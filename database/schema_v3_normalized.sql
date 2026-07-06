@@ -60,6 +60,7 @@ CREATE TABLE devices (
     department_id INT,
     contract_id INT,
     price_override DECIMAL(10, 2) DEFAULT NULL,
+    status ENUM('active', 'repair', 'retired') DEFAULT 'active',
     FOREIGN KEY (brand_id) REFERENCES brand(id),
     FOREIGN KEY (building_id) REFERENCES building(id),
     FOREIGN KEY (floor_id) REFERENCES floor(id),
@@ -74,6 +75,7 @@ CREATE TABLE print_transactions (
     device_id INT,
     month VARCHAR(7) NOT NULL,
     pages INT DEFAULT 0,
+    snapshot_price DECIMAL(10, 2) NOT NULL,
     FOREIGN KEY (device_id) REFERENCES devices(id)
 );
 
@@ -86,10 +88,11 @@ CREATE OR REPLACE VIEW v_monthly_kpi AS
 SELECT 
     pt.device_id,
     d.serial_number,
+    d.status AS device_status,
     pt.month,
     pt.pages AS pages_printed,
     (pt.pages * 0.8) AS net_pages,
-    ((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_cost
+    ((pt.pages * 0.8) * pt.snapshot_price) AS total_cost
 FROM print_transactions pt
 JOIN devices d ON pt.device_id = d.id
 JOIN contracts c ON d.contract_id = c.id;
@@ -99,7 +102,7 @@ CREATE OR REPLACE VIEW v_summary_by_building AS
 SELECT 
     b.name AS building_name,
     SUM(pt.pages * 0.8) AS total_net_pages,
-    SUM((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_building_cost
+    SUM((pt.pages * 0.8) * pt.snapshot_price) AS total_building_cost
 FROM devices d
 JOIN building b ON d.building_id = b.id
 JOIN print_transactions pt ON d.id = pt.device_id
@@ -111,14 +114,15 @@ SELECT
     pt.month,
     fy.year AS fiscal_year,
     d.serial_number,
+    d.status AS device_status,
     b.name AS building_name,
     f.name AS floor_name,
     divi.name AS division_name,
     dept.name AS department_name,
     br.name AS brand_name,
     (pt.pages * 0.8) AS net_pages,
-    COALESCE(d.price_override, c.price_per_page) AS cost_per_page,
-    ((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_cost
+    pt.snapshot_price AS cost_per_page,
+    ((pt.pages * 0.8) * pt.snapshot_price) AS total_cost
 FROM print_transactions pt
 JOIN devices d ON pt.device_id = d.id
 JOIN contracts c ON d.contract_id = c.id
