@@ -1,6 +1,15 @@
 -- ------------------------------------------------------------------------------
 -- 1. Master Data (Lookup Tables)
 -- ------------------------------------------------------------------------------
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(100),
+    role ENUM('admin', 'staff') DEFAULT 'staff',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE fiscal_year (
     id INT AUTO_INCREMENT PRIMARY KEY,
     year VARCHAR(10) NOT NULL UNIQUE,
@@ -96,21 +105,29 @@ SELECT
     pt.month,
     pt.pages AS pages_printed,
     (pt.pages * 0.8) AS net_pages,
-    ((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_cost
+    ((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page, 0)) AS total_cost
 FROM print_transactions pt
 JOIN devices d ON pt.device_id = d.id
-JOIN contracts c ON d.contract_id = c.id;
+LEFT JOIN contracts c ON d.contract_id = c.id;
 
 -- View: v_summary_by_building (สรุปการใช้งานรายตึก)
 CREATE OR REPLACE VIEW v_summary_by_building AS
 SELECT 
     b.name AS building_name,
     SUM(pt.pages * 0.8) AS total_net_pages,
+<<<<<<< HEAD:database/schema_normalized.sql
     SUM((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_building_cost
 FROM devices d
 JOIN building b ON d.building_id = b.id
 JOIN print_transactions pt ON d.id = pt.device_id
 JOIN contracts c ON d.contract_id = c.id
+=======
+    SUM((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page, 0)) AS total_building_cost
+FROM print_transactions pt
+JOIN devices d ON pt.device_id = d.id
+LEFT JOIN building b ON d.building_id = b.id
+LEFT JOIN contracts c ON d.contract_id = c.id
+>>>>>>> ee8bc57 (handoff document):database/schema_v3_normalized.sql
 GROUP BY b.name;
 
 -- View: v_compare_usage_costs (สำหรับฟีเจอร์ Compare - ดึงยอดสุทธิและราคาต่อแผ่น)
@@ -119,18 +136,24 @@ SELECT
     pt.month,
     fy.year AS fiscal_year,
     d.serial_number,
+<<<<<<< HEAD:database/schema_normalized.sql
     d.status AS device_status,
+=======
+
+>>>>>>> ee8bc57 (handoff document):database/schema_v3_normalized.sql
     b.name AS building_name,
     f.name AS floor_name,
     divi.name AS division_name,
     dept.name AS department_name,
     br.name AS brand_name,
+
     (pt.pages * 0.8) AS net_pages,
-    COALESCE(d.price_override, c.price_per_page) AS cost_per_page,
-    ((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_cost
+    COALESCE(d.price_override, c.price_per_page, 0) AS cost_per_page,
+    ((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page, 0)) AS total_cost
+
 FROM print_transactions pt
 JOIN devices d ON pt.device_id = d.id
-JOIN contracts c ON d.contract_id = c.id
+LEFT JOIN contracts c ON d.contract_id = c.id
 LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
 LEFT JOIN building b ON d.building_id = b.id
 LEFT JOIN floor f ON d.floor_id = f.id

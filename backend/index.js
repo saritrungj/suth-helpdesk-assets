@@ -9,13 +9,18 @@ const devicesRoutes = require('./routes/devices')
 const contractsRoutes = require('./routes/contracts')
 const printTransactionsRoutes = require('./routes/print-transactions')
 const dashboardRoutes = require('./routes/dashboard')
+
 const authRoutes = require('./routes/auth')
+
+const importRoutes = require("./routes/importRoutes");
+
 
 const app = express()
 const PORT = process.env.PORT || 3000
 
 // Middleware
 app.use(helmet()) // Security headers
+app.use("/api/import", importRoutes);
 
 // Restrict CORS to specific origins (e.g., Vue frontend)
 const corsOptions = {

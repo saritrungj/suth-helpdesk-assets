@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import ImportDevices from '../views/ImportDevices.vue'
 import Dashboard from '../views/Dashboard.vue'
 import AssetList from '../views/AssetList.vue'
 import AssetForm from '../views/AssetForm.vue'
@@ -31,7 +32,12 @@ const routes = [
     path: '/report',
     name: 'Report',
     component: Report
-  }
+  },
+  {
+  path: '/import-devices',
+  name: 'ImportDevices',
+  component: ImportDevices
+}
 ]
 
 const router = createRouter({
