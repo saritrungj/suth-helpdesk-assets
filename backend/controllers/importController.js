@@ -19,11 +19,11 @@ exports.importDevices = async (req, res) => {
 
         // โหลดข้อมูล Master
         const [brands] = await db.query(
-            "SELECT id, name FROM brand"
+        "SELECT id, name FROM brand"
         );
 
         const [buildings] = await db.query(
-            "SELECT id, name FROM building"
+        "SELECT id, name FROM building"
         );
 
         const brandMap = {};
