@@ -1,0 +1,6 @@
+serial_number,brand,model,building,floor,division,department,contract_no,price_override
+SN-HP-001,HP,LaserJet M404dn,อาคารบริหาร,ชั้น 2,ฝ่ายบริหารงานทั่วไป,แผนกการเงินและบัญชี,CONT-67-001,
+SN-CN-002,Canon,imageCLASS LBP6030,อาคารบริหาร,ชั้น 3,ฝ่ายบริหารงานทั่วไป,แผนกทรัพยากรบุคคล,CONT-67-001,
+SN-EP-003,Epson,EcoTank L3250,อาคารผู้ป่วยนอก (OPD),ชั้น 1,ฝ่ายการแพทย์,แผนกอายุรกรรม,CONT-67-001,1.50
+SN-BR-004,Brother,HL-L2370DN,อาคารผู้ป่วยนอก (OPD),ชั้น 2,ฝ่ายการพยาบาล,แผนกศัลยกรรม,CONT-67-001,
+SN-HP-005,HP,LaserJet Enterprise,อาคารฉุกเฉิน (ER),ชั้น 1,ฝ่ายการแพทย์,แผนกฉุกเฉิน,CONT-66-009,
