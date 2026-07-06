@@ -1,116 +1,140 @@
 -- ==============================================================================
 -- 🚀 โค้ด Schema v3 (Database Normalization) - รองรับฟีเจอร์ Compare ข้อมูลข้ามมิติ
--- ปรับแก้จาก Schema v2 เดิม เพื่อแยกตาราง Master Data และอัปเดตตารางหลัก
+-- ปรับปรุงล่าสุด:
+--   1. ยกเลิก snapshot_price ใน print_transactions → คิดราคาจากสัญญา (หรือ price_override ของเครื่อง) ณ เวลา query
+--   2. Master Data ทุกตารางมี is_active (ปุ่มปิด/เปิดการใช้งาน) — ปิดแล้วข้อมูลเก่ายังอยู่ แต่ไม่ให้เลือกใช้ใหม่
+--   3. floor ผูกกับ building (ชั้นสังกัดตึก), department ผูกกับ division (แผนกสังกัดฝ่าย)
+--      → devices เก็บแค่ floor_id / department_id แล้ว derive ตึก/ฝ่ายจากความสัมพันธ์ (กันข้อมูลขัดแย้งกันเอง)
+--   4. เพิ่ม UNIQUE(device_id, month) กันบันทึกยอดพิมพ์เดือนเดิมซ้ำ
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- 1. Master Data (Lookup Tables)
+-- 1. Master Data (Lookup Tables) — ทุกตารางมี is_active สำหรับปิด/เปิด
 -- ------------------------------------------------------------------------------
 CREATE TABLE fiscal_year (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    year VARCHAR(10) NOT NULL UNIQUE
+    year VARCHAR(10) NOT NULL UNIQUE,
+    is_active TINYINT(1) NOT NULL DEFAULT 1
 );
 
 CREATE TABLE brand (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE
+    name VARCHAR(100) NOT NULL UNIQUE,
+    is_active TINYINT(1) NOT NULL DEFAULT 1
 );
 
 CREATE TABLE building (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE
+    name VARCHAR(255) NOT NULL UNIQUE,
+    is_active TINYINT(1) NOT NULL DEFAULT 1
 );
 
+-- ชั้นผูกกับตึก: ชื่อชั้นซ้ำกันได้ข้ามตึก แต่ห้ามซ้ำในตึกเดียวกัน
 CREATE TABLE floor (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE
+    building_id INT NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    UNIQUE KEY uq_floor_per_building (building_id, name),
+    FOREIGN KEY (building_id) REFERENCES building(id)
 );
 
 CREATE TABLE division (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE DEFAULT 'ยังไม่ระบุฝ่าย'
+    name VARCHAR(255) NOT NULL UNIQUE,
+    is_active TINYINT(1) NOT NULL DEFAULT 1
 );
 
+-- แผนกผูกกับฝ่าย: ชื่อแผนกซ้ำกันได้ข้ามฝ่าย แต่ห้ามซ้ำในฝ่ายเดียวกัน
 CREATE TABLE department (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE
+    division_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    UNIQUE KEY uq_department_per_division (division_id, name),
+    FOREIGN KEY (division_id) REFERENCES division(id)
 );
 
 -- ------------------------------------------------------------------------------
 -- 2. Main Tables
 -- ------------------------------------------------------------------------------
--- ตารางสัญญา (ดึงข้อมูลปีงบประมาณออกมาเป็น fiscal_year_id)
+-- ตารางสัญญา (ราคาต่อแผ่นอ้างอิงจากที่นี่ — ไม่มี snapshot อีกต่อไป)
 CREATE TABLE contracts (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    contract_no VARCHAR(100) NOT NULL UNIQUE,  
+    contract_no VARCHAR(100) NOT NULL UNIQUE,
     fiscal_year_id INT,
     price_per_page DECIMAL(10, 2),
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
     FOREIGN KEY (fiscal_year_id) REFERENCES fiscal_year(id)
 );
 
--- ตารางอุปกรณ์ (เปลี่ยนจาก printers เป็น devices และผูก Foreign Key จาก Master Data)
+-- ตารางอุปกรณ์
+-- หมายเหตุ: ไม่เก็บ building_id / division_id ตรงๆ แล้ว
+--   ตึกได้จาก floor → building, ฝ่ายได้จาก department → division
 CREATE TABLE devices (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    serial_number VARCHAR(100) NOT NULL UNIQUE, 
+    serial_number VARCHAR(100) NOT NULL UNIQUE,
     brand_id INT,
     model VARCHAR(100),
-    building_id INT,
     floor_id INT,
-    division_id INT,
     department_id INT,
     contract_id INT,
-    price_override DECIMAL(10, 2) DEFAULT NULL,
+    price_override DECIMAL(10, 2) DEFAULT NULL, -- ถ้ากำหนด จะใช้แทนราคาในสัญญา
     status ENUM('active', 'repair', 'retired') DEFAULT 'active',
+    deleted_at TIMESTAMP NULL DEFAULT NULL, -- soft delete
     FOREIGN KEY (brand_id) REFERENCES brand(id),
-    FOREIGN KEY (building_id) REFERENCES building(id),
     FOREIGN KEY (floor_id) REFERENCES floor(id),
-    FOREIGN KEY (division_id) REFERENCES division(id),
     FOREIGN KEY (department_id) REFERENCES department(id),
     FOREIGN KEY (contract_id) REFERENCES contracts(id)
 );
 
--- ตารางยอดการพิมพ์รายเดือน (เปลี่ยนเป็นใช้ device_id)
+-- ตารางยอดการพิมพ์รายเดือน (ยกเลิก snapshot_price — ราคาคำนวณจากสัญญา/override ตอน query)
 CREATE TABLE print_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    device_id INT,
-    month VARCHAR(7) NOT NULL,
+    device_id INT NOT NULL,
+    month VARCHAR(7) NOT NULL, -- รูปแบบ YYYY-MM
     pages INT DEFAULT 0,
-    snapshot_price DECIMAL(10, 2) NOT NULL,
+    UNIQUE KEY uq_device_month (device_id, month),
     FOREIGN KEY (device_id) REFERENCES devices(id)
 );
 
 -- ==============================================================================
--- 📊 Views สำหรับ Dashboard (อัปเดตตาม Schema ใหม่)
+-- 📊 Views สำหรับ Dashboard (คิดราคาจาก COALESCE(price_override, price_per_page))
 -- ==============================================================================
 
 -- View: v_monthly_kpi (ยอดสุทธิ, ต้นทุน, KPI ต่อเครื่อง)
 CREATE OR REPLACE VIEW v_monthly_kpi AS
-SELECT 
+SELECT
     pt.device_id,
     d.serial_number,
     d.status AS device_status,
     pt.month,
     pt.pages AS pages_printed,
     (pt.pages * 0.8) AS net_pages,
-    ((pt.pages * 0.8) * pt.snapshot_price) AS total_cost
+    COALESCE(d.price_override, c.price_per_page) AS cost_per_page,
+    ((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_cost
 FROM print_transactions pt
 JOIN devices d ON pt.device_id = d.id
-JOIN contracts c ON d.contract_id = c.id;
+LEFT JOIN contracts c ON d.contract_id = c.id
+WHERE d.deleted_at IS NULL;
 
--- View: v_summary_by_building (สรุปการใช้งานรายตึก)
+-- View: v_summary_by_building (สรุปการใช้งานรายตึก — ตึกมาจาก floor → building)
 CREATE OR REPLACE VIEW v_summary_by_building AS
-SELECT 
+SELECT
     b.name AS building_name,
     SUM(pt.pages * 0.8) AS total_net_pages,
-    SUM((pt.pages * 0.8) * pt.snapshot_price) AS total_building_cost
+    SUM((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_building_cost
 FROM devices d
-JOIN building b ON d.building_id = b.id
+JOIN floor f ON d.floor_id = f.id
+JOIN building b ON f.building_id = b.id
 JOIN print_transactions pt ON d.id = pt.device_id
+LEFT JOIN contracts c ON d.contract_id = c.id
+WHERE d.deleted_at IS NULL
 GROUP BY b.name;
 
--- View: v_compare_usage_costs (สำหรับฟีเจอร์ Compare - ดึงยอดสุทธิและราคาต่อแผ่น)
+-- View: v_compare_usage_costs (สำหรับฟีเจอร์ Compare - ยอดสุทธิและราคาต่อแผ่น)
 CREATE OR REPLACE VIEW v_compare_usage_costs AS
-SELECT 
+SELECT
     pt.month,
     fy.year AS fiscal_year,
     d.serial_number,
@@ -121,17 +145,18 @@ SELECT
     dept.name AS department_name,
     br.name AS brand_name,
     (pt.pages * 0.8) AS net_pages,
-    pt.snapshot_price AS cost_per_page,
-    ((pt.pages * 0.8) * pt.snapshot_price) AS total_cost
+    COALESCE(d.price_override, c.price_per_page) AS cost_per_page,
+    ((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_cost
 FROM print_transactions pt
 JOIN devices d ON pt.device_id = d.id
-JOIN contracts c ON d.contract_id = c.id
+LEFT JOIN contracts c ON d.contract_id = c.id
 LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
-LEFT JOIN building b ON d.building_id = b.id
 LEFT JOIN floor f ON d.floor_id = f.id
-LEFT JOIN division divi ON d.division_id = divi.id
+LEFT JOIN building b ON f.building_id = b.id
 LEFT JOIN department dept ON d.department_id = dept.id
-LEFT JOIN brand br ON d.brand_id = br.id;
+LEFT JOIN division divi ON dept.division_id = divi.id
+LEFT JOIN brand br ON d.brand_id = br.id
+WHERE d.deleted_at IS NULL;
 
 -- ==============================================================================
 -- 👤 Users Table (For Prototype Authentication)
@@ -145,6 +170,6 @@ CREATE TABLE users (
 );
 
 -- Insert dummy data for presentation
-INSERT IGNORE INTO users (username, password, role) VALUES 
+INSERT IGNORE INTO users (username, password, role) VALUES
 ('admin', 'admin123', 'admin'),
 ('user1', 'user123', 'user');
