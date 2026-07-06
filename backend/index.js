@@ -1,6 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
+const helmet = require('helmet')
 
 // Import routes
 const masterDataRoutes = require('./routes/master-data')
@@ -13,7 +14,14 @@ const app = express()
 const PORT = process.env.PORT || 3000
 
 // Middleware
-app.use(cors())
+app.use(helmet()) // Security headers
+
+// Restrict CORS to specific origins (e.g., Vue frontend)
+const corsOptions = {
+  origin: ['http://localhost:5173'], // add production domains later
+  optionsSuccessStatus: 200
+}
+app.use(cors(corsOptions))
 app.use(express.json())
 
 // Health check

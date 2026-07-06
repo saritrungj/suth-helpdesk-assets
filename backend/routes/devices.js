@@ -73,12 +73,27 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+const { z } = require('zod');
+
+// Validation Schema
+const deviceSchema = z.object({
+  serial_number: z.string().min(1, 'Serial number is required'),
+  brand_id: z.number().int().positive().optional().nullable(),
+  model: z.string().optional().nullable(),
+  building_id: z.number().int().positive().optional().nullable(),
+  floor_id: z.number().int().positive().optional().nullable(),
+  division_id: z.number().int().positive().optional().nullable(),
+  department_id: z.number().int().positive().optional().nullable(),
+  contract_id: z.number().int().positive().optional().nullable(),
+  price_override: z.number().nonnegative().optional().nullable(),
+});
+
 // POST /api/devices — เพิ่มอุปกรณ์ใหม่
 router.post('/', async (req, res) => {
   try {
-    const { serial_number, brand_id, model, building_id, floor_id, division_id, department_id, contract_id, price_override } = req.body;
-
-    if (!serial_number) return res.status(400).json({ error: 'serial_number is required' });
+    // Validate input using Zod
+    const validatedData = deviceSchema.parse(req.body);
+    const { serial_number, brand_id, model, building_id, floor_id, division_id, department_id, contract_id, price_override } = validatedData;
 
     const [result] = await db.query(
       `INSERT INTO devices (serial_number, brand_id, model, building_id, floor_id, division_id, department_id, contract_id, price_override)
@@ -88,6 +103,9 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ id: result.insertId, serial_number });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    }
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: `Serial number "${req.body.serial_number}" already exists` });
     }
@@ -99,7 +117,9 @@ router.post('/', async (req, res) => {
 // PUT /api/devices/:id — แก้ไขอุปกรณ์
 router.put('/:id', async (req, res) => {
   try {
-    const { serial_number, brand_id, model, building_id, floor_id, division_id, department_id, contract_id, price_override } = req.body;
+    // Validate input using Zod
+    const validatedData = deviceSchema.parse(req.body);
+    const { serial_number, brand_id, model, building_id, floor_id, division_id, department_id, contract_id, price_override } = validatedData;
 
     const [result] = await db.query(
       `UPDATE devices SET 
@@ -112,6 +132,9 @@ router.put('/:id', async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Device not found' });
     res.json({ message: 'Device updated successfully' });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    }
     console.error('Error updating device:', err.message);
     res.status(500).json({ error: err.message });
   }
