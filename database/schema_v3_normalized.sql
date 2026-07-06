@@ -128,3 +128,19 @@ LEFT JOIN floor f ON d.floor_id = f.id
 LEFT JOIN division divi ON d.division_id = divi.id
 LEFT JOIN department dept ON d.department_id = dept.id
 LEFT JOIN brand br ON d.brand_id = br.id;
+
+-- ==============================================================================
+-- 👤 Users Table (For Prototype Authentication)
+-- ==============================================================================
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL, -- Plaintext for prototype as requested
+    role ENUM('admin', 'user') DEFAULT 'user',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert dummy data for presentation
+INSERT IGNORE INTO users (username, password, role) VALUES 
+('admin', 'admin123', 'admin'),
+('user1', 'user123', 'user');

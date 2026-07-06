@@ -9,6 +9,7 @@ const devicesRoutes = require('./routes/devices')
 const contractsRoutes = require('./routes/contracts')
 const printTransactionsRoutes = require('./routes/print-transactions')
 const dashboardRoutes = require('./routes/dashboard')
+const authRoutes = require('./routes/auth')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -52,6 +53,7 @@ app.use('/api/devices', devicesRoutes)
 app.use('/api/contracts', contractsRoutes)
 app.use('/api/print-transactions', printTransactionsRoutes)
 app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/auth', authRoutes)
 
 // 404 handler
 app.use((req, res) => {
