@@ -2,7 +2,7 @@
   <div class="p-5">
     <h2>Import Devices (CSV)</h2>
 
-    <input type="file" accept=".csv" @change="handleFile" />
+    <input type="file" accept=".xlsx,.xls" @change="handleFile" />
 
     <br /><br />
 

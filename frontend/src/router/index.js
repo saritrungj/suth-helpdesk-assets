@@ -14,6 +14,11 @@ const routes = [
     component: Dashboard
   },
   {
+  path:"/admin/brands",
+  component:
+  ()=>import("../views/admin/Brand.vue")
+  },
+  {
     path: '/assets',
     name: 'AssetList',
     component: AssetList
@@ -37,6 +42,10 @@ const routes = [
   path: '/import-devices',
   name: 'ImportDevices',
   component: ImportDevices
+},
+{
+    path: "/admin/devices",
+    component: () => import("../views/admin/Device.vue")
 }
 ]
 
