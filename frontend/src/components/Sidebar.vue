@@ -24,6 +24,36 @@
       <RouterLink to="/report" class="block hover:bg-blue-600 p-2 rounded">
         รายงาน
       </RouterLink>
+
+      <!-- เมนูสำหรับ Admin -->
+      <div v-if="user?.role === 'admin'" class="pt-4 border-t border-blue-500">
+        <p class="text-sm text-blue-200 mb-2">Admin</p>
+
+        <RouterLink
+          to="/admin/devices"
+          class="block hover:bg-blue-600 p-2 rounded"
+        >
+          จัดการอุปกรณ์
+        </RouterLink>
+
+        <RouterLink
+          to="/admin/brands"
+          class="block hover:bg-blue-600 p-2 rounded"
+        >
+          จัดการยี่ห้อ
+        </RouterLink>
+
+        <RouterLink
+          to="/import-devices"
+          class="block hover:bg-blue-600 p-2 rounded"
+        >
+          Import CSV
+        </RouterLink>
+      </div>
     </nav>
   </aside>
 </template>
+
+<script setup>
+const user = JSON.parse(localStorage.getItem("user"));
+</script>
