@@ -10,7 +10,7 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
-import axios from "axios";
+import api from "../services/api";
 
 import {
   Chart as ChartJS,
@@ -49,7 +49,7 @@ const chartOptions = {
 };
 
 const loadChart = async () => {
-  const res = await axios.get(
+  const res = await apiget(
     "http://localhost:3000/api/dashboard/monthly-kpi"
   );
 

@@ -37,7 +37,7 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
-import axios from "axios";
+import api from "../services/api";
 import MonthlyChart from "../components/MonthlyChart.vue";
 
 const stats = ref({
@@ -49,16 +49,7 @@ const stats = ref({
 
 const loadDashboard = async () => {
   try {
-    const token = localStorage.getItem("token");
-
-    const res = await axios.get(
-      "http://localhost:3000/api/dashboard/stats",
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const res = await api.get("/dashboard/stats");
 
     stats.value = res.data;
   } catch (err) {

@@ -1,39 +1,5 @@
-<script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-// 🧠 form state
-const form = ref({
-  sn: '',
-  brand: '',
-  model: '',
-  department: 'OPD',
-  status: 'ใช้งาน'
-})
-
-// 💾 save data (mock)
-function saveAsset() {
-  console.log('Saving asset:', form.value)
-
-  // 👉 ตอนนี้ยังไม่ต่อ API
-  // แต่อนาคตจะ POST ไป backend
-
-  alert('บันทึกข้อมูลสำเร็จ')
-
-  router.push('/assets')
-}
-
-// ❌ cancel
-function cancel() {
-  router.push('/assets')
-}
-</script>
-
 <template>
   <div class="max-w-xl mx-auto bg-white p-6 shadow rounded">
-
     <h1 class="text-2xl font-bold mb-6">
       เพิ่ม / แก้ไข ทรัพย์สิน
     </h1>
@@ -71,7 +37,10 @@ function cancel() {
     <!-- Department -->
     <div class="mb-4">
       <label class="block mb-1">Department</label>
-      <select v-model="form.department" class="border w-full p-2 rounded">
+      <select
+        v-model="form.department"
+        class="border w-full p-2 rounded"
+      >
         <option>OPD</option>
         <option>IPD</option>
         <option>LAB</option>
@@ -82,7 +51,10 @@ function cancel() {
     <!-- Status -->
     <div class="mb-4">
       <label class="block mb-1">Status</label>
-      <select v-model="form.status" class="border w-full p-2 rounded">
+      <select
+        v-model="form.status"
+        class="border w-full p-2 rounded"
+      >
         <option>ใช้งาน</option>
         <option>ซ่อม</option>
         <option>ชำรุด</option>
@@ -105,6 +77,32 @@ function cancel() {
         Cancel
       </button>
     </div>
-
   </div>
 </template>
+
+<script setup>
+import { ref } from "vue";
+import { useRouter } from "vue-router";
+
+const router = useRouter();
+
+const form = ref({
+  sn: "",
+  brand: "",
+  model: "",
+  department: "OPD",
+  status: "ใช้งาน",
+});
+
+function saveAsset() {
+  console.log("Saving asset:", form.value);
+
+  alert("บันทึกข้อมูลสำเร็จ");
+
+  router.push("/assets");
+}
+
+function cancel() {
+  router.push("/assets");
+}
+</script>
