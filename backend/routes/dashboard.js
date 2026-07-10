@@ -26,7 +26,10 @@ router.get('/monthly-kpi', async (req, res) => {
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
-    sql += ' ORDER BY month DESC';
+    sql += `
+    ORDER BY
+    month ASC
+    `;
 
     const [rows] = await db.query(sql, params);
     res.json(rows);
@@ -79,7 +82,11 @@ router.get('/compare', async (req, res) => {
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
-    sql += ' ORDER BY month, serial_number';
+    sql += `
+ORDER BY
+month ASC,
+serial_number ASC
+`;
 
     const [rows] = await db.query(sql, params);
     res.json(rows);

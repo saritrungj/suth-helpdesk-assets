@@ -1,108 +1,673 @@
 <template>
-  <div class="max-w-xl mx-auto bg-white p-6 shadow rounded">
-    <h1 class="text-2xl font-bold mb-6">
-      เพิ่ม / แก้ไข ทรัพย์สิน
-    </h1>
 
-    <!-- SN -->
-    <div class="mb-4">
-      <label class="block mb-1">SN</label>
+<div class="p-6">
+
+  <h1 class="text-2xl font-bold mb-6">
+    {{ isEdit ? "แก้ไขทรัพย์สิน" : "เพิ่มทรัพย์สิน" }}
+  </h1>
+
+
+  <div class="grid grid-cols-2 gap-4">
+
+
+    <!-- Serial -->
+    <div>
+      <label>
+        Serial Number
+      </label>
+
       <input
-        v-model="form.sn"
-        class="border w-full p-2 rounded"
-        placeholder="เช่น HP001"
+        v-model="form.serial_number"
+        class="border p-2 w-full"
       />
     </div>
+
+
 
     <!-- Brand -->
-    <div class="mb-4">
-      <label class="block mb-1">Brand</label>
-      <input
-        v-model="form.brand"
-        class="border w-full p-2 rounded"
-        placeholder="HP, Canon, Epson"
-      />
+    <div>
+
+      <label>
+        Brand
+      </label>
+
+      <select
+        v-model="form.brand_id"
+        class="border p-2 w-full"
+      >
+
+        <option
+          disabled
+          value=""
+        >
+          Select Brand
+        </option>
+
+
+        <option
+          v-for="b in brands"
+          :key="b.id"
+          :value="b.id"
+        >
+
+          {{ b.name }}
+
+        </option>
+
+      </select>
+
     </div>
+
+
+
 
     <!-- Model -->
-    <div class="mb-4">
-      <label class="block mb-1">Model</label>
+    <div>
+
+      <label>
+        Model
+      </label>
+
+
       <input
         v-model="form.model"
-        class="border w-full p-2 rounded"
-        placeholder="รุ่นอุปกรณ์"
+        class="border p-2 w-full"
       />
+
     </div>
+
+
+
+
+
+    <!-- Building -->
+    <div>
+
+      <label>
+        Building
+      </label>
+
+
+      <select
+        v-model="form.building_id"
+        class="border p-2 w-full"
+      >
+
+        <option
+          v-for="b in buildings"
+          :key="b.id"
+          :value="b.id"
+        >
+
+          {{ b.name }}
+
+        </option>
+
+
+      </select>
+
+    </div>
+
+
+
+
+
+    <!-- Floor -->
+    <div>
+
+      <label>
+        Floor
+      </label>
+
+
+      <select
+        v-model="form.floor_id"
+        class="border p-2 w-full"
+      >
+
+        <option
+          v-for="f in floors"
+          :key="f.id"
+          :value="f.id"
+        >
+
+          {{ f.name }}
+
+        </option>
+
+
+      </select>
+
+    </div>
+
+
+
+
+
+    <!-- Division -->
+    <div>
+
+      <label>
+        Division
+      </label>
+
+
+      <select
+        v-model="form.division_id"
+        class="border p-2 w-full"
+      >
+
+        <option
+          v-for="d in divisions"
+          :key="d.id"
+          :value="d.id"
+        >
+
+          {{ d.name }}
+
+        </option>
+
+
+      </select>
+
+
+    </div>
+
+
+
+
 
     <!-- Department -->
-    <div class="mb-4">
-      <label class="block mb-1">Department</label>
+    <div>
+
+      <label>
+        Department
+      </label>
+
+
       <select
-        v-model="form.department"
-        class="border w-full p-2 rounded"
+        v-model="form.department_id"
+        class="border p-2 w-full"
       >
-        <option>OPD</option>
-        <option>IPD</option>
-        <option>LAB</option>
-        <option>ICU</option>
+
+        <option
+          v-for="d in departments"
+          :key="d.id"
+          :value="d.id"
+        >
+
+          {{ d.name }}
+
+        </option>
+
+
       </select>
+
+
     </div>
 
-    <!-- Status -->
-    <div class="mb-4">
-      <label class="block mb-1">Status</label>
+
+
+
+
+    <!-- Contract -->
+    <div>
+
+      <label>
+        Contract
+      </label>
+
+
       <select
-        v-model="form.status"
-        class="border w-full p-2 rounded"
+        v-model="form.contract_id"
+        class="border p-2 w-full"
       >
-        <option>ใช้งาน</option>
-        <option>ซ่อม</option>
-        <option>ชำรุด</option>
+
+        <option
+          :value="null"
+        >
+          ไม่มี
+        </option>
+
+
+        <option
+          v-for="c in contracts"
+          :key="c.id"
+          :value="c.id"
+        >
+
+          {{ c.name }}
+
+        </option>
+
+
       </select>
+
+
     </div>
 
-    <!-- Buttons -->
-    <div class="flex gap-3">
-      <button
-        @click="saveAsset"
-        class="bg-green-600 text-white px-4 py-2 rounded"
-      >
-        Save
-      </button>
 
-      <button
-        @click="cancel"
-        class="bg-gray-500 text-white px-4 py-2 rounded"
-      >
-        Cancel
-      </button>
+
+
+
+    <!-- Price -->
+    <div>
+
+      <label>
+        Override Price
+      </label>
+
+
+      <input
+        type="number"
+        v-model="form.price_override"
+        class="border p-2 w-full"
+      />
+
+
     </div>
+
+
   </div>
-</template>
 
+
+
+
+
+  <div class="mt-6 flex gap-3">
+
+
+    <button
+      @click="saveAsset"
+      class="bg-blue-600 text-white px-4 py-2 rounded"
+    >
+
+      Save
+
+    </button>
+
+
+
+    <button
+      @click="cancel"
+      class="border px-4 py-2 rounded"
+    >
+
+      Cancel
+
+    </button>
+
+
+  </div>
+
+
+</div>
+
+
+</template>
 <script setup>
-import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { ref, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import axios from "axios";
 
 const router = useRouter();
+const route = useRoute();
+
+const token = localStorage.getItem("token");
+
+if (!token) {
+  router.push("/login");
+}
+
+const isEdit = ref(false);
+
 
 const form = ref({
-  sn: "",
-  brand: "",
+  serial_number: "",
+  brand_id: null,
   model: "",
-  department: "OPD",
-  status: "ใช้งาน",
+  building_id: null,
+  floor_id: null,
+  division_id: null,
+  department_id: null,
+  contract_id: null,
+  price_override: null,
 });
 
-function saveAsset() {
-  console.log("Saving asset:", form.value);
 
-  alert("บันทึกข้อมูลสำเร็จ");
+const brands = ref([]);
+const buildings = ref([]);
+const floors = ref([]);
+const divisions = ref([]);
+const departments = ref([]);
+const contracts = ref([]);
 
-  router.push("/assets");
+
+
+const config = {
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+};
+
+
+
+// ==========================
+// Load Master Data
+// ==========================
+async function loadMasterData() {
+
+  try {
+
+    const [
+      brandRes,
+      buildingRes,
+      floorRes,
+      divisionRes,
+      departmentRes,
+      contractRes
+
+    ] = await Promise.all([
+
+      axios.get(
+        "http://localhost:3000/api/brands",
+        config
+      ),
+
+      axios.get(
+        "http://localhost:3000/api/buildings",
+        config
+      ),
+
+      axios.get(
+        "http://localhost:3000/api/floors",
+        config
+      ),
+
+      axios.get(
+        "http://localhost:3000/api/divisions",
+        config
+      ),
+
+      axios.get(
+        "http://localhost:3000/api/departments",
+        config
+      ),
+
+      axios.get(
+        "http://localhost:3000/api/contracts",
+        config
+      )
+
+    ]);
+
+
+    brands.value = brandRes.data;
+    buildings.value = buildingRes.data;
+    floors.value = floorRes.data;
+    divisions.value = divisionRes.data;
+    departments.value = departmentRes.data;
+    contracts.value = contractRes.data;
+
+
+  } catch(err){
+
+    console.error(
+      "Load master error:",
+      err
+    );
+
+    alert("โหลด Master Data ไม่สำเร็จ");
+
+  }
+
 }
 
-function cancel() {
-  router.push("/assets");
+
+
+
+// ==========================
+// Load Asset for Edit
+// ==========================
+async function loadAsset(){
+
+  if(!route.params.id){
+    return;
+  }
+
+
+  try{
+
+    isEdit.value = true;
+
+
+    const res = await axios.get(
+      `http://localhost:3000/api/devices/${route.params.id}`,
+      config
+    );
+
+
+    console.log(
+      "API DEVICE:",
+      res.data
+    );
+
+
+    const d = res.data.data ?? res.data;
+
+
+    form.value = {
+
+      serial_number: d.serial_number ?? "",
+
+      brand_id: d.brand_id ?? null,
+
+      model: d.model ?? "",
+
+      building_id: d.building_id ?? null,
+
+      floor_id: d.floor_id ?? null,
+
+      division_id: d.division_id ?? null,
+
+      department_id: d.department_id ?? null,
+
+      contract_id: d.contract_id ?? null,
+
+      price_override: d.price_override ?? null
+
+    };
+
+
+    console.log(
+      "Edit data:",
+      form.value
+    );
+
+
+  }catch(err){
+
+    console.error(
+      "Load asset error:",
+      err
+    );
+
+    alert("โหลดข้อมูลทรัพย์สินไม่สำเร็จ");
+
+  }
+
 }
+
+
+
+
+
+// ==========================
+// Save Create / Update
+// ==========================
+async function saveAsset(){
+
+try{
+
+
+const data = {
+
+  serial_number:
+    form.value.serial_number,
+
+
+  brand_id:
+    Number(form.value.brand_id),
+
+
+  model:
+    form.value.model,
+
+
+  building_id:
+    form.value.building_id
+      ? Number(form.value.building_id)
+      : null,
+
+
+  floor_id:
+    form.value.floor_id
+      ? Number(form.value.floor_id)
+      : null,
+
+
+  division_id:
+    form.value.division_id
+      ? Number(form.value.division_id)
+      : null,
+
+
+  department_id:
+    form.value.department_id
+      ? Number(form.value.department_id)
+      : null,
+
+
+  contract_id:
+    form.value.contract_id
+      ? Number(form.value.contract_id)
+      : null,
+
+
+  price_override:
+    form.value.price_override !== ""
+      && form.value.price_override !== null
+      ? Number(form.value.price_override)
+      : null
+
+};
+
+
+
+console.log(
+  "SEND DATA:",
+  data
+);
+
+
+
+if(isEdit.value){
+
+
+  console.log(
+    "PUT:",
+    `/api/devices/${route.params.id}`
+  );
+
+
+  await axios.put(
+
+    `http://localhost:3000/api/devices/${route.params.id}`,
+
+    data,
+
+    config
+
+  );
+
+
+  alert(
+    "แก้ไขข้อมูลสำเร็จ"
+  );
+
+
+}else{
+
+
+  await axios.post(
+
+    "http://localhost:3000/api/devices",
+
+    data,
+
+    config
+
+  );
+
+
+  alert(
+    "บันทึกข้อมูลสำเร็จ"
+  );
+
+
+}
+
+
+
+router.push("/assets");
+
+
+
+}catch(err){
+
+
+console.log(
+  "STATUS:",
+  err.response?.status
+);
+
+
+console.log(
+  "BACKEND ERROR:",
+  err.response?.data
+);
+
+
+alert(
+  err.response?.data?.error ||
+  "บันทึกข้อมูลไม่สำเร็จ"
+);
+
+
+}
+
+}
+
+
+
+
+
+function cancel(){
+
+ router.push("/assets");
+
+}
+
+
+
+
+
+onMounted(async()=>{
+
+ await loadMasterData();
+
+ await loadAsset();
+
+});
+
 </script>

@@ -1,84 +1,161 @@
-<template>
-  <div class="bg-white shadow rounded-lg p-6 mt-8">
-    <h2 class="text-xl font-bold mb-4">
-      จำนวนหน้าที่พิมพ์รายเดือน
-    </h2>
-
-    <Bar :data="chartData" :options="chartOptions" />
-  </div>
-</template>
-
 <script setup>
+
 import { ref, onMounted } from "vue";
-import api from "../services/api";
+import {
+  Bar
+} from "vue-chartjs";
 
 import {
   Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
   Title,
   Tooltip,
   Legend,
+  BarElement,
+  CategoryScale,
+  LinearScale
+
 } from "chart.js";
 
-import { Bar } from "vue-chartjs";
+import api from "../services/api";
+
+
 
 ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
+
   Title,
   Tooltip,
-  Legend
+  Legend,
+  BarElement,
+  CategoryScale,
+  LinearScale
+
 );
 
+
+
 const chartData = ref({
+
   labels: [],
+
   datasets: [
+
     {
-      label: "Pages Printed",
-      data: [],
-    },
-  ],
-});
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-};
+      label: "จำนวนหน้าพิมพ์",
 
-const loadChart = async () => {
-  const res = await apiget(
-    "http://localhost:3000/api/dashboard/monthly-kpi"
-  );
+      data: []
 
-  const summary = {};
-
-  res.data.forEach((row) => {
-    if (!summary[row.month]) {
-      summary[row.month] = 0;
     }
 
-    summary[row.month] += row.pages_printed;
-  });
+  ]
 
-  chartData.value = {
-    labels: Object.keys(summary),
-    datasets: [
-      {
-        label: "Pages Printed",
-        data: Object.values(summary),
-      },
-    ],
-  };
+});
+
+
+
+
+const chartOptions = {
+
+  responsive:true,
+
+  plugins:{
+
+    legend:{
+
+      display:true
+
+    }
+
+  }
+
 };
 
-onMounted(loadChart);
+
+
+
+
+async function loadMonthly(){
+
+
+try{
+
+
+const res = await api.get(
+  "/dashboard/monthly-kpi"
+);
+
+
+console.log(
+  JSON.stringify(res.data[0], null, 2)
+);
+
+
+
+const grouped = {};
+
+res.data.forEach(item => {
+  if (!grouped[item.month]) {
+    grouped[item.month] = 0;
+  }
+
+  grouped[item.month] += Number(item.net_pages);
+});
+
+chartData.value = {
+  labels: Object.keys(grouped),
+  datasets: [
+    {
+      label: "จำนวนหน้าพิมพ์",
+      data: Object.values(grouped)
+    }
+  ]
+};
+
+
+
+}catch(err){
+
+console.error(
+ "Monthly Chart Error:",
+ err
+);
+
+}
+
+
+}
+
+
+
+
+
+onMounted(()=>{
+
+ loadMonthly();
+
+});
+
+
 </script>
 
-<style scoped>
-div {
-  height: 400px;
-}
-</style>
+
+
+<template>
+
+
+<div>
+
+
+<Bar
+
+:options="chartOptions"
+
+:data="chartData"
+
+/>
+
+
+</div>
+
+
+</template>

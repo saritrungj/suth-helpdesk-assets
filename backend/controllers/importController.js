@@ -28,12 +28,12 @@ exports.importDevices = async (req, res) => {
 
 
         // โหลด Master Data
-        const [brands] = await db.query(
-            "SELECT id, name FROM brands"
+        const [brand] = await db.query(
+            "SELECT id, name FROM brand"
         );
 
-        const [buildings] = await db.query(
-            "SELECT id, name FROM buildings"
+        const [building] = await db.query(
+            "SELECT id, name FROM building"
         );
 
 
@@ -41,12 +41,12 @@ exports.importDevices = async (req, res) => {
         const buildingMap = {};
 
 
-        brands.forEach((b) => {
+        brand.forEach((b) => {
             brandMap[String(b.name).trim()] = b.id;
         });
 
 
-        buildings.forEach((b) => {
+        building.forEach((b) => {
             buildingMap[String(b.name).trim()] = b.id;
         });
 

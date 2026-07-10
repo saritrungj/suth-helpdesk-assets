@@ -73,7 +73,7 @@ exports.getOne = async (req, res) => {
       FROM devices d
       LEFT JOIN brand br ON d.brand_id = br.id
       LEFT JOIN building b ON d.building_id = b.id
-      LEFT JOIN floors f ON d.floor_id = f.id
+      LEFT JOIN floor f ON d.floor_id = f.id
       LEFT JOIN division divi ON d.division_id = divi.id
       LEFT JOIN department dept ON d.department_id = dept.id
       LEFT JOIN contracts c ON d.contract_id = c.id

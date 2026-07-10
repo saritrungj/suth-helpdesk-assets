@@ -8,14 +8,34 @@ const api = axios.create({
 });
 
 // แนบ Token อัตโนมัติทุก Request
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("token");
 
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// ถ้า Token หมดอายุหรือไม่ได้รับอนุญาต ให้ Logout
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
+
+    return Promise.reject(error);
   }
-
-  return config;
-});
+);
 
 export default api;
