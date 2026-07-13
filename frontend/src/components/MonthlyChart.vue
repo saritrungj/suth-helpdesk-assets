@@ -1,9 +1,7 @@
 <script setup>
 
-import { ref, onMounted } from "vue";
-import {
-  Bar
-} from "vue-chartjs";
+import { ref, onMounted, watch } from "vue";
+import { Bar } from "vue-chartjs";
 
 import {
   Chart as ChartJS,
@@ -12,8 +10,7 @@ import {
   Legend,
   BarElement,
   CategoryScale,
-  LinearScale
-
+  LinearScale,
 } from "chart.js";
 
 import api from "../services/api";
@@ -21,15 +18,36 @@ import api from "../services/api";
 
 
 ChartJS.register(
-
   Title,
   Tooltip,
   Legend,
   BarElement,
   CategoryScale,
   LinearScale
-
 );
+
+
+
+// รับ Filter จาก Dashboard.vue
+const props = defineProps({
+
+  filter:{
+    type:Object,
+    default:()=>({
+      building_id:"",
+      month:""
+    })
+  }
+
+});
+
+
+
+// State
+
+const loading = ref(true);
+
+const error = ref(null);
 
 
 
@@ -37,13 +55,17 @@ const chartData = ref({
 
   labels: [],
 
-  datasets: [
+  datasets:[
 
     {
 
-      label: "จำนวนหน้าพิมพ์",
+      label:"จำนวนหน้าพิมพ์",
 
-      data: []
+      data:[],
+
+      backgroundColor:"#2563EB",
+
+      borderWidth:1
 
     }
 
@@ -54,15 +76,68 @@ const chartData = ref({
 
 
 
+
 const chartOptions = {
 
   responsive:true,
 
+  maintainAspectRatio:false,
+
+
   plugins:{
 
-    legend:{
 
+    legend:{
       display:true
+    },
+
+
+    tooltip:{
+
+
+      callbacks:{
+
+
+        label(context){
+
+          return (
+            "จำนวนหน้า: " +
+            Number(context.raw)
+            .toLocaleString()
+            +
+            " หน้า"
+          );
+
+        }
+
+      }
+
+    }
+
+  },
+
+
+
+  scales:{
+
+
+    y:{
+
+
+      beginAtZero:true,
+
+
+      ticks:{
+
+
+        callback(value){
+
+          return Number(value)
+          .toLocaleString();
+
+        }
+
+      }
 
     }
 
@@ -77,50 +152,109 @@ const chartOptions = {
 async function loadMonthly(){
 
 
-try{
+  loading.value = true;
+
+  error.value = null;
 
 
-const res = await api.get(
-  "/dashboard/monthly-kpi"
-);
+  try{
 
 
-console.log(
-  JSON.stringify(res.data[0], null, 2)
-);
+    const res = await api.get(
+
+      "/dashboard/monthly-kpi",
+
+      {
+
+        params: props.filter
+
+      }
+
+    );
 
 
 
-const grouped = {};
+    console.log(
+      "Monthly KPI:",
+      res.data
+    );
 
-res.data.forEach(item => {
-  if (!grouped[item.month]) {
-    grouped[item.month] = 0;
+
+
+    const monthly = {};
+
+
+
+    res.data.forEach(item=>{
+
+
+      const month = item.month;
+
+
+
+      if(!monthly[month]){
+
+        monthly[month] = 0;
+
+      }
+
+
+
+      monthly[month] += Number(
+        item.net_pages || 0
+      );
+
+
+    });
+
+
+
+    chartData.value = {
+
+
+      labels:Object.keys(monthly),
+
+
+      datasets:[
+
+        {
+
+          label:"จำนวนหน้าพิมพ์",
+
+          data:Object.values(monthly),
+
+          backgroundColor:"#2563EB",
+
+          borderWidth:1
+
+        }
+
+      ]
+
+    };
+
+
+
+  }catch(err){
+
+
+    console.error(
+      "Monthly Chart Error:",
+      err
+    );
+
+
+    error.value =
+      "โหลดข้อมูลรายเดือนไม่ได้";
+
+
+  }finally{
+
+
+    loading.value=false;
+
+
   }
-
-  grouped[item.month] += Number(item.net_pages);
-});
-
-chartData.value = {
-  labels: Object.keys(grouped),
-  datasets: [
-    {
-      label: "จำนวนหน้าพิมพ์",
-      data: Object.values(grouped)
-    }
-  ]
-};
-
-
-
-}catch(err){
-
-console.error(
- "Monthly Chart Error:",
- err
-);
-
-}
 
 
 }
@@ -131,9 +265,31 @@ console.error(
 
 onMounted(()=>{
 
- loadMonthly();
+  loadMonthly();
 
 });
+
+
+
+
+// เมื่อเปลี่ยน Filter ให้โหลดใหม่
+
+watch(
+
+  ()=>props.filter,
+
+  ()=>{
+
+    loadMonthly();
+
+  },
+
+  {
+    deep:true
+  }
+
+);
+
 
 
 </script>
@@ -142,20 +298,48 @@ onMounted(()=>{
 
 <template>
 
+<div class="h-80">
 
-<div>
+
+  <div
+
+    v-if="loading"
+
+    class="flex justify-center items-center h-full"
+
+  >
+
+    กำลังโหลดกราฟ...
+
+  </div>
 
 
-<Bar
 
-:options="chartOptions"
+  <div
 
-:data="chartData"
+    v-else-if="error"
 
-/>
+    class="text-red-600"
+
+  >
+
+    {{ error }}
+
+  </div>
+
+
+
+  <Bar
+
+    v-else
+
+    :data="chartData"
+
+    :options="chartOptions"
+
+  />
 
 
 </div>
-
 
 </template>

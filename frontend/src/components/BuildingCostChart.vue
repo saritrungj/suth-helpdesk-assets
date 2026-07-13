@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted } from "vue";
 
 import { Bar } from "vue-chartjs";
 
@@ -21,36 +21,13 @@ import api from "../services/api";
 
 
 ChartJS.register(
-
   Title,
   Tooltip,
   Legend,
   BarElement,
   CategoryScale,
   LinearScale
-
 );
-
-
-
-// รับ Filter จาก Dashboard
-
-const props = defineProps({
-
-  filter: {
-
-    type: Object,
-
-    default: () => ({
-
-      building_name: "",
-      month: ""
-
-    })
-
-  }
-
-});
 
 
 
@@ -64,15 +41,19 @@ const chartData = ref({
 
   labels: [],
 
+
   datasets: [
 
     {
 
       label: "ค่าใช้จ่าย (บาท)",
 
+
       data: [],
 
+
       backgroundColor: "#DC2626",
+
 
       borderWidth: 1
 
@@ -151,7 +132,6 @@ const chartOptions = {
   },
 
 
-
   scales: {
 
 
@@ -164,12 +144,12 @@ const chartOptions = {
       ticks: {
 
 
-        callback(value) {
+        callback(value){
 
 
           return Number(value)
 
-            .toLocaleString();
+          .toLocaleString();
 
 
         }
@@ -192,39 +172,15 @@ const chartOptions = {
 
 
 
-async function loadCost(){
-
-
-  loading.value = true;
+async function loadBuildingCost(){
 
 
   try {
 
 
-
     const res = await api.get(
 
-      "/dashboard/compare",
-
-      {
-
-        params: {
-
-
-          month:
-
-            props.filter.month || undefined,
-
-
-
-          building_name:
-
-            props.filter.building_name || undefined
-
-
-        }
-
-      }
+      "/dashboard/summary-by-building"
 
     );
 
@@ -232,7 +188,7 @@ async function loadCost(){
 
     console.log(
 
-      "Cost Data:",
+      "Building Cost:",
 
       res.data
 
@@ -240,55 +196,21 @@ async function loadCost(){
 
 
 
-    const monthly = {};
-
-
-
-    res.data.forEach(item => {
-
-
-
-      const month = item.month;
-
-
-
-      if(!monthly[month]){
-
-
-        monthly[month] = 0;
-
-
-      }
-
-
-
-      monthly[month] +=
-
-        Number(
-
-          item.total_cost || 0
-
-        );
-
-
-
-    });
-
-
-
-
 
     chartData.value = {
 
 
-
       labels:
 
-        Object.keys(monthly),
+        res.data.map(
+
+          item => item.building_name
+
+        ),
 
 
 
-      datasets: [
+      datasets:[
 
 
         {
@@ -302,7 +224,17 @@ async function loadCost(){
 
           data:
 
-            Object.values(monthly),
+            res.data.map(
+
+              item =>
+
+                Number(
+
+                  item.total_building_cost || 0
+
+                )
+
+            ),
 
 
 
@@ -321,9 +253,7 @@ async function loadCost(){
       ]
 
 
-
     };
-
 
 
 
@@ -333,20 +263,18 @@ async function loadCost(){
   catch(err){
 
 
-
     console.error(
 
-      "Cost Chart Error:",
+      "Building Cost Error:",
 
       err
 
     );
 
 
-
     error.value =
 
-      "โหลดข้อมูลค่าใช้จ่ายรายเดือนไม่ได้";
+      "โหลดค่าใช้จ่ายรายอาคารไม่ได้";
 
 
   }
@@ -355,7 +283,7 @@ async function loadCost(){
   finally{
 
 
-    loading.value = false;
+    loading.value=false;
 
 
   }
@@ -367,37 +295,10 @@ async function loadCost(){
 
 
 
-// โหลดครั้งแรก
-
-onMounted(loadCost);
-
-
-
-// โหลดใหม่เมื่อ Filter เปลี่ยน
-
-watch(
-
-  () => props.filter,
-
-  () => {
-
-    loadCost();
-
-  },
-
-  {
-
-    deep:true
-
-  }
-
-);
-
+onMounted(loadBuildingCost);
 
 
 </script>
-
-
 
 
 
@@ -405,7 +306,6 @@ watch(
 
 
 <div class="h-80">
-
 
 
   <div
@@ -418,8 +318,8 @@ watch(
 
     กำลังโหลดกราฟ...
 
-  </div>
 
+  </div>
 
 
 
@@ -434,8 +334,8 @@ watch(
 
     {{ error }}
 
-  </div>
 
+  </div>
 
 
 
@@ -449,7 +349,6 @@ watch(
     :options="chartOptions"
 
   />
-
 
 
 </div>

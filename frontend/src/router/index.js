@@ -6,16 +6,24 @@ import AssetList from "../views/AssetList.vue";
 import ImportDevices from "../views/ImportDevices.vue";
 import Expense from "../views/Expense.vue";
 import Report from "../views/Report.vue";
+import PrintTransactions from "../views/PrintTransactions.vue";
 
 
 // Lazy Load
-const AssetForm = () => import("../views/AssetForm.vue");
-const Brand = () => import("../views/admin/Brand.vue");
-const Device = () => import("../views/admin/Device.vue");
+const AssetForm = () =>
+  import("../views/AssetForm.vue");
+
+const Brand = () =>
+  import("../views/admin/Brand.vue");
+
+const Device = () =>
+  import("../views/admin/Device.vue");
+
 
 
 const routes = [
 
+  // Login
   {
     path: "/login",
     name: "Login",
@@ -23,6 +31,7 @@ const routes = [
   },
 
 
+  // Dashboard
   {
     path: "/",
     name: "Dashboard",
@@ -31,13 +40,21 @@ const routes = [
 
 
   {
+    path: "/dashboard",
+    name: "DashboardPage",
+    component: Dashboard,
+  },
+
+
+  // Asset List
+  {
     path: "/assets",
     name: "AssetList",
     component: AssetList,
   },
 
 
-  // เพิ่มข้อมูลใหม่
+  // Add Asset
   {
     path: "/add-asset",
     name: "AddAsset",
@@ -45,14 +62,16 @@ const routes = [
   },
 
 
-  // แก้ไขข้อมูล
+  // Edit Asset
   {
- path:"/edit-asset/:id",
- name:"EditAsset",
- component:()=>import("../views/AssetForm.vue")
-},
+    path: "/edit-asset/:id",
+    name: "EditAsset",
+    component: () =>
+      import("../views/AssetForm.vue"),
+  },
 
 
+  // Expense
   {
     path: "/expense",
     name: "Expense",
@@ -60,6 +79,7 @@ const routes = [
   },
 
 
+  // Report
   {
     path: "/report",
     name: "Report",
@@ -67,6 +87,7 @@ const routes = [
   },
 
 
+  // Import Devices
   {
     path: "/import-devices",
     name: "ImportDevices",
@@ -74,6 +95,15 @@ const routes = [
   },
 
 
+  // Print Transactions
+  {
+    path: "/print-transactions",
+    name: "PrintTransactions",
+    component: PrintTransactions,
+  },
+
+
+  // Admin Brand
   {
     path: "/admin/brands",
     name: "Brands",
@@ -81,11 +111,13 @@ const routes = [
   },
 
 
+  // Admin Device
   {
     path: "/admin/devices",
     name: "Devices",
     component: Device,
   },
+
 
 ];
 
@@ -101,22 +133,33 @@ const router = createRouter({
 
 
 
+// Auth Guard
 router.beforeEach((to) => {
 
-  const token = localStorage.getItem("token");
+
+  const token =
+    localStorage.getItem("token");
+
 
   const user = JSON.parse(
     localStorage.getItem("user") || "null"
   );
 
 
-  if (to.path !== "/login" && !token) {
+
+  // ถ้าไม่ login ให้ไปหน้า login
+  if (
+    to.path !== "/login" &&
+    !token
+  ) {
 
     return "/login";
 
   }
 
 
+
+  // Admin เท่านั้น
   if (
     to.path.startsWith("/admin") &&
     user?.role !== "admin"
@@ -127,7 +170,9 @@ router.beforeEach((to) => {
   }
 
 
+
   return true;
+
 
 });
 
