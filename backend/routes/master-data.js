@@ -77,12 +77,101 @@ function registerLookup(tableName, routePath) {
   });
 }
 
+// Helper: CRUD สำหรับ lookup table ที่มี parent (foreign key) เช่น floor -> building
+function registerChildLookup(tableName, routePath, parentField) {
+
+  // GET all
+  router.get(routePath, async (req, res) => {
+    try {
+      const [rows] = await db.query(`SELECT * FROM \`${tableName}\` ORDER BY id`);
+      res.json(rows);
+    } catch (err) {
+      console.error(`Error fetching ${tableName}:`, err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET by id
+  router.get(`${routePath}/:id`, async (req, res) => {
+    try {
+      const [rows] = await db.query(`SELECT * FROM \`${tableName}\` WHERE id = ?`, [req.params.id]);
+      if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+      res.json(rows[0]);
+    } catch (err) {
+      console.error(`Error fetching ${tableName}:`, err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST — create (ต้องมีทั้งชื่อและ parent id)
+  router.post(routePath, async (req, res) => {
+    try {
+      const { name } = req.body;
+      const parentId = req.body[parentField];
+
+      if (!name) return res.status(400).json({ error: 'name is required' });
+      if (!parentId) return res.status(400).json({ error: `${parentField} is required` });
+
+      const [result] = await db.query(
+        `INSERT INTO \`${tableName}\` (\`${parentField}\`, name) VALUES (?, ?)`,
+        [parentId, name.trim()]
+      );
+
+      res.status(201).json({ id: result.insertId, [parentField]: parentId, name: name.trim() });
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ error: `"${req.body.name}" already exists in ${tableName}` });
+      }
+      console.error(`Error creating ${tableName}:`, err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PUT — update (แก้ทั้งชื่อและ parent id)
+  router.put(`${routePath}/:id`, async (req, res) => {
+    try {
+      const { name } = req.body;
+      const parentId = req.body[parentField];
+
+      if (!name) return res.status(400).json({ error: 'name is required' });
+      if (!parentId) return res.status(400).json({ error: `${parentField} is required` });
+
+      const [result] = await db.query(
+        `UPDATE \`${tableName}\` SET \`${parentField}\` = ?, name = ? WHERE id = ?`,
+        [parentId, name.trim(), req.params.id]
+      );
+
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
+      res.json({ id: parseInt(req.params.id), [parentField]: parentId, name: name.trim() });
+    } catch (err) {
+      console.error(`Error updating ${tableName}:`, err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE
+  router.delete(`${routePath}/:id`, async (req, res) => {
+    try {
+      const [result] = await db.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [req.params.id]);
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
+      res.json({ message: 'Deleted successfully' });
+    } catch (err) {
+      console.error(`Error deleting ${tableName}:`, err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
+
 // Register all lookup tables
 registerLookup('brand', '/brands');
 registerLookup('building', '/buildings');
-registerLookup('floor', '/floors');
 registerLookup('division', '/divisions');
-registerLookup('department', '/departments');
+
+// floor และ department มี foreign key ผูกกับตารางแม่ (building / division)
+// ต้องใช้ registerChildLookup แทน registerLookup ธรรมดา
+// (registerLookup เดิมบันทึกแค่ name ทำให้ building_id / division_id หายไปทุกครั้ง)
+registerChildLookup('floor', '/floors', 'building_id');
+registerChildLookup('department', '/departments', 'division_id');
 
 // fiscal_year uses "year" column instead of "name"
 router.get('/fiscal-years', async (req, res) => {

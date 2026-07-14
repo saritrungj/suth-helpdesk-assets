@@ -505,5 +505,149 @@ router.get('/stats', async(req,res)=>{
 
 });
 
+// ============================================================
+// GET /api/dashboard/expense
+// Expense Detail
+// ============================================================
+
+router.get('/expense', async(req,res)=>{
+
+  try {
+
+
+    let sql = `
+
+      SELECT
+
+        v.device_id,
+
+        d.model,
+
+        b.name AS building_name,
+
+        dep.name AS department_name,
+
+
+        SUM(v.net_pages) AS total_pages,
+
+
+        SUM(v.total_cost) AS total_cost
+
+
+      FROM v_monthly_kpi v
+
+
+      LEFT JOIN devices d
+      ON v.device_id = d.id
+
+
+      LEFT JOIN building b
+      ON d.building_id = b.id
+
+
+      LEFT JOIN department dep
+      ON d.department_id = dep.id
+
+
+      WHERE 1=1
+
+    `;
+
+
+
+    const params=[];
+
+
+
+    // Filter เดือน
+    if(req.query.month){
+
+
+      sql += `
+        AND v.month = ?
+      `;
+
+
+      params.push(
+        req.query.month
+      );
+
+
+    }
+
+
+
+    // Filter อาคาร
+    if(req.query.building_name){
+
+
+      sql += `
+        AND b.name = ?
+      `;
+
+
+      params.push(
+        req.query.building_name
+      );
+
+
+    }
+
+
+
+    sql += `
+
+      GROUP BY
+
+        v.device_id,
+
+        d.model,
+
+        b.name,
+
+        dep.name
+
+
+      ORDER BY
+
+        total_cost DESC
+
+    `;
+
+
+
+    const [rows] =
+      await db.query(
+        sql,
+        params
+      );
+
+
+
+    res.json(rows);
+
+
+
+  }
+  catch(err){
+
+
+    console.error(
+      "Expense Error:",
+      err.message
+    );
+
+
+    res.status(500).json({
+
+      error:err.message
+
+    });
+
+
+  }
+
+
+});
 
 module.exports = router;

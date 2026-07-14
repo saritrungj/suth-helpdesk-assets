@@ -4,26 +4,69 @@ import Login from "../views/Login.vue";
 import Dashboard from "../views/Dashboard.vue";
 import AssetList from "../views/AssetList.vue";
 import ImportDevices from "../views/ImportDevices.vue";
-import Expense from "../views/Expense.vue";
-import Report from "../views/Report.vue";
-import PrintTransactions from "../views/PrintTransactions.vue";
 
 
-// Lazy Load
+// =======================
+// Lazy Load Pages
+// =======================
+
+const Expense = () =>
+  import("../views/Expense.vue");
+
+
+const Report = () =>
+  import("../views/Report.vue");
+
+
+const PrintTransactions = () =>
+  import("../views/PrintTransactions.vue");
+
+
+
 const AssetForm = () =>
   import("../views/AssetForm.vue");
 
+
+// Admin
+
 const Brand = () =>
   import("../views/admin/Brand.vue");
+
 
 const Device = () =>
   import("../views/admin/Device.vue");
 
 
+const Building = () =>
+  import("../views/admin/Building.vue");
+
+
+const Floor = () =>
+  import("../views/admin/Floor.vue");
+
+
+const Division = () =>
+  import("../views/admin/Division.vue");
+
+
+const Department = () =>
+  import("../views/admin/Department.vue");
+
+
+const FiscalYear = () =>
+  import("../views/admin/FiscalYear.vue");
+
+
+const Contract = () =>
+  import("../views/admin/Contract.vue");
+
+
+// =======================
+// Routes
+// =======================
 
 const routes = [
 
-  // Login
   {
     path: "/login",
     name: "Login",
@@ -34,40 +77,33 @@ const routes = [
   // Dashboard
   {
     path: "/",
+    redirect: "/dashboard",
+  },
+
+  {
+    path: "/dashboard",
     name: "Dashboard",
     component: Dashboard,
   },
 
 
-  {
-    path: "/dashboard",
-    name: "DashboardPage",
-    component: Dashboard,
-  },
-
-
-  // Asset List
+  // Asset
   {
     path: "/assets",
     name: "AssetList",
     component: AssetList,
   },
 
-
-  // Add Asset
   {
     path: "/add-asset",
     name: "AddAsset",
     component: AssetForm,
   },
 
-
-  // Edit Asset
   {
     path: "/edit-asset/:id",
     name: "EditAsset",
-    component: () =>
-      import("../views/AssetForm.vue"),
+    component: AssetForm,
   },
 
 
@@ -87,7 +123,7 @@ const routes = [
   },
 
 
-  // Import Devices
+  // Import
   {
     path: "/import-devices",
     name: "ImportDevices",
@@ -95,7 +131,7 @@ const routes = [
   },
 
 
-  // Print Transactions
+  // Print
   {
     path: "/print-transactions",
     name: "PrintTransactions",
@@ -103,25 +139,66 @@ const routes = [
   },
 
 
-  // Admin Brand
+  // =======================
+  // Admin Master Data
+  // =======================
+
   {
     path: "/admin/brands",
     name: "Brands",
     component: Brand,
   },
 
-
-  // Admin Device
   {
     path: "/admin/devices",
     name: "Devices",
     component: Device,
   },
 
+  {
+    path: "/admin/buildings",
+    name: "Buildings",
+    component: Building,
+  },
+
+  {
+    path: "/admin/floors",
+    name: "Floors",
+    component: Floor,
+  },
+
+  {
+    path: "/admin/divisions",
+    name: "Divisions",
+    component: Division,
+  },
+
+  {
+    path: "/admin/departments",
+    name: "Departments",
+    component: Department,
+  },
+
+  {
+    path: "/admin/fiscal-years",
+    name: "FiscalYears",
+    component: FiscalYear,
+  },
+
+  {
+    path: "/admin/contracts",
+    name: "Contracts",
+    component: Contract,
+  },
+
 
 ];
 
 
+
+// =======================
+// Router
+// =======================
 
 const router = createRouter({
 
@@ -133,7 +210,10 @@ const router = createRouter({
 
 
 
+// =======================
 // Auth Guard
+// =======================
+
 router.beforeEach((to) => {
 
 
@@ -141,31 +221,50 @@ router.beforeEach((to) => {
     localStorage.getItem("token");
 
 
-  const user = JSON.parse(
-    localStorage.getItem("user") || "null"
-  );
+  const user =
+    JSON.parse(
+      localStorage.getItem("user") || "{}"
+    );
 
 
 
-  // ถ้าไม่ login ให้ไปหน้า login
+  // ไม่ login
   if (
     to.path !== "/login" &&
     !token
   ) {
 
-    return "/login";
+    return {
+      path: "/login",
+    };
 
   }
 
 
 
-  // Admin เท่านั้น
+  // Login แล้ว ไม่ควรกลับ login
   if (
-    to.path.startsWith("/admin") &&
-    user?.role !== "admin"
+    to.path === "/login" &&
+    token
   ) {
 
-    return "/";
+    return {
+      path: "/dashboard",
+    };
+
+  }
+
+
+
+  // Admin only
+  if (
+    to.path.startsWith("/admin") &&
+    user.role !== "admin"
+  ) {
+
+    return {
+      path: "/dashboard",
+    };
 
   }
 
@@ -173,9 +272,7 @@ router.beforeEach((to) => {
 
   return true;
 
-
 });
-
 
 
 export default router;

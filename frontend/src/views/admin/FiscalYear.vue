@@ -2,17 +2,17 @@
 import { ref, onMounted } from "vue"
 import api from "../../services/api"
 
-const buildings = ref([])
-const newBuilding = ref("")
+const fiscalYears = ref([])
+const newYear = ref("")
 
 const editingId = ref(null)
-const editName = ref("")
+const editYear = ref("")
 
 // โหลดข้อมูล
 async function load() {
   try {
-    const res = await api.get("/buildings")
-    buildings.value = res.data
+    const res = await api.get("/fiscal-years")
+    fiscalYears.value = res.data
   } catch (err) {
     console.error(err)
     alert("โหลดข้อมูลไม่สำเร็จ")
@@ -20,18 +20,18 @@ async function load() {
 }
 
 // เพิ่ม
-async function addBuilding() {
-  if (!newBuilding.value.trim()) {
-    alert("กรุณากรอกชื่ออาคาร")
+async function addFiscalYear() {
+  if (!newYear.value.trim()) {
+    alert("กรุณากรอกปีงบประมาณ")
     return
   }
 
   try {
-    await api.post("/buildings", {
-      name: newBuilding.value,
+    await api.post("/fiscal-years", {
+      year: newYear.value
     })
 
-    newBuilding.value = ""
+    newYear.value = ""
     load()
   } catch (err) {
     console.error(err)
@@ -39,26 +39,26 @@ async function addBuilding() {
   }
 }
 
-// เริ่มแก้ไข
-function editBuilding(building) {
-  editingId.value = building.id
-  editName.value = building.name
+// แก้ไข
+function editFiscalYear(item) {
+  editingId.value = item.id
+  editYear.value = item.year
 }
 
 // บันทึก
-async function saveBuilding(id) {
-  if (!editName.value.trim()) {
-    alert("กรุณากรอกชื่ออาคาร")
+async function saveFiscalYear(id) {
+  if (!editYear.value.trim()) {
+    alert("กรุณากรอกปีงบประมาณ")
     return
   }
 
   try {
-    await api.put(`/buildings/${id}`, {
-      name: editName.value,
+    await api.put(`/fiscal-years/${id}`, {
+      year: editYear.value
     })
 
     editingId.value = null
-    editName.value = ""
+    editYear.value = ""
 
     load()
   } catch (err) {
@@ -68,11 +68,11 @@ async function saveBuilding(id) {
 }
 
 // ลบ
-async function deleteBuilding(id) {
-  if (!confirm("ต้องการลบอาคารนี้ใช่หรือไม่?")) return
+async function deleteFiscalYear(id) {
+  if (!confirm("ต้องการลบปีงบประมาณนี้ใช่หรือไม่?")) return
 
   try {
-    await api.delete(`/buildings/${id}`)
+    await api.delete(`/fiscal-years/${id}`)
     load()
   } catch (err) {
     console.error(err)
@@ -85,34 +85,34 @@ onMounted(load)
 
 <template>
   <div class="p-6">
-    <h1 class="text-2xl font-bold mb-4">
-      Building Management
+
+    <h1 class="text-2xl font-bold mb-6">
+      Fiscal Year Management
     </h1>
 
-    <!-- เพิ่ม -->
     <div class="flex gap-2 mb-6">
+
       <input
-        v-model="newBuilding"
-        type="text"
-        placeholder="Building Name"
+        v-model="newYear"
+        placeholder="2569"
         class="border rounded px-3 py-2"
       />
 
       <button
-        @click="addBuilding"
-        class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+        @click="addFiscalYear"
+        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
       >
         Add
       </button>
+
     </div>
 
-    <!-- ตาราง -->
     <table class="w-full border-collapse border">
 
       <thead>
-        <tr>
+        <tr class="bg-gray-100">
           <th class="border p-2">ID</th>
-          <th class="border p-2">Building</th>
+          <th class="border p-2">Fiscal Year</th>
           <th class="border p-2">Action</th>
         </tr>
       </thead>
@@ -120,23 +120,23 @@ onMounted(load)
       <tbody>
 
         <tr
-          v-for="b in buildings"
-          :key="b.id"
+          v-for="y in fiscalYears"
+          :key="y.id"
         >
 
           <td class="border p-2">
-            {{ b.id }}
+            {{ y.id }}
           </td>
 
           <td class="border p-2">
 
-            <span v-if="editingId !== b.id">
-              {{ b.name }}
+            <span v-if="editingId !== y.id">
+              {{ y.year }}
             </span>
 
             <input
               v-else
-              v-model="editName"
+              v-model="editYear"
               class="border rounded px-2 py-1 w-full"
             />
 
@@ -144,17 +144,17 @@ onMounted(load)
 
           <td class="border p-2 space-x-2">
 
-            <template v-if="editingId !== b.id">
+            <template v-if="editingId !== y.id">
 
               <button
-                @click="editBuilding(b)"
+                @click="editFiscalYear(y)"
                 class="bg-yellow-500 text-white px-3 py-1 rounded"
               >
                 Edit
               </button>
 
               <button
-                @click="deleteBuilding(b.id)"
+                @click="deleteFiscalYear(y.id)"
                 class="bg-red-600 text-white px-3 py-1 rounded"
               >
                 Delete
@@ -164,7 +164,7 @@ onMounted(load)
 
             <button
               v-else
-              @click="saveBuilding(b.id)"
+              @click="saveFiscalYear(y.id)"
               class="bg-green-600 text-white px-3 py-1 rounded"
             >
               Save

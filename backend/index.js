@@ -59,6 +59,12 @@ const importRoutes =
   require("./routes/importRoutes");
 
 
+// ⭐ เพิ่มบรรทัดนี้
+const expenseRoutes =
+  require("./routes/expense");
+
+
+
 
 // ======================
 // Health Check
@@ -77,6 +83,7 @@ app.get("/", (req,res)=>{
   });
 
 });
+
 
 
 
@@ -126,6 +133,14 @@ app.use(
 );
 
 
+// ⭐ เพิ่ม Expense Route
+app.use(
+  "/api/expense",
+  expenseRoutes
+);
+
+
+
 
 // ======================
 // 404
@@ -161,6 +176,7 @@ app.use((err,req,res,next)=>{
   });
 
 });
+
 
 
 
