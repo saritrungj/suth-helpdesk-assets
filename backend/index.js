@@ -30,6 +30,7 @@ const devicesRoutes = require("./routes/devices");
 const contractsRoutes = require("./routes/contracts");
 const printTransactionsRoutes = require("./routes/print-transactions");
 const dashboardRoutes = require("./routes/dashboard");
+const expensesRoutes = require("./routes/expenses");
 const authRoutes = require("./routes/auth");
 const importRoutes = require("./routes/importRoutes");
 
@@ -48,6 +49,7 @@ app.use("/api/devices", devicesRoutes);
 app.use("/api/contracts", contractsRoutes);
 app.use("/api/print-transactions", printTransactionsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/expenses", expensesRoutes);
 app.use("/api/auth", authRoutes);
 
 // 404

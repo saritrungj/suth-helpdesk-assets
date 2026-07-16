@@ -36,6 +36,71 @@ router.get('/monthly-kpi', async (req, res) => {
   }
 });
 
+// GET /api/dashboard/monthly-summary — ยอดรวมรายเดือน (พิมพ์, สุทธิ, ค่าใช้จ่าย)
+// ใช้ขับกราฟและการ์ดเปรียบเทียบเดือนต่อเดือนบน Dashboard
+router.get('/monthly-summary', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        month,
+        SUM(pages_printed) AS pages,
+        SUM(net_pages) AS net_pages,
+        SUM(total_cost) AS total_cost,
+        COUNT(DISTINCT device_id) AS device_count
+      FROM v_monthly_kpi
+      GROUP BY month
+      ORDER BY month
+    `);
+
+    res.json(rows.map((r) => ({
+      month: r.month,
+      pages: Number(r.pages),
+      net_pages: Number(r.net_pages),
+      total_cost: Number(r.total_cost),
+      device_count: Number(r.device_count)
+    })));
+  } catch (err) {
+    console.error('Error fetching monthly summary:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/dashboard/top-devices — เครื่องที่ค่าใช้จ่ายสะสมสูงสุด (default 5 ตัว)
+router.get('/top-devices', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 5, 50);
+
+    const [rows] = await db.query(`
+      SELECT
+        k.device_id,
+        k.serial_number,
+        d.model,
+        br.name AS brand_name,
+        dept.name AS department_name,
+        b.name AS building_name,
+        SUM(k.net_pages) AS net_pages,
+        SUM(k.total_cost) AS total_cost
+      FROM v_monthly_kpi k
+      JOIN devices d ON k.device_id = d.id
+      LEFT JOIN brand br ON d.brand_id = br.id
+      LEFT JOIN department dept ON d.department_id = dept.id
+      LEFT JOIN building b ON d.building_id = b.id
+      GROUP BY k.device_id, k.serial_number, d.model, br.name, dept.name, b.name
+      ORDER BY total_cost DESC
+      LIMIT ?
+    `, [limit]);
+
+    res.json(rows.map((r) => ({
+      ...r,
+      net_pages: Number(r.net_pages),
+      total_cost: Number(r.total_cost)
+    })));
+  } catch (err) {
+    console.error('Error fetching top devices:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/dashboard/summary-by-building — ดึงจาก v_summary_by_building
 router.get('/summary-by-building', async (req, res) => {
   try {

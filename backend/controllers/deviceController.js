@@ -14,6 +14,7 @@ const deviceSchema = z.object({
   department_id: z.number().int().positive().optional().nullable(),
   contract_id: z.number().int().positive().optional().nullable(),
   price_override: z.number().nonnegative().optional().nullable(),
+  status: z.enum(["active", "repair", "retired"]).optional().nullable(),
 });
 
 // ============================================================
@@ -27,6 +28,7 @@ exports.getAll = async (req, res) => {
         d.serial_number,
         d.model,
         d.price_override,
+        d.status,
         br.name AS brand_name,
         b.name AS building_name,
         f.name AS floor_name,
@@ -73,7 +75,7 @@ exports.getOne = async (req, res) => {
       FROM devices d
       LEFT JOIN brand br ON d.brand_id = br.id
       LEFT JOIN building b ON d.building_id = b.id
-      LEFT JOIN floors f ON d.floor_id = f.id
+      LEFT JOIN floor f ON d.floor_id = f.id
       LEFT JOIN division divi ON d.division_id = divi.id
       LEFT JOIN department dept ON d.department_id = dept.id
       LEFT JOIN contracts c ON d.contract_id = c.id
@@ -115,6 +117,7 @@ exports.create = async (req, res) => {
       department_id,
       contract_id,
       price_override,
+      status,
     } = validatedData;
 
     const [result] = await db.query(
@@ -129,9 +132,10 @@ exports.create = async (req, res) => {
         division_id,
         department_id,
         contract_id,
-        price_override
+        price_override,
+        status
       )
-      VALUES (?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
     `,
       [
         serial_number,
@@ -143,6 +147,7 @@ exports.create = async (req, res) => {
         department_id || null,
         contract_id || null,
         price_override || null,
+        status || "active",
       ]
     );
 
@@ -189,6 +194,7 @@ exports.update = async (req, res) => {
       department_id,
       contract_id,
       price_override,
+      status,
     } = validatedData;
 
     const [result] = await db.query(
@@ -202,7 +208,8 @@ exports.update = async (req, res) => {
         division_id=?,
         department_id=?,
         contract_id=?,
-        price_override=?
+        price_override=?,
+        status=?
       WHERE id=?
     `,
       [
@@ -215,6 +222,7 @@ exports.update = async (req, res) => {
         department_id || null,
         contract_id || null,
         price_override || null,
+        status || "active",
         req.params.id,
       ]
     );
@@ -264,6 +272,12 @@ exports.remove = async (req, res) => {
       message: "Device deleted successfully",
     });
   } catch (err) {
+    if (err.code === "ER_ROW_IS_REFERENCED_2") {
+      return res.status(409).json({
+        error: "ลบไม่ได้ เพราะเครื่องนี้มียอดพิมพ์บันทึกอยู่",
+      });
+    }
+
     console.error(err);
 
     res.status(500).json({

@@ -114,19 +114,11 @@ CREATE OR REPLACE VIEW v_summary_by_building AS
 SELECT 
     b.name AS building_name,
     SUM(pt.pages * 0.8) AS total_net_pages,
-<<<<<<< HEAD:database/schema_normalized.sql
-    SUM((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page)) AS total_building_cost
-FROM devices d
-JOIN building b ON d.building_id = b.id
-JOIN print_transactions pt ON d.id = pt.device_id
-JOIN contracts c ON d.contract_id = c.id
-=======
     SUM((pt.pages * 0.8) * COALESCE(d.price_override, c.price_per_page, 0)) AS total_building_cost
 FROM print_transactions pt
 JOIN devices d ON pt.device_id = d.id
 LEFT JOIN building b ON d.building_id = b.id
 LEFT JOIN contracts c ON d.contract_id = c.id
->>>>>>> ee8bc57 (handoff document):database/schema_v3_normalized.sql
 GROUP BY b.name;
 
 -- View: v_compare_usage_costs (สำหรับฟีเจอร์ Compare - ดึงยอดสุทธิและราคาต่อแผ่น)
@@ -135,11 +127,7 @@ SELECT
     pt.month,
     fy.year AS fiscal_year,
     d.serial_number,
-<<<<<<< HEAD:database/schema_normalized.sql
     d.status AS device_status,
-=======
-
->>>>>>> ee8bc57 (handoff document):database/schema_v3_normalized.sql
     b.name AS building_name,
     f.name AS floor_name,
     divi.name AS division_name,
@@ -161,17 +149,12 @@ LEFT JOIN department dept ON d.department_id = dept.id
 LEFT JOIN brand br ON d.brand_id = br.id;
 
 -- ==============================================================================
--- 👤 Users Table (For Prototype Authentication)
+-- 👤 Dummy Users (For Prototype Authentication)
 -- ==============================================================================
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL, -- Plaintext for prototype as requested
-    role ENUM('admin', 'user') DEFAULT 'user',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 
 -- Insert dummy data for presentation
-INSERT IGNORE INTO users (username, password, role) VALUES 
-('admin', 'admin123', 'admin'),
-('user1', 'user123', 'user');
+-- รหัสผ่านเก็บเป็น bcrypt hash (backend ตรวจด้วย bcrypt.compare)
+-- admin / admin123 , user1 / user123
+INSERT IGNORE INTO users (username, password, role) VALUES
+('admin', '$2b$10$iQCZ86ynZX2Mq4/XIYZdV.ia3uXu3IPVNsFb4zCmyX5LDht5zt/IK', 'admin'),
+('user1', '$2b$10$DSqOMMM982ZGMeTdCiv9v.Ww2uzOrhjfZ2KdR3INnsZsPpdvEtILe', 'viewer');

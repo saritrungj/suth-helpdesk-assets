@@ -13,7 +13,11 @@
         ทรัพย์สิน
       </RouterLink>
 
-      <RouterLink to="/add-asset" class="block hover:bg-blue-600 p-2 rounded">
+      <RouterLink
+        v-if="user?.role === 'admin'"
+        to="/add-asset"
+        class="block hover:bg-blue-600 p-2 rounded"
+      >
         เพิ่มทรัพย์สิน
       </RouterLink>
 
@@ -41,6 +45,34 @@
           class="block hover:bg-blue-600 p-2 rounded"
         >
           จัดการยี่ห้อ
+        </RouterLink>
+
+        <RouterLink
+          to="/admin/buildings"
+          class="block hover:bg-blue-600 p-2 rounded"
+        >
+          จัดการอาคาร/ชั้น
+        </RouterLink>
+
+        <RouterLink
+          to="/admin/divisions"
+          class="block hover:bg-blue-600 p-2 rounded"
+        >
+          จัดการฝ่าย/แผนก
+        </RouterLink>
+
+        <RouterLink
+          to="/admin/fiscal-years"
+          class="block hover:bg-blue-600 p-2 rounded"
+        >
+          จัดการปีงบประมาณ
+        </RouterLink>
+
+        <RouterLink
+          to="/admin/contracts"
+          class="block hover:bg-blue-600 p-2 rounded"
+        >
+          จัดการสัญญา
         </RouterLink>
 
         <RouterLink

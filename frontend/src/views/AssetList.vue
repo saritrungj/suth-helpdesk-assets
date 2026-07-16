@@ -8,6 +8,9 @@ import SearchBar from '../components/SearchBar.vue'
 
 const router = useRouter()
 
+const user = JSON.parse(localStorage.getItem('user') || 'null')
+const isAdmin = user?.role === 'admin'
+
 const search = ref('')
 
 // ข้อมูลจาก API
@@ -30,9 +33,21 @@ async function loadAssets() {
   }
 }
 
-// ลบ (ตอนนี้ยังเป็น Mock)
-function deleteAsset(id) {
-  assets.value = assets.value.filter(a => a.id !== id)
+// ลบจริงผ่าน API
+async function deleteAsset(id) {
+  if (!confirm('ต้องการลบทรัพย์สินนี้ใช่หรือไม่?')) return
+
+  try {
+    await api.delete(`/devices/${id}`)
+    loadAssets()
+  } catch (error) {
+    console.error('Delete device failed:', error)
+    alert(error.response?.data?.error || 'ลบข้อมูลไม่สำเร็จ')
+  }
+}
+
+function editAsset(id) {
+  router.push(`/edit-asset/${id}`)
 }
 
 // โหลดข้อมูลเมื่อเปิดหน้า
@@ -49,6 +64,7 @@ onMounted(() => {
       <SearchBar @search="search = $event" />
 
       <button
+        v-if="isAdmin"
         class="bg-blue-600 text-white px-4 py-2 rounded"
         @click="router.push('/add-asset')"
       >
@@ -58,7 +74,9 @@ onMounted(() => {
 
     <AssetTable
       :assets="filteredAssets"
+      :can-manage="isAdmin"
       @delete="deleteAsset"
+      @edit="editAsset"
     />
   </div>
 </template>
