@@ -91,6 +91,16 @@ app.get("/", (req,res)=>{
 // API Routes
 // ======================
 
+// ⚠️ auth ต้อง mount ก่อน route กว้างๆ อย่าง masterDataRoutes/importRoutes เสมอ
+// เพราะ masterDataRoutes มี router.use(authMiddleware) แบบไม่ระบุ path
+// ถ้า mount ก่อน มันจะดักทุก request ที่ขึ้นต้นด้วย /api (รวมถึง /api/auth/login)
+// แล้วเตะกลับด้วย 401 "No token provided" ก่อนจะไปถึง authRoutes จริงๆ
+app.use(
+  "/api/auth",
+  authRoutes
+);
+
+
 app.use(
   "/api",
   masterDataRoutes
@@ -124,12 +134,6 @@ app.use(
 app.use(
   "/api/dashboard",
   dashboardRoutes
-);
-
-
-app.use(
-  "/api/auth",
-  authRoutes
 );
 
 

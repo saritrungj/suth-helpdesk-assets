@@ -90,6 +90,7 @@
 
       <select
         v-model="form.building_id"
+        @change="onBuildingChange"
         class="border p-2 w-full"
       >
 
@@ -122,11 +123,20 @@
 
       <select
         v-model="form.floor_id"
+        :disabled="!form.building_id"
         class="border p-2 w-full"
       >
 
         <option
-          v-for="f in floors"
+          v-if="!form.building_id"
+          disabled
+          value=""
+        >
+          เลือกอาคารก่อน
+        </option>
+
+        <option
+          v-for="f in filteredFloors"
           :key="f.id"
           :value="f.id"
         >
@@ -236,7 +246,7 @@
           :value="c.id"
         >
 
-          {{ c.name }}
+          {{ c.contract_no }}
 
         </option>
 
@@ -306,7 +316,7 @@
 
 </template>
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import axios from "axios";
 
@@ -343,6 +353,23 @@ const departments = ref([]);
 const contracts = ref([]);
 
 
+// floors ที่ backend คืนมามีของทุกอาคารรวมกัน (ผูกด้วย building_id)
+// ต้องกรองตาม building ที่เลือกไว้ ไม่งั้นชื่อชั้นที่ซ้ำกันในแต่ละตึก
+// (เช่น "ชั้น 1" ของทุกตึก) จะโชว์ปนกันเป็นรายการซ้ำๆ ใน dropdown เดียว
+const filteredFloors = computed(() => {
+  if (!form.value.building_id) return [];
+
+  return floors.value.filter(
+    (f) => Number(f.building_id) === Number(form.value.building_id)
+  );
+});
+
+// เมื่อผู้ใช้เปลี่ยนอาคารเอง ให้ล้างชั้นเดิมทิ้ง เพราะชั้นเดิมอาจไม่ได้
+// อยู่ในอาคารใหม่ (ใช้ @change แทน watch เพื่อไม่ให้ทำงานตอน loadAsset
+// เซ็ตค่า building_id/floor_id พร้อมกันตอนโหลดข้อมูลมาแก้ไข)
+function onBuildingChange() {
+  form.value.floor_id = null;
+}
 
 const config = {
   headers: {

@@ -87,13 +87,22 @@ CREATE TABLE devices (
     FOREIGN KEY (contract_id) REFERENCES contracts(id)
 );
 
+-- print_transactions ต้องมี UNIQUE KEY (device_id, month) เพราะ
+-- backend/routes/print-transactions.js ทั้งตอนบันทึกทีละรายการ (POST /)
+-- และบันทึกทีละหลายเครื่อง (POST /bulk) ใช้คำสั่ง
+--   INSERT ... ON DUPLICATE KEY UPDATE pages = VALUES(pages)
+-- ถ้าไม่มี UNIQUE KEY คู่นี้ คำสั่งข้างต้นจะไม่รู้ว่าแถวไหนซ้ำ และจะ INSERT
+-- แถวใหม่ทุกครั้งที่กด "บันทึก" ซ้ำในเดือนเดิม ทำให้ยอดพิมพ์/ค่าใช้จ่ายถูกนับซ้ำ
+-- (เดิมคีย์นี้อยู่แยกไว้ในไฟล์ migration_unique_print_transactions.sql
+-- ตอนนี้รวมเข้ามาไว้ใน schema หลักเพื่อให้ setup ฐานข้อมูลใหม่ได้ครบในครั้งเดียว)
 CREATE TABLE print_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     device_id INT,
     month VARCHAR(7) NOT NULL,
     pages INT DEFAULT 0,
 
-    FOREIGN KEY (device_id) REFERENCES devices(id)
+    FOREIGN KEY (device_id) REFERENCES devices(id),
+    UNIQUE KEY uq_device_month (device_id, month)
 );
 
 -- ==============================================================================
@@ -227,7 +236,12 @@ ON d.brand_id = br.id;
 -- Prototype User
 -- ==============================================================================
 
+-- backend/routes/auth.js ใช้ bcrypt.compare(password, user.password) ตอน login
+-- เดิม schema นี้ insert รหัสผ่านเป็น plaintext ('admin123' / 'user123')
+-- ทำให้ bcrypt.compare เทียบไม่ตรงและ login ไม่ผ่านทุกครั้ง (แม้กรอกรหัสถูก)
+-- ด้านล่างนี้แก้เป็นค่า hash จาก bcrypt (saltRounds = 10 ตาม backend/hash.js)
+-- ของรหัสผ่านเดิมแทน (admin/admin123, user1/user123)
 INSERT IGNORE INTO users (username,password,role)
 VALUES
-('admin','admin123','admin'),
-('user1','user123','viewer');
+('admin','$2b$10$yRofvUyNetzokkLKJAcqw.qRPIFUEdvi7eoqTkeSM4IQRKhZ7WsyC','admin'),
+('user1','$2b$10$5RJWHc6Ky55Rxuyjyc/o5Op0z.o9RpKC/g5KPHK/tjPpKNBNh4yEu','viewer');

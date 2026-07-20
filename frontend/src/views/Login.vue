@@ -33,6 +33,7 @@
 import { ref } from "vue";
 import api from "../services/api";
 import { useRouter } from "vue-router";
+import { setAuth } from "../store/auth";
 
 const router = useRouter();
 
@@ -50,8 +51,7 @@ const login = async () => {
       }
     );
 
-    localStorage.setItem("token", res.data.token);
-    localStorage.setItem("user", JSON.stringify(res.data.user));
+    setAuth(res.data.user, res.data.token);
 
     router.push("/");
   } catch (err) {

@@ -26,6 +26,7 @@ exports.getAll = async (req, res) => {
         d.id,
         d.serial_number,
         d.model,
+        d.status,
         d.price_override,
         br.name AS brand_name,
         b.name AS building_name,

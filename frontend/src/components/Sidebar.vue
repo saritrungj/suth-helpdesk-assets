@@ -16,21 +16,23 @@
       </RouterLink>
 
 
+      <!-- บันทึกข้อมูล -->
+      <p class="text-sm text-blue-200 mt-4 mb-2">
+        บันทึกข้อมูล
+      </p>
+
       <RouterLink 
-        to="/assets" 
+        to="/print-transactions" 
         class="block hover:bg-blue-600 p-2 rounded"
       >
-        ทรัพย์สิน
+        บันทึกยอดพิมพ์
       </RouterLink>
 
 
-      <RouterLink 
-        to="/add-asset" 
-        class="block hover:bg-blue-600 p-2 rounded"
-      >
-        เพิ่มทรัพย์สิน
-      </RouterLink>
-
+      <!-- รายงาน -->
+      <p class="text-sm text-blue-200 mt-4 mb-2">
+        รายงาน
+      </p>
 
       <RouterLink 
         to="/expense" 
@@ -39,6 +41,19 @@
         ค่าใช้จ่าย
       </RouterLink>
 
+      <RouterLink 
+        to="/compare" 
+        class="block hover:bg-blue-600 p-2 rounded"
+      >
+        เปรียบเทียบข้อมูลรายเดือน
+      </RouterLink>
+
+      <RouterLink 
+        to="/by-department" 
+        class="block hover:bg-blue-600 p-2 rounded"
+      >
+        ยอดพิมพ์แยกตามฝ่าย/แผนก
+      </RouterLink>
 
       <RouterLink 
         to="/report" 
@@ -48,10 +63,24 @@
       </RouterLink>
 
 
+      <!-- ทรัพย์สิน — หน้าดูรายการ เปิดให้ผู้ใช้ทุกคนเหมือนหน้ารายงานอื่นๆ
+           (การเพิ่ม/แก้ไข/ลบ ต้องเป็น admin เท่านั้น จึงย้ายไปอยู่ในหมวด Admin ด้านล่าง) -->
+      <p class="text-sm text-blue-200 mt-4 mb-2">
+        ทรัพย์สิน
+      </p>
+
+      <RouterLink 
+        to="/assets" 
+        class="block hover:bg-blue-600 p-2 rounded"
+      >
+        ทรัพย์สิน
+      </RouterLink>
+
+
 
       <!-- Admin -->
       <div 
-        v-if="user?.role === 'admin'" 
+        v-if="authState.user?.role === 'admin'"
         class="pt-4 border-t border-blue-500"
       >
 
@@ -60,13 +89,17 @@
         </p>
 
 
+        <!-- อุปกรณ์ -->
+        <p class="text-sm text-blue-200 mt-4 mb-2">
+          อุปกรณ์
+        </p>
+
         <RouterLink
-          to="/admin/devices"
+          to="/admin/add-asset"
           class="block hover:bg-blue-600 p-2 rounded"
         >
-          จัดการอุปกรณ์
+          เพิ่มทรัพย์สิน
         </RouterLink>
-
 
         <RouterLink
           to="/admin/brands"
@@ -76,12 +109,10 @@
         </RouterLink>
 
 
-        <!-- Master Data -->
-
+        <!-- สถานที่ -->
         <p class="text-sm text-blue-200 mt-4 mb-2">
-          Master Data
+          สถานที่
         </p>
-
 
         <RouterLink
           to="/admin/buildings"
@@ -89,7 +120,6 @@
         >
           จัดการอาคาร
         </RouterLink>
-
 
         <RouterLink
           to="/admin/floors"
@@ -99,13 +129,17 @@
         </RouterLink>
 
 
+        <!-- องค์กร -->
+        <p class="text-sm text-blue-200 mt-4 mb-2">
+          องค์กร
+        </p>
+
         <RouterLink
           to="/admin/divisions"
           class="block hover:bg-blue-600 p-2 rounded"
         >
           จัดการฝ่าย
         </RouterLink>
-
 
         <RouterLink
           to="/admin/departments"
@@ -115,13 +149,17 @@
         </RouterLink>
 
 
+        <!-- สัญญา/งบประมาณ -->
+        <p class="text-sm text-blue-200 mt-4 mb-2">
+          สัญญา/งบประมาณ
+        </p>
+
         <RouterLink
           to="/admin/fiscal-years"
           class="block hover:bg-blue-600 p-2 rounded"
         >
           ปีงบประมาณ
         </RouterLink>
-
 
         <RouterLink
           to="/admin/contracts"
@@ -131,14 +169,13 @@
         </RouterLink>
 
 
-
+        <!-- Tools -->
         <p class="text-sm text-blue-200 mt-4 mb-2">
           Tools
         </p>
 
-
         <RouterLink
-          to="/import-devices"
+          to="/admin/import-devices"
           class="block hover:bg-blue-600 p-2 rounded"
         >
           Import CSV
@@ -156,7 +193,5 @@
 
 
 <script setup>
-const user = JSON.parse(
-  localStorage.getItem("user") || "null"
-)
+import { authState } from "../store/auth";
 </script>

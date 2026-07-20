@@ -6,9 +6,9 @@
 
     <div class="flex items-center gap-4">
       <span class="text-gray-700">
-        👤 <strong>{{ user?.username }}</strong>
+        👤 <strong>{{ authState.user?.username }}</strong>
         <span class="text-sm text-gray-500">
-          ({{ user?.role }})
+          ({{ authState.user?.role }})
         </span>
       </span>
 
@@ -24,14 +24,12 @@
 
 <script setup>
 import { useRouter } from "vue-router";
+import { authState, clearAuth } from "../store/auth";
 
 const router = useRouter();
 
-const user = JSON.parse(localStorage.getItem("user"));
-
 const logout = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  clearAuth();
   router.push("/login");
 };
 </script>

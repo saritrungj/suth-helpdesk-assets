@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const authMiddleware = require('../middlewares/authMiddleware');
+const adminMiddleware = require('../middlewares/adminMiddleware');
+
+// ต้อง login ก่อนถึงจะเรียก master data ได้ (เดิมไม่มีการป้องกันเลย)
+router.use(authMiddleware);
 
 // ============================================================
 // Master Data API — brand, building, floor, division, department, fiscal_year
@@ -32,8 +37,8 @@ function registerLookup(tableName, routePath) {
     }
   });
 
-  // POST — create
-  router.post(routePath, async (req, res) => {
+  // POST — create (admin เท่านั้น)
+  router.post(routePath, adminMiddleware, async (req, res) => {
     try {
       const { name } = req.body;
       if (!name) return res.status(400).json({ error: 'name is required' });
@@ -49,8 +54,8 @@ function registerLookup(tableName, routePath) {
     }
   });
 
-  // PUT — update
-  router.put(`${routePath}/:id`, async (req, res) => {
+  // PUT — update (admin เท่านั้น)
+  router.put(`${routePath}/:id`, adminMiddleware, async (req, res) => {
     try {
       const { name } = req.body;
       if (!name) return res.status(400).json({ error: 'name is required' });
@@ -64,8 +69,8 @@ function registerLookup(tableName, routePath) {
     }
   });
 
-  // DELETE
-  router.delete(`${routePath}/:id`, async (req, res) => {
+  // DELETE (admin เท่านั้น)
+  router.delete(`${routePath}/:id`, adminMiddleware, async (req, res) => {
     try {
       const [result] = await db.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
@@ -103,8 +108,8 @@ function registerChildLookup(tableName, routePath, parentField) {
     }
   });
 
-  // POST — create (ต้องมีทั้งชื่อและ parent id)
-  router.post(routePath, async (req, res) => {
+  // POST — create (admin เท่านั้น, ต้องมีทั้งชื่อและ parent id)
+  router.post(routePath, adminMiddleware, async (req, res) => {
     try {
       const { name } = req.body;
       const parentId = req.body[parentField];
@@ -127,8 +132,8 @@ function registerChildLookup(tableName, routePath, parentField) {
     }
   });
 
-  // PUT — update (แก้ทั้งชื่อและ parent id)
-  router.put(`${routePath}/:id`, async (req, res) => {
+  // PUT — update (admin เท่านั้น, แก้ทั้งชื่อและ parent id)
+  router.put(`${routePath}/:id`, adminMiddleware, async (req, res) => {
     try {
       const { name } = req.body;
       const parentId = req.body[parentField];
@@ -149,8 +154,8 @@ function registerChildLookup(tableName, routePath, parentField) {
     }
   });
 
-  // DELETE
-  router.delete(`${routePath}/:id`, async (req, res) => {
+  // DELETE (admin เท่านั้น)
+  router.delete(`${routePath}/:id`, adminMiddleware, async (req, res) => {
     try {
       const [result] = await db.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [req.params.id]);
       if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
@@ -183,7 +188,7 @@ router.get('/fiscal-years', async (req, res) => {
   }
 });
 
-router.post('/fiscal-years', async (req, res) => {
+router.post('/fiscal-years', adminMiddleware, async (req, res) => {
   try {
     const { year } = req.body;
     if (!year) return res.status(400).json({ error: 'year is required' });
@@ -194,6 +199,38 @@ router.post('/fiscal-years', async (req, res) => {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: `Fiscal year "${req.body.year}" already exists` });
     }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// เดิมหน้า admin/FiscalYear.vue เรียก PUT/DELETE อยู่แล้ว แต่ backend ไม่เคยมี route
+// นี้มาก่อน ทำให้แก้ไข/ลบปีงบประมาณจากหน้า Admin ได้ 404 เสมอ
+router.put('/fiscal-years/:id', adminMiddleware, async (req, res) => {
+  try {
+    const { year } = req.body;
+    if (!year) return res.status(400).json({ error: 'year is required' });
+
+    const [result] = await db.query(
+      'UPDATE fiscal_year SET year = ? WHERE id = ?',
+      [year.trim(), req.params.id]
+    );
+
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ id: parseInt(req.params.id), year: year.trim() });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: `Fiscal year "${req.body.year}" already exists` });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/fiscal-years/:id', adminMiddleware, async (req, res) => {
+  try {
+    const [result] = await db.query('DELETE FROM fiscal_year WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ message: 'Deleted successfully' });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

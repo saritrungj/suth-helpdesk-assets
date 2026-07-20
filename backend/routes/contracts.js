@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const authMiddleware = require('../middlewares/authMiddleware');
+const adminMiddleware = require('../middlewares/adminMiddleware');
+
+router.use(authMiddleware);
 
 // ============================================================
 // Contracts API — CRUD สำหรับสัญญา
@@ -47,8 +51,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/contracts — เพิ่มสัญญาใหม่
-router.post('/', async (req, res) => {
+// POST /api/contracts — เพิ่มสัญญาใหม่ (admin เท่านั้น)
+router.post('/', adminMiddleware, async (req, res) => {
   try {
     const { contract_no, fiscal_year_id, price_per_page } = req.body;
 
@@ -69,8 +73,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/contracts/:id — แก้ไขสัญญา
-router.put('/:id', async (req, res) => {
+// PUT /api/contracts/:id — แก้ไขสัญญา (admin เท่านั้น)
+router.put('/:id', adminMiddleware, async (req, res) => {
   try {
     const { contract_no, fiscal_year_id, price_per_page } = req.body;
 
@@ -87,8 +91,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/contracts/:id — ลบสัญญา
-router.delete('/:id', async (req, res) => {
+// DELETE /api/contracts/:id — ลบสัญญา (admin เท่านั้น)
+router.delete('/:id', adminMiddleware, async (req, res) => {
   try {
     const [result] = await db.query('DELETE FROM contracts WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Contract not found' });

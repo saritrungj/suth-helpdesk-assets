@@ -1,6 +1,15 @@
 <template>
   <div class="p-5">
-    <h2>Import Devices (CSV / Excel)</h2>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-2xl font-bold">Import Devices (CSV / Excel)</h2>
+
+      <RouterLink
+        to="/assets"
+        class="text-sm text-blue-600 hover:underline"
+      >
+        ← กลับไปหน้าจัดการอุปกรณ์
+      </RouterLink>
+    </div>
 
     <input 
       type="file" 
@@ -21,13 +30,21 @@
       กำลังอัปโหลด...
     </p>
 
-    <pre v-if="result">{{ result }}</pre>
+    <div v-if="result && !result.error" class="mt-4 bg-green-50 border border-green-200 text-green-800 p-3 rounded text-sm">
+      {{ result.message }} — พบทั้งหมด {{ result.total_rows }} แถว, บันทึกสำเร็จ {{ result.inserted }} เครื่อง
+    </div>
+
+    <div v-else-if="result && result.error" class="mt-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded text-sm">
+      {{ result.error }}
+    </div>
   </div>
 </template>
 
 
 <script setup>
 import { ref } from "vue";
+import { RouterLink } from "vue-router";
+import api from "../services/api";
 
 
 const file = ref(null);
@@ -61,18 +78,18 @@ const uploadFile = async () => {
 
   try {
 
-    const res = await fetch(
-      "http://localhost:3000/api/devices/import",
+    // ใช้ api.js แทน fetch ตรงๆ เพื่อให้แนบ token และใช้ base URL เดียวกับหน้าอื่นๆ
+    const res = await api.post(
+      "/devices/import",
+      formData,
       {
-        method: "POST",
-        body: formData
+        headers: {
+          "Content-Type": "multipart/form-data"
+        }
       }
     );
 
-
-    const data = await res.json();
-
-    result.value = data;
+    result.value = res.data;
 
 
   } catch (err) {
@@ -80,7 +97,7 @@ const uploadFile = async () => {
     console.error("Upload error:", err);
 
     result.value = {
-      error: "Upload failed"
+      error: err.response?.data?.error || "Upload failed"
     };
 
   } finally {

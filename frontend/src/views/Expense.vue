@@ -9,6 +9,8 @@ const fiscalYears = ref([]);
 const fiscalYearId = ref("");
 
 const contracts = ref([]);
+const unassignedDevices = ref([]);
+const showUnassigned = ref(false);
 
 // เก็บสถานะเปิด/ปิดของแต่ละสัญญา และแต่ละเครื่อง
 const openContracts = ref(new Set());
@@ -49,6 +51,16 @@ async function loadFiscalYears() {
   } catch (err) {
     console.error("Load fiscal years error:", err);
     error.value = "โหลดรายการปีงบประมาณไม่สำเร็จ";
+  }
+}
+
+// เครื่องที่ยังไม่ได้ผูกสัญญา — ไม่ขึ้นกับปีงบ เพราะไม่มีสัญญาที่จะบอกปีงบได้
+async function loadUnassignedDevices() {
+  try {
+    const res = await api.get("/expense/unassigned-devices");
+    unassignedDevices.value = res.data.devices || [];
+  } catch (err) {
+    console.error("Load unassigned devices error:", err);
   }
 }
 
@@ -107,7 +119,14 @@ const grandTotalPages = computed(() =>
   )
 );
 
-onMounted(loadFiscalYears);
+function toggleUnassigned() {
+  showUnassigned.value = !showUnassigned.value;
+}
+
+onMounted(() => {
+  loadFiscalYears();
+  loadUnassignedDevices();
+});
 </script>
 
 <template>
@@ -228,6 +247,37 @@ onMounted(loadFiscalYears);
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- เครื่องที่ยังไม่ได้ผูกสัญญา (เดิมมองไม่เห็นในหน้านี้เลย) -->
+    <div v-if="unassignedDevices.length" class="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg overflow-hidden">
+      <button
+        @click="toggleUnassigned"
+        class="w-full flex items-center justify-between p-4 hover:bg-yellow-100 text-left"
+      >
+        <div class="flex items-center gap-2">
+          <span>⚠️</span>
+          <span class="font-semibold text-yellow-800">
+            เครื่องที่ยังไม่ได้ผูกสัญญา ({{ unassignedDevices.length }} เครื่อง)
+          </span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="font-bold text-yellow-800">
+            {{ formatMoney(unassignedDevices.reduce((s, d) => s + Number(d.total_cost || 0), 0)) }} บาท
+          </span>
+          <span>{{ showUnassigned ? "▲" : "▼" }}</span>
+        </div>
+      </button>
+
+      <div v-if="showUnassigned" class="border-t divide-y bg-white">
+        <div v-for="device in unassignedDevices" :key="device.id" class="p-3 pl-8 flex items-center justify-between">
+          <div>
+            <span class="font-medium">{{ device.brand_name || "-" }} {{ device.model || "" }}</span>
+            <span class="text-xs text-gray-400 ml-2">S/N: {{ device.serial_number }}</span>
+          </div>
+          <span class="text-gray-700">{{ formatMoney(device.total_cost) }} บาท</span>
         </div>
       </div>
     </div>

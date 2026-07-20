@@ -22,6 +22,11 @@ const PrintTransactions = () =>
   import("../views/PrintTransactions.vue");
 
 
+const Compare = () =>
+  import("../views/Compare.vue");
+
+const ByDepartment = () =>
+  import("../views/ByDepartment.vue");
 
 const AssetForm = () =>
   import("../views/AssetForm.vue");
@@ -31,10 +36,6 @@ const AssetForm = () =>
 
 const Brand = () =>
   import("../views/admin/Brand.vue");
-
-
-const Device = () =>
-  import("../views/admin/Device.vue");
 
 
 const Building = () =>
@@ -87,23 +88,11 @@ const routes = [
   },
 
 
-  // Asset
+  // Asset (ดูรายการ — เปิดให้ผู้ใช้ที่ login แล้วทุกคน เหมือนหน้ารายงานอื่นๆ)
   {
     path: "/assets",
     name: "AssetList",
     component: AssetList,
-  },
-
-  {
-    path: "/add-asset",
-    name: "AddAsset",
-    component: AssetForm,
-  },
-
-  {
-    path: "/edit-asset/:id",
-    name: "EditAsset",
-    component: AssetForm,
   },
 
 
@@ -115,19 +104,22 @@ const routes = [
   },
 
 
+  {
+    path: "/compare",
+    name: "Compare",
+    component: Compare,
+  },
+
+  {
+  path: "/by-department",
+  name: "ByDepartment",
+  component: ByDepartment,
+},
   // Report
   {
     path: "/report",
     name: "Report",
     component: Report,
-  },
-
-
-  // Import
-  {
-    path: "/import-devices",
-    name: "ImportDevices",
-    component: ImportDevices,
   },
 
 
@@ -147,12 +139,6 @@ const routes = [
     path: "/admin/brands",
     name: "Brands",
     component: Brand,
-  },
-
-  {
-    path: "/admin/devices",
-    name: "Devices",
-    component: Device,
   },
 
   {
@@ -189,6 +175,28 @@ const routes = [
     path: "/admin/contracts",
     name: "Contracts",
     component: Contract,
+  },
+
+  // เพิ่ม/แก้ไขทรัพย์สิน — ย้ายมาอยู่ใต้ /admin เพราะการเขียนข้อมูล (POST/PUT)
+  // ที่ backend บังคับ adminMiddleware อยู่แล้ว ควรถูกกันด้วย route guard ฝั่ง frontend ด้วย
+  // ไม่ใช่แค่ซ่อนปุ่ม (การดูรายการที่ /assets ยังเปิดให้ทุกคนเหมือนเดิม)
+  {
+    path: "/admin/add-asset",
+    name: "AddAsset",
+    component: AssetForm,
+  },
+
+  {
+    path: "/admin/edit-asset/:id",
+    name: "EditAsset",
+    component: AssetForm,
+  },
+
+  // Import CSV/Excel — เป็นเครื่องมือของ Admin เช่นกัน
+  {
+    path: "/admin/import-devices",
+    name: "ImportDevices",
+    component: ImportDevices,
   },
 
 
