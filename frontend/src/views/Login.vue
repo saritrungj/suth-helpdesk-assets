@@ -8,6 +8,7 @@
         type="text"
         placeholder="Username"
         class="w-full border rounded p-2 mb-4"
+        @keyup.enter="login"
       />
 
       <input
@@ -15,6 +16,7 @@
         type="password"
         placeholder="Password"
         class="w-full border rounded p-2 mb-4"
+        @keyup.enter="login"
       />
 
       <button

@@ -16,11 +16,15 @@ const assets = ref([]);
 const search = ref("");
 const selectedBrand = ref("");
 const selectedBuilding = ref("");
+const selectedFloor = ref("");
+const selectedDivision = ref("");
 const selectedDepartment = ref("");
 const selectedStatus = ref("");
 
 const brands = ref([]);
 const buildings = ref([]);
+const floors = ref([]);
+const divisions = ref([]);
 const departments = ref([]);
 
 const loading = ref(true);
@@ -93,14 +97,18 @@ async function loadFilterData() {
 
   try {
 
-    const [brandRes, buildingRes, departmentRes] = await Promise.all([
+    const [brandRes, buildingRes, floorRes, divisionRes, departmentRes] = await Promise.all([
       api.get("/brands"),
       api.get("/buildings"),
+      api.get("/floors"),
+      api.get("/divisions"),
       api.get("/departments"),
     ]);
 
     brands.value = brandRes.data;
     buildings.value = buildingRes.data;
+    floors.value = floorRes.data;
+    divisions.value = divisionRes.data;
     departments.value = departmentRes.data;
 
   } catch (err) {
@@ -109,6 +117,39 @@ async function loadFilterData() {
 
   }
 
+}
+
+
+// ==========================
+// Cascading filter options
+// ==========================
+// ตัวเลือก "ชั้น" กรองตามอาคารที่เลือกไว้ ไม่งั้นชื่อชั้นที่ซ้ำกันในแต่ละตึก
+// (เช่น "ชั้น 1" ของทุกตึก) จะโชว์ปนกันเป็นรายการซ้ำๆ ใน dropdown เดียว
+const filteredFloorOptions = computed(() => {
+  if (!selectedBuilding.value) return floors.value;
+
+  return floors.value.filter(
+    (f) => Number(f.building_id) === Number(selectedBuilding.value)
+  );
+});
+
+// ตัวเลือก "แผนก" กรองตามฝ่ายที่เลือกไว้
+const filteredDepartmentOptions = computed(() => {
+  if (!selectedDivision.value) return departments.value;
+
+  return departments.value.filter(
+    (d) => Number(d.division_id) === Number(selectedDivision.value)
+  );
+});
+
+// เลือกอาคารใหม่ -> เคลียร์ชั้นเดิมทิ้ง เพราะชั้นเดิมอาจไม่ได้อยู่ในอาคารใหม่
+function onFilterBuildingChange() {
+  selectedFloor.value = "";
+}
+
+// เลือกฝ่ายใหม่ -> เคลียร์แผนกเดิมทิ้ง เพราะแผนกเดิมอาจไม่ได้อยู่ในฝ่ายใหม่
+function onFilterDivisionChange() {
+  selectedDepartment.value = "";
 }
 
 
@@ -136,6 +177,14 @@ const filteredAssets = computed(() => {
       !selectedBuilding.value ||
       a.building_name === buildings.value.find((b) => b.id == selectedBuilding.value)?.name;
 
+    const matchFloor =
+      !selectedFloor.value ||
+      a.floor_name === floors.value.find((f) => f.id == selectedFloor.value)?.name;
+
+    const matchDivision =
+      !selectedDivision.value ||
+      a.division_name === divisions.value.find((d) => d.id == selectedDivision.value)?.name;
+
     const matchDepartment =
       !selectedDepartment.value ||
       a.department_name === departments.value.find((d) => d.id == selectedDepartment.value)?.name;
@@ -144,7 +193,7 @@ const filteredAssets = computed(() => {
       !selectedStatus.value ||
       a.status === selectedStatus.value;
 
-    return matchSearch && matchBrand && matchBuilding && matchDepartment && matchStatus;
+    return matchSearch && matchBrand && matchBuilding && matchFloor && matchDivision && matchDepartment && matchStatus;
 
   });
 
@@ -237,14 +286,24 @@ onMounted(async () => {
       <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
     </select>
 
-    <select v-model="selectedBuilding" class="border p-2 rounded">
+    <select v-model="selectedBuilding" @change="onFilterBuildingChange" class="border p-2 rounded">
       <option value="">ทุกอาคาร</option>
       <option v-for="b in buildings" :key="b.id" :value="b.id">{{ b.name }}</option>
     </select>
 
+    <select v-model="selectedFloor" class="border p-2 rounded">
+      <option value="">ทุกชั้น</option>
+      <option v-for="f in filteredFloorOptions" :key="f.id" :value="f.id">{{ f.name }}</option>
+    </select>
+
+    <select v-model="selectedDivision" @change="onFilterDivisionChange" class="border p-2 rounded">
+      <option value="">ทุกฝ่าย</option>
+      <option v-for="d in divisions" :key="d.id" :value="d.id">{{ d.name }}</option>
+    </select>
+
     <select v-model="selectedDepartment" class="border p-2 rounded">
       <option value="">ทุกแผนก</option>
-      <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+      <option v-for="d in filteredDepartmentOptions" :key="d.id" :value="d.id">{{ d.name }}</option>
     </select>
 
     <select v-model="selectedStatus" class="border p-2 rounded">

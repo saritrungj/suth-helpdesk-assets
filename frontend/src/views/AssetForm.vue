@@ -278,8 +278,32 @@
     </div>
 
 
-  </div>
 
+
+    <!-- Status -->
+    <div>
+
+      <label>
+        สถานะ
+      </label>
+
+
+      <select
+        v-model="form.status"
+        class="border p-2 w-full"
+      >
+
+        <option value="active">ใช้งานอยู่</option>
+        <option value="repair">ซ่อมบำรุง</option>
+        <option value="retired">ปลดระวาง</option>
+
+      </select>
+
+
+    </div>
+
+
+  </div>
 
 
 
@@ -342,6 +366,7 @@ const form = ref({
   department_id: null,
   contract_id: null,
   price_override: null,
+  status: "active",
 });
 
 
@@ -501,7 +526,9 @@ async function loadAsset(){
 
       contract_id: d.contract_id ?? null,
 
-      price_override: d.price_override ?? null
+      price_override: d.price_override ?? null,
+
+      status: d.status ?? "active"
 
     };
 
@@ -585,7 +612,10 @@ const data = {
     form.value.price_override !== ""
       && form.value.price_override !== null
       ? Number(form.value.price_override)
-      : null
+      : null,
+
+  status:
+    form.value.status || "active"
 
 };
 

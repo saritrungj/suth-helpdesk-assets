@@ -60,9 +60,8 @@ async function loadMonths() {
     const unique = [...new Set(res.data.map((r) => r.month))].sort();
     months.value = unique;
 
-    if (unique.length > 0) {
-      month.value = unique[unique.length - 1];
-    }
+    // ไม่ auto-select เดือนล่าสุด เพื่อให้ default เป็น "ไม่เทียบ (ดูยอดรวมทั้งหมด)"
+    // (month.value เริ่มต้นเป็น "" อยู่แล้วจาก ref(""))
   } catch (err) {
     console.error("Load months error:", err);
   }

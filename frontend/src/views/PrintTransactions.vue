@@ -332,7 +332,9 @@ onMounted(init);
             <thead>
               <tr class="bg-gray-100 text-left">
                 <th class="border p-2">SN</th>
+                <th class="border p-2">ยี่ห้อ</th>
                 <th class="border p-2">รุ่น</th>
+                <th class="border p-2">อาคาร</th>
                 <th class="border p-2">ชั้น</th>
                 <th class="border p-2 text-right">จำนวนหน้า</th>
               </tr>
@@ -344,7 +346,9 @@ onMounted(init);
                 :class="isChanged(d) ? 'bg-orange-50' : ''"
               >
                 <td class="border p-2">{{ d.serial_number }}</td>
+                <td class="border p-2">{{ d.brand_name || "-" }}</td>
                 <td class="border p-2">{{ d.model || "-" }}</td>
+                <td class="border p-2">{{ d.building_name || "-" }}</td>
                 <td class="border p-2">{{ d.floor_name || "-" }}</td>
                 <td class="border p-2">
                   <input

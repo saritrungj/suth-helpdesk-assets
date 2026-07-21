@@ -14,6 +14,7 @@ const deviceSchema = z.object({
   department_id: z.number().int().positive().optional().nullable(),
   contract_id: z.number().int().positive().optional().nullable(),
   price_override: z.number().nonnegative().optional().nullable(),
+  status: z.enum(["active", "repair", "retired"]).optional(),
 });
 
 // ============================================================
@@ -116,6 +117,7 @@ exports.create = async (req, res) => {
       department_id,
       contract_id,
       price_override,
+      status,
     } = validatedData;
 
     const [result] = await db.query(
@@ -130,9 +132,10 @@ exports.create = async (req, res) => {
         division_id,
         department_id,
         contract_id,
-        price_override
+        price_override,
+        status
       )
-      VALUES (?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
     `,
       [
         serial_number,
@@ -144,6 +147,7 @@ exports.create = async (req, res) => {
         department_id || null,
         contract_id || null,
         price_override || null,
+        status || "active",
       ]
     );
 
@@ -190,6 +194,7 @@ exports.update = async (req, res) => {
       department_id,
       contract_id,
       price_override,
+      status,
     } = validatedData;
 
     const [result] = await db.query(
@@ -203,7 +208,8 @@ exports.update = async (req, res) => {
         division_id=?,
         department_id=?,
         contract_id=?,
-        price_override=?
+        price_override=?,
+        status=?
       WHERE id=?
     `,
       [
@@ -216,6 +222,7 @@ exports.update = async (req, res) => {
         department_id || null,
         contract_id || null,
         price_override || null,
+        status || "active",
         req.params.id,
       ]
     );

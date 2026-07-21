@@ -150,7 +150,11 @@
     <div class="mt-8 bg-white shadow rounded-lg p-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-bold">สรุปการใช้งานตามสัญญา</h2>
-        <RouterLink to="/admin/contracts" class="text-sm text-blue-600 hover:underline">
+        <RouterLink
+          v-if="authState.user?.role === 'admin'"
+          to="/admin/contracts"
+          class="text-sm text-blue-600 hover:underline"
+        >
           จัดการสัญญา →
         </RouterLink>
       </div>
@@ -194,6 +198,7 @@
 import { ref, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import api from "../services/api";
+import { authState } from "../store/auth";
 
 import MonthlyChart from "../components/MonthlyChart.vue";
 import BuildingChart from "../components/BuildingChart.vue";
