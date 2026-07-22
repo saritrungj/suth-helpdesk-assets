@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { Bar } from "vue-chartjs";
 import {
   Chart as ChartJS,
@@ -11,16 +12,19 @@ import {
   LinearScale,
 } from "chart.js";
 import api from "../services/api";
+import MonthPicker from "../components/MonthPicker.vue";
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
+
+const route = useRoute();
+const router = useRouter();
 
 const loading = ref(true);
 const error = ref(null);
 
-const monthA = ref("");
-const monthB = ref("");
+// เลือกได้หลายเดือน ไม่ตายตัวแค่ A/B อีกต่อไป
+const selectedMonths = ref([]);
 
-// ข้อมูลดิบทั้งหมดจาก v_monthly_kpi (device_id, month, pages_printed, net_pages, total_cost)
 const rawRows = ref([]);
 const months = ref([]);
 
@@ -35,6 +39,26 @@ function formatMonth(value) {
   return `${monthsTH[Number(m) - 1]} ${Number(y) + 543}`;
 }
 
+// -------------------------------------------------------
+// sync กับ query param ?months=2026-01,2026-03
+// -------------------------------------------------------
+function readMonthsFromQuery(availableMonths) {
+  const raw = route.query.months;
+  if (!raw) return [];
+
+  const list = String(raw).split(",").map((s) => s.trim());
+  return list.filter((m) => availableMonths.includes(m)).sort();
+}
+
+let syncingFromRoute = false;
+
+watch(selectedMonths, (val) => {
+  if (syncingFromRoute) return;
+  router.replace({
+    query: { ...route.query, months: val.length ? val.join(",") : undefined },
+  });
+});
+
 async function loadData() {
   loading.value = true;
   error.value = null;
@@ -46,10 +70,10 @@ async function loadData() {
     const unique = [...new Set(res.data.map((r) => r.month))].sort();
     months.value = unique;
 
-    // Default เป็น "ไม่มีข้อมูล (ว่างเปล่า)" ทั้งสองช่อง ให้ผู้ใช้เลือกเดือนเอง
-    // แทนที่จะเดาให้อัตโนมัติว่าอยากเทียบเดือนไหนกับเดือนไหน
-    monthA.value = "";
-    monthB.value = "";
+    // ถ้า URL มี ?months= อยู่แล้ว (refresh หรือ share link) ใช้ค่านั้นก่อน
+    syncingFromRoute = true;
+    selectedMonths.value = readMonthsFromQuery(unique);
+    syncingFromRoute = false;
   } catch (err) {
     console.error("Load compare data error:", err);
     error.value = "โหลดข้อมูลไม่สำเร็จ";
@@ -74,15 +98,15 @@ function aggregate(month) {
   return { totalPages, netPages, totalCost, activeDevices, costPerPage };
 }
 
-const statsA = computed(() => aggregate(monthA.value));
-const statsB = computed(() => aggregate(monthB.value));
+// แถวข้อมูลต่อเดือนที่เลือก เรียงตามลำดับเวลา
+const monthStats = computed(() =>
+  selectedMonths.value.map((m) => ({
+    month: m,
+    label: formatMonth(m),
+    stats: aggregate(m),
+  }))
+);
 
-const labelA = computed(() => (monthA.value ? formatMonth(monthA.value) : "ไม่มีข้อมูล"));
-const labelB = computed(() => (monthB.value ? formatMonth(monthB.value) : "ไม่มีข้อมูล"));
-
-// -------------------------------------------------------
-// เมตริกที่จะแสดง (การ์ด + กราฟแยกต่อหมวด)
-// -------------------------------------------------------
 const metrics = computed(() => [
   {
     key: "totalPages",
@@ -128,14 +152,23 @@ function diffPercent(before, after) {
   return ((after - before) / before) * 100;
 }
 
+// ผลต่างเทียบกับเดือนก่อนหน้า "ในรายการที่เลือก" (ไม่ใช่เดือนก่อนหน้าตามปฏิทิน)
+function deltaVsPrevious(metricKey, index) {
+  if (index === 0) return null;
+  const prev = monthStats.value[index - 1].stats;
+  const curr = monthStats.value[index].stats;
+  if (!prev || !curr) return null;
+  return diffPercent(prev[metricKey], curr[metricKey]);
+}
+
 function chartDataFor(metric) {
   return {
-    labels: [labelA.value, labelB.value],
+    labels: monthStats.value.map((s) => s.label),
     datasets: [
       {
         label: metric.label,
-        data: [statsA.value?.[metric.key] || 0, statsB.value?.[metric.key] || 0],
-        backgroundColor: [metric.color + "80", metric.color],
+        data: monthStats.value.map((s) => s.stats?.[metric.key] || 0),
+        backgroundColor: metric.color,
         borderRadius: 6,
       },
     ],
@@ -158,17 +191,19 @@ const chartOptions = {
   },
 };
 
-// -------------------------------------------------------
-// บทสรุปอัตโนมัติ
-// -------------------------------------------------------
+// บทสรุปอัตโนมัติ: เทียบเดือนแรกกับเดือนสุดท้ายที่เลือก (ถ้าเลือกมากกว่า 2 เดือน จะสรุปภาพรวมทั้งช่วง)
+const summaryFirst = computed(() => monthStats.value[0] || null);
+const summaryLast = computed(() =>
+  monthStats.value.length > 1 ? monthStats.value[monthStats.value.length - 1] : null
+);
+
 const summarySentences = computed(() => {
-  if (!statsA.value || !statsB.value) return [];
+  if (!summaryFirst.value?.stats || !summaryLast.value?.stats) return [];
 
   const lines = [];
-
   for (const m of metrics.value) {
-    const before = statsA.value[m.key];
-    const after = statsB.value[m.key];
+    const before = summaryFirst.value.stats[m.key];
+    const after = summaryLast.value.stats[m.key];
     const pct = diffPercent(before, after);
 
     if (Math.abs(pct) < 0.05) {
@@ -184,7 +219,6 @@ const summarySentences = computed(() => {
         `(จาก ${m.format(before)} เป็น ${m.format(after)} ${m.unit})`
     );
   }
-
   return lines;
 });
 
@@ -197,25 +231,11 @@ onMounted(loadData);
 
     <div class="bg-white shadow rounded-lg p-6 mb-6">
       <p class="text-sm text-gray-500 mb-4">
-        เลือก 2 เดือนเพื่อเปรียบเทียบยอดพิมพ์และค่าใช้จ่าย
+        เลือกเดือนที่ต้องการเปรียบเทียบ (เลือกได้มากกว่า 2 เดือน)
       </p>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm text-gray-500 mb-1">เดือนที่ 1</label>
-          <select v-model="monthA" class="border rounded p-2 w-full">
-            <option value="">-- ไม่มีข้อมูล --</option>
-            <option v-for="m in months" :key="m" :value="m">{{ formatMonth(m) }}</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-sm text-gray-500 mb-1">เดือนที่ 2</label>
-          <select v-model="monthB" class="border rounded p-2 w-full">
-            <option value="">-- ไม่มีข้อมูล --</option>
-            <option v-for="m in months" :key="m" :value="m">{{ formatMonth(m) }}</option>
-          </select>
-        </div>
+      <div class="max-w-sm">
+        <MonthPicker v-model="selectedMonths" :options="months" />
       </div>
     </div>
 
@@ -224,21 +244,22 @@ onMounted(loadData);
 
     <template v-else>
       <div
-        v-if="!statsA && !statsB"
+        v-if="!monthStats.length"
         class="text-center text-gray-400 border border-dashed rounded-lg py-10"
       >
-        ยังไม่มีข้อมูลยอดพิมพ์ — เลือกเดือนด้านบนเพื่อเปรียบเทียบ
+        ยังไม่ได้เลือกเดือน — เลือกอย่างน้อย 1 เดือนด้านบนเพื่อดูข้อมูล
       </div>
 
       <template v-else>
         <!-- บทสรุปอัตโนมัติ -->
         <div
-          v-if="statsA && statsB"
+          v-if="summaryFirst && summaryLast"
           class="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-6"
         >
           <h2 class="font-bold text-blue-800 mb-2">📝 สรุปการเปลี่ยนแปลง</h2>
           <p class="text-sm text-gray-600 mb-3">
-            เปรียบเทียบ {{ labelA }} กับ {{ labelB }}
+            เปรียบเทียบ {{ summaryFirst.label }} กับ {{ summaryLast.label }}
+            <span v-if="monthStats.length > 2">(รวม {{ monthStats.length }} เดือนที่เลือก)</span>
           </p>
           <ul class="space-y-1 text-sm">
             <li v-for="(line, idx) in summarySentences" :key="idx">{{ line }}</li>
@@ -248,44 +269,42 @@ onMounted(loadData);
           v-else
           class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-sm text-yellow-800"
         >
-          ⚠️ มีข้อมูลแค่ช่วงเดียว ({{ statsA ? labelA : labelB }}) — เลือกอีกเดือนเพื่อดูบทสรุปการเปลี่ยนแปลง
+          ⚠️ เลือกแค่เดือนเดียว ({{ summaryFirst?.label }}) — เลือกอีกเดือนเพื่อดูบทสรุปการเปลี่ยนแปลง
         </div>
 
-        <!-- การ์ด KPI เปรียบเทียบ -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <div
-            v-for="m in metrics"
-            :key="m.key"
-            class="bg-white shadow rounded-lg p-4"
-          >
-            <h3 class="text-xs text-gray-500 mb-2">{{ m.label }}</h3>
-
-            <div class="flex items-baseline gap-2 mb-1">
-              <span class="text-sm text-gray-400">{{ labelA }}</span>
-              <span class="font-semibold">
-                {{ statsA ? m.format(statsA[m.key]) : "-" }}
-              </span>
-            </div>
-
-            <div class="flex items-baseline gap-2 mb-2">
-              <span class="text-sm text-blue-500">{{ labelB }}</span>
-              <span class="font-bold text-lg">
-                {{ statsB ? m.format(statsB[m.key]) : "-" }}
-              </span>
-            </div>
-
-            <div
-              v-if="statsA && statsB"
-              class="text-xs font-semibold"
-              :class="statsB[m.key] >= statsA[m.key] ? 'text-green-600' : 'text-red-600'"
-            >
-              {{ statsB[m.key] >= statsA[m.key] ? "▲" : "▼" }}
-              {{ Math.abs(diffPercent(statsA[m.key], statsB[m.key])).toFixed(1) }}%
-            </div>
-          </div>
+        <!-- ตารางเปรียบเทียบทุกเดือนที่เลือก -->
+        <div class="bg-white shadow rounded-lg p-4 mb-8 overflow-x-auto">
+          <table class="w-full text-sm border-collapse min-w-max">
+            <thead>
+              <tr class="text-left text-gray-500 border-b">
+                <th class="py-2 pr-4">ตัวชี้วัด</th>
+                <th v-for="s in monthStats" :key="s.month" class="py-2 pr-4 whitespace-nowrap">
+                  {{ s.label }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in metrics" :key="m.key" class="border-b">
+                <td class="py-2 pr-4 text-gray-500">{{ m.label }}</td>
+                <td v-for="(s, i) in monthStats" :key="s.month" class="py-2 pr-4">
+                  <div class="font-semibold">
+                    {{ s.stats ? m.format(s.stats[m.key]) : "-" }}
+                  </div>
+                  <div
+                    v-if="deltaVsPrevious(m.key, i) !== null"
+                    class="text-xs font-medium"
+                    :class="deltaVsPrevious(m.key, i) >= 0 ? 'text-red-600' : 'text-green-600'"
+                  >
+                    {{ deltaVsPrevious(m.key, i) >= 0 ? "▲" : "▼" }}
+                    {{ Math.abs(deltaVsPrevious(m.key, i)).toFixed(1) }}%
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <!-- กราฟแยกตามหมวดหมู่ (เพราะสเกลตัวเลขต่างกันมาก) -->
+        <!-- กราฟแยกตามหมวดหมู่ -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div
             v-for="m in metrics"

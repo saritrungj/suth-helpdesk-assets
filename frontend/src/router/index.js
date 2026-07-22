@@ -69,9 +69,10 @@ const Contract = () =>
 const routes = [
 
   {
-    path: "/login",
-    name: "Login",
-    component: Login,
+  path: "/login",
+  name: "Login",
+  component: Login,
+  meta: { layout: "auth" },
   },
 
 
@@ -213,6 +214,15 @@ const router = createRouter({
   history: createWebHistory(),
 
   routes,
+
+  // ทุกครั้งที่เปลี่ยนหน้า ให้เลื่อนขึ้นบนสุดเสมอ
+  // (ยกเว้นตอนกดปุ่ม back/forward ของ browser จะกลับไปตำแหน่งเดิมที่เคยอยู่)
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition;
+    }
+    return { top: 0 };
+  },
 
 });
 

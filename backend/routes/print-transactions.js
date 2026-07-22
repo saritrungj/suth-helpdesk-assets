@@ -183,4 +183,120 @@ router.post("/bulk", async (req, res) => {
   }
 });
 
+// ============================================================
+// GET /api/print-transactions/summary?year=YYYY
+// นับจำนวนเดือนที่กรอกแล้วของแต่ละเครื่อง ในปีที่ระบุ (ใช้โชว์ badge ในตารางหลัก)
+// ============================================================
+router.get("/summary", async (req, res) => {
+  try {
+    const year = String(req.query.year || "").trim();
+    if (!/^\d{4}$/.test(year)) {
+      return res.status(400).json({ error: "รูปแบบปีไม่ถูกต้อง (ต้องเป็น YYYY)" });
+    }
+
+    const [rows] = await db.query(
+      `
+      SELECT device_id, COUNT(*) AS filled
+      FROM print_transactions
+      WHERE month LIKE ?
+      GROUP BY device_id
+      `,
+      [`${year}-%`]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// GET /api/print-transactions/by-device/:deviceId?year=YYYY
+// ดึงยอดพิมพ์ทั้ง 12 เดือนของเครื่องเดียว ในปีที่ระบุ (ใช้ตอนเปิด Modal กรอกข้อมูล)
+// ============================================================
+router.get("/by-device/:deviceId", async (req, res) => {
+  try {
+    const deviceId = Number(req.params.deviceId);
+    const year = String(req.query.year || "").trim();
+
+    if (!deviceId) {
+      return res.status(400).json({ error: "device_id ไม่ถูกต้อง" });
+    }
+    if (!/^\d{4}$/.test(year)) {
+      return res.status(400).json({ error: "รูปแบบปีไม่ถูกต้อง (ต้องเป็น YYYY)" });
+    }
+
+    const [rows] = await db.query(
+      `
+      SELECT month, pages
+      FROM print_transactions
+      WHERE device_id = ? AND month LIKE ?
+      `,
+      [deviceId, `${year}-%`]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// POST /api/print-transactions/bulk-device
+// บันทึกยอดพิมพ์ทีเดียวหลายเดือน สำหรับเครื่องเดียว (ใช้กับ Modal กรอก 12 เดือน)
+// ============================================================
+router.post("/bulk-device", async (req, res) => {
+  const { device_id, items } = req.body;
+
+  if (!device_id || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: "device_id และ items (array) จำเป็นต้องระบุ" });
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    let saved = 0;
+
+    for (const item of items) {
+      // ข้ามเดือนที่ไม่ได้กรอกจริงๆ (null/undefined/ค่าว่าง)
+      if (item.pages === null || item.pages === undefined || item.pages === "") {
+        continue;
+      }
+
+      const month = normalizeMonth(item.month);
+      if (!month) {
+        throw new Error(`รูปแบบเดือนไม่ถูกต้อง: ${item.month}`);
+      }
+
+      const pagesNum = Number(item.pages);
+      if (pagesNum < 0) {
+        throw new Error(`จำนวนหน้าของเดือน ${month} ต้องไม่ติดลบ`);
+      }
+
+      await connection.query(
+        `
+        INSERT INTO print_transactions (device_id, month, pages)
+        VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE pages = VALUES(pages)
+        `,
+        [device_id, month, pagesNum]
+      );
+
+      saved++;
+    }
+
+    await connection.commit();
+
+    res.json({ message: `บันทึกยอดพิมพ์สำเร็จ ${saved} เดือน` });
+  } catch (err) {
+    await connection.rollback();
+    console.error("Bulk-device save error:", err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
+  }
+});
+
 module.exports = router;

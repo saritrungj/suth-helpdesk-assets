@@ -11,6 +11,7 @@ import {
   LinearScale,
 } from "chart.js";
 import api from "../services/api";
+import DepartmentPicker from "../components/DepartmentPicker.vue";
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
@@ -21,7 +22,9 @@ const months = ref([]);
 const month = ref("");
 const search = ref("");
 const chartMetric = ref("cost"); // cost | pages
-const chartMode = ref("total"); // total | compare (ต้องเลือกเดือนก่อนถึงจะสลับเป็น compare ได้)
+
+// เลือกฝ่าย/แผนกเองที่จะเทียบ — ไม่มีโหมด "ยอดรวมทั้งองค์กร" แบบ Top 10 อัตโนมัติอีกต่อไป
+const selectedDepartmentIds = ref([]);
 
 const divisions = ref([]);
 const unassignedDevices = ref([]);
@@ -59,9 +62,6 @@ async function loadMonths() {
     const res = await api.get("/dashboard/monthly-kpi");
     const unique = [...new Set(res.data.map((r) => r.month))].sort();
     months.value = unique;
-
-    // ไม่ auto-select เดือนล่าสุด เพื่อให้ default เป็น "ไม่เทียบ (ดูยอดรวมทั้งหมด)"
-    // (month.value เริ่มต้นเป็น "" อยู่แล้วจาก ref(""))
   } catch (err) {
     console.error("Load months error:", err);
   }
@@ -79,9 +79,6 @@ async function loadByDepartment() {
 
     divisions.value = res.data.divisions || [];
     unassignedDevices.value = res.data.unassignedDevices || [];
-
-    // ไม่รีเซ็ต openDivisions/openDepartments/openDevices ตรงนี้แล้ว
-    // ให้ accordion ที่เปิดไว้ยังเปิดอยู่ต่อ แม้เปลี่ยนเดือน
   } catch (err) {
     console.error("Load by-department error:", err);
     error.value = "โหลดข้อมูลไม่สำเร็จ";
@@ -184,7 +181,6 @@ function trendBadge(department) {
   if (trend === "down") return { icon: "📉", cls: "bg-green-100 text-green-700", label: `ลดลง${pctLabel}` };
   if (trend === "no-data") return { icon: "❔", cls: "bg-gray-100 text-gray-400", label: "ไม่มีข้อมูล" };
 
-  // pct === null ทั้งที่ trend เป็น up/flat มักหมายถึง "เดือนก่อนไม่มีข้อมูล แต่เดือนนี้มี" = ข้อมูลใหม่
   if (pct === null && trend !== "no-data") {
     return { icon: "🆕", cls: "bg-blue-100 text-blue-700", label: "ข้อมูลใหม่" };
   }
@@ -192,8 +188,6 @@ function trendBadge(department) {
   return { icon: "➖", cls: "bg-gray-100 text-gray-600", label: "เท่าเดิม" };
 }
 
-// รายละเอียดตัวเลขจริงเบื้องหลัง badge — เดือนนี้/เดือนก่อน ทั้งหน้าและค่าใช้จ่าย
-// พร้อมผลต่างที่เป็นตัวเลข ไม่ใช่แค่ % (ใช้โชว์ต่อท้าย badge เพิ่มขึ้น/ลดลง)
 function trendDetail(department) {
   if (department.trend === "no-data") return null;
 
@@ -213,7 +207,6 @@ function trendDetail(department) {
   };
 }
 
-// จำนวนแผนกที่ไม่มีข้อมูลเดือนนี้เลย (สรุปด้านบน)
 const noDataCount = computed(() => {
   if (!month.value) return 0;
   let count = 0;
@@ -238,69 +231,72 @@ const grandTotalPages = computed(() =>
 );
 
 // -------------------------------------------------------
-// กราฟเปรียบเทียบแผนกทั้งหมดในหน้าเดียว (ไม่ต้องไล่เปิดทีละอัน)
-// สองโหมด:
-//  - total   : Top 10 แผนกตามยอดรวมทั้งหมด (ของเดิม)
-//  - compare : Top 10 แผนกที่ "เปลี่ยนแปลงมากที่สุด" เดือนนี้เทียบเดือนก่อน
-//              (แท่งคู่ เดือนก่อน/เดือนนี้ ต้องเลือกเดือนก่อนถึงจะใช้ได้
-//              เพราะต้องมี current_month_*/previous_month_* จาก backend)
+// รายชื่อฝ่าย/แผนกทั้งหมด ให้ DepartmentPicker เลือก (flatten จาก divisions)
 // -------------------------------------------------------
-const canCompare = computed(() => !!month.value);
+const departmentOptions = computed(() => {
+  const opts = [];
+  for (const division of divisions.value) {
+    for (const department of division.departments || []) {
+      opts.push({ id: department.id, label: `${department.name} (${division.name})` });
+    }
+  }
+  return opts;
+});
 
-const topDepartmentsChart = computed(() => {
+// -------------------------------------------------------
+// กราฟเปรียบเทียบเฉพาะฝ่าย/แผนกที่ผู้ใช้เลือกเอง (ไม่มี Top 10 อัตโนมัติ)
+// ถ้าเลือก "เดือนที่เทียบแนวโน้ม" ไว้ด้วย จะโชว์แท่งคู่ เดือนก่อน/เดือนนี้
+// -------------------------------------------------------
+const canCompareMonth = computed(() => !!month.value);
+
+const selectedDepartmentsData = computed(() => {
   const flat = [];
   for (const division of divisions.value) {
     for (const department of division.departments || []) {
-      flat.push({
-        label: `${department.name} (${division.name})`,
-        cost: Number(department.total_cost || 0),
-        pages: Number(department.total_pages || 0),
-        currentCost: Number(department.current_month_cost || 0),
-        previousCost: Number(department.previous_month_cost || 0),
-        currentPages: Number(department.current_month_pages || 0),
-        previousPages: Number(department.previous_month_pages || 0),
-      });
+      if (selectedDepartmentIds.value.includes(department.id)) {
+        flat.push({
+          id: department.id,
+          label: `${department.name} (${division.name})`,
+          cost: Number(department.total_cost || 0),
+          pages: Number(department.total_pages || 0),
+          currentCost: Number(department.current_month_cost || 0),
+          previousCost: Number(department.previous_month_cost || 0),
+          currentPages: Number(department.current_month_pages || 0),
+          previousPages: Number(department.previous_month_pages || 0),
+        });
+      }
     }
   }
 
-  const key = chartMetric.value === "cost" ? "cost" : "pages";
+  // เรียงตามลำดับที่ผู้ใช้เลือก ไม่ใช่เรียงตามยอด (ไม่มีการจัดอันดับอัตโนมัติแล้ว)
+  return selectedDepartmentIds.value
+    .map((id) => flat.find((f) => f.id === id))
+    .filter(Boolean);
+});
 
-  if (chartMode.value === "compare" && canCompare.value) {
+const comparisonChart = computed(() => {
+  const key = chartMetric.value === "cost" ? "cost" : "pages";
+  const list = selectedDepartmentsData.value;
+
+  if (canCompareMonth.value) {
     const currentKey = chartMetric.value === "cost" ? "currentCost" : "currentPages";
     const previousKey = chartMetric.value === "cost" ? "previousCost" : "previousPages";
 
-    const sorted = [...flat]
-      .map((d) => ({ ...d, diff: Math.abs(d[currentKey] - d[previousKey]) }))
-      .sort((a, b) => b.diff - a.diff)
-      .slice(0, 10);
-
     return {
-      labels: sorted.map((d) => d.label),
+      labels: list.map((d) => d.label),
       datasets: [
-        {
-          label: "เดือนก่อน",
-          data: sorted.map((d) => d[previousKey]),
-          backgroundColor: "#9CA3AF",
-          borderRadius: 6,
-        },
-        {
-          label: "เดือนนี้",
-          data: sorted.map((d) => d[currentKey]),
-          backgroundColor: "#2563EB",
-          borderRadius: 6,
-        },
+        { label: "เดือนก่อน", data: list.map((d) => d[previousKey]), backgroundColor: "#9CA3AF", borderRadius: 6 },
+        { label: "เดือนนี้", data: list.map((d) => d[currentKey]), backgroundColor: "#2563EB", borderRadius: 6 },
       ],
     };
   }
 
-  const sorted = [...flat].sort((a, b) => b[key] - a[key]).slice(0, 10);
-
   return {
-    labels: sorted.map((d) => d.label),
+    labels: list.map((d) => d.label),
     datasets: [
       {
         label: chartMetric.value === "cost" ? "ค่าใช้จ่าย (บาท)" : "จำนวนหน้าสุทธิ",
-        data: sorted.map((d) => d[key]),
+        data: list.map((d) => d[key]),
         backgroundColor: "#2563EB",
         borderRadius: 6,
       },
@@ -312,7 +308,7 @@ const chartOptions = computed(() => ({
   indexAxis: "y",
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { display: chartMode.value === "compare" } },
+  plugins: { legend: { display: canCompareMonth.value } },
   scales: {
     x: {
       beginAtZero: true,
@@ -391,33 +387,16 @@ onMounted(async () => {
     <div v-else-if="error" class="bg-red-100 text-red-700 p-4 rounded">{{ error }}</div>
 
     <template v-else>
-      <!-- กราฟเปรียบเทียบ Top 10 แผนก -->
-      <div v-if="divisions.length" class="bg-white shadow rounded-lg p-4 mb-6">
-        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h2 class="font-semibold">
-            {{ chartMode === "compare" && canCompare ? "Top 10 แผนกที่เปลี่ยนแปลงมากที่สุด" : "Top 10 แผนก" }}
-          </h2>
+      <!-- เปรียบเทียบฝ่าย/แผนกที่เลือกเอง (ไม่มี Top 10 อัตโนมัติ / ไม่มีค่ารวมทั้งองค์กรเป็น series เดียว) -->
+      <div class="bg-white shadow rounded-lg p-4 mb-6">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
+          <h2 class="font-semibold">เปรียบเทียบฝ่าย/แผนก</h2>
+
           <div class="flex items-center gap-3 flex-wrap">
-            <div class="flex gap-2 text-sm">
-              <button
-                @click="chartMode = 'total'"
-                class="px-3 py-1 rounded-full"
-                :class="chartMode === 'total' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'"
-              >
-                ยอดรวม
-              </button>
-              <button
-                @click="chartMode = 'compare'"
-                :disabled="!canCompare"
-                :title="!canCompare ? 'ต้องเลือกเดือนที่เทียบแนวโน้มก่อน' : ''"
-                class="px-3 py-1 rounded-full"
-                :class="chartMode === 'compare' && canCompare
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'"
-              >
-                เทียบเดือนก่อน
-              </button>
+            <div class="w-64">
+              <DepartmentPicker v-model="selectedDepartmentIds" :options="departmentOptions" />
             </div>
+
             <div class="flex gap-2 text-sm">
               <button
                 @click="chartMetric = 'cost'"
@@ -436,8 +415,13 @@ onMounted(async () => {
             </div>
           </div>
         </div>
-        <div class="h-80">
-          <Bar :data="topDepartmentsChart" :options="chartOptions" />
+
+        <div v-if="!selectedDepartmentIds.length" class="text-center text-gray-400 py-10 border border-dashed rounded-lg">
+          เลือกฝ่าย/แผนกอย่างน้อย 1 รายการด้านบนเพื่อเปรียบเทียบ
+        </div>
+
+        <div v-else class="h-80">
+          <Bar :data="comparisonChart" :options="chartOptions" />
         </div>
       </div>
 
@@ -496,7 +480,6 @@ onMounted(async () => {
                     </span>
                   </div>
 
-                  <!-- รายละเอียดตัวเลขจริง: เดือนนี้/เดือนก่อน ทั้งหน้าและค่าใช้จ่าย -->
                   <div
                     v-if="month && trendDetail(department)"
                     class="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-4 gap-y-0.5"

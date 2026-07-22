@@ -1,12 +1,10 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 import api from "../services/api";
+import { fiscalYearState } from "../store/fiscalYear";
 
 const loading = ref(false);
 const error = ref(null);
-
-const fiscalYears = ref([]);
-const fiscalYearId = ref("");
 
 const contracts = ref([]);
 const unassignedDevices = ref([]);
@@ -38,22 +36,6 @@ function formatMonth(value) {
   return `${monthName} ${Number(year) + 543}`;
 }
 
-async function loadFiscalYears() {
-  try {
-    const res = await api.get("/fiscal-years");
-    fiscalYears.value = res.data;
-
-    // เลือกปีงบล่าสุดเป็นค่าเริ่มต้น (ถ้ามี)
-    if (res.data.length > 0) {
-      fiscalYearId.value = res.data[res.data.length - 1].id;
-      await loadExpense();
-    }
-  } catch (err) {
-    console.error("Load fiscal years error:", err);
-    error.value = "โหลดรายการปีงบประมาณไม่สำเร็จ";
-  }
-}
-
 // เครื่องที่ยังไม่ได้ผูกสัญญา — ไม่ขึ้นกับปีงบ เพราะไม่มีสัญญาที่จะบอกปีงบได้
 async function loadUnassignedDevices() {
   try {
@@ -65,7 +47,7 @@ async function loadUnassignedDevices() {
 }
 
 async function loadExpense() {
-  if (!fiscalYearId.value) {
+  if (!fiscalYearState.activeId) {
     contracts.value = [];
     return;
   }
@@ -74,7 +56,7 @@ async function loadExpense() {
   error.value = null;
 
   try {
-    const res = await api.get(`/expense/${fiscalYearId.value}`);
+    const res = await api.get(`/expense/${fiscalYearState.activeId}`);
 
     contracts.value = res.data.contracts || [];
 
@@ -123,8 +105,17 @@ function toggleUnassigned() {
   showUnassigned.value = !showUnassigned.value;
 }
 
+// ปีงบตอนนี้เป็น global state (Navbar เป็นคนโหลด/เซ็ตค่าเริ่มต้นให้)
+// หน้านี้แค่ "subscribe" — พอ activeId เปลี่ยน (ไม่ว่าจะเปลี่ยนจาก Navbar, URL, หรือ back/forward) ให้โหลดข้อมูลใหม่ทันที
+watch(
+  () => fiscalYearState.activeId,
+  (id) => {
+    if (id) loadExpense();
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
-  loadFiscalYears();
   loadUnassignedDevices();
 });
 </script>
@@ -133,22 +124,12 @@ onMounted(() => {
   <div class="p-6">
     <h1 class="text-2xl font-bold mb-6">ค่าใช้จ่ายแยกตามสัญญา</h1>
 
-    <!-- เลือกปีงบประมาณ -->
-    <div class="bg-white shadow rounded-lg p-4 mb-6 flex items-center gap-4">
-      <label class="text-sm text-gray-500">ปีงบประมาณ</label>
-
-      <select
-        v-model="fiscalYearId"
-        @change="loadExpense"
-        class="border rounded px-3 py-2"
-      >
-        <option value="" disabled>เลือกปีงบประมาณ</option>
-        <option v-for="fy in fiscalYears" :key="fy.id" :value="fy.id">
-          {{ fy.year }}
-        </option>
-      </select>
-
-      <div v-if="!loading && contracts.length" class="ml-auto text-right">
+    <!-- สรุปยอดรวม — ตัว selector ปีงบย้ายไปอยู่ที่ Navbar แล้ว (global state) -->
+    <div
+      v-if="!loading && contracts.length"
+      class="bg-white shadow rounded-lg p-4 mb-6 flex items-center justify-end"
+    >
+      <div class="text-right">
         <div class="text-sm text-gray-500">รวมค่าใช้จ่ายทั้งปีงบ</div>
         <div class="text-xl font-bold text-blue-700">{{ formatMoney(grandTotal) }} บาท</div>
         <div class="text-xs text-gray-400">รวม {{ grandTotalPages.toLocaleString() }} หน้า</div>
