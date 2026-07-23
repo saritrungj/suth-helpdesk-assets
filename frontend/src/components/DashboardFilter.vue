@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import api from "../services/api";
+import { activeGregorianYear } from "../store/fiscalYear";
 
 const emit = defineEmits(["filter"]);
 
@@ -8,266 +9,114 @@ const building_name = ref("");
 const month = ref("");
 
 const buildings = ref([]);
-const months = ref([]);
+const allMonths = ref([]); // เดือนทั้งหมด "YYYY-MM" ที่เคยมีข้อมูล (ทุกปี) — ยังไม่กรองปีงบ
 
+const monthsTH = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
+  "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม",
+  "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
+
+function formatMonth(value) {
+  if (!value || typeof value !== "string") return "";
+  const [y, m] = value.split("-");
+  return `${monthsTH[Number(m) - 1]} ${Number(y) + 543}`;
+}
 
 // โหลดอาคาร
 async function loadBuildings() {
-
   try {
-
     const res = await api.get("/buildings");
-
     buildings.value = res.data;
-
-  } catch(err){
-
+  } catch (err) {
     console.error("Load buildings error", err);
-
   }
-
 }
 
-
-
-// แปลงเดือน
-function formatMonth(value){
-
-  if(!value || typeof value !== "string"){
-    return "";
+// โหลดเดือนทั้งหมดที่เคยมีข้อมูล (ทุกปี) — จะไปกรองเหลือเฉพาะปีงบปัจจุบันในขั้นตอนถัดไป
+async function loadMonths() {
+  try {
+    const res = await api.get("/dashboard/monthly-kpi");
+    allMonths.value = [...new Set(res.data.map((item) => item.month))].sort();
+  } catch (err) {
+    console.error("Load months error", err);
   }
-
-
-  const monthsTH = [
-    "มกราคม",
-    "กุมภาพันธ์",
-    "มีนาคม",
-    "เมษายน",
-    "พฤษภาคม",
-    "มิถุนายน",
-    "กรกฎาคม",
-    "สิงหาคม",
-    "กันยายน",
-    "ตุลาคม",
-    "พฤศจิกายน",
-    "ธันวาคม"
-  ];
-
-
-  const [year,m] = value.split("-");
-
-
-  return `${monthsTH[Number(m)-1]} ${Number(year)+543}`;
-
 }
 
+// ปีอ้างอิงตามปีงบที่ active อยู่ตอนนี้เสมอ (global, เลือกที่ Navbar) — filter นี้จึงเหลือให้เลือกแค่ "เดือน"
+const year = computed(() => activeGregorianYear.value);
 
-
-// โหลดเดือน
-async function loadMonths(){
-
-  try{
-
-    const res = await api.get(
-      "/dashboard/monthly-kpi"
-    );
-
-
-    const unique = [
-      ...new Set(
-        res.data.map(
-          item => item.month
-        )
-      )
-    ];
-
-
-    months.value = unique.map(m => ({
-
-      value:m,
-
-      label:formatMonth(m)
-
-    }));
-
-
-  }catch(err){
-
-    console.error(
-      "Load months error",
-      err
-    );
-
-  }
-
-}
-
-
-
-// ส่ง Filter
-function sendFilter(){
-
-  const filter = {
-
-    building_name: building_name.value,
-
-    month: month.value
-
-  };
-
-
-  console.log(
-    "Filter Update:",
-    filter
-  );
-
-
-  emit(
-    "filter",
-    filter
-  );
-
-}
-
-
-
-// จับการเปลี่ยนค่า
-watch(
-  [
-    building_name,
-    month
-  ],
-  () => {
-
-    sendFilter();
-
-  }
-);
-
-
-
-
-// Reset
-function resetFilter(){
-
-  building_name.value = "";
-
-  month.value = "";
-
-}
-
-
-
-onMounted(async()=>{
-
-  await loadBuildings();
-
-  await loadMonths();
-
+// ตัวเลือกเดือนที่โชว์ในดรอปดาวน์ — จำกัดเฉพาะเดือนของปีงบปัจจุบันเท่านั้น
+const months = computed(() => {
+  if (!year.value) return [];
+  return allMonths.value
+    .filter((m) => m.startsWith(`${year.value}-`))
+    .map((m) => ({ value: m, label: formatMonth(m) }));
 });
 
+// ส่ง Filter
+function sendFilter() {
+  const filter = {
+    building_name: building_name.value,
+    month: month.value,
+  };
+
+  emit("filter", filter);
+}
+
+// จับการเปลี่ยนค่า
+watch([building_name, month], sendFilter);
+
+// ปีงบเปลี่ยน (จาก Navbar) → เดือนที่เคยเลือกไว้อาจเป็นของปีงบเก่า ใช้ต่อไม่ได้แล้ว ล้างทิ้งให้เริ่มเลือกใหม่
+watch(year, () => {
+  if (month.value && !months.value.some((m) => m.value === month.value)) {
+    month.value = "";
+  }
+});
+
+// Reset
+function resetFilter() {
+  building_name.value = "";
+  month.value = "";
+}
+
+onMounted(async () => {
+  await loadBuildings();
+  await loadMonths();
+});
 </script>
 
-
 <template>
+  <div class="bg-white shadow rounded-lg p-4 mb-6">
+    <h2 class="font-bold mb-3">Filter Dashboard</h2>
 
-<div class="bg-white shadow rounded-lg p-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+      <!-- อาคาร -->
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
+        <select v-model="building_name" class="border rounded p-2 w-full">
+          <option value="">ทุกอาคาร</option>
+          <option v-for="b in buildings" :key="b.id" :value="b.name">{{ b.name }}</option>
+        </select>
+      </div>
 
-<h2 class="font-bold mb-3">
-Filter Dashboard
-</h2>
+      <!-- เดือน (ปีอ้างอิงจากปีงบที่เลือกที่ Navbar) -->
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">
+          เดือน (ปีงบ {{ year ? year + 543 : "-" }})
+        </label>
+        <select v-model="month" class="border rounded p-2 w-full">
+          <option value="">ทุกเดือน</option>
+          <option v-for="m in months" :key="m.value" :value="m.value">{{ m.label }}</option>
+        </select>
+      </div>
 
-
-<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-
-
-<!-- อาคาร -->
-
-<select
-
-v-model="building_name"
-
-class="border rounded p-2"
-
->
-
-<option value="">
-ทุกอาคาร
-</option>
-
-
-<option
-
-v-for="b in buildings"
-
-:key="b.id"
-
-:value="b.name"
-
->
-
-{{ b.name }}
-
-</option>
-
-
-</select>
-
-
-
-
-<!-- เดือน -->
-
-<select
-
-v-model="month"
-
-class="border rounded p-2"
-
->
-
-
-<option value="">
-ทุกเดือน
-</option>
-
-
-<option
-
-v-for="m in months"
-
-:key="m.value"
-
-:value="m.value"
-
->
-
-{{ m.label }}
-
-</option>
-
-
-</select>
-
-
-
-
-<button
-
-@click="resetFilter"
-
-class="bg-gray-500 hover:bg-gray-600 text-white rounded px-4 py-2"
-
->
-
-ล้างตัวกรอง
-
-</button>
-
-
-</div>
-
-
-</div>
-
+      <button
+        @click="resetFilter"
+        class="bg-gray-500 hover:bg-gray-600 text-white rounded px-4 py-2"
+      >
+        ล้างตัวกรอง
+      </button>
+    </div>
+  </div>
 </template>

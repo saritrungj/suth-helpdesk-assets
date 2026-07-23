@@ -196,7 +196,7 @@ router.get("/summary", async (req, res) => {
 
     const [rows] = await db.query(
       `
-      SELECT device_id, COUNT(*) AS filled
+      SELECT device_id, COUNT(*) AS filled, SUM(pages) AS total_pages
       FROM print_transactions
       WHERE month LIKE ?
       GROUP BY device_id

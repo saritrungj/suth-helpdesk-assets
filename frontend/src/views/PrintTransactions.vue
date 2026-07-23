@@ -1,20 +1,38 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import api from "../services/api";
+import { activeGregorianYear } from "../store/fiscalYear";
 
 const loading = ref(false);
 const message = ref(null);
 const messageType = ref("success"); // success | error
 
 const search = ref("");
+
+// -------------------------------------------------------
+// Filter แบบเจาะจง — เดิมมีแค่ "แผนก" ตอนนี้เพิ่มมิติอื่นให้ค้นหา/กรองได้ตรงจุดขึ้น
+// -------------------------------------------------------
+const buildingFilter = ref("");
+const floorFilter = ref("");
+const divisionFilter = ref("");
 const departmentFilter = ref("");
+const brandFilter = ref("");
+const deviceStatusFilter = ref("");
+const fillStatusFilter = ref(""); // "" | done | partial | none
 
-const devices = ref([]); // [{ id, serial_number, model, brand_name, department_name, ... }]
-const filledSummary = ref({}); // { [device_id]: filledCount }
+const devices = ref([]); // [{ id, serial_number, model, brand_name, building_name, floor_name, division_name, department_name, status, ... }]
+const filledSummary = ref({}); // { [device_id]: { filled, total_pages } }
 
-const currentYear = new Date().getFullYear();
-const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - 4 + i); // -4 ถึง +1 ปีจากปัจจุบัน
-const year = ref(currentYear);
+// Master data สำหรับตัวเลือก filter (ดึงจาก endpoint เดียวกับหน้า AssetList)
+const buildings = ref([]);
+const floors = ref([]);
+const divisions = ref([]);
+const departments = ref([]);
+const brands = ref([]);
+
+// ปีที่ใช้กรอก/แสดงผล อ้างอิงจากปีงบที่ active อยู่ตอนนี้เสมอ (เลือกที่ Navbar) — ไม่มี dropdown ปีแยกต่างหากอีกต่อไป
+// ปีงบเริ่มเดือน ม.ค. จึงตรงกับปีปฏิทินปกติ (ค.ศ.) ตัวเดียวกันเป๊ะๆ
+const year = computed(() => activeGregorianYear.value);
 
 const monthsTH = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
@@ -22,21 +40,60 @@ const monthsTH = [
   "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
 ];
 
+const statusMeta = {
+  active: { label: "ใช้งานอยู่", class: "bg-green-100 text-green-700" },
+  repair: { label: "ซ่อมบำรุง", class: "bg-yellow-100 text-yellow-700" },
+  retired: { label: "ปลดระวาง", class: "bg-gray-200 text-gray-600" },
+};
+
+function statusLabel(status) {
+  return statusMeta[status]?.label || status || "-";
+}
+
+function statusClass(status) {
+  return statusMeta[status]?.class || "bg-gray-100 text-gray-600";
+}
+
 // -------------------------------------------------------
-// โหลดรายการเครื่อง + สรุปจำนวนเดือนที่กรอกแล้วของปีที่เลือก
+// โหลดรายการเครื่อง + master data (ตัวเลือก filter) + สรุปจำนวนเดือนที่กรอกแล้วของปีที่เลือก
 // -------------------------------------------------------
 async function loadDevices() {
   const res = await api.get("/devices");
   devices.value = res.data;
 }
 
+async function loadMasterData() {
+  try {
+    const [buildingRes, floorRes, divisionRes, departmentRes, brandRes] = await Promise.all([
+      api.get("/buildings"),
+      api.get("/floors"),
+      api.get("/divisions"),
+      api.get("/departments"),
+      api.get("/brands"),
+    ]);
+
+    buildings.value = buildingRes.data;
+    floors.value = floorRes.data;
+    divisions.value = divisionRes.data;
+    departments.value = departmentRes.data;
+    brands.value = brandRes.data;
+  } catch (err) {
+    console.error("Load master data error:", err);
+  }
+}
+
 async function loadSummary() {
+  if (!year.value) {
+    filledSummary.value = {};
+    return;
+  }
+
   try {
     const res = await api.get("/print-transactions/summary", {
       params: { year: year.value },
     });
     filledSummary.value = Object.fromEntries(
-      res.data.map((r) => [r.device_id, r.filled])
+      res.data.map((r) => [r.device_id, { filled: r.filled, totalPages: Number(r.total_pages || 0) }])
     );
   } catch (err) {
     console.error(err);
@@ -46,7 +103,7 @@ async function loadSummary() {
 async function init() {
   loading.value = true;
   try {
-    await Promise.all([loadDevices(), loadSummary()]);
+    await Promise.all([loadDevices(), loadMasterData(), loadSummary()]);
   } catch (err) {
     console.error(err);
     message.value = "โหลดข้อมูลไม่สำเร็จ";
@@ -56,17 +113,67 @@ async function init() {
   }
 }
 
-// เปลี่ยนปี → สรุปจำนวนเดือนที่กรอกแล้วต้องโหลดใหม่
-watch(year, loadSummary);
+// ปีงบเปลี่ยน (จาก Navbar) → สรุปจำนวนเดือนที่กรอกแล้ว/ยอดรวมต้องโหลดใหม่
+// immediate: true เผื่อปีงบโหลดเสร็จ/ถูกตั้งค่าเริ่มต้นหลังจาก init() ทำงานไปแล้ว
+watch(year, loadSummary, { immediate: true });
 
 // -------------------------------------------------------
-// ค้นหา / กรองตามแผนก (ตัด "อาคาร" ออกแล้ว เหลือมิติเดียวคือเดือน — ใช้จัดการใน Modal)
+// Cascading filter — เลือกอาคารแล้วค่อยกรองชั้น, เลือกฝ่ายแล้วค่อยกรองแผนก (เหมือน AssetList)
 // -------------------------------------------------------
-const departmentOptions = computed(() => {
-  const names = [...new Set(devices.value.map((d) => d.department_name).filter(Boolean))];
-  return names.sort();
+const filteredFloorOptions = computed(() => {
+  if (!buildingFilter.value) return floors.value;
+  return floors.value.filter((f) => Number(f.building_id) === Number(buildingFilter.value));
 });
 
+const filteredDepartmentOptions = computed(() => {
+  if (!divisionFilter.value) return departments.value;
+  return departments.value.filter((d) => Number(d.division_id) === Number(divisionFilter.value));
+});
+
+function onBuildingFilterChange() {
+  floorFilter.value = "";
+}
+
+function onDivisionFilterChange() {
+  departmentFilter.value = "";
+}
+
+function resetFilters() {
+  search.value = "";
+  buildingFilter.value = "";
+  floorFilter.value = "";
+  divisionFilter.value = "";
+  departmentFilter.value = "";
+  brandFilter.value = "";
+  deviceStatusFilter.value = "";
+  fillStatusFilter.value = "";
+}
+
+// -------------------------------------------------------
+// สถานะการกรอกของเครื่องหนึ่งๆ ในปีที่เลือก — ครบ 12 / กรอกบางส่วน / ยังไม่กรอกเลย
+// -------------------------------------------------------
+function fillInfo(deviceId) {
+  return filledSummary.value[deviceId] || { filled: 0, totalPages: 0 };
+}
+
+function filledCount(deviceId) {
+  return fillInfo(deviceId).filled || 0;
+}
+
+function totalPages(deviceId) {
+  return fillInfo(deviceId).totalPages || 0;
+}
+
+function fillStatusOf(deviceId) {
+  const n = filledCount(deviceId);
+  if (n === 12) return "done";
+  if (n > 0) return "partial";
+  return "none";
+}
+
+// -------------------------------------------------------
+// ค้นหา / กรองแบบเจาะจง (อาคาร, ชั้น, ฝ่าย, แผนก, ยี่ห้อ, สถานะเครื่อง, สถานะการกรอก)
+// -------------------------------------------------------
 const filteredDevices = computed(() => {
   const keyword = search.value.trim().toLowerCase();
 
@@ -75,17 +182,44 @@ const filteredDevices = computed(() => {
       !keyword ||
       d.serial_number?.toLowerCase().includes(keyword) ||
       d.model?.toLowerCase().includes(keyword) ||
-      d.department_name?.toLowerCase().includes(keyword);
+      d.department_name?.toLowerCase().includes(keyword) ||
+      d.contract_no?.toLowerCase().includes(keyword);
+
+    const matchBuilding =
+      !buildingFilter.value ||
+      d.building_name === buildings.value.find((b) => b.id == buildingFilter.value)?.name;
+
+    const matchFloor =
+      !floorFilter.value ||
+      d.floor_name === floors.value.find((f) => f.id == floorFilter.value)?.name;
+
+    const matchDivision =
+      !divisionFilter.value ||
+      d.division_name === divisions.value.find((dv) => dv.id == divisionFilter.value)?.name;
 
     const matchDepartment = !departmentFilter.value || d.department_name === departmentFilter.value;
 
-    return matchKeyword && matchDepartment;
+    const matchBrand =
+      !brandFilter.value ||
+      d.brand_name === brands.value.find((b) => b.id == brandFilter.value)?.name;
+
+    const matchDeviceStatus = !deviceStatusFilter.value || d.status === deviceStatusFilter.value;
+
+    const matchFillStatus = !fillStatusFilter.value || fillStatusOf(d.id) === fillStatusFilter.value;
+
+    return (
+      matchKeyword &&
+      matchBuilding &&
+      matchFloor &&
+      matchDivision &&
+      matchDepartment &&
+      matchBrand &&
+      matchDeviceStatus &&
+      matchFillStatus
+    );
   });
 });
 
-function filledCount(deviceId) {
-  return filledSummary.value[deviceId] || 0;
-}
 
 // -------------------------------------------------------
 // Modal กรอกข้อมูล 12 เดือน (Jan–Dec) ของเครื่องเดียว
@@ -111,6 +245,12 @@ function buildMonthRows(targetYear) {
 }
 
 async function openModal(device) {
+  if (!year.value) {
+    message.value = "กรุณาเลือกปีงบก่อน (มุมขวาบน)";
+    messageType.value = "error";
+    return;
+  }
+
   modalDevice.value = device;
   modalError.value = null;
   modalMonths.value = buildMonthRows(year.value);
@@ -197,14 +337,15 @@ onMounted(init);
       <!-- แถบควบคุมด้านบน -->
       <div class="flex flex-wrap items-end gap-4 mb-4">
         <div>
-          <label class="block text-sm text-gray-500 mb-1">ปีที่จะกรอก</label>
-          <select v-model.number="year" class="border rounded p-2">
-            <option v-for="y in yearOptions" :key="y" :value="y">{{ y + 543 }}</option>
-          </select>
+          <label class="block text-sm text-gray-500 mb-1">ปีงบ</label>
+          <div class="border rounded p-2 bg-gray-50 text-gray-700 min-w-[80px]">
+            {{ year ? year + 543 : "-" }}
+          </div>
+          <p class="text-xs text-gray-400 mt-1">เปลี่ยนปีงบได้ที่มุมขวาบน</p>
         </div>
 
         <div class="flex-1 min-w-[200px]">
-          <label class="block text-sm text-gray-500 mb-1">ค้นหา (SN / รุ่น / แผนก)</label>
+          <label class="block text-sm text-gray-500 mb-1">ค้นหา (SN / รุ่น / แผนก / เลขที่สัญญา)</label>
           <input
             v-model="search"
             type="text"
@@ -212,14 +353,77 @@ onMounted(init);
             class="border rounded p-2 w-full"
           />
         </div>
+      </div>
 
+      <!-- Filter เจาะจง — อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่อง/สถานะการกรอก -->
+      <div class="flex flex-wrap items-end gap-3 mb-4 pt-4 border-t">
         <div>
-          <label class="block text-sm text-gray-500 mb-1">แผนก</label>
-          <select v-model="departmentFilter" class="border rounded p-2">
-            <option value="">ทั้งหมด</option>
-            <option v-for="d in departmentOptions" :key="d" :value="d">{{ d }}</option>
+          <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
+          <select v-model="buildingFilter" @change="onBuildingFilterChange" class="border rounded p-2 text-sm">
+            <option value="">ทุกอาคาร</option>
+            <option v-for="b in buildings" :key="b.id" :value="b.id">{{ b.name }}</option>
           </select>
         </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">ชั้น</label>
+          <select v-model="floorFilter" class="border rounded p-2 text-sm">
+            <option value="">ทุกชั้น</option>
+            <option v-for="f in filteredFloorOptions" :key="f.id" :value="f.id">{{ f.name }}</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">ฝ่าย</label>
+          <select v-model="divisionFilter" @change="onDivisionFilterChange" class="border rounded p-2 text-sm">
+            <option value="">ทุกฝ่าย</option>
+            <option v-for="d in divisions" :key="d.id" :value="d.id">{{ d.name }}</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">แผนก</label>
+          <select v-model="departmentFilter" class="border rounded p-2 text-sm">
+            <option value="">ทุกแผนก</option>
+            <option v-for="d in filteredDepartmentOptions" :key="d.id" :value="d.name">{{ d.name }}</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">ยี่ห้อ</label>
+          <select v-model="brandFilter" class="border rounded p-2 text-sm">
+            <option value="">ทุกยี่ห้อ</option>
+            <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">สถานะเครื่อง</label>
+          <select v-model="deviceStatusFilter" class="border rounded p-2 text-sm">
+            <option value="">ทุกสถานะ</option>
+            <option value="active">ใช้งานอยู่</option>
+            <option value="repair">ซ่อมบำรุง</option>
+            <option value="retired">ปลดระวาง</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ year ? year + 543 : "-" }})</label>
+          <select v-model="fillStatusFilter" class="border rounded p-2 text-sm">
+            <option value="">ทั้งหมด</option>
+            <option value="done">กรอกครบ 12 เดือน</option>
+            <option value="partial">กรอกบางส่วน</option>
+            <option value="none">ยังไม่ได้กรอกเลย</option>
+          </select>
+        </div>
+
+        <button
+          type="button"
+          @click="resetFilters"
+          class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap"
+        >
+          ล้างตัวกรองทั้งหมด
+        </button>
       </div>
 
       <!-- สถานะ -->
@@ -232,7 +436,7 @@ onMounted(init);
       </div>
 
       <div class="text-sm text-gray-500 mb-3">
-        ทั้งหมด {{ filteredDevices.length }} เครื่อง — ปี {{ year + 543 }}
+        ทั้งหมด {{ filteredDevices.length }} เครื่อง (จากทั้งหมด {{ devices.length }}) — ปีงบ {{ year ? year + 543 : "-" }}
       </div>
 
       <div v-if="loading" class="text-center text-gray-500 py-10">กำลังโหลดข้อมูล...</div>
@@ -241,49 +445,70 @@ onMounted(init);
         ไม่พบเครื่องที่ตรงกับเงื่อนไขค้นหา
       </div>
 
-      <!-- ตารางเครื่อง (ไม่แยกอาคาร) -->
-      <table v-else class="w-full border text-sm">
-        <thead>
-          <tr class="bg-gray-100 text-left">
-            <th class="border p-2">SN</th>
-            <th class="border p-2">ยี่ห้อ</th>
-            <th class="border p-2">รุ่น</th>
-            <th class="border p-2">แผนก</th>
-            <th class="border p-2 text-center">สถานะการกรอก</th>
-            <th class="border p-2 text-center">จัดการ</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="d in filteredDevices" :key="d.id">
-            <td class="border p-2">{{ d.serial_number }}</td>
-            <td class="border p-2">{{ d.brand_name || "-" }}</td>
-            <td class="border p-2">{{ d.model || "-" }}</td>
-            <td class="border p-2">{{ d.department_name || "-" }}</td>
-            <td class="border p-2 text-center">
-              <span
-                class="px-2 py-1 rounded text-xs font-medium"
-                :class="
-                  filledCount(d.id) === 12
-                    ? 'bg-green-100 text-green-700'
-                    : filledCount(d.id) > 0
-                    ? 'bg-orange-100 text-orange-700'
-                    : 'bg-gray-100 text-gray-500'
-                "
-              >
-                {{ filledCount(d.id) }}/12 เดือน
-              </span>
-            </td>
-            <td class="border p-2 text-center">
-              <button
-                @click="openModal(d)"
-                class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-              >
-                กรอกข้อมูล
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- ตารางเครื่อง — เพิ่มข้อมูลอาคาร/ชั้น/ฝ่าย/สถานะเครื่อง/ยอดรวมปีนี้ ให้ดูภาพรวมได้จากตารางเดียว -->
+      <div v-else class="overflow-x-auto">
+        <table class="w-full border text-sm min-w-max">
+          <thead>
+            <tr class="bg-gray-100 text-left whitespace-nowrap">
+              <th class="border p-2">SN</th>
+              <th class="border p-2">ยี่ห้อ / รุ่น</th>
+              <th class="border p-2">อาคาร / ชั้น</th>
+              <th class="border p-2">ฝ่าย / แผนก</th>
+              <th class="border p-2 text-center">สถานะเครื่อง</th>
+              <th class="border p-2 text-right">ยอดรวมปีนี้ (หน้า)</th>
+              <th class="border p-2 text-center">สถานะการกรอก</th>
+              <th class="border p-2 text-center">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="d in filteredDevices" :key="d.id">
+              <td class="border p-2 whitespace-nowrap">{{ d.serial_number }}</td>
+              <td class="border p-2 whitespace-nowrap">
+                <div>{{ d.brand_name || "-" }}</div>
+                <div class="text-gray-500">{{ d.model || "-" }}</div>
+              </td>
+              <td class="border p-2 whitespace-nowrap">
+                <div>{{ d.building_name || "-" }}</div>
+                <div class="text-gray-500">{{ d.floor_name || "-" }}</div>
+              </td>
+              <td class="border p-2 whitespace-nowrap">
+                <div>{{ d.division_name || "-" }}</div>
+                <div class="text-gray-500">{{ d.department_name || "-" }}</div>
+              </td>
+              <td class="border p-2 text-center whitespace-nowrap">
+                <span class="px-2 py-1 rounded text-xs font-medium" :class="statusClass(d.status)">
+                  {{ statusLabel(d.status) }}
+                </span>
+              </td>
+              <td class="border p-2 text-right whitespace-nowrap">
+                {{ totalPages(d.id).toLocaleString() }}
+              </td>
+              <td class="border p-2 text-center whitespace-nowrap">
+                <span
+                  class="px-2 py-1 rounded text-xs font-medium"
+                  :class="
+                    filledCount(d.id) === 12
+                      ? 'bg-green-100 text-green-700'
+                      : filledCount(d.id) > 0
+                      ? 'bg-orange-100 text-orange-700'
+                      : 'bg-gray-100 text-gray-500'
+                  "
+                >
+                  {{ filledCount(d.id) }}/12 เดือน
+                </span>
+              </td>
+              <td class="border p-2 text-center whitespace-nowrap">
+                <button
+                  @click="openModal(d)"
+                  class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                >
+                  กรอกข้อมูล
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Modal: กรอก 12 เดือน (Jan–Dec) ของเครื่องเดียว -->
@@ -298,7 +523,7 @@ onMounted(init);
             <h2 class="text-lg font-bold">กรอกยอดพิมพ์รายเดือน</h2>
             <p class="text-sm text-gray-500">
               {{ modalDevice?.serial_number }} — {{ modalDevice?.brand_name }} {{ modalDevice?.model }}
-              (ปี {{ year + 543 }})
+              (ปีงบ {{ year ? year + 543 : "-" }})
             </p>
           </div>
           <button @click="closeModal" class="text-gray-400 hover:text-gray-700 text-xl leading-none">

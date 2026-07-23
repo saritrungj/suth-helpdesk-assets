@@ -1,19 +1,18 @@
 <script setup>
 
 import { ref, onMounted, computed } from "vue";
-import { useRouter } from "vue-router";
 import api from "../services/api";
 import { authState } from "../store/auth";
+import DataTable from "../components/DataTable.vue";
+import AssetForm from "./AssetForm.vue";
 
-
-const router = useRouter();
 
 const isAdmin = computed(() => authState.user?.role === "admin");
 
 
 const assets = ref([]);
 
-const search = ref("");
+const search = ref(""); // ตัวกรองเฉพาะทาง (dropdown) — ยังทำเอง แยกจากช่องค้นหาทั่วไปใน DataTable
 const selectedBrand = ref("");
 const selectedBuilding = ref("");
 const selectedFloor = ref("");
@@ -30,9 +29,26 @@ const departments = ref([]);
 const loading = ref(true);
 const error = ref(null);
 
-// Pagination
-const currentPage = ref(1);
-const perPage = ref(10);
+
+// -------------------------------------------------------
+// Modal เพิ่ม/แก้ไขทรัพย์สิน — ปุ่ม "เพิ่ม" และ "แก้ไข" เปิด Popup แทนการเปลี่ยนหน้า (ข้อ 6)
+// -------------------------------------------------------
+const showFormModal = ref(false);
+const editingAssetId = ref(null); // null = โหมดเพิ่มใหม่, number = โหมดแก้ไข
+
+function openAddModal() {
+  editingAssetId.value = null;
+  showFormModal.value = true;
+}
+
+function openEditModal(id) {
+  editingAssetId.value = id;
+  showFormModal.value = true;
+}
+
+function onAssetSaved() {
+  loadAssets(); // refresh ตารางหลัง submit สำเร็จ (ไม่ต้อง reload ทั้งหน้า)
+}
 
 
 // สถานะเครื่อง — label + สี badge
@@ -70,33 +86,23 @@ function formatMoney(value) {
 // Load Assets
 // ==========================
 async function loadAssets() {
-
   loading.value = true;
   error.value = null;
 
   try {
-
     const res = await api.get("/devices");
     assets.value = res.data;
-
   } catch (err) {
-
     console.error("Load assets error:", err);
     error.value = "โหลดข้อมูล Asset ไม่สำเร็จ";
-
   } finally {
-
     loading.value = false;
-
   }
-
 }
 
 
 async function loadFilterData() {
-
   try {
-
     const [brandRes, buildingRes, floorRes, divisionRes, departmentRes] = await Promise.all([
       api.get("/brands"),
       api.get("/buildings"),
@@ -110,58 +116,41 @@ async function loadFilterData() {
     floors.value = floorRes.data;
     divisions.value = divisionRes.data;
     departments.value = departmentRes.data;
-
   } catch (err) {
-
     console.error("Load filter error:", err);
-
   }
-
 }
 
 
 // ==========================
 // Cascading filter options
 // ==========================
-// ตัวเลือก "ชั้น" กรองตามอาคารที่เลือกไว้ ไม่งั้นชื่อชั้นที่ซ้ำกันในแต่ละตึก
-// (เช่น "ชั้น 1" ของทุกตึก) จะโชว์ปนกันเป็นรายการซ้ำๆ ใน dropdown เดียว
 const filteredFloorOptions = computed(() => {
   if (!selectedBuilding.value) return floors.value;
-
-  return floors.value.filter(
-    (f) => Number(f.building_id) === Number(selectedBuilding.value)
-  );
+  return floors.value.filter((f) => Number(f.building_id) === Number(selectedBuilding.value));
 });
 
-// ตัวเลือก "แผนก" กรองตามฝ่ายที่เลือกไว้
 const filteredDepartmentOptions = computed(() => {
   if (!selectedDivision.value) return departments.value;
-
-  return departments.value.filter(
-    (d) => Number(d.division_id) === Number(selectedDivision.value)
-  );
+  return departments.value.filter((d) => Number(d.division_id) === Number(selectedDivision.value));
 });
 
-// เลือกอาคารใหม่ -> เคลียร์ชั้นเดิมทิ้ง เพราะชั้นเดิมอาจไม่ได้อยู่ในอาคารใหม่
 function onFilterBuildingChange() {
   selectedFloor.value = "";
 }
 
-// เลือกฝ่ายใหม่ -> เคลียร์แผนกเดิมทิ้ง เพราะแผนกเดิมอาจไม่ได้อยู่ในฝ่ายใหม่
 function onFilterDivisionChange() {
   selectedDepartment.value = "";
 }
 
 
 // ==========================
-// Filter
+// Filter (เฉพาะทาง — dropdown) — DataTable จะรับผิดชอบ search ทั่วไป/sort/pagination/export ต่อ
 // ==========================
 const filteredAssets = computed(() => {
-
   const keyword = search.value.toLowerCase();
 
   return assets.value.filter((a) => {
-
     const matchSearch =
       !keyword ||
       a.serial_number?.toLowerCase().includes(keyword) ||
@@ -189,52 +178,53 @@ const filteredAssets = computed(() => {
       !selectedDepartment.value ||
       a.department_name === departments.value.find((d) => d.id == selectedDepartment.value)?.name;
 
-    const matchStatus =
-      !selectedStatus.value ||
-      a.status === selectedStatus.value;
+    const matchStatus = !selectedStatus.value || a.status === selectedStatus.value;
 
     return matchSearch && matchBrand && matchBuilding && matchFloor && matchDivision && matchDepartment && matchStatus;
-
   });
-
 });
 
-const totalPages = computed(() => {
-  return Math.max(1, Math.ceil(filteredAssets.value.length / perPage.value));
-});
 
-const paginatedAssets = computed(() => {
-  const start = (currentPage.value - 1) * perPage.value;
-  return filteredAssets.value.slice(start, start + perPage.value);
-});
+// ==========================
+// คอลัมน์ของ DataTable
+// ==========================
+const columns = computed(() => [
+  { key: "serial_number", label: "Serial" },
+  { key: "brand_name", label: "Brand / Model", value: (a) => `${a.brand_name || "-"} ${a.model || ""}` },
+  { key: "building_name", label: "อาคาร" },
+  { key: "floor_name", label: "ชั้น" },
+  { key: "division_name", label: "ฝ่าย" },
+  { key: "department_name", label: "แผนก" },
+  { key: "contract_no", label: "สัญญา" },
+  {
+    key: "effective_price",
+    label: "ราคา/แผ่น (บาท)",
+    align: "right",
+    value: (a) => effectivePrice(a),
+    csv: (a) => effectivePrice(a) ?? "",
+  },
+  { key: "status", label: "สถานะ", align: "center", value: (a) => statusLabel(a.status), csv: (a) => statusLabel(a.status) },
+]);
 
 
 // ==========================
 // Edit / Delete (admin เท่านั้น — backend บังคับอยู่แล้ว ฝั่ง UI ก็ซ่อนไม่ให้กดของที่ทำไม่ได้)
 // ==========================
 function editAsset(id) {
-  router.push(`/admin/edit-asset/${id}`);
+  openEditModal(id);
 }
 
 async function deleteAsset(id) {
-
-  if (!confirm("ต้องการลบรายการนี้หรือไม่?")) {
-    return;
-  }
+  if (!confirm("ต้องการลบรายการนี้หรือไม่?")) return;
 
   try {
-
     await api.delete(`/devices/${id}`);
     alert("ลบข้อมูลสำเร็จ");
     loadAssets();
-
   } catch (err) {
-
     console.error(err);
     alert(err.response?.data?.error || "ลบข้อมูลไม่สำเร็จ");
-
   }
-
 }
 
 
@@ -244,7 +234,6 @@ onMounted(async () => {
 });
 
 </script>
-
 
 
 <template>
@@ -259,27 +248,14 @@ onMounted(async () => {
     {{ error }}
   </div>
 
-  <p class="mb-3">
-    จำนวนอุปกรณ์ทั้งหมด:
-    <strong>{{ filteredAssets.length }}</strong>
-    รายการ
-  </p>
-
-
+  <!-- Filter เฉพาะทาง (dropdown) — ยังอยู่เหนือ DataTable เหมือนเดิม -->
   <div class="flex flex-wrap gap-3 mb-4">
 
     <input
       v-model="search"
-      placeholder="ค้นหา Serial / Model / Brand / เลขที่สัญญา"
+      placeholder="ค้นหา Serial / Model / Brand / เลขที่สัญญา (แบบเฉพาะเจาะจง)"
       class="border p-2 rounded w-72"
     />
-
-    <select v-model="perPage" class="border p-2 rounded">
-      <option :value="10">10 รายการ</option>
-      <option :value="20">20 รายการ</option>
-      <option :value="50">50 รายการ</option>
-      <option :value="100">100 รายการ</option>
-    </select>
 
     <select v-model="selectedBrand" class="border p-2 rounded">
       <option value="">ทุก Brand</option>
@@ -315,8 +291,8 @@ onMounted(async () => {
 
     <button
       v-if="isAdmin"
-      @click="router.push('/admin/add-asset')"
-      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+      @click="openAddModal"
+      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded ml-auto"
     >
       + เพิ่มอุปกรณ์
     </button>
@@ -326,107 +302,63 @@ onMounted(async () => {
 
   <div v-if="loading" class="text-gray-500 py-6">กำลังโหลดข้อมูล...</div>
 
-  <div v-else class="overflow-x-auto">
-    <table class="w-full border bg-white text-sm">
+  <!-- ตารางเดิม -> DataTable (มี sort/ค้นหาทั่วไป/pagination/export CSV/sticky header ในตัว) -->
+  <DataTable
+    v-else
+    :rows="filteredAssets"
+    :columns="columns"
+    row-key="id"
+    export-filename="assets"
+    search-placeholder="ค้นหาทุกคอลัมน์..."
+    empty-text="ไม่พบข้อมูลที่ตรงกับตัวกรอง"
+    max-height="65vh"
+  >
+    <template #cell-brand_name="{ row }">
+      <div>{{ row.brand_name || "-" }}</div>
+      <div class="text-gray-500">{{ row.model || "-" }}</div>
+    </template>
 
-      <thead>
-        <tr class="bg-gray-100">
-          <th class="border p-2 text-left">Serial</th>
-          <th class="border p-2 text-left">Brand / Model</th>
-          <th class="border p-2 text-left">อาคาร</th>
-          <th class="border p-2 text-left">ชั้น</th>
-          <th class="border p-2 text-left">ฝ่าย</th>
-          <th class="border p-2 text-left">แผนก</th>
-          <th class="border p-2 text-left">สัญญา</th>
-          <th class="border p-2 text-right">ราคา/แผ่น (บาท)</th>
-          <th class="border p-2 text-center">สถานะ</th>
-          <th v-if="isAdmin" class="border p-2 text-center">จัดการ</th>
-        </tr>
-      </thead>
+    <template #cell-contract_no="{ row }">
+      <div>{{ row.contract_no || "-" }}</div>
+      <div v-if="row.fiscal_year" class="text-gray-500">ปีงบ {{ Number(row.fiscal_year) + 543 }}</div>
+    </template>
 
-      <tbody>
+    <template #cell-effective_price="{ row }">
+      {{ formatMoney(effectivePrice(row)) }}
+      <span v-if="row.price_override !== null && row.price_override !== undefined" class="text-xs text-blue-600 block">
+        (ราคาเฉพาะเครื่อง)
+      </span>
+    </template>
 
-        <tr v-if="paginatedAssets.length === 0">
-          <td :colspan="isAdmin ? 10 : 9" class="border p-4 text-center text-gray-400">
-            ไม่พบข้อมูลที่ตรงกับตัวกรอง
-          </td>
-        </tr>
+    <template #cell-status="{ row }">
+      <span class="px-2 py-1 rounded text-xs font-medium" :class="statusClass(row.status)">
+        {{ statusLabel(row.status) }}
+      </span>
+    </template>
 
-        <tr v-for="a in paginatedAssets" :key="a.id" class="hover:bg-gray-50">
+    <template v-if="isAdmin" #actions="{ row }">
+      <button
+        @click="editAsset(row.id)"
+        class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded mr-2"
+      >
+        แก้ไข
+      </button>
 
-          <td class="border p-2 font-mono">{{ a.serial_number }}</td>
+      <button
+        @click="deleteAsset(row.id)"
+        class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+      >
+        ลบ
+      </button>
+    </template>
+  </DataTable>
 
-          <td class="border p-2">
-            <div>{{ a.brand_name || "-" }}</div>
-            <div class="text-gray-500">{{ a.model || "-" }}</div>
-          </td>
-
-          <td class="border p-2">{{ a.building_name || "-" }}</td>
-          <td class="border p-2">{{ a.floor_name || "-" }}</td>
-          <td class="border p-2">{{ a.division_name || "-" }}</td>
-          <td class="border p-2">{{ a.department_name || "-" }}</td>
-
-          <td class="border p-2">
-            <div>{{ a.contract_no || "-" }}</div>
-            <div v-if="a.fiscal_year" class="text-gray-500">ปีงบ {{ Number(a.fiscal_year) + 543 }}</div>
-          </td>
-
-          <td class="border p-2 text-right">
-            {{ formatMoney(effectivePrice(a)) }}
-            <span v-if="a.price_override !== null && a.price_override !== undefined" class="text-xs text-blue-600 block">
-              (ราคาเฉพาะเครื่อง)
-            </span>
-          </td>
-
-          <td class="border p-2 text-center">
-            <span class="px-2 py-1 rounded text-xs font-medium" :class="statusClass(a.status)">
-              {{ statusLabel(a.status) }}
-            </span>
-          </td>
-
-          <td v-if="isAdmin" class="border p-2 text-center whitespace-nowrap">
-            <button
-              @click="editAsset(a.id)"
-              class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded mr-2"
-            >
-              แก้ไข
-            </button>
-
-            <button
-              @click="deleteAsset(a.id)"
-              class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-            >
-              ลบ
-            </button>
-          </td>
-
-        </tr>
-
-      </tbody>
-
-    </table>
-  </div>
-
-
-  <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 mt-4">
-    <button
-      class="border px-3 py-1 rounded disabled:opacity-40"
-      :disabled="currentPage === 1"
-      @click="currentPage--"
-    >
-      ก่อนหน้า
-    </button>
-
-    <span class="text-sm text-gray-600">หน้า {{ currentPage }} / {{ totalPages }}</span>
-
-    <button
-      class="border px-3 py-1 rounded disabled:opacity-40"
-      :disabled="currentPage === totalPages"
-      @click="currentPage++"
-    >
-      ถัดไป
-    </button>
-  </div>
+  <!-- Modal เพิ่ม/แก้ไขทรัพย์สิน -->
+  <AssetForm
+    v-model="showFormModal"
+    :asset-id="editingAssetId"
+    @saved="onAssetSaved"
+  />
 
 </div>
 

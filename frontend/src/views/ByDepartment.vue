@@ -1,29 +1,35 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
-import { Bar } from "vue-chartjs";
+import { ref, onMounted, computed, watch } from "vue";
+import { Line } from "vue-chartjs";
 import {
   Chart as ChartJS,
   Title,
   Tooltip,
   Legend,
-  BarElement,
+  LineElement,
+  PointElement,
   CategoryScale,
   LinearScale,
 } from "chart.js";
 import api from "../services/api";
 import DepartmentPicker from "../components/DepartmentPicker.vue";
+import MonthPicker from "../components/MonthPicker.vue";
 
-ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
+ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale);
 
 const loading = ref(false);
 const error = ref(null);
 
 const months = ref([]);
-const month = ref("");
 const search = ref("");
 const chartMetric = ref("cost"); // cost | pages
 
-// เลือกฝ่าย/แผนกเองที่จะเทียบ — ไม่มีโหมด "ยอดรวมทั้งองค์กร" แบบ Top 10 อัตโนมัติอีกต่อไป
+// เดือนที่เทียบแนวโน้ม — ใช้ MonthPicker แบบเดียวกับหน้า "เปรียบเทียบข้อมูลรายเดือน" (จำกัดเลือกได้ 1 เดือน)
+const trendMonthSelection = ref([]);
+const month = computed(() => trendMonthSelection.value[0] || "");
+
+// เลือกฝ่าย และ แผนก แยกกันคนละ filter — เลือกได้ทั้งสองอย่างพร้อมกัน กราฟจะโชว์ตามที่เลือกทั้งหมด
+const selectedDivisionIds = ref([]);
 const selectedDepartmentIds = ref([]);
 
 const divisions = ref([]);
@@ -34,6 +40,10 @@ const openDivisions = ref(new Set());
 const openDepartments = ref(new Set());
 const openDevices = ref(new Set());
 const showUnassigned = ref(false);
+
+// ช่วงเวลาที่แสดงในกราฟเส้น (zoom/pan)
+const rangeStartIdx = ref(0);
+const rangeEndIdx = ref(0);
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString(undefined, {
@@ -49,9 +59,9 @@ function formatPages(value) {
 function formatMonth(value) {
   if (!value) return "";
   const monthsTH = [
-    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
-    "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม",
-    "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.",
+    "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.",
+    "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
   ];
   const [y, m] = value.split("-");
   return `${monthsTH[Number(m) - 1]} ${Number(y) + 543}`;
@@ -86,6 +96,11 @@ async function loadByDepartment() {
     loading.value = false;
   }
 }
+
+// เปลี่ยนเดือนที่เทียบแนวโน้ม -> โหลดข้อมูลใหม่ (badge เพิ่มขึ้น/ลดลงของแต่ละแผนก)
+watch(trendMonthSelection, () => {
+  loadByDepartment();
+});
 
 function toggleDivision(id) {
   const next = new Set(openDivisions.value);
@@ -231,8 +246,12 @@ const grandTotalPages = computed(() =>
 );
 
 // -------------------------------------------------------
-// รายชื่อฝ่าย/แผนกทั้งหมด ให้ DepartmentPicker เลือก (flatten จาก divisions)
+// รายชื่อฝ่ายทั้งหมด และรายชื่อแผนกทั้งหมด ให้แต่ละ Picker เลือกแยกกัน
 // -------------------------------------------------------
+const divisionOptions = computed(() =>
+  divisions.value.map((division) => ({ id: division.id, label: division.name }))
+);
+
 const departmentOptions = computed(() => {
   const opts = [];
   for (const division of divisions.value) {
@@ -243,75 +262,138 @@ const departmentOptions = computed(() => {
   return opts;
 });
 
-// -------------------------------------------------------
-// กราฟเปรียบเทียบเฉพาะฝ่าย/แผนกที่ผู้ใช้เลือกเอง (ไม่มี Top 10 อัตโนมัติ)
-// ถ้าเลือก "เดือนที่เทียบแนวโน้ม" ไว้ด้วย จะโชว์แท่งคู่ เดือนก่อน/เดือนนี้
-// -------------------------------------------------------
-const canCompareMonth = computed(() => !!month.value);
-
-const selectedDepartmentsData = computed(() => {
-  const flat = [];
+function findDepartment(id) {
   for (const division of divisions.value) {
-    for (const department of division.departments || []) {
-      if (selectedDepartmentIds.value.includes(department.id)) {
-        flat.push({
-          id: department.id,
-          label: `${department.name} (${division.name})`,
-          cost: Number(department.total_cost || 0),
-          pages: Number(department.total_pages || 0),
-          currentCost: Number(department.current_month_cost || 0),
-          previousCost: Number(department.previous_month_cost || 0),
-          currentPages: Number(department.current_month_pages || 0),
-          previousPages: Number(department.previous_month_pages || 0),
-        });
-      }
+    const dep = (division.departments || []).find((d) => d.id === id);
+    if (dep) return { department: dep, division };
+  }
+  return null;
+}
+
+function findDivision(id) {
+  return divisions.value.find((d) => d.id === id) || null;
+}
+
+// -------------------------------------------------------
+// รวมรายการที่จะขึ้นกราฟ: ฝ่ายที่เลือก (รวมทุกแผนกในฝ่ายนั้น) + แผนกที่เลือกเจาะจง
+// -------------------------------------------------------
+const chartEntities = computed(() => {
+  const list = [];
+
+  for (const id of selectedDivisionIds.value) {
+    const division = findDivision(id);
+    if (!division) continue;
+    const devices = (division.departments || []).flatMap((dep) => dep.devices || []);
+    list.push({
+      key: `div-${id}`,
+      label: `🏢 ${division.name}`,
+      devices,
+    });
+  }
+
+  for (const id of selectedDepartmentIds.value) {
+    const found = findDepartment(id);
+    if (!found) continue;
+    list.push({
+      key: `dep-${id}`,
+      label: `📁 ${found.department.name} (${found.division.name})`,
+      devices: found.department.devices || [],
+    });
+  }
+
+  return list;
+});
+
+// -------------------------------------------------------
+// กราฟเส้น: แนวโน้มค่าใช้จ่าย/จำนวนหน้าเป็นรายเดือน หนึ่งเส้นต่อฝ่าย/แผนกที่เลือก
+// -------------------------------------------------------
+
+// รวมยอดรายเดือน (ทั้งค่าใช้จ่ายและจำนวนหน้า) จาก device.monthly ของทุกเครื่องในรายการนั้น
+function buildMonthlySeries(devices) {
+  const byMonth = {};
+  for (const device of devices) {
+    for (const m of device.monthly || []) {
+      if (!byMonth[m.month]) byMonth[m.month] = { cost: 0, pages: 0 };
+      byMonth[m.month].cost += Number(m.total_cost || 0);
+      byMonth[m.month].pages += Number(m.net_pages || 0);
     }
   }
+  return byMonth;
+}
 
-  // เรียงตามลำดับที่ผู้ใช้เลือก ไม่ใช่เรียงตามยอด (ไม่มีการจัดอันดับอัตโนมัติแล้ว)
-  return selectedDepartmentIds.value
-    .map((id) => flat.find((f) => f.id === id))
-    .filter(Boolean);
+// รวมเดือนทั้งหมดที่มีข้อมูลของทุกรายการที่เลือก ไว้ใช้เป็นแกน X ร่วมกัน + ตัวเลือกช่วง (zoom/pan)
+const allChartMonths = computed(() => {
+  const set = new Set();
+  for (const entity of chartEntities.value) {
+    for (const m of Object.keys(buildMonthlySeries(entity.devices))) set.add(m);
+  }
+  return [...set].sort();
 });
 
-const comparisonChart = computed(() => {
-  const key = chartMetric.value === "cost" ? "cost" : "pages";
-  const list = selectedDepartmentsData.value;
+function clampRange() {
+  const max = Math.max(0, allChartMonths.value.length - 1);
+  if (rangeEndIdx.value === 0 || rangeEndIdx.value > max) rangeEndIdx.value = max;
+  if (rangeStartIdx.value > rangeEndIdx.value) rangeStartIdx.value = rangeEndIdx.value;
+}
 
-  if (canCompareMonth.value) {
-    const currentKey = chartMetric.value === "cost" ? "currentCost" : "currentPages";
-    const previousKey = chartMetric.value === "cost" ? "previousCost" : "previousPages";
+const visibleChartMonths = computed(() => {
+  clampRange();
+  return allChartMonths.value.slice(rangeStartIdx.value, rangeEndIdx.value + 1);
+});
+
+// สร้างเส้นแนวโน้ม ทีละฝ่าย/แผนกที่เลือก — คนละสีเพื่อแยกดูง่าย
+const linePalette = ["#2563EB", "#7C3AED", "#059669", "#D97706", "#DC2626", "#0891B2", "#DB2777", "#4B5563"];
+
+const lineChartData = computed(() => {
+  const labels = visibleChartMonths.value.map(formatMonth);
+  const metricKey = chartMetric.value === "cost" ? "cost" : "pages";
+
+  const datasets = chartEntities.value.map((entity, idx) => {
+    const byMonth = buildMonthlySeries(entity.devices);
+    const color = linePalette[idx % linePalette.length];
+
+    // ค่า null สำหรับเดือนที่ยังไม่มีข้อมูล — spanGaps จะลากเส้นข้ามช่องว่างนั้นให้เอง
+    const points = visibleChartMonths.value.map((m) =>
+      byMonth[m] === undefined ? null : byMonth[m][metricKey]
+    );
 
     return {
-      labels: list.map((d) => d.label),
-      datasets: [
-        { label: "เดือนก่อน", data: list.map((d) => d[previousKey]), backgroundColor: "#9CA3AF", borderRadius: 6 },
-        { label: "เดือนนี้", data: list.map((d) => d[currentKey]), backgroundColor: "#2563EB", borderRadius: 6 },
-      ],
+      label: entity.label,
+      data: points,
+      borderColor: color,
+      backgroundColor: color,
+      pointBackgroundColor: color,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      borderWidth: 2,
+      tension: 0.25,
+      spanGaps: true,
     };
-  }
+  });
 
-  return {
-    labels: list.map((d) => d.label),
-    datasets: [
-      {
-        label: chartMetric.value === "cost" ? "ค่าใช้จ่าย (บาท)" : "จำนวนหน้าสุทธิ",
-        data: list.map((d) => d[key]),
-        backgroundColor: "#2563EB",
-        borderRadius: 6,
-      },
-    ],
-  };
+  return { labels, datasets };
 });
 
-const chartOptions = computed(() => ({
-  indexAxis: "y",
+const lineChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { display: canCompareMonth.value } },
+  interaction: { mode: "index", intersect: false },
+  plugins: {
+    legend: { display: true, position: "bottom" },
+    tooltip: {
+      callbacks: {
+        label(ctx) {
+          const v = ctx.raw;
+          const unit = chartMetric.value === "cost" ? "บาท" : "หน้า";
+          if (v === null || v === undefined) return `${ctx.dataset.label}: ไม่มีข้อมูล`;
+          return `${ctx.dataset.label}: ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`;
+        },
+      },
+    },
+  },
   scales: {
-    x: {
-      beginAtZero: true,
+    y: {
+      beginAtZero: false,
       ticks: {
         callback(value) {
           return Number(value).toLocaleString();
@@ -333,12 +415,9 @@ onMounted(async () => {
 
     <!-- แถบควบคุม -->
     <div class="bg-white shadow rounded-lg p-4 mb-6 flex items-center gap-4 flex-wrap">
-      <div>
+      <div class="w-64">
         <label class="block text-xs text-gray-500 mb-1">เดือนที่เทียบแนวโน้ม</label>
-        <select v-model="month" @change="loadByDepartment" class="border rounded px-3 py-2">
-          <option value="">ไม่เทียบ (ดูยอดรวมทั้งหมด)</option>
-          <option v-for="m in months" :key="m" :value="m">{{ formatMonth(m) }}</option>
-        </select>
+        <MonthPicker v-model="trendMonthSelection" :options="months" :max="1" />
       </div>
 
       <div class="flex-1 min-w-[200px]">
@@ -387,17 +466,23 @@ onMounted(async () => {
     <div v-else-if="error" class="bg-red-100 text-red-700 p-4 rounded">{{ error }}</div>
 
     <template v-else>
-      <!-- เปรียบเทียบฝ่าย/แผนกที่เลือกเอง (ไม่มี Top 10 อัตโนมัติ / ไม่มีค่ารวมทั้งองค์กรเป็น series เดียว) -->
+      <!-- เปรียบเทียบฝ่าย/แผนก — เลือกฝ่ายและแผนกแยกกันคนละ filter แล้วแสดงเป็นกราฟเส้นตามที่เลือก -->
       <div class="bg-white shadow rounded-lg p-4 mb-6">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
           <h2 class="font-semibold">เปรียบเทียบฝ่าย/แผนก</h2>
 
           <div class="flex items-center gap-3 flex-wrap">
             <div class="w-64">
+              <label class="block text-xs text-gray-500 mb-1">เลือกฝ่าย</label>
+              <DepartmentPicker v-model="selectedDivisionIds" :options="divisionOptions" />
+            </div>
+
+            <div class="w-64">
+              <label class="block text-xs text-gray-500 mb-1">เลือกแผนก</label>
               <DepartmentPicker v-model="selectedDepartmentIds" :options="departmentOptions" />
             </div>
 
-            <div class="flex gap-2 text-sm">
+            <div class="flex gap-2 text-sm self-end">
               <button
                 @click="chartMetric = 'cost'"
                 class="px-3 py-1 rounded-full"
@@ -416,13 +501,32 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div v-if="!selectedDepartmentIds.length" class="text-center text-gray-400 py-10 border border-dashed rounded-lg">
-          เลือกฝ่าย/แผนกอย่างน้อย 1 รายการด้านบนเพื่อเปรียบเทียบ
+        <div v-if="!chartEntities.length" class="text-center text-gray-400 py-10 border border-dashed rounded-lg">
+          เลือกฝ่ายและ/หรือแผนกอย่างน้อย 1 รายการด้านบนเพื่อเปรียบเทียบ
         </div>
 
-        <div v-else class="h-80">
-          <Bar :data="comparisonChart" :options="chartOptions" />
+        <div v-else-if="!allChartMonths.length" class="text-center text-gray-400 py-10 border border-dashed rounded-lg">
+          รายการที่เลือกยังไม่มีข้อมูลรายเดือนพอที่จะสร้างกราฟ
         </div>
+
+        <template v-else>
+          <div class="flex items-center gap-3 flex-wrap mb-3 text-sm">
+            <span class="text-gray-500">ช่วงที่แสดง (zoom/pan):</span>
+            <select v-model.number="rangeStartIdx" class="border rounded px-2 py-1">
+              <option v-for="(m, i) in allChartMonths" :key="'s' + m" :value="i">{{ formatMonth(m) }}</option>
+            </select>
+            <span class="text-gray-400">ถึง</span>
+            <select v-model.number="rangeEndIdx" class="border rounded px-2 py-1">
+              <option v-for="(m, i) in allChartMonths" :key="'e' + m" :value="i">{{ formatMonth(m) }}</option>
+            </select>
+            <span class="text-xs text-gray-400">
+              แต่ละเส้น = 1 ฝ่าย/แผนก &nbsp;•&nbsp; ชี้ที่จุดเพื่อดูค่าของเดือนนั้น
+            </span>
+          </div>
+          <div class="h-80">
+            <Line :data="lineChartData" :options="lineChartOptions" />
+          </div>
+        </template>
       </div>
 
       <div v-if="!filteredDivisions.length" class="text-center text-gray-400 border border-dashed rounded-lg py-10">

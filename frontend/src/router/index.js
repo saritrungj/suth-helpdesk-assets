@@ -28,10 +28,6 @@ const Compare = () =>
 const ByDepartment = () =>
   import("../views/ByDepartment.vue");
 
-const AssetForm = () =>
-  import("../views/AssetForm.vue");
-
-
 // Admin
 
 const Brand = () =>
@@ -178,20 +174,10 @@ const routes = [
     component: Contract,
   },
 
-  // เพิ่ม/แก้ไขทรัพย์สิน — ย้ายมาอยู่ใต้ /admin เพราะการเขียนข้อมูล (POST/PUT)
-  // ที่ backend บังคับ adminMiddleware อยู่แล้ว ควรถูกกันด้วย route guard ฝั่ง frontend ด้วย
-  // ไม่ใช่แค่ซ่อนปุ่ม (การดูรายการที่ /assets ยังเปิดให้ทุกคนเหมือนเดิม)
-  {
-    path: "/admin/add-asset",
-    name: "AddAsset",
-    component: AssetForm,
-  },
-
-  {
-    path: "/admin/edit-asset/:id",
-    name: "EditAsset",
-    component: AssetForm,
-  },
+  // เพิ่ม/แก้ไขทรัพย์สิน — ไม่ใช่หน้าแยกอีกต่อไป (ข้อ 6): AssetForm.vue ถูกแปลงเป็น Modal
+  // เปิดจากปุ่ม "+ เพิ่มอุปกรณ์" / "แก้ไข" ในหน้า /assets โดยตรง (ดู views/AssetList.vue)
+  // การกันสิทธิ์ POST/PUT ยังคงถูกบังคับที่ backend (adminMiddleware) เหมือนเดิม
+  // ส่วนฝั่ง frontend ก็ซ่อนปุ่มเหล่านี้ให้ผู้ใช้ที่ไม่ใช่ admin อยู่แล้วใน AssetList.vue
 
   // Import CSV/Excel — เป็นเครื่องมือของ Admin เช่นกัน
   {

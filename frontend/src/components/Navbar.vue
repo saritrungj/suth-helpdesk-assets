@@ -19,7 +19,7 @@
             :key="fy.id"
             :value="fy.id"
           >
-            {{ Number(fy.year) + 543 }}
+            {{ Number(fy.year)}}
           </option>
         </select>
       </div>
