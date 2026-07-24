@@ -229,7 +229,7 @@ onMounted(loadData);
   <div>
     <h1 class="text-3xl font-bold mb-6">เปรียบเทียบข้อมูลรายเดือน</h1>
 
-    <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="bg-gray-50 shadow rounded-lg p-6 mb-6">
       <p class="text-sm text-gray-500 mb-4">
         เลือกเดือนที่ต้องการเปรียบเทียบ (เลือกได้มากกว่า 2 เดือน)
       </p>
@@ -273,7 +273,7 @@ onMounted(loadData);
         </div>
 
         <!-- ตารางเปรียบเทียบทุกเดือนที่เลือก -->
-        <div class="bg-white shadow rounded-lg p-4 mb-8 overflow-x-auto">
+        <div class="bg-gray-50 shadow rounded-lg p-4 mb-8 overflow-x-auto">
           <table class="w-full text-sm border-collapse min-w-max">
             <thead>
               <tr class="text-left text-gray-500 border-b">
@@ -309,7 +309,7 @@ onMounted(loadData);
           <div
             v-for="m in metrics"
             :key="'chart-' + m.key"
-            class="bg-white shadow rounded-lg p-4"
+            class="bg-gray-50 shadow rounded-lg p-4"
           >
             <h3 class="font-semibold mb-3">{{ m.label }}</h3>
             <div class="h-56">

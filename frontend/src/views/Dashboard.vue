@@ -19,28 +19,28 @@
     <!-- KPI Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-      <div class="bg-white shadow rounded-lg p-6 hover:shadow-xl transition">
+      <div class="bg-gray-50 shadow rounded-lg p-6 hover:shadow-xl transition">
         <h2 class="text-gray-500 text-sm">อุปกรณ์ทั้งหมด</h2>
         <p class="text-3xl font-bold text-blue-600">
           {{ Number(stats.total_devices || 0).toLocaleString() }}
         </p>
       </div>
 
-      <div class="bg-white shadow rounded-lg p-6 hover:shadow-xl transition">
+      <div class="bg-gray-50 shadow rounded-lg p-6 hover:shadow-xl transition">
         <h2 class="text-gray-500 text-sm">สัญญาทั้งหมด</h2>
         <p class="text-3xl font-bold text-green-600">
           {{ Number(stats.total_contracts || 0).toLocaleString() }}
         </p>
       </div>
 
-      <div class="bg-white shadow rounded-lg p-6 hover:shadow-xl transition">
+      <div class="bg-gray-5050 shadow rounded-lg p-6 hover:shadow-xl transition">
         <h2 class="text-gray-500 text-sm">รายการพิมพ์</h2>
         <p class="text-3xl font-bold text-purple-600">
           {{ Number(stats.total_transactions || 0).toLocaleString() }}
         </p>
       </div>
 
-      <div class="bg-white shadow rounded-lg p-6 hover:shadow-xl transition">
+      <div class="bg-gray-5050 shadow rounded-lg p-6 hover:shadow-xl transition">
         <h2 class="text-gray-500 text-sm">จำนวนหน้าที่พิมพ์</h2>
         <p class="text-3xl font-bold text-red-600">
           {{ Number(stats.total_pages || 0).toLocaleString() }}
@@ -50,7 +50,7 @@
     </div>
 
     <!-- Monthly Usage -->
-    <div class="mt-8 bg-white shadow rounded-lg p-6">
+    <div class="mt-8 bg-gray-50 shadow rounded-lg p-6">
       <h2 class="text-xl font-bold mb-4">Print Usage รายเดือน</h2>
       <MonthlyChart :filter="dashboardFilter" />
     </div>
@@ -58,12 +58,12 @@
     <!-- Building + Cost -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
 
-      <div class="bg-white shadow rounded-lg p-6">
+      <div class="bg-gray-50 shadow rounded-lg p-6">
         <h2 class="text-xl font-bold mb-4">จำนวนหน้าพิมพ์รายอาคาร</h2>
         <BuildingChart :filter="dashboardFilter" />
       </div>
 
-      <div class="bg-white shadow rounded-lg p-6">
+      <div class="bg-gray-50 shadow rounded-lg p-6">
         <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายรายอาคาร</h2>
         <BuildingCostChart :filter="dashboardFilter" />
       </div>
@@ -71,7 +71,7 @@
     </div>
 
     <!-- Monthly Cost -->
-    <div class="mt-8 bg-white shadow rounded-lg p-6">
+    <div class="mt-8 bg-gray-50 shadow rounded-lg p-6">
       <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายรายเดือน</h2>
       <CostChart :filter="dashboardFilter" />
     </div>
@@ -83,7 +83,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
 
       <!-- สถานะเครื่องพิมพ์ -->
-      <div class="bg-white shadow rounded-lg p-6">
+      <div class="bg-gray-50 shadow rounded-lg p-6">
         <h2 class="text-xl font-bold mb-4">สถานะเครื่องพิมพ์</h2>
 
         <div v-if="highlightsLoading" class="text-gray-400 text-sm">กำลังโหลด...</div>
@@ -106,7 +106,7 @@
       </div>
 
       <!-- Top 5 แผนกที่ค่าใช้จ่ายสูงสุด -->
-      <div class="bg-white shadow rounded-lg p-6">
+      <div class="bg-gray-50 shadow rounded-lg p-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-bold">แผนกที่ค่าใช้จ่ายสูงสุด (Top 5)</h2>
           <RouterLink to="/by-department" class="text-sm text-blue-600 hover:underline">
@@ -147,7 +147,7 @@
     </div>
 
     <!-- สรุปการใช้งานตามสัญญา -->
-    <div class="mt-8 bg-white shadow rounded-lg p-6">
+    <div class="mt-8 bg-gray-50 shadow rounded-lg p-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-bold">สรุปการใช้งานตามสัญญา</h2>
         <RouterLink

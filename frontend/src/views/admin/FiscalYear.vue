@@ -162,7 +162,7 @@ onMounted(load)
       class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
       @click.self="closeAddModal"
     >
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
+      <div class="bg-gray-50 rounded-lg shadow-xl w-full max-w-sm">
         <div class="p-5 border-b flex items-center justify-between">
           <h2 class="text-lg font-bold">เพิ่มปีงบประมาณ</h2>
           <button @click="closeAddModal" class="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>

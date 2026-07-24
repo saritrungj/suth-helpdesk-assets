@@ -3,7 +3,7 @@
     <button
       type="button"
       @click="open = !open"
-      class="border rounded px-3 py-2 w-full text-left flex items-center justify-between gap-2 bg-white"
+      class="border rounded px-3 py-2 w-full text-left flex items-center justify-between gap-2 bg-gray-50"
     >
       <span class="truncate">
         <template v-if="!modelValue.length">-- เลือกฝ่าย/แผนก --</template>
@@ -14,7 +14,7 @@
 
     <div
       v-if="open"
-      class="absolute z-20 mt-1 w-72 max-h-80 overflow-y-auto bg-white border rounded-lg shadow-lg p-2"
+      class="absolute z-20 mt-1 w-72 max-h-80 overflow-y-auto bg-gray-50 border rounded-lg shadow-lg p-2"
     >
       <div class="flex items-center justify-between px-1 pb-2 mb-1 border-b">
         <span class="text-xs text-gray-400">เลือกแล้ว {{ modelValue.length }} รายการ</span>
@@ -28,8 +28,16 @@
         </button>
       </div>
 
+      <input
+        v-model="search"
+        type="text"
+        placeholder="พิมพ์เพื่อค้นหา..."
+        class="border rounded px-2 py-1 w-full text-sm mb-2"
+        @click.stop
+      />
+
       <label
-        v-for="opt in options"
+        v-for="opt in filteredOptions"
         :key="opt.id"
         class="flex items-center gap-2 px-1 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm"
       >
@@ -44,12 +52,15 @@
       <div v-if="!options.length" class="text-xs text-gray-400 px-1 py-2">
         ไม่มีรายการให้เลือก
       </div>
+      <div v-else-if="!filteredOptions.length" class="text-xs text-gray-400 px-1 py-2">
+        ไม่พบรายการที่ตรงกับ "{{ search }}"
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] }, // array ของ id
@@ -60,6 +71,7 @@ const emit = defineEmits(["update:modelValue"]);
 
 const open = ref(false);
 const rootEl = ref(null);
+const search = ref("");
 
 const summaryLabel = computed(() => {
   const labels = props.options
@@ -68,6 +80,17 @@ const summaryLabel = computed(() => {
 
   if (labels.length <= 2) return labels.join(", ");
   return `${labels.length} รายการที่เลือก`;
+});
+
+const filteredOptions = computed(() => {
+  const keyword = search.value.trim().toLowerCase();
+  if (!keyword) return props.options;
+  return props.options.filter((o) => o.label.toLowerCase().includes(keyword));
+});
+
+// ปิด dropdown แล้วเปิดใหม่ครั้งหน้า → เคลียร์คำค้นหาเก่าทิ้ง เริ่มพิมพ์ใหม่
+watch(open, (isOpen) => {
+  if (!isOpen) search.value = "";
 });
 
 function toggle(id) {

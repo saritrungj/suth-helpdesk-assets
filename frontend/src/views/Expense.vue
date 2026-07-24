@@ -127,7 +127,7 @@ onMounted(() => {
     <!-- สรุปยอดรวม — ตัว selector ปีงบย้ายไปอยู่ที่ Navbar แล้ว (global state) -->
     <div
       v-if="!loading && contracts.length"
-      class="bg-white shadow rounded-lg p-4 mb-6 flex items-center justify-end"
+      class="bg-gray-505050 shadow rounded-lg p-4 mb-6 flex items-center justify-end"
     >
       <div class="text-right">
         <div class="text-sm text-gray-500">รวมค่าใช้จ่ายทั้งปีงบ</div>
@@ -151,7 +151,7 @@ onMounted(() => {
       <div
         v-for="contract in contracts"
         :key="contract.id"
-        class="bg-white shadow rounded-lg overflow-hidden"
+        class="bg-gray-5050 shadow rounded-lg overflow-hidden"
       >
         <!-- ระดับ 1: สัญญา -->
         <button
@@ -252,7 +252,7 @@ onMounted(() => {
         </div>
       </button>
 
-      <div v-if="showUnassigned" class="border-t divide-y bg-white">
+      <div v-if="showUnassigned" class="border-t divide-y bg-gray-50">
         <div v-for="device in unassignedDevices" :key="device.id" class="p-3 pl-8 flex items-center justify-between">
           <div>
             <span class="font-medium">{{ device.brand_name || "-" }} {{ device.model || "" }}</span>

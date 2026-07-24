@@ -194,7 +194,7 @@ function exportCsv() {
 
     <!-- ตาราง -->
     <div
-      class="overflow-auto border rounded-lg bg-white"
+      class="overflow-auto border rounded-lg bg-gray-50"
       :style="maxHeight ? { maxHeight } : {}"
     >
       <table class="w-full text-sm border-collapse min-w-max">

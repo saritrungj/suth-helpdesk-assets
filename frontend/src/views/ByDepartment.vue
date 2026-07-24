@@ -414,7 +414,7 @@ onMounted(async () => {
     <h1 class="text-2xl font-bold mb-6">ยอดพิมพ์แยกตามฝ่าย/แผนก</h1>
 
     <!-- แถบควบคุม -->
-    <div class="bg-white shadow rounded-lg p-4 mb-6 flex items-center gap-4 flex-wrap">
+    <div class="bg-gray-50 shadow rounded-lg p-4 mb-6 flex items-center gap-4 flex-wrap">
       <div class="w-64">
         <label class="block text-xs text-gray-500 mb-1">เดือนที่เทียบแนวโน้ม</label>
         <MonthPicker v-model="trendMonthSelection" :options="months" :max="1" />
@@ -467,7 +467,7 @@ onMounted(async () => {
 
     <template v-else>
       <!-- เปรียบเทียบฝ่าย/แผนก — เลือกฝ่ายและแผนกแยกกันคนละ filter แล้วแสดงเป็นกราฟเส้นตามที่เลือก -->
-      <div class="bg-white shadow rounded-lg p-4 mb-6">
+      <div class="bg-gray-50 shadow rounded-lg p-4 mb-6">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
           <h2 class="font-semibold">เปรียบเทียบฝ่าย/แผนก</h2>
 
@@ -537,7 +537,7 @@ onMounted(async () => {
         <div
           v-for="division in filteredDivisions"
           :key="division.id"
-          class="bg-white shadow rounded-lg overflow-hidden"
+          class="bg-gray-50 shadow rounded-lg overflow-hidden"
         >
           <!-- ระดับ 1: ฝ่าย -->
           <button
@@ -671,7 +671,7 @@ onMounted(async () => {
         <span>{{ showUnassigned ? "▲" : "▼" }}</span>
       </button>
 
-      <div v-if="showUnassigned" class="border-t divide-y bg-white">
+      <div v-if="showUnassigned" class="border-t divide-y bg-gray-50">
         <div v-for="device in unassignedDevices" :key="device.id" class="p-3 pl-8 flex items-center justify-between">
           <div>
             <span class="font-medium">{{ device.brand_name || "-" }} {{ device.model || "" }}</span>

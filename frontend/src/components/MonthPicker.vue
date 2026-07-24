@@ -3,7 +3,7 @@
     <button
       type="button"
       @click="open = !open"
-      class="border rounded px-3 py-2 w-full text-left flex items-center justify-between gap-2 bg-white"
+      class="border rounded px-3 py-2 w-full text-left flex items-center justify-between gap-2 bg-gray-50"
     >
       <span class="truncate">
         <template v-if="!modelValue.length">-- เลือกเดือน --</template>
@@ -15,7 +15,7 @@
     <!-- Dropdown รายชื่อเดือนไทย (ม.ค.–ธ.ค.) ของปีงบที่ active อยู่ตอนนี้ (เลือกปีจาก Navbar เท่านั้น ที่นี่เลือกได้แค่เดือน) -->
     <div
       v-if="open"
-      class="absolute z-20 mt-1 w-64 bg-white border rounded-lg shadow-lg p-3"
+      class="absolute z-20 mt-1 w-64 bg-gray-50 border rounded-lg shadow-lg p-3"
     >
       <div class="flex items-center justify-between px-1 pb-2 mb-2 border-b">
         <span class="text-xs text-gray-400">

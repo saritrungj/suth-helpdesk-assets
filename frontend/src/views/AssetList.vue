@@ -1,10 +1,11 @@
 <script setup>
 
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import api from "../services/api";
 import { authState } from "../store/auth";
 import DataTable from "../components/DataTable.vue";
 import AssetForm from "./AssetForm.vue";
+import SearchableSelect from "../components/SearchableSelect.vue";
 
 
 const isAdmin = computed(() => authState.user?.role === "admin");
@@ -31,15 +32,12 @@ const error = ref(null);
 
 
 // -------------------------------------------------------
-// Modal เพิ่ม/แก้ไขทรัพย์สิน — ปุ่ม "เพิ่ม" และ "แก้ไข" เปิด Popup แทนการเปลี่ยนหน้า (ข้อ 6)
+// -------------------------------------------------------
+// Modal แก้ไขทรัพย์สิน — ปุ่ม "แก้ไข" เปิด Popup แทนการเปลี่ยนหน้า (ข้อ 6)
+// การ "เพิ่ม" ทรัพย์สินย้ายไปอยู่หน้าเดียวกับ Admin master data อื่นๆ แล้ว (ดู /admin/add-asset)
 // -------------------------------------------------------
 const showFormModal = ref(false);
-const editingAssetId = ref(null); // null = โหมดเพิ่มใหม่, number = โหมดแก้ไข
-
-function openAddModal() {
-  editingAssetId.value = null;
-  showFormModal.value = true;
-}
+const editingAssetId = ref(null);
 
 function openEditModal(id) {
   editingAssetId.value = id;
@@ -123,25 +121,37 @@ async function loadFilterData() {
 
 
 // ==========================
-// Cascading filter options
+// Cascading filter options (เลือกอาคาร/ฝ่ายจากรายการ ค่าจึงตรงเป๊ะเสมอ ไม่ต้องเดา)
 // ==========================
 const filteredFloorOptions = computed(() => {
   if (!selectedBuilding.value) return floors.value;
-  return floors.value.filter((f) => Number(f.building_id) === Number(selectedBuilding.value));
+  const bld = buildings.value.find((b) => b.name === selectedBuilding.value);
+  if (!bld) return floors.value;
+  return floors.value.filter((f) => Number(f.building_id) === Number(bld.id));
 });
 
 const filteredDepartmentOptions = computed(() => {
   if (!selectedDivision.value) return departments.value;
-  return departments.value.filter((d) => Number(d.division_id) === Number(selectedDivision.value));
+  const div = divisions.value.find((d) => d.name === selectedDivision.value);
+  if (!div) return departments.value;
+  return departments.value.filter((d) => Number(d.division_id) === Number(div.id));
 });
 
-function onFilterBuildingChange() {
-  selectedFloor.value = "";
-}
+// ตัวเลือกสำหรับ SearchableSelect ของแต่ละ filter
+const brandOptions = computed(() => brands.value.map((b) => ({ value: b.name, label: b.name })));
+const buildingOptions = computed(() => buildings.value.map((b) => ({ value: b.name, label: b.name })));
+const floorOptions = computed(() => filteredFloorOptions.value.map((f) => ({ value: f.name, label: f.name })));
+const divisionOptions = computed(() => divisions.value.map((d) => ({ value: d.name, label: d.name })));
+const departmentOptions = computed(() => filteredDepartmentOptions.value.map((d) => ({ value: d.name, label: d.name })));
 
-function onFilterDivisionChange() {
+// เลือกอาคาร/ฝ่ายใหม่ → ค่าชั้น/แผนกที่เคยเลือกไว้อาจไม่ตรงกับตัวเลือกใหม่แล้ว รีเซ็ตทิ้งให้เลือกใหม่
+watch(selectedBuilding, () => {
+  selectedFloor.value = "";
+});
+
+watch(selectedDivision, () => {
   selectedDepartment.value = "";
-}
+});
 
 
 // ==========================
@@ -158,25 +168,15 @@ const filteredAssets = computed(() => {
       a.brand_name?.toLowerCase().includes(keyword) ||
       a.contract_no?.toLowerCase().includes(keyword);
 
-    const matchBrand =
-      !selectedBrand.value ||
-      a.brand_name === brands.value.find((b) => b.id == selectedBrand.value)?.name;
+    const matchBrand = !selectedBrand.value || a.brand_name === selectedBrand.value;
 
-    const matchBuilding =
-      !selectedBuilding.value ||
-      a.building_name === buildings.value.find((b) => b.id == selectedBuilding.value)?.name;
+    const matchBuilding = !selectedBuilding.value || a.building_name === selectedBuilding.value;
 
-    const matchFloor =
-      !selectedFloor.value ||
-      a.floor_name === floors.value.find((f) => f.id == selectedFloor.value)?.name;
+    const matchFloor = !selectedFloor.value || a.floor_name === selectedFloor.value;
 
-    const matchDivision =
-      !selectedDivision.value ||
-      a.division_name === divisions.value.find((d) => d.id == selectedDivision.value)?.name;
+    const matchDivision = !selectedDivision.value || a.division_name === selectedDivision.value;
 
-    const matchDepartment =
-      !selectedDepartment.value ||
-      a.department_name === departments.value.find((d) => d.id == selectedDepartment.value)?.name;
+    const matchDepartment = !selectedDepartment.value || a.department_name === selectedDepartment.value;
 
     const matchStatus = !selectedStatus.value || a.status === selectedStatus.value;
 
@@ -257,30 +257,40 @@ onMounted(async () => {
       class="border p-2 rounded w-72"
     />
 
-    <select v-model="selectedBrand" class="border p-2 rounded">
-      <option value="">ทุก Brand</option>
-      <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
-    </select>
+    <SearchableSelect
+      v-model="selectedBrand"
+      :options="brandOptions"
+      placeholder="ทุก Brand"
+      search-placeholder="พิมพ์/เลือก Brand"
+    />
 
-    <select v-model="selectedBuilding" @change="onFilterBuildingChange" class="border p-2 rounded">
-      <option value="">ทุกอาคาร</option>
-      <option v-for="b in buildings" :key="b.id" :value="b.id">{{ b.name }}</option>
-    </select>
+    <SearchableSelect
+      v-model="selectedBuilding"
+      :options="buildingOptions"
+      placeholder="ทุกอาคาร"
+      search-placeholder="พิมพ์/เลือกอาคาร"
+    />
 
-    <select v-model="selectedFloor" class="border p-2 rounded">
-      <option value="">ทุกชั้น</option>
-      <option v-for="f in filteredFloorOptions" :key="f.id" :value="f.id">{{ f.name }}</option>
-    </select>
+    <SearchableSelect
+      v-model="selectedFloor"
+      :options="floorOptions"
+      placeholder="ทุกชั้น"
+      search-placeholder="พิมพ์/เลือกชั้น"
+    />
 
-    <select v-model="selectedDivision" @change="onFilterDivisionChange" class="border p-2 rounded">
-      <option value="">ทุกฝ่าย</option>
-      <option v-for="d in divisions" :key="d.id" :value="d.id">{{ d.name }}</option>
-    </select>
+    <SearchableSelect
+      v-model="selectedDivision"
+      :options="divisionOptions"
+      placeholder="ทุกฝ่าย"
+      search-placeholder="พิมพ์/เลือกฝ่าย"
+    />
 
-    <select v-model="selectedDepartment" class="border p-2 rounded">
-      <option value="">ทุกแผนก</option>
-      <option v-for="d in filteredDepartmentOptions" :key="d.id" :value="d.id">{{ d.name }}</option>
-    </select>
+    <SearchableSelect
+      v-model="selectedDepartment"
+      :options="departmentOptions"
+      placeholder="ทุกแผนก"
+      search-placeholder="พิมพ์/เลือกแผนก"
+    />
 
     <select v-model="selectedStatus" class="border p-2 rounded">
       <option value="">ทุกสถานะ</option>
@@ -289,13 +299,13 @@ onMounted(async () => {
       <option value="retired">ปลดระวาง</option>
     </select>
 
-    <button
+    <RouterLink
       v-if="isAdmin"
-      @click="openAddModal"
+      to="/admin/add-asset"
       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded ml-auto"
     >
       + เพิ่มอุปกรณ์
-    </button>
+    </RouterLink>
 
   </div>
 

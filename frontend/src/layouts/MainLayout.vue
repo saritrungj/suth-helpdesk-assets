@@ -10,11 +10,11 @@ import Navbar from "../components/Navbar.vue";
 
   <Sidebar />
 
-  <div class="flex-1">
+  <div class="flex-1 min-w-0">
 
     <Navbar />
 
-    <main class="p-6">
+    <main class="p-6 max-w-[1600px] mx-auto">
 
       <RouterView />
 

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from "vue";
 import api from "../services/api";
 import { activeGregorianYear } from "../store/fiscalYear";
+import SearchableSelect from "../components/SearchableSelect.vue";
 
 const loading = ref(false);
 const message = ref(null);
@@ -122,21 +123,33 @@ watch(year, loadSummary, { immediate: true });
 // -------------------------------------------------------
 const filteredFloorOptions = computed(() => {
   if (!buildingFilter.value) return floors.value;
-  return floors.value.filter((f) => Number(f.building_id) === Number(buildingFilter.value));
+  const bld = buildings.value.find((b) => b.name === buildingFilter.value);
+  if (!bld) return floors.value;
+  return floors.value.filter((f) => Number(f.building_id) === Number(bld.id));
 });
 
 const filteredDepartmentOptions = computed(() => {
   if (!divisionFilter.value) return departments.value;
-  return departments.value.filter((d) => Number(d.division_id) === Number(divisionFilter.value));
+  const div = divisions.value.find((d) => d.name === divisionFilter.value);
+  if (!div) return departments.value;
+  return departments.value.filter((d) => Number(d.division_id) === Number(div.id));
 });
 
-function onBuildingFilterChange() {
-  floorFilter.value = "";
-}
+// ตัวเลือกสำหรับ SearchableSelect ของแต่ละ filter
+const buildingFilterOptions = computed(() => buildings.value.map((b) => ({ value: b.name, label: b.name })));
+const floorFilterOptions = computed(() => filteredFloorOptions.value.map((f) => ({ value: f.name, label: f.name })));
+const divisionFilterOptions = computed(() => divisions.value.map((d) => ({ value: d.name, label: d.name })));
+const departmentFilterOptions = computed(() => filteredDepartmentOptions.value.map((d) => ({ value: d.name, label: d.name })));
+const brandFilterOptions = computed(() => brands.value.map((b) => ({ value: b.name, label: b.name })));
 
-function onDivisionFilterChange() {
+// เลือกอาคาร/ฝ่ายใหม่ → ค่าชั้น/แผนกที่เคยเลือกไว้อาจไม่ตรงกับตัวเลือกใหม่แล้ว รีเซ็ตทิ้งให้เลือกใหม่
+watch(buildingFilter, () => {
+  floorFilter.value = "";
+});
+
+watch(divisionFilter, () => {
   departmentFilter.value = "";
-}
+});
 
 function resetFilters() {
   search.value = "";
@@ -185,23 +198,15 @@ const filteredDevices = computed(() => {
       d.department_name?.toLowerCase().includes(keyword) ||
       d.contract_no?.toLowerCase().includes(keyword);
 
-    const matchBuilding =
-      !buildingFilter.value ||
-      d.building_name === buildings.value.find((b) => b.id == buildingFilter.value)?.name;
+    const matchBuilding = !buildingFilter.value || d.building_name === buildingFilter.value;
 
-    const matchFloor =
-      !floorFilter.value ||
-      d.floor_name === floors.value.find((f) => f.id == floorFilter.value)?.name;
+    const matchFloor = !floorFilter.value || d.floor_name === floorFilter.value;
 
-    const matchDivision =
-      !divisionFilter.value ||
-      d.division_name === divisions.value.find((dv) => dv.id == divisionFilter.value)?.name;
+    const matchDivision = !divisionFilter.value || d.division_name === divisionFilter.value;
 
     const matchDepartment = !departmentFilter.value || d.department_name === departmentFilter.value;
 
-    const matchBrand =
-      !brandFilter.value ||
-      d.brand_name === brands.value.find((b) => b.id == brandFilter.value)?.name;
+    const matchBrand = !brandFilter.value || d.brand_name === brandFilter.value;
 
     const matchDeviceStatus = !deviceStatusFilter.value || d.status === deviceStatusFilter.value;
 
@@ -333,7 +338,7 @@ onMounted(init);
   <div>
     <h1 class="text-3xl font-bold mb-6">บันทึกยอดพิมพ์รายเดือน</h1>
 
-    <div class="bg-white shadow rounded-lg p-6">
+    <div class="bg-gray-50 shadow rounded-lg p-6">
       <!-- แถบควบคุมด้านบน -->
       <div class="flex flex-wrap items-end gap-4 mb-4">
         <div>
@@ -359,42 +364,52 @@ onMounted(init);
       <div class="flex flex-wrap items-end gap-3 mb-4 pt-4 border-t">
         <div>
           <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
-          <select v-model="buildingFilter" @change="onBuildingFilterChange" class="border rounded p-2 text-sm">
-            <option value="">ทุกอาคาร</option>
-            <option v-for="b in buildings" :key="b.id" :value="b.id">{{ b.name }}</option>
-          </select>
+          <SearchableSelect
+            v-model="buildingFilter"
+            :options="buildingFilterOptions"
+            placeholder="ทุกอาคาร"
+            search-placeholder="พิมพ์ชื่ออาคาร..."
+          />
         </div>
 
         <div>
           <label class="block text-xs text-gray-500 mb-1">ชั้น</label>
-          <select v-model="floorFilter" class="border rounded p-2 text-sm">
-            <option value="">ทุกชั้น</option>
-            <option v-for="f in filteredFloorOptions" :key="f.id" :value="f.id">{{ f.name }}</option>
-          </select>
+          <SearchableSelect
+            v-model="floorFilter"
+            :options="floorFilterOptions"
+            placeholder="ทุกชั้น"
+            search-placeholder="พิมพ์ชื่อชั้น..."
+          />
         </div>
 
         <div>
           <label class="block text-xs text-gray-500 mb-1">ฝ่าย</label>
-          <select v-model="divisionFilter" @change="onDivisionFilterChange" class="border rounded p-2 text-sm">
-            <option value="">ทุกฝ่าย</option>
-            <option v-for="d in divisions" :key="d.id" :value="d.id">{{ d.name }}</option>
-          </select>
+          <SearchableSelect
+            v-model="divisionFilter"
+            :options="divisionFilterOptions"
+            placeholder="ทุกฝ่าย"
+            search-placeholder="พิมพ์ชื่อฝ่าย..."
+          />
         </div>
 
         <div>
           <label class="block text-xs text-gray-500 mb-1">แผนก</label>
-          <select v-model="departmentFilter" class="border rounded p-2 text-sm">
-            <option value="">ทุกแผนก</option>
-            <option v-for="d in filteredDepartmentOptions" :key="d.id" :value="d.name">{{ d.name }}</option>
-          </select>
+          <SearchableSelect
+            v-model="departmentFilter"
+            :options="departmentFilterOptions"
+            placeholder="ทุกแผนก"
+            search-placeholder="พิมพ์ชื่อแผนก..."
+          />
         </div>
 
         <div>
           <label class="block text-xs text-gray-500 mb-1">ยี่ห้อ</label>
-          <select v-model="brandFilter" class="border rounded p-2 text-sm">
-            <option value="">ทุกยี่ห้อ</option>
-            <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
-          </select>
+          <SearchableSelect
+            v-model="brandFilter"
+            :options="brandFilterOptions"
+            placeholder="ทุกยี่ห้อ"
+            search-placeholder="พิมพ์ชื่อยี่ห้อ..."
+          />
         </div>
 
         <div>
@@ -517,7 +532,7 @@ onMounted(init);
       class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
       @click.self="closeModal"
     >
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="bg-gray-50 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div class="p-5 border-b flex items-center justify-between">
           <div>
             <h2 class="text-lg font-bold">กรอกยอดพิมพ์รายเดือน</h2>

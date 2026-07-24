@@ -13,6 +13,7 @@
  */
 import { ref, computed, watch } from "vue";
 import api from "../services/api";
+import SearchableSelect from "../components/SearchableSelect.vue";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -59,10 +60,32 @@ const filteredFloors = computed(() => {
   );
 });
 
+// department ที่ backend คืนมามีของทุกฝ่ายรวมกัน ต้องกรองตามฝ่ายที่เลือกไว้ (เหมือน building → floor)
+const filteredDepartments = computed(() => {
+  if (!form.value.division_id) return [];
+  return departments.value.filter(
+    (d) => Number(d.division_id) === Number(form.value.division_id)
+  );
+});
+
 // เมื่อผู้ใช้เปลี่ยนอาคารเอง ให้ล้างชั้นเดิมทิ้ง เพราะชั้นเดิมอาจไม่ได้อยู่ในอาคารใหม่
-function onBuildingChange() {
+function onBuildingChange(value) {
+  form.value.building_id = value;
   form.value.floor_id = "";
 }
+
+// เมื่อผู้ใช้เปลี่ยนฝ่ายเอง ให้ล้างแผนกเดิมทิ้ง เพราะแผนกเดิมอาจไม่ได้อยู่ในฝ่ายใหม่
+function onDivisionChange(value) {
+  form.value.division_id = value;
+  form.value.department_id = "";
+}
+
+// ตัวเลือกสำหรับ SearchableSelect ของแต่ละฟิลด์ — สไตล์และการค้นหาแบบเดียวกับหน้า "บันทึกยอดพิมพ์รายเดือน"
+const brandOptions = computed(() => brands.value.map((b) => ({ value: b.id, label: b.name })));
+const buildingOptions = computed(() => buildings.value.map((b) => ({ value: b.id, label: b.name })));
+const floorOptions = computed(() => filteredFloors.value.map((f) => ({ value: f.id, label: f.name })));
+const divisionOptions = computed(() => divisions.value.map((d) => ({ value: d.id, label: d.name })));
+const departmentOptions = computed(() => filteredDepartments.value.map((d) => ({ value: d.id, label: d.name })));
 
 async function loadMasterData() {
   if (masterLoaded.value) return; // โหลดครั้งเดียวพอ ใช้ซ้ำได้ทุกครั้งที่เปิด modal
@@ -197,7 +220,7 @@ function close() {
     class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
     @click.self="close"
   >
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="bg-gray-50 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
       <div class="p-5 border-b flex items-center justify-between">
         <h2 class="text-lg font-bold">
           {{ isEdit ? "แก้ไขทรัพย์สิน" : "เพิ่มทรัพย์สิน" }}
@@ -220,10 +243,12 @@ function close() {
           <!-- Brand -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">Brand</label>
-            <select v-model="form.brand_id" class="border rounded p-2 w-full">
-              <option disabled value="">-- เลือก Brand --</option>
-              <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
-            </select>
+            <SearchableSelect
+              v-model="form.brand_id"
+              :options="brandOptions"
+              placeholder="-- เลือก Brand --"
+              search-placeholder="พิมพ์ชื่อ Brand..."
+            />
           </div>
 
           <!-- Model -->
@@ -245,37 +270,47 @@ function close() {
           <!-- Building -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">อาคาร</label>
-            <select v-model="form.building_id" @change="onBuildingChange" class="border rounded p-2 w-full">
-              <option value="">-- เลือกอาคาร --</option>
-              <option v-for="b in buildings" :key="b.id" :value="b.id">{{ b.name }}</option>
-            </select>
+            <SearchableSelect
+              :model-value="form.building_id"
+              @update:model-value="onBuildingChange"
+              :options="buildingOptions"
+              placeholder="-- เลือกอาคาร --"
+              search-placeholder="พิมพ์ชื่ออาคาร..."
+            />
           </div>
 
           <!-- Floor -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">ชั้น</label>
-            <select v-model="form.floor_id" :disabled="!form.building_id" class="border rounded p-2 w-full">
-              <option value="" disabled>{{ form.building_id ? "-- เลือกชั้น --" : "เลือกอาคารก่อน" }}</option>
-              <option v-for="f in filteredFloors" :key="f.id" :value="f.id">{{ f.name }}</option>
-            </select>
+            <SearchableSelect
+              v-model="form.floor_id"
+              :options="floorOptions"
+              :placeholder="form.building_id ? '-- เลือกชั้น --' : 'เลือกอาคารก่อน'"
+              search-placeholder="พิมพ์ชื่อชั้น..."
+            />
           </div>
 
           <!-- Division -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">ฝ่าย</label>
-            <select v-model="form.division_id" class="border rounded p-2 w-full">
-              <option value="">-- เลือกฝ่าย --</option>
-              <option v-for="d in divisions" :key="d.id" :value="d.id">{{ d.name }}</option>
-            </select>
+            <SearchableSelect
+              :model-value="form.division_id"
+              @update:model-value="onDivisionChange"
+              :options="divisionOptions"
+              placeholder="-- เลือกฝ่าย --"
+              search-placeholder="พิมพ์ชื่อฝ่าย..."
+            />
           </div>
 
           <!-- Department -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">แผนก</label>
-            <select v-model="form.department_id" class="border rounded p-2 w-full">
-              <option value="">-- เลือกแผนก --</option>
-              <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
-            </select>
+            <SearchableSelect
+              v-model="form.department_id"
+              :options="departmentOptions"
+              :placeholder="form.division_id ? '-- เลือกแผนก --' : 'เลือกฝ่ายก่อน'"
+              search-placeholder="พิมพ์ชื่อแผนก..."
+            />
           </div>
 
           <!-- Contract -->

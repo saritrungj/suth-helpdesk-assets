@@ -1,1 +1,157 @@
 @import "tailwindcss";
+
+
+
+:root {
+  /* brand scale — ฟ้าอมเทา นิ่ง สบายตา เหมาะกับงานโรงพยาบาล ใช้เหมือนกันทั้งสองโหมด */
+  --brand-50: #eef4f7;
+  --brand-100: #dbe8ee;
+  --brand-200: #b9d2dd;
+  --brand-300: #8db5c7;
+  --brand-400: #5f93ab;
+  --brand-500: #427791;
+  --brand-600: #336178;
+  --brand-700: #2b5064;
+  --brand-800: #254253;
+  --brand-900: #203847;
+}
+
+/* -----------------------------------------------------------
+   โหมดมืด (ค่าเริ่มต้น) — โทนกลางแบบอุ่นๆ ไม่ดำสนิทจนแสบตา
+   ตัวหนังสือใช้โทนสว่าง (พลิกลำดับความสว่างของสเกล 50→900 จากเดิม
+   เพื่อให้ class เดิมทั้งระบบ เช่น bg-gray-50 / text-gray-800
+   กลายเป็นพื้นเข้ม/ตัวหนังสือสว่างโดยอัตโนมัติ ไม่ต้องแก้ class ทีละไฟล์)
+----------------------------------------------------------- */
+:root,
+[data-mode="dark"] {
+  color-scheme: dark;
+
+  --neutral-50: #221f1a;
+  --neutral-100: #2c2820;
+  --neutral-200: #4a4338;
+  --neutral-300: #6b6252;
+  --neutral-400: #a89e8c;
+  --neutral-500: #c3bba7;
+  --neutral-600: #d8d2c2;
+  --neutral-700: #e9e4d8;
+  --neutral-800: #f5f2ea;
+  --neutral-900: #fbfaf6;
+
+  /* แดง (danger/error) — พลิกเฉพาะโทนพื้น/ตัวหนังสือที่ใช้เป็น "กล่องแจ้งเตือน"
+     (bg-red-100 text-red-700 ฯลฯ) ให้เข้ากับพื้นเข้ม เหมือน neutral-*
+     ส่วน red-300–600 (ปุ่มลบ/ไอคอน/ลิงก์) ปล่อยเป็นค่า default ของ Tailwind
+     ไว้เหมือนเดิม เพราะสีแดงสดใช้บนพื้นเข้มได้อยู่แล้ว ไม่ต้องพลิก */
+  --danger-50: #2e1512;
+  --danger-100: #3a1c17;
+  --danger-200: #5c2b22;
+  --danger-700: #f2b8ab;
+  --danger-800: #f7cec4;
+
+  --body-bg: #17150f;
+}
+
+/* -----------------------------------------------------------
+   โหมดสว่าง — สเกลสีปกติแบบมาตรฐาน Tailwind (พื้นสว่าง/ตัวหนังสือเข้ม)
+----------------------------------------------------------- */
+[data-mode="light"] {
+  color-scheme: light;
+
+  --neutral-50: #f9fafb;
+  --neutral-100: #f3f4f6;
+  --neutral-200: #e5e7eb;
+  --neutral-300: #d1d5db;
+  --neutral-400: #9ca3af;
+  --neutral-500: #6b7280;
+  --neutral-600: #4b5563;
+  --neutral-700: #374151;
+  --neutral-800: #1f2937;
+  --neutral-900: #111827;
+
+  --danger-50: #fef2f2;
+  --danger-100: #fee2e2;
+  --danger-200: #fecaca;
+  --danger-700: #b91c1c;
+  --danger-800: #991b1b;
+
+  --body-bg: #ffffff;
+}
+
+@theme {
+  --color-blue-50: var(--brand-50);
+  --color-blue-100: var(--brand-100);
+  --color-blue-200: var(--brand-200);
+  --color-blue-300: var(--brand-300);
+  --color-blue-400: var(--brand-400);
+  --color-blue-500: var(--brand-500);
+  --color-blue-600: var(--brand-600);
+  --color-blue-700: var(--brand-700);
+  --color-blue-800: var(--brand-800);
+  --color-blue-900: var(--brand-900);
+
+  --color-gray-50: var(--neutral-50);
+  --color-gray-100: var(--neutral-100);
+  --color-gray-200: var(--neutral-200);
+  --color-gray-300: var(--neutral-300);
+  --color-gray-400: var(--neutral-400);
+  --color-gray-500: var(--neutral-500);
+  --color-gray-600: var(--neutral-600);
+  --color-gray-700: var(--neutral-700);
+  --color-gray-800: var(--neutral-800);
+  --color-gray-900: var(--neutral-900);
+
+  --color-red-50: var(--danger-50);
+  --color-red-100: var(--danger-100);
+  --color-red-200: var(--danger-200);
+  --color-red-700: var(--danger-700);
+  --color-red-800: var(--danger-800);
+
+  --font-sans: "Sarabun", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--body-bg);
+  color: var(--neutral-800);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* แถบไฮไลต์เมนูที่กำลังเปิดอยู่ในแถบด้านข้าง — ใช้ class ที่ Vue Router ใส่ให้อัตโนมัติ
+   ใช้สีธีมแบบเจือจาง (ไม่ใช่พื้นสว่างจ้า) ให้เข้ากับ sidebar โทนเข้ม */
+.sidebar-nav a.router-link-exact-active {
+  background-color: color-mix(in srgb, var(--brand-500) 18%, transparent);
+  color: var(--brand-200);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--brand-400);
+}
+
+/* สกอลบาร์บางและกลมกลืน อ่านสบายตากว่าสกอลบาร์ระบบปกติ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--neutral-300);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neutral-400);
+}
+
+/* โฟกัสให้เห็นชัดตอนกด Tab ไล่ทีละ element (คนใช้คีย์บอร์ด/accessibility) */
+:focus-visible {
+  outline: 2px solid var(--brand-400);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

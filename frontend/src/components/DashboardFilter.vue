@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from "vue";
 import api from "../services/api";
 import { activeGregorianYear } from "../store/fiscalYear";
+import SearchableSelect from "./SearchableSelect.vue";
 
 const emit = defineEmits(["filter"]);
 
@@ -54,6 +55,9 @@ const months = computed(() => {
     .map((m) => ({ value: m, label: formatMonth(m) }));
 });
 
+// ตัวเลือกอาคารสำหรับ SearchableSelect (เลือกจากรายการเสมอ ไม่มีปัญหาพิมพ์ชื่อไม่ตรงแบบ input ธรรมดา)
+const buildingOptions = computed(() => buildings.value.map((b) => ({ value: b.name, label: b.name })));
+
 // ส่ง Filter
 function sendFilter() {
   const filter = {
@@ -87,17 +91,19 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="bg-white shadow rounded-lg p-4 mb-6">
+  <div class="bg-gray-50 shadow rounded-lg p-4 mb-6">
     <h2 class="font-bold mb-3">Filter Dashboard</h2>
 
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
       <!-- อาคาร -->
       <div>
         <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
-        <select v-model="building_name" class="border rounded p-2 w-full">
-          <option value="">ทุกอาคาร</option>
-          <option v-for="b in buildings" :key="b.id" :value="b.name">{{ b.name }}</option>
-        </select>
+        <SearchableSelect
+          v-model="building_name"
+          :options="buildingOptions"
+          placeholder="ทุกอาคาร"
+          search-placeholder="พิมพ์ชื่ออาคาร..."
+        />
       </div>
 
       <!-- เดือน (ปีอ้างอิงจากปีงบที่เลือกที่ Navbar) -->

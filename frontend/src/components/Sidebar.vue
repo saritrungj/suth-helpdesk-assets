@@ -1,16 +1,22 @@
 <template>
-  <aside class="w-64 bg-blue-700 text-white min-h-screen p-5">
+  <aside class="w-64 min-h-screen p-5 bg-gray-50 border-r border-gray-200 shrink-0">
 
-    <h1 class="text-2xl font-bold mb-8">
-      IT Asset
-    </h1>
+    <div class="flex items-center gap-2.5 mb-7 px-1">
+      <span class="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm tracking-wide shrink-0">
+        IT
+      </span>
+      <div class="leading-tight min-w-0">
+        <p class="font-semibold text-gray-800 truncate">IT Asset</p>
+        <p class="text-xs text-gray-400 truncate">ระบบทรัพย์สินโรงพยาบาล</p>
+      </div>
+    </div>
 
 
-    <nav class="space-y-3">
+    <nav class="sidebar-nav space-y-1 text-sm">
 
       <RouterLink
         to="/"
-        class="block hover:bg-blue-600 p-2 rounded"
+        class="block text-gray-600 hover:bg-gray-100 hover:text-gray-900 p-2 rounded-lg transition-colors"
       >
         Dashboard
       </RouterLink>
@@ -20,7 +26,7 @@
       <SidebarGroup label="บันทึกข้อมูล" group-key="record">
         <RouterLink
           to="/print-transactions"
-          class="block hover:bg-blue-600 p-2 rounded"
+          class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
         >
           บันทึกยอดพิมพ์
         </RouterLink>
@@ -31,28 +37,28 @@
       <SidebarGroup label="รายงาน" group-key="reports">
         <RouterLink
           to="/expense"
-          class="block hover:bg-blue-600 p-2 rounded"
+          class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
         >
           ค่าใช้จ่าย
         </RouterLink>
 
         <RouterLink
           to="/compare"
-          class="block hover:bg-blue-600 p-2 rounded"
+          class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
         >
           เปรียบเทียบข้อมูลรายเดือน
         </RouterLink>
 
         <RouterLink
           to="/by-department"
-          class="block hover:bg-blue-600 p-2 rounded"
+          class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
         >
           ยอดพิมพ์แยกตามฝ่าย/แผนก
         </RouterLink>
 
         <RouterLink
           to="/report"
-          class="block hover:bg-blue-600 p-2 rounded"
+          class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
         >
           รายงาน
         </RouterLink>
@@ -64,7 +70,7 @@
       <SidebarGroup label="ทรัพย์สิน" group-key="assets">
         <RouterLink
           to="/assets"
-          class="block hover:bg-blue-600 p-2 rounded"
+          class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
         >
           ทรัพย์สิน
         </RouterLink>
@@ -75,10 +81,10 @@
       <!-- Admin -->
       <div
         v-if="authState.user?.role === 'admin'"
-        class="pt-4 border-t border-blue-500"
+        class="pt-4 mt-4 border-t border-gray-200"
       >
 
-        <p class="text-sm text-blue-200 mb-2">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
           Admin
         </p>
 
@@ -87,14 +93,14 @@
         <SidebarGroup label="อุปกรณ์" group-key="admin-devices">
           <RouterLink
             to="/admin/add-asset"
-            class="block hover:bg-blue-600 p-2 rounded"
+            class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
           >
             เพิ่มทรัพย์สิน
           </RouterLink>
 
           <RouterLink
             to="/admin/brands"
-            class="block hover:bg-blue-600 p-2 rounded"
+            class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
           >
             จัดการยี่ห้อ
           </RouterLink>
@@ -105,14 +111,14 @@
         <SidebarGroup label="สถานที่" group-key="admin-places">
           <RouterLink
             to="/admin/buildings"
-            class="block hover:bg-blue-600 p-2 rounded"
+            class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
           >
             จัดการอาคาร
           </RouterLink>
 
           <RouterLink
             to="/admin/floors"
-            class="block hover:bg-blue-600 p-2 rounded"
+            class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
           >
             จัดการชั้น
           </RouterLink>
@@ -123,14 +129,14 @@
         <SidebarGroup label="องค์กร" group-key="admin-org">
           <RouterLink
             to="/admin/divisions"
-            class="block hover:bg-blue-600 p-2 rounded"
+            class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
           >
             จัดการฝ่าย
           </RouterLink>
 
           <RouterLink
             to="/admin/departments"
-            class="block hover:bg-blue-600 p-2 rounded"
+            class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
           >
             จัดการแผนก
           </RouterLink>
@@ -141,14 +147,14 @@
         <SidebarGroup label="สัญญา/งบประมาณ" group-key="admin-contracts">
           <RouterLink
             to="/admin/fiscal-years"
-            class="block hover:bg-blue-600 p-2 rounded"
+            class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
           >
             ปีงบประมาณ
           </RouterLink>
 
           <RouterLink
             to="/admin/contracts"
-            class="block hover:bg-blue-600 p-2 rounded"
+            class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
           >
             จัดการสัญญา
           </RouterLink>
@@ -159,7 +165,7 @@
         <SidebarGroup label="Tools" group-key="admin-tools">
           <RouterLink
             to="/admin/import-devices"
-            class="block hover:bg-blue-600 p-2 rounded"
+            class="block text-gray-600 hover:bg-gray-50 hover:text-gray-900 p-2 rounded-lg transition-colors"
           >
             Import CSV
           </RouterLink>
@@ -204,7 +210,7 @@ const SidebarGroup = (props, { slots }) => {
         type: "button",
         onClick: () => toggleGroup(props.groupKey),
         class:
-          "w-full flex items-center justify-between text-sm text-blue-200 mb-2 hover:text-white",
+          "w-full flex items-center justify-between text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1 hover:text-gray-600 transition-colors",
       },
       [
         h("span", props.label),
@@ -215,7 +221,7 @@ const SidebarGroup = (props, { slots }) => {
             viewBox: "0 0 20 20",
             fill: "currentColor",
             class: [
-              "w-4 h-4 transition-transform",
+              "w-3.5 h-3.5 transition-transform",
               open ? "rotate-180" : "",
             ],
           },

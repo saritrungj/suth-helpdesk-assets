@@ -1,10 +1,32 @@
 <!doctype html>
-<html lang="en">
+<html lang="th">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <title>ระบบจัดการทรัพย์สิน IT โรงพยาบาล</title>
+
+    <script>
+      // ตั้งค่า data-mode (สว่าง/มืด) ให้ตรงกับที่ผู้ใช้เคยเลือกไว้ ก่อนที่ CSS จะ paint หน้าจอ
+      // ป้องกันการกระพริบเป็นโหมดเริ่มต้นแวบเดียวตอนโหลดหน้า (FOUC ของโหมดสี)
+      (function () {
+        try {
+          var saved = localStorage.getItem("suth-ui-mode");
+          document.documentElement.setAttribute(
+            "data-mode",
+            saved === "light" || saved === "dark" ? saved : "dark"
+          );
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

@@ -58,6 +58,10 @@ const Contract = () =>
   import("../views/admin/Contract.vue");
 
 
+const AddAsset = () =>
+  import("../views/admin/AddAsset.vue");
+
+
 // =======================
 // Routes
 // =======================
@@ -174,10 +178,14 @@ const routes = [
     component: Contract,
   },
 
-  // เพิ่ม/แก้ไขทรัพย์สิน — ไม่ใช่หน้าแยกอีกต่อไป (ข้อ 6): AssetForm.vue ถูกแปลงเป็น Modal
-  // เปิดจากปุ่ม "+ เพิ่มอุปกรณ์" / "แก้ไข" ในหน้า /assets โดยตรง (ดู views/AssetList.vue)
-  // การกันสิทธิ์ POST/PUT ยังคงถูกบังคับที่ backend (adminMiddleware) เหมือนเดิม
-  // ส่วนฝั่ง frontend ก็ซ่อนปุ่มเหล่านี้ให้ผู้ใช้ที่ไม่ใช่ admin อยู่แล้วใน AssetList.vue
+  // เพิ่มทรัพย์สิน — อยู่ฝั่ง Admin (ตรงกับลิงก์ในเมนู Admin > อุปกรณ์ > "เพิ่มทรัพย์สิน")
+  // ใช้ AssetForm.vue ตัวเดียวกับที่ AssetList.vue ใช้ตอน "แก้ไข" (ดู views/admin/AddAsset.vue)
+  // การกันสิทธิ์ POST ยังคงถูกบังคับที่ backend (adminMiddleware) เหมือนเดิม
+  {
+    path: "/admin/add-asset",
+    name: "AddAsset",
+    component: AddAsset,
+  },
 
   // Import CSV/Excel — เป็นเครื่องมือของ Admin เช่นกัน
   {
