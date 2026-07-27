@@ -168,11 +168,20 @@ onMounted(load)
 
       <template #actions="{ row }">
         <template v-if="editingId !== row.id">
-          <button @click="editFloor(row)" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded mr-2">
-            Edit
+          <button @click="editFloor(row)" title="แก้ไข" class="bg-yellow-500 hover:bg-yellow-600 text-white p-1.5 rounded mr-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              <path d="M15 5l4 4" />
+            </svg>
           </button>
-          <button @click="deleteFloor(row.id)" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded">
-            Delete
+          <button @click="deleteFloor(row.id)" title="ลบ" class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
           </button>
         </template>
         <template v-else>

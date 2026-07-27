@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted } from "vue"
+import { ref, onMounted, computed } from "vue"
 import api from "../../services/api"
+import DataTable from "../../components/DataTable.vue"
 
 const brands = ref([])
 const loading = ref(false)
@@ -8,6 +9,11 @@ const loading = ref(false)
 // สำหรับแก้ไขข้อมูล (ยังเป็น inline edit เหมือนเดิม — โจทย์ข้อ 6 พูดถึงแค่ flow "เพิ่ม")
 const editingId = ref(null)
 const editName = ref("")
+
+const columns = computed(() => [
+  { key: "id", label: "ID", align: "right" },
+  { key: "name", label: "Name" },
+])
 
 // -------------------------------------------------------
 // Modal เพิ่มข้อมูล
@@ -132,60 +138,60 @@ onMounted(load)
 
     <div v-if="loading" class="text-center text-gray-500 py-6">กำลังโหลดข้อมูล...</div>
 
-    <!-- ตาราง -->
-    <table v-else class="w-full border-collapse border">
-      <thead>
-        <tr>
-          <th class="border p-2">ID</th>
-          <th class="border p-2">Name</th>
-          <th class="border p-2">Action</th>
-        </tr>
-      </thead>
+    <!-- ตาราง -> DataTable (sort/search/pagination/export ในตัว) -->
+    <DataTable
+      v-else
+      :rows="brands"
+      :columns="columns"
+      row-key="id"
+      export-filename="brands"
+      empty-text="ยังไม่มี Brand"
+    >
+      <template #cell-name="{ row, value }">
+        <span v-if="editingId !== row.id">{{ value }}</span>
+        <input
+          v-else
+          v-model="editName"
+          class="border rounded px-2 py-1 w-full"
+        />
+      </template>
 
-      <tbody>
-        <tr v-for="b in brands" :key="b.id">
-          <td class="border p-2">{{ b.id }}</td>
+      <template #actions="{ row }">
+        <template v-if="editingId !== row.id">
+          <button
+            @click="editBrand(row)"
+            title="แก้ไข"
+            class="bg-yellow-500 hover:bg-yellow-600 text-white p-1.5 rounded mr-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              <path d="M15 5l4 4" />
+            </svg>
+          </button>
+          <button
+            @click="deleteBrand(row.id)"
+            title="ลบ"
+            class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
+          </button>
+        </template>
 
-          <td class="border p-2">
-            <span v-if="editingId !== b.id">{{ b.name }}</span>
-            <input
-              v-else
-              v-model="editName"
-              class="border rounded px-2 py-1 w-full"
-            />
-          </td>
-
-          <td class="border p-2 space-x-2">
-            <template v-if="editingId !== b.id">
-              <button
-                @click="editBrand(b)"
-                class="bg-yellow-500 text-white px-3 py-1 rounded"
-              >
-                Edit
-              </button>
-              <button
-                @click="deleteBrand(b.id)"
-                class="bg-red-600 text-white px-3 py-1 rounded"
-              >
-                Delete
-              </button>
-            </template>
-
-            <button
-              v-else
-              @click="saveBrand(b.id)"
-              class="bg-green-600 text-white px-3 py-1 rounded"
-            >
-              Save
-            </button>
-          </td>
-        </tr>
-
-        <tr v-if="!brands.length">
-          <td colspan="3" class="border p-4 text-center text-gray-400">ยังไม่มี Brand</td>
-        </tr>
-      </tbody>
-    </table>
+        <button
+          v-else
+          @click="saveBrand(row.id)"
+          class="bg-green-600 text-white px-3 py-1 rounded"
+        >
+          Save
+        </button>
+      </template>
+    </DataTable>
 
     <!-- Modal: เพิ่ม Brand -->
     <div

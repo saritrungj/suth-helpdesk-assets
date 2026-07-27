@@ -1,101 +1,89 @@
 <template>
   <div>
 
-    <!-- Loading Overlay -->
-    <div v-if="loading" class="text-center text-gray-500 mb-4">
-      กำลังอัปเดตข้อมูล...
-    </div>
-
-    <!-- Error -->
-    <div v-if="error" class="bg-red-100 text-red-700 p-4 rounded mb-4">
-      {{ error }}
-    </div>
-
-    <!-- Dashboard -->
     <h1 class="text-3xl font-bold mb-6">Dashboard</h1>
 
     <DashboardFilter @filter="handleFilter" />
 
-    <!-- KPI Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-
-      <div class="bg-gray-50 shadow rounded-lg p-6 hover:shadow-xl transition">
-        <h2 class="text-gray-500 text-sm">อุปกรณ์ทั้งหมด</h2>
-        <p class="text-3xl font-bold text-blue-600">
-          {{ Number(stats.total_devices || 0).toLocaleString() }}
-        </p>
+    <!-- ============================================================
+         KPI Cards — sticky ใต้ Navbar เสมอ (เห็นตัวเลขหลักตลอดเวลาที่เลื่อนดูกราฟด้านล่าง)
+         ตอนโหลดใหม่ (เปลี่ยน filter) จะโชว์ skeleton แทนค่าเดิม/0 เพื่อไม่ให้ตัวเลขกระโดด
+         ============================================================ -->
+    <div class="sticky top-16 z-10 -mx-6 px-6 py-3 bg-[var(--body-bg)]/90 backdrop-blur">
+      <div v-if="statsError" class="bg-red-100 text-red-700 p-3 rounded-lg mb-3 text-sm flex items-center justify-between gap-3">
+        <span>{{ statsError }}</span>
+        <button type="button" class="underline shrink-0" @click="loadDashboard">ลองใหม่</button>
       </div>
 
-      <div class="bg-gray-50 shadow rounded-lg p-6 hover:shadow-xl transition">
-        <h2 class="text-gray-500 text-sm">สัญญาทั้งหมด</h2>
-        <p class="text-3xl font-bold text-green-600">
-          {{ Number(stats.total_contracts || 0).toLocaleString() }}
-        </p>
-      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-      <div class="bg-gray-5050 shadow rounded-lg p-6 hover:shadow-xl transition">
-        <h2 class="text-gray-500 text-sm">รายการพิมพ์</h2>
-        <p class="text-3xl font-bold text-purple-600">
-          {{ Number(stats.total_transactions || 0).toLocaleString() }}
-        </p>
-      </div>
+        <div class="bg-gray-50 shadow rounded-lg p-6 hover:shadow-xl transition">
+          <h2 class="text-gray-500 text-sm">อุปกรณ์ทั้งหมด</h2>
+          <SkeletonBlock v-if="loading" width="5rem" height="2.25rem" class="mt-1" />
+          <p v-else class="text-3xl font-bold text-blue-600">
+            {{ Number(stats.total_devices || 0).toLocaleString() }}
+          </p>
+        </div>
 
-      <div class="bg-gray-5050 shadow rounded-lg p-6 hover:shadow-xl transition">
-        <h2 class="text-gray-500 text-sm">จำนวนหน้าที่พิมพ์</h2>
-        <p class="text-3xl font-bold text-red-600">
-          {{ Number(stats.total_pages || 0).toLocaleString() }}
-        </p>
-      </div>
+        <div class="bg-gray-50 shadow rounded-lg p-6 hover:shadow-xl transition">
+          <h2 class="text-gray-500 text-sm">สัญญาทั้งหมด</h2>
+          <SkeletonBlock v-if="loading" width="5rem" height="2.25rem" class="mt-1" />
+          <p v-else class="text-3xl font-bold text-green-600">
+            {{ Number(stats.total_contracts || 0).toLocaleString() }}
+          </p>
+        </div>
 
+        <div class="bg-gray-50 shadow rounded-lg p-6 hover:shadow-xl transition">
+          <h2 class="text-gray-500 text-sm">รายการพิมพ์</h2>
+          <SkeletonBlock v-if="loading" width="5rem" height="2.25rem" class="mt-1" />
+          <p v-else class="text-3xl font-bold text-purple-600">
+            {{ Number(stats.total_transactions || 0).toLocaleString() }}
+          </p>
+        </div>
+
+        <div class="bg-gray-50 shadow rounded-lg p-6 hover:shadow-xl transition">
+          <h2 class="text-gray-500 text-sm">จำนวนหน้าที่พิมพ์</h2>
+          <SkeletonBlock v-if="loading" width="5rem" height="2.25rem" class="mt-1" />
+          <p v-else class="text-3xl font-bold text-red-600">
+            {{ Number(stats.total_pages || 0).toLocaleString() }}
+          </p>
+        </div>
+
+      </div>
     </div>
-
-    <!-- Monthly Usage -->
-    <div class="mt-8 bg-gray-50 shadow rounded-lg p-6">
-      <h2 class="text-xl font-bold mb-4">Print Usage รายเดือน</h2>
-      <MonthlyChart :filter="dashboardFilter" />
-    </div>
-
-    <!-- Building + Cost -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-
-      <div class="bg-gray-50 shadow rounded-lg p-6">
-        <h2 class="text-xl font-bold mb-4">จำนวนหน้าพิมพ์รายอาคาร</h2>
-        <BuildingChart :filter="dashboardFilter" />
-      </div>
-
-      <div class="bg-gray-50 shadow rounded-lg p-6">
-        <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายรายอาคาร</h2>
-        <BuildingCostChart :filter="dashboardFilter" />
-      </div>
-
-    </div>
-
-    <!-- Monthly Cost -->
-    <div class="mt-8 bg-gray-50 shadow rounded-lg p-6">
-      <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายรายเดือน</h2>
-      <CostChart :filter="dashboardFilter" />
-    </div>
-
 
     <!-- ============================================================
-         ส่วนเสริม (Highlights) — ข้อมูลที่ไม่มีในหน้าอื่น
+         ส่วนเสริม (Highlights) — ย้ายขึ้นมาไว้ใกล้ KPI แทนท้ายสุดของหน้า
+         เพราะเป็นข้อมูลที่ช่วยตัดสินใจ (แผนกไหนใช้จ่ายเยอะ / สถานะเครื่อง)
+         ไม่ควรถูกฝังอยู่หลังกราฟยาวๆ จนคนไม่ scroll ไปเจอ
          ============================================================ -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
 
       <!-- สถานะเครื่องพิมพ์ -->
       <div class="bg-gray-50 shadow rounded-lg p-6">
         <h2 class="text-xl font-bold mb-4">สถานะเครื่องพิมพ์</h2>
 
-        <div v-if="highlightsLoading" class="text-gray-400 text-sm">กำลังโหลด...</div>
+        <div v-if="highlightsError" class="text-sm text-red-600 flex items-center justify-between gap-3">
+          <span>{{ highlightsError }}</span>
+          <button type="button" class="underline shrink-0" @click="loadHighlights">ลองใหม่</button>
+        </div>
+
+        <div v-else-if="highlightsLoading" class="grid grid-cols-3 gap-4">
+          <SkeletonBlock v-for="n in 3" :key="n" height="4.5rem" />
+        </div>
 
         <div v-else class="grid grid-cols-3 gap-4">
           <div
             v-for="s in highlights.device_status"
             :key="s.status"
-            class="text-center p-4 rounded-lg"
-            :class="deviceStatusMeta[s.status]?.bg"
+            class="status-chip text-center p-4 rounded-lg"
+            :class="deviceStatusMeta[s.status]?.chipClass"
           >
-            <p class="text-2xl font-bold" :class="deviceStatusMeta[s.status]?.text">
+            <component
+              :is="deviceStatusMeta[s.status]?.icon"
+              class="w-4 h-4 mx-auto mb-1 status-chip__value"
+            />
+            <p class="text-2xl font-bold status-chip__value">
               {{ Number(s.count).toLocaleString() }}
             </p>
             <p class="text-sm text-gray-600 mt-1">
@@ -109,12 +97,16 @@
       <div class="bg-gray-50 shadow rounded-lg p-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-bold">แผนกที่ค่าใช้จ่ายสูงสุด (Top 5)</h2>
-          <RouterLink to="/by-department" class="text-sm text-blue-600 hover:underline">
+          <RouterLink to="/by-department" class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap">
             ดูทั้งหมด →
           </RouterLink>
         </div>
 
-        <div v-if="highlightsLoading" class="text-gray-400 text-sm">กำลังโหลด...</div>
+        <div v-if="highlightsError" class="text-sm text-red-600">{{ highlightsError }}</div>
+
+        <div v-else-if="highlightsLoading" class="space-y-2">
+          <SkeletonBlock v-for="n in 5" :key="n" height="1.75rem" />
+        </div>
 
         <div v-else-if="highlights.top_departments.length === 0" class="text-gray-400 text-sm">
           ไม่มีข้อมูลในช่วงที่เลือก
@@ -147,19 +139,23 @@
     </div>
 
     <!-- สรุปการใช้งานตามสัญญา -->
-    <div class="mt-8 bg-gray-50 shadow rounded-lg p-6">
+    <div class="mt-6 bg-gray-50 shadow rounded-lg p-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-bold">สรุปการใช้งานตามสัญญา</h2>
         <RouterLink
           v-if="authState.user?.role === 'admin'"
           to="/admin/contracts"
-          class="text-sm text-blue-600 hover:underline"
+          class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap"
         >
           จัดการสัญญา →
         </RouterLink>
       </div>
 
-      <div v-if="highlightsLoading" class="text-gray-400 text-sm">กำลังโหลด...</div>
+      <div v-if="highlightsError" class="text-sm text-red-600">{{ highlightsError }}</div>
+
+      <div v-else-if="highlightsLoading" class="space-y-2">
+        <SkeletonBlock v-for="n in 3" :key="n" height="1.75rem" />
+      </div>
 
       <div v-else-if="highlights.contracts.length === 0" class="text-gray-400 text-sm">
         ยังไม่มีสัญญาในระบบ
@@ -191,11 +187,68 @@
       </div>
     </div>
 
+    <!-- ============================================================
+         กราฟ — แยกเป็น 2 แท็บ (การใช้งาน / ค่าใช้จ่าย) แทนวางต่อกันยาว 4 กราฟรวด
+         เพราะคนดู dashboard นี้ปกติสนใจอย่างใดอย่างหนึ่งตามช่วงเวลา (ปิดงบ vs ดูแลระบบ)
+         ============================================================ -->
+    <div class="mt-8">
+      <div class="flex gap-1 border-b border-gray-200 mb-6" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="chartTab === 'usage'"
+          class="px-4 py-2.5 text-sm font-medium rounded-t-lg -mb-px border-b-2 transition-colors"
+          :class="chartTab === 'usage'
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-gray-500 hover:text-gray-700'"
+          @click="chartTab = 'usage'"
+        >
+          การใช้งาน
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="chartTab === 'cost'"
+          class="px-4 py-2.5 text-sm font-medium rounded-t-lg -mb-px border-b-2 transition-colors"
+          :class="chartTab === 'cost'
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-gray-500 hover:text-gray-700'"
+          @click="chartTab = 'cost'"
+        >
+          ค่าใช้จ่าย
+        </button>
+      </div>
+
+      <div v-if="chartTab === 'usage'">
+        <div class="bg-gray-50 shadow rounded-lg p-6">
+          <h2 class="text-xl font-bold mb-4">Print Usage รายเดือน</h2>
+          <MonthlyChart :filter="dashboardFilter" />
+        </div>
+
+        <div class="mt-6 bg-gray-50 shadow rounded-lg p-6">
+          <h2 class="text-xl font-bold mb-4">จำนวนหน้าพิมพ์รายอาคาร</h2>
+          <BuildingChart :filter="dashboardFilter" />
+        </div>
+      </div>
+
+      <div v-else>
+        <div class="bg-gray-50 shadow rounded-lg p-6">
+          <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายรายเดือน</h2>
+          <CostChart :filter="dashboardFilter" />
+        </div>
+
+        <div class="mt-6 bg-gray-50 shadow rounded-lg p-6">
+          <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายรายอาคาร</h2>
+          <BuildingCostChart :filter="dashboardFilter" />
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, h } from "vue";
 import { RouterLink } from "vue-router";
 import api from "../services/api";
 import { authState } from "../store/auth";
@@ -205,13 +258,14 @@ import BuildingChart from "../components/BuildingChart.vue";
 import BuildingCostChart from "../components/BuildingCostChart.vue";
 import CostChart from "../components/CostChart.vue";
 import DashboardFilter from "../components/DashboardFilter.vue";
+import SkeletonBlock from "../components/SkeletonBlock.vue";
 
 // =====================
 // State
 // =====================
 
 const loading = ref(true);
-const error = ref(null);
+const statsError = ref(null);
 
 const stats = ref({
   total_devices: 0,
@@ -221,6 +275,7 @@ const stats = ref({
 });
 
 const highlightsLoading = ref(true);
+const highlightsError = ref(null);
 
 const highlights = ref({
   device_status: [],
@@ -228,16 +283,59 @@ const highlights = ref({
   contracts: [],
 });
 
+// ไอคอนเล็กๆ กำกับสถานะ ไม่ให้พึ่งสีอย่างเดียว (ช่วยผู้ใช้ตาบอดสี/พื้นหลังคอนทราสต์ต่ำ)
+const CheckCircleIcon = () =>
+  h(
+    "svg",
+    { viewBox: "0 0 20 20", fill: "currentColor", xmlns: "http://www.w3.org/2000/svg" },
+    [
+      h("path", {
+        "fill-rule": "evenodd",
+        "clip-rule": "evenodd",
+        d: "M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z",
+      }),
+    ]
+  );
+
+const WrenchIcon = () =>
+  h(
+    "svg",
+    { viewBox: "0 0 20 20", fill: "currentColor", xmlns: "http://www.w3.org/2000/svg" },
+    [
+      h("path", {
+        d: "M14.5 2.134a1 1 0 011 0l3 1.732a1 1 0 01.5.866V8a1 1 0 01-.5.866l-3 1.732a1 1 0 01-1 0L13 9.856v1.288a2.75 2.75 0 01-.804 1.945l-6.708 6.708a2.625 2.625 0 11-3.712-3.712l6.708-6.708A2.75 2.75 0 0110.427 8.5h1.288L10.5 6.634a1 1 0 010-1.732l3-1.732a1 1 0 011-1.036z",
+      }),
+    ]
+  );
+
+const ArchiveBoxIcon = () =>
+  h(
+    "svg",
+    { viewBox: "0 0 20 20", fill: "currentColor", xmlns: "http://www.w3.org/2000/svg" },
+    [
+      h("path", {
+        d: "M2 3a1 1 0 00-1 1v1a1 1 0 001 1h16a1 1 0 001-1V4a1 1 0 00-1-1H2z",
+      }),
+      h("path", {
+        "fill-rule": "evenodd",
+        "clip-rule": "evenodd",
+        d: "M2 7.5h16l-.811 7.71a2 2 0 01-1.99 1.79H4.8a2 2 0 01-1.99-1.79L2 7.5zM7 11a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z",
+      }),
+    ]
+  );
+
 const deviceStatusMeta = {
-  active: { label: "ใช้งานอยู่", bg: "bg-green-50", text: "text-green-600" },
-  repair: { label: "ซ่อมบำรุง", bg: "bg-yellow-50", text: "text-yellow-600" },
-  retired: { label: "ปลดระวาง", bg: "bg-gray-100", text: "text-gray-600" },
+  active: { label: "ใช้งานอยู่", chipClass: "status-chip--success", icon: CheckCircleIcon },
+  repair: { label: "ซ่อมบำรุง", chipClass: "status-chip--warning", icon: WrenchIcon },
+  retired: { label: "ปลดระวาง", chipClass: "status-chip--neutral", icon: ArchiveBoxIcon },
 };
 
 const dashboardFilter = ref({
   building_name: "",
   month: "",
 });
+
+const chartTab = ref("usage"); // "usage" | "cost"
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString(undefined, {
@@ -252,7 +350,7 @@ function formatMoney(value) {
 
 async function loadDashboard() {
   loading.value = true;
-  error.value = null;
+  statsError.value = null;
 
   try {
     const params = {};
@@ -273,7 +371,7 @@ async function loadDashboard() {
     };
   } catch (err) {
     console.error("Dashboard error:", err);
-    error.value = "ไม่สามารถโหลดข้อมูล Dashboard ได้";
+    statsError.value = "ไม่สามารถโหลดข้อมูล KPI ได้";
   } finally {
     loading.value = false;
   }
@@ -285,6 +383,7 @@ async function loadDashboard() {
 
 async function loadHighlights() {
   highlightsLoading.value = true;
+  highlightsError.value = null;
 
   try {
     const params = {};
@@ -306,6 +405,7 @@ async function loadHighlights() {
     };
   } catch (err) {
     console.error("Highlights error:", err);
+    highlightsError.value = "ไม่สามารถโหลดข้อมูลสรุปได้";
   } finally {
     highlightsLoading.value = false;
   }
@@ -334,3 +434,39 @@ onMounted(() => {
   loadHighlights();
 });
 </script>
+
+<style scoped>
+/*
+  สีสถานะเครื่องพิมพ์ (ใช้งานอยู่/ซ่อมบำรุง/ปลดระวาง)
+  ใช้ CSS variable ของตัวเอง (--status-*) แทนการเรียก Tailwind bg-green-50/bg-yellow-50
+  ตรงๆ เพราะสเกลสี green/yellow ของ Tailwind ในโปรเจกต์นี้ยังไม่ได้ถูก remap ตามโหมด
+  มืด/สว่างเหมือน gray/red/blue (ดู style.css) — ถ้าใช้ bg-green-50 ตรงๆ การ์ดจะกลายเป็น
+  แผ่นพื้นเขียวอ่อนจ้าโผล่ขึ้นมาท่ามกลางการ์ดโทนมืดอื่นๆ ตอนเปิดโหมดมืด
+*/
+.status-chip--success {
+  background-color: var(--status-success-bg);
+}
+.status-chip--success .status-chip__value {
+  color: var(--status-success-text);
+}
+
+.status-chip--warning {
+  background-color: var(--status-warning-bg);
+}
+.status-chip--warning .status-chip__value {
+  color: var(--status-warning-text);
+}
+
+.status-chip--neutral {
+  /* เดิมใช้ --neutral-100 เหมือนพื้นหลังการ์ดทั่วไป ทำให้ "ปลดระวาง" กลืนหายไป
+     เปลี่ยนเป็น --neutral-200 (เข้มขึ้นหนึ่งขั้น) ให้ยังแยกออกจากพื้นหลังได้ */
+  background-color: var(--neutral-200);
+}
+.status-chip--neutral .status-chip__value {
+  color: var(--neutral-600);
+}
+
+.status-chip__value {
+  display: block;
+}
+</style>

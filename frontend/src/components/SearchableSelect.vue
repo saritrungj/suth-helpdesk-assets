@@ -8,7 +8,7 @@
       <span class="truncate" :class="{ 'text-gray-400': !selectedLabel }">
         {{ selectedLabel || placeholder }}
       </span>
-      <span class="text-gray-400 text-xs">{{ open ? "▲" : "▼" }}</span>
+      <ChevronIcon :open="open" class="text-gray-400" />
     </button>
 
     <div
@@ -56,6 +56,7 @@
 </template>
 
 <script setup>
+import ChevronIcon from "./ChevronIcon.vue";
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 
 const props = defineProps({

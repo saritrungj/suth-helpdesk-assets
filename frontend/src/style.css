@@ -47,6 +47,15 @@
   --danger-700: #f2b8ab;
   --danger-800: #f7cec4;
 
+  /* สถานะ (การ์ด "สถานะเครื่องพิมพ์" ในหน้า Dashboard) — พื้นเข้ม/ตัวหนังสือสว่าง
+     คนละชุดกับสเกล green-*/yellow-* ของ Tailwind เพราะสเกลนั้นยังใช้เป็นสีปุ่ม
+     (bg-green-600, bg-yellow-500 ฯลฯ) อยู่ในหลายหน้า ถ้าไปพลิกสเกลทั้งชุดจะทำให้
+     ปุ่มเหล่านั้นเพี้ยนไปด้วย จึงแยกตัวแปรเฉพาะสำหรับ "ป้ายสถานะ" ต่างหาก */
+  --status-success-bg: #12271a;
+  --status-success-text: #6ee7a0;
+  --status-warning-bg: #2a2410;
+  --status-warning-text: #fde68a;
+
   --body-bg: #17150f;
 }
 
@@ -72,6 +81,12 @@
   --danger-200: #fecaca;
   --danger-700: #b91c1c;
   --danger-800: #991b1b;
+
+  /* โหมดสว่าง — ให้หน้าตาเหมือนเดิม (bg-green-50/text-green-600, bg-yellow-50/text-yellow-600) */
+  --status-success-bg: #f0fdf4;
+  --status-success-text: #16a34a;
+  --status-warning-bg: #fefce8;
+  --status-warning-text: #ca8a04;
 
   --body-bg: #ffffff;
 }

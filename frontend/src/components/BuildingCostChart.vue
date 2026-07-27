@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 
 import { Bar } from "vue-chartjs";
 
@@ -17,6 +17,9 @@ import {
 
 
 import api from "../services/api";
+import { useChartTheme } from "../composables/useChartTheme";
+
+const { baseChartOptions } = useChartTheme();
 
 
 
@@ -67,104 +70,80 @@ const chartData = ref({
 
 
 
-const chartOptions = {
+const chartOptions = computed(() => {
+  const theme = baseChartOptions.value;
 
+  return {
 
-  responsive: true,
+    responsive: true,
 
+    maintainAspectRatio: false,
 
-  maintainAspectRatio: false,
+    plugins: {
 
+      legend: {
+        display: true,
+        labels: theme.plugins.legend.labels,
+      },
 
-  plugins: {
+      tooltip: {
 
+        ...theme.plugins.tooltip,
 
-    legend: {
+        callbacks: {
 
-      display: true
+          label(context) {
+
+            return (
+              "ค่าใช้จ่าย: " +
+              Number(context.raw)
+                .toLocaleString(
+                  undefined,
+                  {
+                    minimumFractionDigits: 2
+                  }
+                )
+              +
+              " บาท"
+            );
+
+          }
+
+        }
+
+      }
 
     },
 
+    scales: {
 
-    tooltip: {
+      x: theme.scales.x,
 
+      y: {
 
-      callbacks: {
+        ...theme.scales.y,
 
+        beginAtZero: true,
 
-        label(context) {
+        ticks: {
 
+          ...theme.scales.y.ticks,
 
-          return (
+          callback(value){
 
-            "ค่าใช้จ่าย: " +
+            return Number(value)
+            .toLocaleString();
 
-            Number(context.raw)
-
-              .toLocaleString(
-
-                undefined,
-
-                {
-
-                  minimumFractionDigits: 2
-
-                }
-
-              )
-
-            +
-
-            " บาท"
-
-          );
-
+          }
 
         }
 
-
       }
-
 
     }
 
-
-  },
-
-
-  scales: {
-
-
-    y: {
-
-
-      beginAtZero: true,
-
-
-      ticks: {
-
-
-        callback(value){
-
-
-          return Number(value)
-
-          .toLocaleString();
-
-
-        }
-
-
-      }
-
-
-    }
-
-
-  }
-
-
-};
+  };
+});
 
 
 

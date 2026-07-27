@@ -346,19 +346,44 @@ onMounted(async () => {
       </span>
     </template>
 
+    <template #empty="{ search: searchTerm }">
+      <div v-if="searchTerm">ไม่พบข้อมูลที่ตรงกับ "{{ searchTerm }}"</div>
+      <div v-else class="flex flex-col items-center gap-3">
+        <span>ยังไม่มีอุปกรณ์ในระบบ</span>
+        <RouterLink
+          v-if="isAdmin"
+          to="/admin/import-devices"
+          class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+        >
+          นำเข้าอุปกรณ์จากไฟล์ CSV/Excel
+        </RouterLink>
+      </div>
+    </template>
+
     <template v-if="isAdmin" #actions="{ row }">
       <button
         @click="editAsset(row.id)"
-        class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded mr-2"
+        title="แก้ไข"
+        class="bg-yellow-500 hover:bg-yellow-600 text-white p-1.5 rounded mr-2"
       >
-        แก้ไข
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+          <path d="M15 5l4 4" />
+        </svg>
       </button>
 
       <button
         @click="deleteAsset(row.id)"
-        class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+        title="ลบ"
+        class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded"
       >
-        ลบ
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+        </svg>
       </button>
     </template>
   </DataTable>

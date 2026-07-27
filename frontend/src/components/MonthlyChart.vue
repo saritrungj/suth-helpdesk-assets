@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { Bar } from "vue-chartjs";
 
 import {
@@ -14,6 +14,9 @@ import {
 } from "chart.js";
 
 import api from "../services/api";
+import { useChartTheme } from "../composables/useChartTheme";
+
+const { baseChartOptions } = useChartTheme();
 
 
 
@@ -77,73 +80,51 @@ const chartData = ref({
 
 
 
-const chartOptions = {
+const chartOptions = computed(() => {
+  const theme = baseChartOptions.value;
 
-  responsive:true,
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
 
-  maintainAspectRatio:false,
+    plugins: {
+      legend: {
+        display: true,
+        labels: theme.plugins.legend.labels,
+      },
 
-
-  plugins:{
-
-
-    legend:{
-      display:true
+      tooltip: {
+        ...theme.plugins.tooltip,
+        callbacks: {
+          label(context) {
+            return (
+              "จำนวนหน้า: " +
+              Number(context.raw)
+              .toLocaleString()
+              +
+              " หน้า"
+            );
+          }
+        }
+      }
     },
 
-
-    tooltip:{
-
-
-      callbacks:{
-
-
-        label(context){
-
-          return (
-            "จำนวนหน้า: " +
-            Number(context.raw)
-            .toLocaleString()
-            +
-            " หน้า"
-          );
-
+    scales: {
+      x: theme.scales.x,
+      y: {
+        ...theme.scales.y,
+        beginAtZero: true,
+        ticks: {
+          ...theme.scales.y.ticks,
+          callback(value) {
+            return Number(value)
+            .toLocaleString();
+          }
         }
-
       }
-
     }
-
-  },
-
-
-
-  scales:{
-
-
-    y:{
-
-
-      beginAtZero:true,
-
-
-      ticks:{
-
-
-        callback(value){
-
-          return Number(value)
-          .toLocaleString();
-
-        }
-
-      }
-
-    }
-
-  }
-
-};
+  };
+});
 
 
 

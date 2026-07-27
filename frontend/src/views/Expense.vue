@@ -2,6 +2,7 @@
 import { ref, onMounted, watch, computed } from "vue";
 import api from "../services/api";
 import { fiscalYearState } from "../store/fiscalYear";
+import ChevronIcon from "../components/ChevronIcon.vue";
 
 const loading = ref(false);
 const error = ref(null);
@@ -127,7 +128,7 @@ onMounted(() => {
     <!-- สรุปยอดรวม — ตัว selector ปีงบย้ายไปอยู่ที่ Navbar แล้ว (global state) -->
     <div
       v-if="!loading && contracts.length"
-      class="bg-gray-505050 shadow rounded-lg p-4 mb-6 flex items-center justify-end"
+      class="bg-gray-50 shadow rounded-lg p-4 mb-6 flex items-center justify-end"
     >
       <div class="text-right">
         <div class="text-sm text-gray-500">รวมค่าใช้จ่ายทั้งปีงบ</div>
@@ -151,7 +152,7 @@ onMounted(() => {
       <div
         v-for="contract in contracts"
         :key="contract.id"
-        class="bg-gray-5050 shadow rounded-lg overflow-hidden"
+        class="bg-gray-50 shadow rounded-lg overflow-hidden"
       >
         <!-- ระดับ 1: สัญญา -->
         <button
@@ -170,7 +171,7 @@ onMounted(() => {
             <span class="font-bold text-blue-700">
               {{ formatMoney(contract.total_cost) }} บาท
             </span>
-            <span>{{ openContracts.has(contract.id) ? "▲" : "▼" }}</span>
+            <ChevronIcon :open="openContracts.has(contract.id)" />
           </div>
         </button>
 
@@ -197,7 +198,7 @@ onMounted(() => {
                 <span class="font-semibold text-gray-700">
                   {{ formatMoney(device.total_cost) }} บาท
                 </span>
-                <span>{{ openDevices.has(device.id) ? "▲" : "▼" }}</span>
+                <ChevronIcon :open="openDevices.has(device.id)" />
               </div>
             </button>
 
@@ -248,7 +249,7 @@ onMounted(() => {
           <span class="font-bold text-yellow-800">
             {{ formatMoney(unassignedDevices.reduce((s, d) => s + Number(d.total_cost || 0), 0)) }} บาท
           </span>
-          <span>{{ showUnassigned ? "▲" : "▼" }}</span>
+          <ChevronIcon :open="showUnassigned" />
         </div>
       </button>
 

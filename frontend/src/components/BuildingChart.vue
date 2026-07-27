@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { Bar } from "vue-chartjs";
 
 import {
@@ -13,6 +13,9 @@ import {
 } from "chart.js";
 
 import api from "../services/api";
+import { useChartTheme } from "../composables/useChartTheme";
+
+const { baseChartOptions } = useChartTheme();
 
 
 // รับ Filter จาก Dashboard
@@ -52,41 +55,50 @@ const chartData = ref({
   ],
 });
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
+const chartOptions = computed(() => {
+  const theme = baseChartOptions.value;
 
-  plugins: {
-    legend: {
-      display: true,
-    },
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
 
-    tooltip: {
-      callbacks: {
-        label(context) {
-          return (
-            context.dataset.label +
-            ": " +
-            context.raw.toLocaleString() +
-            " หน้า"
-          );
+    plugins: {
+      legend: {
+        display: true,
+        labels: theme.plugins.legend.labels,
+      },
+
+      tooltip: {
+        ...theme.plugins.tooltip,
+        callbacks: {
+          label(context) {
+            return (
+              context.dataset.label +
+              ": " +
+              context.raw.toLocaleString() +
+              " หน้า"
+            );
+          },
         },
       },
     },
-  },
 
-  scales: {
-    y: {
-      beginAtZero: true,
+    scales: {
+      x: theme.scales.x,
+      y: {
+        ...theme.scales.y,
+        beginAtZero: true,
 
-      ticks: {
-        callback(value) {
-          return value.toLocaleString();
+        ticks: {
+          ...theme.scales.y.ticks,
+          callback(value) {
+            return value.toLocaleString();
+          },
         },
       },
     },
-  },
-};
+  };
+});
 
 // Load Data
 async function loadBuilding() {

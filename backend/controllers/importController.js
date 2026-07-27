@@ -53,6 +53,7 @@ exports.importDevices = async (req, res) => {
 
 
         const insertData = [];
+        const skipped = []; // แถวที่ import ไม่ได้ พร้อมเหตุผล ให้ frontend แสดงให้ผู้ใช้แก้ไขได้
 
 
         for (const row of rows) {
@@ -112,6 +113,17 @@ exports.importDevices = async (req, res) => {
 
                 console.log("SKIP:", row);
 
+                const reasons = [];
+                if (!brand_id) reasons.push(`ไม่พบยี่ห้อ "${brand || "(ว่าง)"}" ในระบบ`);
+                if (!building_id) reasons.push(`ไม่พบอาคาร "${building || "(ว่าง)"}" ในระบบ`);
+
+                skipped.push({
+                    serial_number: serial_number || "(ไม่มีเลขซีเรียล)",
+                    brand,
+                    building,
+                    reason: reasons.join(", "),
+                });
+
                 continue;
             }
 
@@ -167,7 +179,9 @@ exports.importDevices = async (req, res) => {
 
             total_rows: rows.length,
 
-            inserted: insertData.length
+            inserted: insertData.length,
+
+            skipped
 
         });
 

@@ -13,6 +13,9 @@ import {
 } from "chart.js";
 import api from "../services/api";
 import MonthPicker from "../components/MonthPicker.vue";
+import { useChartTheme } from "../composables/useChartTheme";
+
+const { baseChartOptions } = useChartTheme();
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
@@ -175,21 +178,31 @@ function chartDataFor(metric) {
   };
 }
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-  scales: {
-    y: {
-      beginAtZero: true,
-      ticks: {
-        callback(value) {
-          return Number(value).toLocaleString();
+const chartOptions = computed(() => {
+  const theme = baseChartOptions.value;
+
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: theme.plugins.tooltip,
+    },
+    scales: {
+      x: theme.scales.x,
+      y: {
+        ...theme.scales.y,
+        beginAtZero: true,
+        ticks: {
+          ...theme.scales.y.ticks,
+          callback(value) {
+            return Number(value).toLocaleString();
+          },
         },
       },
     },
-  },
-};
+  };
+});
 
 // บทสรุปอัตโนมัติ: เทียบเดือนแรกกับเดือนสุดท้ายที่เลือก (ถ้าเลือกมากกว่า 2 เดือน จะสรุปภาพรวมทั้งช่วง)
 const summaryFirst = computed(() => monthStats.value[0] || null);
@@ -292,10 +305,22 @@ onMounted(loadData);
                   </div>
                   <div
                     v-if="deltaVsPrevious(m.key, i) !== null"
-                    class="text-xs font-medium"
+                    class="flex items-center gap-0.5 text-xs font-medium"
                     :class="deltaVsPrevious(m.key, i) >= 0 ? 'text-red-600' : 'text-green-600'"
                   >
-                    {{ deltaVsPrevious(m.key, i) >= 0 ? "▲" : "▼" }}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="w-3 h-3 shrink-0"
+                    >
+                      <path v-if="deltaVsPrevious(m.key, i) >= 0" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                      <path v-else d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
                     {{ Math.abs(deltaVsPrevious(m.key, i)).toFixed(1) }}%
                   </div>
                 </td>

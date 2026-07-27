@@ -9,7 +9,7 @@
         <template v-if="!modelValue.length">-- เลือกเดือน --</template>
         <template v-else>{{ summaryLabel }}</template>
       </span>
-      <span class="text-gray-400 text-xs">{{ open ? "▲" : "▼" }}</span>
+      <ChevronIcon :open="open" class="text-gray-400" />
     </button>
 
     <!-- Dropdown รายชื่อเดือนไทย (ม.ค.–ธ.ค.) ของปีงบที่ active อยู่ตอนนี้ (เลือกปีจาก Navbar เท่านั้น ที่นี่เลือกได้แค่เดือน) -->
@@ -61,6 +61,7 @@
 </template>
 
 <script setup>
+import ChevronIcon from "./ChevronIcon.vue";
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { activeGregorianYear } from "../store/fiscalYear";
 

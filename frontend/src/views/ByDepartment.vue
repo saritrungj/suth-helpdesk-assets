@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, watch } from "vue";
+import ChevronIcon from "../components/ChevronIcon.vue";
 import { Line } from "vue-chartjs";
 import {
   Chart as ChartJS,
@@ -14,6 +15,9 @@ import {
 import api from "../services/api";
 import DepartmentPicker from "../components/DepartmentPicker.vue";
 import MonthPicker from "../components/MonthPicker.vue";
+import { useChartTheme } from "../composables/useChartTheme";
+
+const { baseChartOptions } = useChartTheme();
 
 ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale);
 
@@ -374,34 +378,46 @@ const lineChartData = computed(() => {
   return { labels, datasets };
 });
 
-const lineChartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: { mode: "index", intersect: false },
-  plugins: {
-    legend: { display: true, position: "bottom" },
-    tooltip: {
-      callbacks: {
-        label(ctx) {
-          const v = ctx.raw;
-          const unit = chartMetric.value === "cost" ? "บาท" : "หน้า";
-          if (v === null || v === undefined) return `${ctx.dataset.label}: ไม่มีข้อมูล`;
-          return `${ctx.dataset.label}: ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`;
+const lineChartOptions = computed(() => {
+  const theme = baseChartOptions.value;
+
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: {
+        display: true,
+        position: "bottom",
+        labels: theme.plugins.legend.labels,
+      },
+      tooltip: {
+        ...theme.plugins.tooltip,
+        callbacks: {
+          label(ctx) {
+            const v = ctx.raw;
+            const unit = chartMetric.value === "cost" ? "บาท" : "หน้า";
+            if (v === null || v === undefined) return `${ctx.dataset.label}: ไม่มีข้อมูล`;
+            return `${ctx.dataset.label}: ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`;
+          },
         },
       },
     },
-  },
-  scales: {
-    y: {
-      beginAtZero: false,
-      ticks: {
-        callback(value) {
-          return Number(value).toLocaleString();
+    scales: {
+      x: theme.scales.x,
+      y: {
+        ...theme.scales.y,
+        beginAtZero: false,
+        ticks: {
+          ...theme.scales.y.ticks,
+          callback(value) {
+            return Number(value).toLocaleString();
+          },
         },
       },
     },
-  },
-}));
+  };
+});
 
 onMounted(async () => {
   await loadMonths();
@@ -553,7 +569,7 @@ onMounted(async () => {
             </div>
             <div class="flex items-center gap-4">
               <span class="font-bold text-blue-700">{{ formatMoney(division.total_cost) }} บาท</span>
-              <span>{{ openDivisions.has(division.id) ? "▲" : "▼" }}</span>
+              <ChevronIcon :open="openDivisions.has(division.id)" />
             </div>
           </button>
 
@@ -606,7 +622,7 @@ onMounted(async () => {
                 </div>
                 <div class="flex items-center gap-4">
                   <span class="font-semibold text-gray-700">{{ formatMoney(department.total_cost) }} บาท</span>
-                  <span>{{ openDepartments.has(department.id) ? "▲" : "▼" }}</span>
+                  <ChevronIcon :open="openDepartments.has(department.id)" />
                 </div>
               </button>
 
@@ -628,7 +644,7 @@ onMounted(async () => {
                     </div>
                     <div class="flex items-center gap-4">
                       <span class="text-sm text-gray-700">{{ formatMoney(device.total_cost) }} บาท</span>
-                      <span>{{ openDevices.has(device.id) ? "▲" : "▼" }}</span>
+                      <ChevronIcon :open="openDevices.has(device.id)" />
                     </div>
                   </button>
 
@@ -668,7 +684,7 @@ onMounted(async () => {
             เครื่องที่ยังไม่ได้ผูกฝ่าย/แผนก ({{ unassignedDevices.length }} เครื่อง)
           </span>
         </div>
-        <span>{{ showUnassigned ? "▲" : "▼" }}</span>
+        <ChevronIcon :open="showUnassigned" />
       </button>
 
       <div v-if="showUnassigned" class="border-t divide-y bg-gray-50">

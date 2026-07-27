@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import api from "../services/api";
 import { activeGregorianYear } from "../store/fiscalYear";
 import SearchableSelect from "../components/SearchableSelect.vue";
+import DataTable from "../components/DataTable.vue";
 
 const loading = ref(false);
 const message = ref(null);
@@ -331,6 +332,19 @@ async function saveModal() {
   }
 }
 
+// -------------------------------------------------------
+// คอลัมน์ของ DataTable (เหมือนหน้าทรัพย์สิน)
+// -------------------------------------------------------
+const columns = computed(() => [
+  { key: "serial_number", label: "SN" },
+  { key: "brand_name", label: "ยี่ห้อ / รุ่น", value: (d) => `${d.brand_name || "-"} ${d.model || ""}` },
+  { key: "building_name", label: "อาคาร / ชั้น", value: (d) => `${d.building_name || "-"} ${d.floor_name || ""}` },
+  { key: "division_name", label: "ฝ่าย / แผนก", value: (d) => `${d.division_name || "-"} ${d.department_name || ""}` },
+  { key: "status", label: "สถานะเครื่อง", align: "center", value: (d) => statusLabel(d.status), csv: (d) => statusLabel(d.status) },
+  { key: "total_pages", label: "ยอดรวมปีนี้ (หน้า)", align: "right", value: (d) => totalPages(d.id), csv: (d) => totalPages(d.id) },
+  { key: "fill_status", label: "สถานะการกรอก", align: "center", value: (d) => `${filledCount(d.id)}/12 เดือน`, csv: (d) => `${filledCount(d.id)}/12` },
+]);
+
 onMounted(init);
 </script>
 
@@ -451,79 +465,71 @@ onMounted(init);
       </div>
 
       <div class="text-sm text-gray-500 mb-3">
-        ทั้งหมด {{ filteredDevices.length }} เครื่อง (จากทั้งหมด {{ devices.length }}) — ปีงบ {{ year ? year + 543 : "-" }}
+        ปีงบ {{ year ? year + 543 : "-" }}
       </div>
 
       <div v-if="loading" class="text-center text-gray-500 py-10">กำลังโหลดข้อมูล...</div>
 
-      <div v-else-if="!filteredDevices.length" class="text-center text-gray-400 py-10">
-        ไม่พบเครื่องที่ตรงกับเงื่อนไขค้นหา
-      </div>
+      <!-- ตาราง -> DataTable (มี sort/ค้นหาทั่วไป/pagination/export CSV/sticky header ในตัว เหมือนหน้าทรัพย์สิน) -->
+      <DataTable
+        v-else
+        :rows="filteredDevices"
+        :columns="columns"
+        row-key="id"
+        export-filename="print-transactions"
+        search-placeholder="ค้นหาทุกคอลัมน์..."
+        empty-text="ไม่พบเครื่องที่ตรงกับเงื่อนไขค้นหา"
+        max-height="65vh"
+      >
+        <template #cell-brand_name="{ row }">
+          <div>{{ row.brand_name || "-" }}</div>
+          <div class="text-gray-500">{{ row.model || "-" }}</div>
+        </template>
 
-      <!-- ตารางเครื่อง — เพิ่มข้อมูลอาคาร/ชั้น/ฝ่าย/สถานะเครื่อง/ยอดรวมปีนี้ ให้ดูภาพรวมได้จากตารางเดียว -->
-      <div v-else class="overflow-x-auto">
-        <table class="w-full border text-sm min-w-max">
-          <thead>
-            <tr class="bg-gray-100 text-left whitespace-nowrap">
-              <th class="border p-2">SN</th>
-              <th class="border p-2">ยี่ห้อ / รุ่น</th>
-              <th class="border p-2">อาคาร / ชั้น</th>
-              <th class="border p-2">ฝ่าย / แผนก</th>
-              <th class="border p-2 text-center">สถานะเครื่อง</th>
-              <th class="border p-2 text-right">ยอดรวมปีนี้ (หน้า)</th>
-              <th class="border p-2 text-center">สถานะการกรอก</th>
-              <th class="border p-2 text-center">จัดการ</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="d in filteredDevices" :key="d.id">
-              <td class="border p-2 whitespace-nowrap">{{ d.serial_number }}</td>
-              <td class="border p-2 whitespace-nowrap">
-                <div>{{ d.brand_name || "-" }}</div>
-                <div class="text-gray-500">{{ d.model || "-" }}</div>
-              </td>
-              <td class="border p-2 whitespace-nowrap">
-                <div>{{ d.building_name || "-" }}</div>
-                <div class="text-gray-500">{{ d.floor_name || "-" }}</div>
-              </td>
-              <td class="border p-2 whitespace-nowrap">
-                <div>{{ d.division_name || "-" }}</div>
-                <div class="text-gray-500">{{ d.department_name || "-" }}</div>
-              </td>
-              <td class="border p-2 text-center whitespace-nowrap">
-                <span class="px-2 py-1 rounded text-xs font-medium" :class="statusClass(d.status)">
-                  {{ statusLabel(d.status) }}
-                </span>
-              </td>
-              <td class="border p-2 text-right whitespace-nowrap">
-                {{ totalPages(d.id).toLocaleString() }}
-              </td>
-              <td class="border p-2 text-center whitespace-nowrap">
-                <span
-                  class="px-2 py-1 rounded text-xs font-medium"
-                  :class="
-                    filledCount(d.id) === 12
-                      ? 'bg-green-100 text-green-700'
-                      : filledCount(d.id) > 0
-                      ? 'bg-orange-100 text-orange-700'
-                      : 'bg-gray-100 text-gray-500'
-                  "
-                >
-                  {{ filledCount(d.id) }}/12 เดือน
-                </span>
-              </td>
-              <td class="border p-2 text-center whitespace-nowrap">
-                <button
-                  @click="openModal(d)"
-                  class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                >
-                  กรอกข้อมูล
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <template #cell-building_name="{ row }">
+          <div>{{ row.building_name || "-" }}</div>
+          <div class="text-gray-500">{{ row.floor_name || "-" }}</div>
+        </template>
+
+        <template #cell-division_name="{ row }">
+          <div>{{ row.division_name || "-" }}</div>
+          <div class="text-gray-500">{{ row.department_name || "-" }}</div>
+        </template>
+
+        <template #cell-total_pages="{ row }">
+          {{ totalPages(row.id).toLocaleString() }}
+        </template>
+
+        <template #cell-status="{ row }">
+          <span class="px-2 py-1 rounded text-xs font-medium" :class="statusClass(row.status)">
+            {{ statusLabel(row.status) }}
+          </span>
+        </template>
+
+        <template #cell-fill_status="{ row }">
+          <span
+            class="px-2 py-1 rounded text-xs font-medium"
+            :class="
+              filledCount(row.id) === 12
+                ? 'bg-green-100 text-green-700'
+                : filledCount(row.id) > 0
+                ? 'bg-orange-100 text-orange-700'
+                : 'bg-gray-100 text-gray-500'
+            "
+          >
+            {{ filledCount(row.id) }}/12 เดือน
+          </span>
+        </template>
+
+        <template #actions="{ row }">
+          <button
+            @click="openModal(row)"
+            class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+          >
+            กรอกข้อมูล
+          </button>
+        </template>
+      </DataTable>
     </div>
 
     <!-- Modal: กรอก 12 เดือน (Jan–Dec) ของเครื่องเดียว -->

@@ -1,6 +1,18 @@
 <template>
   <header class="sticky top-0 z-20 bg-gray-50/95 backdrop-blur border-b border-gray-200 px-6 py-3.5 flex flex-wrap justify-between items-center gap-3">
     <div class="flex items-center gap-3 min-w-0">
+      <!-- ปุ่มเปิดเมนู — เฉพาะจอมือถือ/แท็บเล็ต (< md) sidebar ปกติซ่อนอยู่นอกจอ -->
+      <button
+        type="button"
+        class="md:hidden shrink-0 p-2 -ml-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+        @click="openMobileSidebar"
+        aria-label="เปิดเมนู"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+          <path d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+        </svg>
+      </button>
+
       <span class="hidden sm:flex w-9 h-9 rounded-xl bg-blue-600 text-white items-center justify-center font-bold text-sm shrink-0">
         IT
       </span>
@@ -56,6 +68,7 @@ import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { authState, clearAuth } from "../store/auth";
 import { fiscalYearState, loadFiscalYears, setActiveFiscalYear } from "../store/fiscalYear";
+import { openMobileSidebar } from "../store/ui";
 import ThemeSwitcher from "./ThemeSwitcher.vue";
 
 const router = useRouter();

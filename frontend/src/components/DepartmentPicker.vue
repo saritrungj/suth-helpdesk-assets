@@ -9,7 +9,7 @@
         <template v-if="!modelValue.length">-- เลือกฝ่าย/แผนก --</template>
         <template v-else>{{ summaryLabel }}</template>
       </span>
-      <span class="text-gray-400 text-xs">{{ open ? "▲" : "▼" }}</span>
+      <ChevronIcon :open="open" class="text-gray-400" />
     </button>
 
     <div
@@ -60,6 +60,7 @@
 </template>
 
 <script setup>
+import ChevronIcon from "./ChevronIcon.vue";
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 
 const props = defineProps({

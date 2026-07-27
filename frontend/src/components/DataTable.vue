@@ -17,6 +17,7 @@
  * columns: [{ key, label, align: 'left'|'right'|'center', sortable: true, csv: (row) => value }]
  */
 import { ref, computed, watch } from "vue";
+import SortIcon from "./SortIcon.vue";
 
 const props = defineProps({
   rows: { type: Array, default: () => [] },
@@ -116,10 +117,19 @@ watch(totalPages, (tp) => {
   if (currentPage.value > tp) currentPage.value = tp;
 });
 
-function sortIcon(col) {
-  if (col.sortable === false) return "";
-  if (sortKey.value !== col.key) return "↕";
-  return sortDir.value === "asc" ? "▲" : "▼";
+function sortState(col) {
+  if (col.sortable === false) return "none";
+  if (sortKey.value !== col.key) return "none";
+  return sortDir.value === "asc" ? "asc" : "desc";
+}
+
+// ข้อความอธิบายว่าคลิกแล้วจะเกิดอะไรขึ้นต่อไป (น้อย -> มาก / มาก -> น้อย / เลิกเรียง)
+// เพื่อไม่ให้ผู้ใช้งงว่าทำไมคลิกรอบที่ 3 แล้วลำดับกลับไปเหมือนเดิม
+function sortTooltip(col) {
+  const state = sortState(col);
+  if (state === "none") return `เรียงตาม "${col.label}" (น้อย → มาก)`;
+  if (state === "asc") return `เรียงตาม "${col.label}" (มาก → น้อย)`;
+  return "เลิกเรียงลำดับ";
 }
 
 // -------------------------------------------------------
@@ -208,11 +218,12 @@ function exportCsv() {
                 col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
                 col.sortable !== false ? 'cursor-pointer hover:bg-gray-200' : '',
               ]"
+              :title="col.sortable !== false ? sortTooltip(col) : undefined"
               @click="toggleSort(col)"
             >
               <span class="inline-flex items-center gap-1">
                 {{ col.label }}
-                <span v-if="col.sortable !== false" class="text-[10px] text-gray-400">{{ sortIcon(col) }}</span>
+                <SortIcon v-if="col.sortable !== false" :state="sortState(col)" />
               </span>
             </th>
             <th v-if="$slots.actions" class="border-b p-2 text-center whitespace-nowrap">จัดการ</th>
@@ -221,8 +232,11 @@ function exportCsv() {
 
         <tbody>
           <tr v-if="!paginatedRows.length">
-            <td :colspan="columns.length + ($slots.actions ? 1 : 0)" class="p-6 text-center text-gray-400">
-              {{ emptyText }}
+            <td :colspan="columns.length + ($slots.actions ? 1 : 0)" class="p-10 text-center text-gray-400">
+              <!-- parent สามารถใส่ #empty เพื่อแสดงปุ่มชวนทำต่อ (เช่น "นำเข้าอุปกรณ์") แทนข้อความเฉยๆ -->
+              <slot name="empty" :search="search">
+                <span>{{ search ? `ไม่พบข้อมูลที่ตรงกับ "${search}"` : emptyText }}</span>
+              </slot>
             </td>
           </tr>
 
