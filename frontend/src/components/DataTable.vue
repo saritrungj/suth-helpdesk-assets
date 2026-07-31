@@ -177,12 +177,12 @@ function exportCsv() {
         v-model="search"
         type="text"
         :placeholder="searchPlaceholder"
-        class="border rounded px-3 py-2 flex-1 min-w-[200px]"
+        class="border rounded px-3 py-2 flex-1 min-w-[200px] bg-gray-50"
       />
 
       <slot name="toolbar-extra" />
 
-      <select v-model="pageSize" class="border rounded px-2 py-2 text-sm">
+      <select v-model="pageSize" class="border rounded px-2 py-2 text-sm bg-gray-50">
         <option v-for="n in pageSizeOptions" :key="n" :value="n">{{ n }} รายการ/หน้า</option>
       </select>
 

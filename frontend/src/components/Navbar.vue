@@ -44,7 +44,7 @@
       <ThemeSwitcher />
 
       <div class="hidden sm:flex items-center gap-2 pl-3 border-l border-gray-200">
-        <span class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-semibold shrink-0">
+        <span class="w-8 h-8 rounded-full bg-blue-100 text-[var(--brand-text)] flex items-center justify-center text-sm font-semibold shrink-0">
           {{ (authState.user?.username || "?").charAt(0).toUpperCase() }}
         </span>
         <div class="leading-tight">
@@ -55,7 +55,7 @@
 
       <button
         @click="logout"
-        class="text-sm text-red-400 border border-red-900/60 px-3.5 py-1.5 rounded-lg hover:bg-red-950/50 transition-colors"
+        class="text-sm text-red-700 border border-red-200 px-3.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
       >
         Logout
       </button>

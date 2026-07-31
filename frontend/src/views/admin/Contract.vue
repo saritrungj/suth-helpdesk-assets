@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from "vue"
 import api from "../../services/api"
 import DataTable from "../../components/DataTable.vue"
+import { toastError } from "../../store/toast"
+import { askConfirm } from "../../store/confirmDialog"
 
 const contracts = ref([])
 const fiscalYears = ref([])
@@ -46,7 +48,7 @@ async function load() {
     fiscalYears.value = fiscalRes.data
   } catch (err) {
     console.error(err)
-    alert("โหลดข้อมูลไม่สำเร็จ")
+    toastError("โหลดข้อมูลไม่สำเร็จ")
   }
 }
 
@@ -64,7 +66,7 @@ async function addContract() {
     load()
   } catch (err) {
     console.error(err)
-    alert(err.response?.data?.error || "เพิ่มข้อมูลไม่สำเร็จ")
+    toastError(err.response?.data?.error || "เพิ่มข้อมูลไม่สำเร็จ")
   }
 }
 
@@ -86,7 +88,7 @@ async function saveContract(id) {
     load()
   } catch (err) {
     console.error(err)
-    alert(err.response?.data?.error || "แก้ไขข้อมูลไม่สำเร็จ")
+    toastError(err.response?.data?.error || "แก้ไขข้อมูลไม่สำเร็จ")
   }
 }
 
@@ -97,14 +99,14 @@ function cancelEdit() {
 
 // Delete
 async function deleteContract(id) {
-  if (!confirm("ต้องการลบสัญญานี้ใช่หรือไม่?")) return
+  if (!(await askConfirm("ต้องการลบสัญญานี้ใช่หรือไม่?"))) return
 
   try {
     await api.delete(`/contracts/${id}`)
     load()
   } catch (err) {
     console.error(err)
-    alert("ลบข้อมูลไม่สำเร็จ")
+    toastError("ลบข้อมูลไม่สำเร็จ")
   }
 }
 
@@ -122,12 +124,12 @@ onMounted(load)
     <input
       v-model="form.contract_no"
       placeholder="เลขที่สัญญา"
-      class="border rounded px-3 py-2"
+      class="border rounded px-3 py-2 bg-gray-50"
     />
 
     <select
       v-model="form.fiscal_year_id"
-      class="border rounded px-3 py-2"
+      class="border rounded px-3 py-2 bg-gray-50"
     >
       <option value="">เลือกปีงบประมาณ</option>
       <option
@@ -144,7 +146,7 @@ onMounted(load)
       placeholder="ราคาต่อแผ่น"
       type="number"
       step="0.01"
-      class="border rounded px-3 py-2"
+      class="border rounded px-3 py-2 bg-gray-50"
     />
 
     <button
@@ -169,7 +171,7 @@ onMounted(load)
       <input
         v-if="editingId === row.id"
         v-model="editForm.contract_no"
-        class="border px-2 rounded"
+        class="border px-2 rounded bg-gray-50"
       />
       <span v-else>{{ row.contract_no }}</span>
     </template>
@@ -178,7 +180,7 @@ onMounted(load)
       <select
         v-if="editingId === row.id"
         v-model="editForm.fiscal_year_id"
-        class="border px-2 rounded"
+        class="border px-2 rounded bg-gray-50"
       >
         <option value="">เลือกปีงบประมาณ</option>
         <option
@@ -198,7 +200,7 @@ onMounted(load)
         v-model="editForm.price_per_page"
         type="number"
         step="0.01"
-        class="border px-2 rounded w-28 text-right"
+        class="border px-2 rounded w-28 text-right bg-gray-50"
       />
       <span v-else>{{ row.price_per_page }}</span>
     </template>

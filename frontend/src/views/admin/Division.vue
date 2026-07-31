@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from "vue"
 import api from "../../services/api"
 import DataTable from "../../components/DataTable.vue"
+import { toastError } from "../../store/toast"
+import { askConfirm } from "../../store/confirmDialog"
 
 const divisions = ref([])
 const loading = ref(false)
@@ -69,7 +71,7 @@ async function load() {
     divisions.value = res.data
   } catch (err) {
     console.error(err)
-    alert("โหลดข้อมูลไม่สำเร็จ")
+    toastError("โหลดข้อมูลไม่สำเร็จ")
   } finally {
     loading.value = false
   }
@@ -82,7 +84,7 @@ function editDivision(item) {
 
 async function saveDivision(id) {
   if (!editName.value.trim()) {
-    alert("กรุณากรอกชื่อฝ่าย")
+    toastError("กรุณากรอกชื่อฝ่าย")
     return
   }
 
@@ -93,19 +95,19 @@ async function saveDivision(id) {
     load()
   } catch (err) {
     console.error(err)
-    alert("แก้ไขข้อมูลไม่สำเร็จ")
+    toastError("แก้ไขข้อมูลไม่สำเร็จ")
   }
 }
 
 async function deleteDivision(id) {
-  if (!confirm("ต้องการลบฝ่ายนี้ใช่หรือไม่?")) return
+  if (!(await askConfirm("ต้องการลบฝ่ายนี้ใช่หรือไม่?"))) return
 
   try {
     await api.delete(`/divisions/${id}`)
     load()
   } catch (err) {
     console.error(err)
-    alert("ลบข้อมูลไม่สำเร็จ")
+    toastError("ลบข้อมูลไม่สำเร็จ")
   }
 }
 
@@ -139,7 +141,7 @@ onMounted(load)
     >
       <template #cell-name="{ row, value }">
         <span v-if="editingId !== row.id">{{ value }}</span>
-        <input v-else v-model="editName" class="border rounded px-2 py-1 w-full" />
+        <input v-else v-model="editName" class="border rounded px-2 py-1 w-full bg-gray-50" />
       </template>
 
       <template #actions="{ row }">
@@ -183,7 +185,7 @@ onMounted(load)
             @keyup.enter="submitAdd"
             type="text"
             placeholder="เช่น ฝ่ายการพยาบาล"
-            class="border rounded px-3 py-2 w-full"
+            class="border rounded px-3 py-2 w-full bg-gray-50"
             autofocus
           />
           <div v-if="formError" class="mt-3 bg-red-100 text-red-700 p-2 rounded text-sm">{{ formError }}</div>

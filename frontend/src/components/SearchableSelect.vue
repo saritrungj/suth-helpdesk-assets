@@ -20,7 +20,7 @@
         v-model="search"
         type="text"
         :placeholder="searchPlaceholder"
-        class="border rounded px-2 py-1 w-full text-sm mb-2"
+        class="border rounded px-2 py-1 w-full text-sm mb-2 bg-gray-50"
         @click.stop
       />
 

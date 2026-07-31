@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from "vue"
 import api from "../../services/api"
 import DataTable from "../../components/DataTable.vue"
+import { toastError } from "../../store/toast"
+import { askConfirm } from "../../store/confirmDialog"
 
 const departments = ref([])
 const divisions = ref([])
@@ -45,7 +47,7 @@ async function load() {
   } catch (err) {
 
     console.error(err)
-    alert("โหลดข้อมูลไม่สำเร็จ")
+    toastError("โหลดข้อมูลไม่สำเร็จ")
 
   }
 }
@@ -54,7 +56,7 @@ async function load() {
 async function addDepartment() {
 
   if (!form.value.division_id || !form.value.name.trim()) {
-    alert("กรุณากรอกข้อมูลให้ครบ")
+    toastError("กรุณากรอกข้อมูลให้ครบ")
     return
   }
 
@@ -72,7 +74,7 @@ async function addDepartment() {
   } catch (err) {
 
     console.error(err)
-    alert("เพิ่มข้อมูลไม่สำเร็จ")
+    toastError("เพิ่มข้อมูลไม่สำเร็จ")
 
   }
 
@@ -94,7 +96,7 @@ function editDepartment(item) {
 async function saveDepartment(id) {
 
   if (!editForm.value.division_id || !editForm.value.name.trim()) {
-    alert("กรุณากรอกข้อมูลให้ครบ")
+    toastError("กรุณากรอกข้อมูลให้ครบ")
     return
   }
 
@@ -109,7 +111,7 @@ async function saveDepartment(id) {
   } catch (err) {
 
     console.error(err)
-    alert("แก้ไขข้อมูลไม่สำเร็จ")
+    toastError("แก้ไขข้อมูลไม่สำเร็จ")
 
   }
 
@@ -118,7 +120,7 @@ async function saveDepartment(id) {
 // ลบ
 async function deleteDepartment(id) {
 
-  if (!confirm("ต้องการลบแผนกนี้ใช่หรือไม่?")) return
+  if (!(await askConfirm("ต้องการลบแผนกนี้ใช่หรือไม่?"))) return
 
   try {
 
@@ -129,7 +131,7 @@ async function deleteDepartment(id) {
   } catch (err) {
 
     console.error(err)
-    alert("ลบข้อมูลไม่สำเร็จ")
+    toastError("ลบข้อมูลไม่สำเร็จ")
 
   }
 
@@ -150,7 +152,7 @@ Department Management
 
 <select
 v-model="form.division_id"
-class="border rounded px-3 py-2">
+class="border rounded px-3 py-2 bg-gray-50">
 
 <option value="">
 เลือกฝ่าย
@@ -170,7 +172,7 @@ v-for="d in divisions"
 <input
 v-model="form.name"
 placeholder="Department Name"
-class="border rounded px-3 py-2"
+class="border rounded px-3 py-2 bg-gray-50"
 />
 
 <button
@@ -192,14 +194,14 @@ Add
 >
   <template #cell-division_id="{ row, value }">
     <template v-if="editingId !== row.id">{{ value }}</template>
-    <select v-else v-model="editForm.division_id" class="border rounded px-2 py-1">
+    <select v-else v-model="editForm.division_id" class="border rounded px-2 py-1 bg-gray-50">
       <option v-for="div in divisions" :key="div.id" :value="div.id">{{ div.name }}</option>
     </select>
   </template>
 
   <template #cell-name="{ row, value }">
     <span v-if="editingId !== row.id">{{ value }}</span>
-    <input v-else v-model="editForm.name" class="border rounded px-2 py-1 w-full" />
+    <input v-else v-model="editForm.name" class="border rounded px-2 py-1 w-full bg-gray-50" />
   </template>
 
   <template #actions="{ row }">

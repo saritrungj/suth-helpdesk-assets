@@ -132,7 +132,7 @@ onMounted(() => {
     >
       <div class="text-right">
         <div class="text-sm text-gray-500">รวมค่าใช้จ่ายทั้งปีงบ</div>
-        <div class="text-xl font-bold text-blue-700">{{ formatMoney(grandTotal) }} บาท</div>
+        <div class="text-xl font-bold text-[var(--brand-text)]">{{ formatMoney(grandTotal) }} บาท</div>
         <div class="text-xs text-gray-400">รวม {{ grandTotalPages.toLocaleString() }} หน้า</div>
       </div>
     </div>
@@ -168,7 +168,7 @@ onMounted(() => {
           </div>
 
           <div class="flex items-center gap-4">
-            <span class="font-bold text-blue-700">
+            <span class="font-bold text-[var(--brand-text)]">
               {{ formatMoney(contract.total_cost) }} บาท
             </span>
             <ChevronIcon :open="openContracts.has(contract.id)" />

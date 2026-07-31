@@ -31,7 +31,7 @@
       </svg>
 
       <p v-if="!file" class="text-sm text-gray-600">
-        ลากไฟล์มาวางตรงนี้ หรือ <span class="text-blue-600 font-medium">คลิกเพื่อเลือกไฟล์</span>
+        ลากไฟล์มาวางตรงนี้ หรือ <span class="text-[var(--brand-text)] font-medium">คลิกเพื่อเลือกไฟล์</span>
       </p>
       <p v-else class="text-sm text-gray-800 font-medium">
         {{ file.name }}

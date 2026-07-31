@@ -111,7 +111,7 @@ onMounted(async () => {
         <label class="block text-xs text-gray-500 mb-1">
           เดือน (ปีงบ {{ year ? year + 543 : "-" }})
         </label>
-        <select v-model="month" class="border rounded p-2 w-full">
+        <select v-model="month" class="border rounded p-2 w-full bg-gray-50">
           <option value="">ทุกเดือน</option>
           <option v-for="m in months" :key="m.value" :value="m.value">{{ m.label }}</option>
         </select>

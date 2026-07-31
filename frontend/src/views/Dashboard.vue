@@ -20,7 +20,7 @@
         <div class="bg-gray-50 shadow rounded-lg p-6 hover:shadow-xl transition">
           <h2 class="text-gray-500 text-sm">อุปกรณ์ทั้งหมด</h2>
           <SkeletonBlock v-if="loading" width="5rem" height="2.25rem" class="mt-1" />
-          <p v-else class="text-3xl font-bold text-blue-600">
+          <p v-else class="text-3xl font-bold text-[var(--brand-text)]">
             {{ Number(stats.total_devices || 0).toLocaleString() }}
           </p>
         </div>

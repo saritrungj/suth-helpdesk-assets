@@ -237,7 +237,7 @@ function close() {
           <!-- Serial -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">Serial Number</label>
-            <input v-model="form.serial_number" class="border rounded p-2 w-full" />
+            <input v-model="form.serial_number" class="border rounded p-2 w-full bg-gray-50" />
           </div>
 
           <!-- Brand -->
@@ -254,13 +254,13 @@ function close() {
           <!-- Model -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">Model</label>
-            <input v-model="form.model" class="border rounded p-2 w-full" />
+            <input v-model="form.model" class="border rounded p-2 w-full bg-gray-50" />
           </div>
 
           <!-- Status -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">สถานะ</label>
-            <select v-model="form.status" class="border rounded p-2 w-full">
+            <select v-model="form.status" class="border rounded p-2 w-full bg-gray-50">
               <option value="active">ใช้งานอยู่</option>
               <option value="repair">ซ่อมบำรุง</option>
               <option value="retired">ปลดระวาง</option>
@@ -316,7 +316,7 @@ function close() {
           <!-- Contract -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">สัญญา</label>
-            <select v-model="form.contract_id" class="border rounded p-2 w-full">
+            <select v-model="form.contract_id" class="border rounded p-2 w-full bg-gray-50">
               <option :value="null">ไม่มี</option>
               <option v-for="c in contracts" :key="c.id" :value="c.id">{{ c.contract_no }}</option>
             </select>
@@ -325,7 +325,7 @@ function close() {
           <!-- Price -->
           <div>
             <label class="block text-sm text-gray-500 mb-1">ราคาเฉพาะเครื่อง (Override)</label>
-            <input type="number" step="0.01" v-model="form.price_override" class="border rounded p-2 w-full" />
+            <input type="number" step="0.01" v-model="form.price_override" class="border rounded p-2 w-full bg-gray-50" />
           </div>
         </div>
 

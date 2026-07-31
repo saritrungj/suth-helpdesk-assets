@@ -248,6 +248,7 @@ router.beforeEach((to) => {
 
     return {
       path: "/login",
+      query: { redirect: to.fullPath },
     };
 
   }

@@ -369,7 +369,7 @@ onMounted(init);
             v-model="search"
             type="text"
             placeholder="พิมพ์เพื่อค้นหา..."
-            class="border rounded p-2 w-full"
+            class="border rounded p-2 w-full bg-gray-50"
           />
         </div>
       </div>
@@ -428,7 +428,7 @@ onMounted(init);
 
         <div>
           <label class="block text-xs text-gray-500 mb-1">สถานะเครื่อง</label>
-          <select v-model="deviceStatusFilter" class="border rounded p-2 text-sm">
+          <select v-model="deviceStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
             <option value="">ทุกสถานะ</option>
             <option value="active">ใช้งานอยู่</option>
             <option value="repair">ซ่อมบำรุง</option>
@@ -438,7 +438,7 @@ onMounted(init);
 
         <div>
           <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ year ? year + 543 : "-" }})</label>
-          <select v-model="fillStatusFilter" class="border rounded p-2 text-sm">
+          <select v-model="fillStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
             <option value="">ทั้งหมด</option>
             <option value="done">กรอกครบ 12 เดือน</option>
             <option value="partial">กรอกบางส่วน</option>
@@ -571,7 +571,7 @@ onMounted(init);
                     min="0"
                     v-model.number="modalMonths[i].pages"
                     placeholder="ยังไม่กรอก"
-                    class="border rounded p-1 w-28 text-right"
+                    class="border rounded p-1 w-28 text-right bg-gray-50"
                   />
                 </td>
               </tr>

@@ -306,7 +306,7 @@ SidebarLink.props = ["to", "label", "icon"];
 // เมนูย่อยข้างในกำลัง active อยู่ แม้ตัวกลุ่มจะถูกพับเก็บไว้ก็ตาม
 const SidebarGroup = (props, { slots }) => {
   const open = isOpen(props.groupKey);
-  const headerColor = props.active ? "text-blue-600" : "text-gray-500";
+  const headerColor = props.active ? "text-[var(--brand-text)]" : "text-gray-500";
 
   return h("div", {}, [
     h(

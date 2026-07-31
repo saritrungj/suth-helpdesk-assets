@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from "vue"
 import api from "../../services/api"
 import DataTable from "../../components/DataTable.vue"
+import { toastError } from "../../store/toast"
+import { askConfirm } from "../../store/confirmDialog"
 
 const brands = ref([])
 const loading = ref(false)
@@ -77,7 +79,7 @@ async function load() {
     brands.value = res.data
   } catch (err) {
     console.error(err)
-    alert("โหลดข้อมูลไม่สำเร็จ")
+    toastError("โหลดข้อมูลไม่สำเร็จ")
   } finally {
     loading.value = false
   }
@@ -90,7 +92,7 @@ function editBrand(brand) {
 
 async function saveBrand(id) {
   if (!editName.value.trim()) {
-    alert("กรุณากรอกชื่อ Brand")
+    toastError("กรุณากรอกชื่อ Brand")
     return
   }
 
@@ -101,12 +103,12 @@ async function saveBrand(id) {
     load()
   } catch (err) {
     console.error(err)
-    alert("แก้ไขข้อมูลไม่สำเร็จ")
+    toastError("แก้ไขข้อมูลไม่สำเร็จ")
   }
 }
 
 async function deleteBrand(id) {
-  const confirmDelete = confirm("ต้องการลบ Brand นี้ใช่หรือไม่?")
+  const confirmDelete = await askConfirm("ต้องการลบ Brand นี้ใช่หรือไม่?")
   if (!confirmDelete) return
 
   try {
@@ -114,7 +116,7 @@ async function deleteBrand(id) {
     load()
   } catch (err) {
     console.error(err)
-    alert("ลบข้อมูลไม่สำเร็จ")
+    toastError("ลบข้อมูลไม่สำเร็จ")
   }
 }
 
@@ -152,7 +154,7 @@ onMounted(load)
         <input
           v-else
           v-model="editName"
-          class="border rounded px-2 py-1 w-full"
+          class="border rounded px-2 py-1 w-full bg-gray-50"
         />
       </template>
 
@@ -214,7 +216,7 @@ onMounted(load)
             @keyup.enter="submitAdd"
             type="text"
             placeholder="เช่น Canon, Epson"
-            class="border rounded px-3 py-2 w-full"
+            class="border rounded px-3 py-2 w-full bg-gray-50"
             autofocus
           />
 

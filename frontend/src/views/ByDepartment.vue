@@ -201,7 +201,7 @@ function trendBadge(department) {
   if (trend === "no-data") return { icon: "❔", cls: "bg-gray-100 text-gray-400", label: "ไม่มีข้อมูล" };
 
   if (pct === null && trend !== "no-data") {
-    return { icon: "🆕", cls: "bg-blue-100 text-blue-700", label: "ข้อมูลใหม่" };
+    return { icon: "🆕", cls: "bg-blue-100 text-[var(--brand-text)]", label: "ข้อมูลใหม่" };
   }
 
   return { icon: "➖", cls: "bg-gray-100 text-gray-600", label: "เท่าเดิม" };
@@ -442,7 +442,7 @@ onMounted(async () => {
           v-model="search"
           type="text"
           placeholder="พิมพ์เพื่อค้นหา..."
-          class="border rounded p-2 w-full"
+          class="border rounded p-2 w-full bg-gray-50"
         />
       </div>
 
@@ -465,7 +465,7 @@ onMounted(async () => {
 
       <div v-if="!loading && divisions.length" class="ml-auto text-right">
         <div class="text-sm text-gray-500">รวมค่าใช้จ่ายทั้งหมด</div>
-        <div class="text-xl font-bold text-blue-700">{{ formatMoney(grandTotalCost) }} บาท</div>
+        <div class="text-xl font-bold text-[var(--brand-text)]">{{ formatMoney(grandTotalCost) }} บาท</div>
         <div class="text-xs text-gray-400">รวม {{ grandTotalPages.toLocaleString() }} หน้า</div>
       </div>
     </div>
@@ -528,11 +528,11 @@ onMounted(async () => {
         <template v-else>
           <div class="flex items-center gap-3 flex-wrap mb-3 text-sm">
             <span class="text-gray-500">ช่วงที่แสดง (zoom/pan):</span>
-            <select v-model.number="rangeStartIdx" class="border rounded px-2 py-1">
+            <select v-model.number="rangeStartIdx" class="border rounded px-2 py-1 bg-gray-50">
               <option v-for="(m, i) in allChartMonths" :key="'s' + m" :value="i">{{ formatMonth(m) }}</option>
             </select>
             <span class="text-gray-400">ถึง</span>
-            <select v-model.number="rangeEndIdx" class="border rounded px-2 py-1">
+            <select v-model.number="rangeEndIdx" class="border rounded px-2 py-1 bg-gray-50">
               <option v-for="(m, i) in allChartMonths" :key="'e' + m" :value="i">{{ formatMonth(m) }}</option>
             </select>
             <span class="text-xs text-gray-400">
@@ -568,7 +568,7 @@ onMounted(async () => {
               </span>
             </div>
             <div class="flex items-center gap-4">
-              <span class="font-bold text-blue-700">{{ formatMoney(division.total_cost) }} บาท</span>
+              <span class="font-bold text-[var(--brand-text)]">{{ formatMoney(division.total_cost) }} บาท</span>
               <ChevronIcon :open="openDivisions.has(division.id)" />
             </div>
           </button>

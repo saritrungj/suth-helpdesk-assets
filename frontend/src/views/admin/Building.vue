@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from "vue"
 import api from "../../services/api"
 import DataTable from "../../components/DataTable.vue"
+import { toastError } from "../../store/toast"
+import { askConfirm } from "../../store/confirmDialog"
 
 const buildings = ref([])
 const loading = ref(false)
@@ -69,7 +71,7 @@ async function load() {
     buildings.value = res.data
   } catch (err) {
     console.error(err)
-    alert("โหลดข้อมูลไม่สำเร็จ")
+    toastError("โหลดข้อมูลไม่สำเร็จ")
   } finally {
     loading.value = false
   }
@@ -82,7 +84,7 @@ function editBuilding(building) {
 
 async function saveBuilding(id) {
   if (!editName.value.trim()) {
-    alert("กรุณากรอกชื่ออาคาร")
+    toastError("กรุณากรอกชื่ออาคาร")
     return
   }
 
@@ -93,19 +95,19 @@ async function saveBuilding(id) {
     load()
   } catch (err) {
     console.error(err)
-    alert("แก้ไขข้อมูลไม่สำเร็จ")
+    toastError("แก้ไขข้อมูลไม่สำเร็จ")
   }
 }
 
 async function deleteBuilding(id) {
-  if (!confirm("ต้องการลบอาคารนี้ใช่หรือไม่?")) return
+  if (!(await askConfirm("ต้องการลบอาคารนี้ใช่หรือไม่?"))) return
 
   try {
     await api.delete(`/buildings/${id}`)
     load()
   } catch (err) {
     console.error(err)
-    alert("ลบข้อมูลไม่สำเร็จ")
+    toastError("ลบข้อมูลไม่สำเร็จ")
   }
 }
 
@@ -142,7 +144,7 @@ onMounted(load)
         <input
           v-else
           v-model="editName"
-          class="border rounded px-2 py-1 w-full"
+          class="border rounded px-2 py-1 w-full bg-gray-50"
         />
       </template>
 
@@ -187,7 +189,7 @@ onMounted(load)
             @keyup.enter="submitAdd"
             type="text"
             placeholder="เช่น อาคารผู้ป่วยนอก"
-            class="border rounded px-3 py-2 w-full"
+            class="border rounded px-3 py-2 w-full bg-gray-50"
             autofocus
           />
           <div v-if="formError" class="mt-3 bg-red-100 text-red-700 p-2 rounded text-sm">{{ formError }}</div>

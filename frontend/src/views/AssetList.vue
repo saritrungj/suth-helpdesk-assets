@@ -6,6 +6,8 @@ import { authState } from "../store/auth";
 import DataTable from "../components/DataTable.vue";
 import AssetForm from "./AssetForm.vue";
 import SearchableSelect from "../components/SearchableSelect.vue";
+import { toastSuccess, toastError } from "../store/toast";
+import { askConfirm } from "../store/confirmDialog";
 
 
 const isAdmin = computed(() => authState.user?.role === "admin");
@@ -215,15 +217,15 @@ function editAsset(id) {
 }
 
 async function deleteAsset(id) {
-  if (!confirm("ต้องการลบรายการนี้หรือไม่?")) return;
+  if (!(await askConfirm("ต้องการลบรายการนี้หรือไม่?"))) return;
 
   try {
     await api.delete(`/devices/${id}`);
-    alert("ลบข้อมูลสำเร็จ");
+    toastSuccess("ลบข้อมูลสำเร็จ");
     loadAssets();
   } catch (err) {
     console.error(err);
-    alert(err.response?.data?.error || "ลบข้อมูลไม่สำเร็จ");
+    toastError(err.response?.data?.error || "ลบข้อมูลไม่สำเร็จ");
   }
 }
 
@@ -254,7 +256,7 @@ onMounted(async () => {
     <input
       v-model="search"
       placeholder="ค้นหา Serial / Model / Brand / เลขที่สัญญา (แบบเฉพาะเจาะจง)"
-      class="border p-2 rounded w-72"
+      class="border p-2 rounded w-72 bg-gray-50"
     />
 
     <SearchableSelect
@@ -292,7 +294,7 @@ onMounted(async () => {
       search-placeholder="พิมพ์/เลือกแผนก"
     />
 
-    <select v-model="selectedStatus" class="border p-2 rounded">
+    <select v-model="selectedStatus" class="border p-2 rounded bg-gray-50">
       <option value="">ทุกสถานะ</option>
       <option value="active">ใช้งานอยู่</option>
       <option value="repair">ซ่อมบำรุง</option>
@@ -335,7 +337,7 @@ onMounted(async () => {
 
     <template #cell-effective_price="{ row }">
       {{ formatMoney(effectivePrice(row)) }}
-      <span v-if="row.price_override !== null && row.price_override !== undefined" class="text-xs text-blue-600 block">
+      <span v-if="row.price_override !== null && row.price_override !== undefined" class="text-xs text-[var(--brand-text)] block">
         (ราคาเฉพาะเครื่อง)
       </span>
     </template>
