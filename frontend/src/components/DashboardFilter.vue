@@ -119,7 +119,7 @@ onMounted(async () => {
 
       <button
         @click="resetFilter"
-        class="bg-gray-500 hover:bg-gray-600 text-white rounded px-4 py-2"
+        class="bg-red-500 hover:bg-red-600 text-white rounded px-4 py-2"
       >
         ล้างตัวกรอง
       </button>

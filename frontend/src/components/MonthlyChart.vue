@@ -190,10 +190,20 @@ async function loadMonthly(){
 
 
 
+    const monthsTH = [
+      "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.",
+      "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.",
+      "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+    ];
+    const formatMonthLabel = (value) => {
+      const [y, m] = value.split("-");
+      return `${monthsTH[Number(m) - 1]} ${Number(y) + 543}`;
+    };
+
     chartData.value = {
 
 
-      labels:Object.keys(monthly),
+      labels:Object.keys(monthly).map(formatMonthLabel),
 
 
       datasets:[

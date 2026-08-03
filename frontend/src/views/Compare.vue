@@ -267,9 +267,9 @@ onMounted(loadData);
         <!-- บทสรุปอัตโนมัติ -->
         <div
           v-if="summaryFirst && summaryLast"
-          class="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-6"
+          class="summary-box rounded-lg p-5 mb-6"
         >
-          <h2 class="font-bold text-blue-800 mb-2">📝 สรุปการเปลี่ยนแปลง</h2>
+          <h2 class="summary-box__title font-bold mb-2">📝 สรุปการเปลี่ยนแปลง</h2>
           <p class="text-sm text-gray-600 mb-3">
             เปรียบเทียบ {{ summaryFirst.label }} กับ {{ summaryLast.label }}
             <span v-if="monthStats.length > 2">(รวม {{ monthStats.length }} เดือนที่เลือก)</span>
@@ -346,3 +346,19 @@ onMounted(loadData);
     </template>
   </div>
 </template>
+
+<style scoped>
+/*
+  กล่อง "สรุปการเปลี่ยนแปลง" — เดิมใช้ bg-blue-50/border-blue-200/text-blue-800 ตรงๆ
+  ซึ่ง map ไปที่สเกล --brand-* ที่ "คงที่ไม่พลิกตามโหมด" (ดู style.css) ต่างจาก gray/red
+  ผลคือพอเปิดโหมดมืด กล่องนี้ยังเป็นพื้นฟ้าอ่อนจ้าเหมือนเดิม ไม่กลืนกับกล่องอื่นๆ
+  เปลี่ยนมาใช้ --status-info-* (ตัวแปรใหม่ที่พลิกตามโหมดแบบเดียวกับ success/warning) แทน
+*/
+.summary-box {
+  background-color: var(--status-info-bg);
+  border: 1px solid var(--status-info-border);
+}
+.summary-box__title {
+  color: var(--status-info-text);
+}
+</style>

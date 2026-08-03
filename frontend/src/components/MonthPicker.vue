@@ -109,13 +109,10 @@ function isSelectable(m) {
   return !!m && props.options.includes(m);
 }
 
+// หมายเหตุ: ไม่ disable เดือนอื่นตอนเลือกครบโควตาแล้ว — ให้กดเดือนใหม่ "แทนที่" ได้เลย
+// (ดู toggle() ด้านล่าง) ผู้ใช้จะได้ไม่ต้องกดเอาเดือนเก่าออกก่อนถึงจะเปลี่ยนได้
 function isDisabled(m) {
-  if (!isSelectable(m)) return true;
-  return (
-    props.max > 0 &&
-    props.modelValue.length >= props.max &&
-    !props.modelValue.includes(m)
-  );
+  return !isSelectable(m);
 }
 
 function cellClass(m) {
@@ -134,9 +131,19 @@ function cellClass(m) {
 function toggle(m) {
   if (!isSelectable(m)) return;
 
-  const next = props.modelValue.includes(m)
-    ? props.modelValue.filter((v) => v !== m)
-    : [...props.modelValue, m];
+  // กดเดือนที่เลือกอยู่แล้ว -> เอาออก (พฤติกรรมเดิม)
+  if (props.modelValue.includes(m)) {
+    emit("update:modelValue", props.modelValue.filter((v) => v !== m).sort());
+    return;
+  }
+
+  // กดเดือนใหม่ที่ยังไม่ได้เลือก -> เพิ่มเข้าไป ถ้าเกินโควตา (max) ให้ตัดเดือนที่เลือกไว้
+  // นานที่สุดออกอัตโนมัติ (FIFO) เพื่อให้ "เปลี่ยนเดือนที่เทียบแนวโน้ม" ได้ในคลิกเดียว
+  // โดยไม่ต้องกดเอาเดือนเก่าออกก่อน (สำคัญมากตอน max=1 อย่างหน้า "เดือนที่เทียบแนวโน้ม")
+  let next = [...props.modelValue, m];
+  if (props.max > 0 && next.length > props.max) {
+    next = next.slice(next.length - props.max);
+  }
 
   emit("update:modelValue", next.sort());
 }

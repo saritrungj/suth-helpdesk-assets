@@ -142,7 +142,16 @@ const filteredDepartmentOptions = computed(() => {
 // ตัวเลือกสำหรับ SearchableSelect ของแต่ละ filter
 const brandOptions = computed(() => brands.value.map((b) => ({ value: b.name, label: b.name })));
 const buildingOptions = computed(() => buildings.value.map((b) => ({ value: b.name, label: b.name })));
-const floorOptions = computed(() => filteredFloorOptions.value.map((f) => ({ value: f.name, label: f.name })));
+const floorOptions = computed(() => {
+  const seen = new Set();
+  const options = [];
+  for (const f of filteredFloorOptions.value) {
+    if (seen.has(f.name)) continue;
+    seen.add(f.name);
+    options.push({ value: f.name, label: f.name });
+  }
+  return options;
+});
 const divisionOptions = computed(() => divisions.value.map((d) => ({ value: d.name, label: d.name })));
 const departmentOptions = computed(() => filteredDepartmentOptions.value.map((d) => ({ value: d.name, label: d.name })));
 
@@ -332,7 +341,7 @@ onMounted(async () => {
 
     <template #cell-contract_no="{ row }">
       <div>{{ row.contract_no || "-" }}</div>
-      <div v-if="row.fiscal_year" class="text-gray-500">ปีงบ {{ Number(row.fiscal_year) + 543 }}</div>
+      <div v-if="row.fiscal_year" class="text-gray-500">ปีงบ {{ Number(row.fiscal_year) }}</div>
     </template>
 
     <template #cell-effective_price="{ row }">

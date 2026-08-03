@@ -24,32 +24,67 @@ export const activeGregorianYear = computed(() =>
 );
 
 let loaded = false;
+let loadingPromise = null;
+
+async function fetchFiscalYears() {
+  fiscalYearState.loading = true;
+
+  loadingPromise = (async () => {
+    try {
+      const res = await api.get("/fiscal-years");
+      fiscalYearState.list = res.data;
+
+      // 1) ถ้า URL มี ?fy= อยู่แล้ว (เช่น refresh หน้า หรือ share link มา) ใช้ค่านั้นก่อน
+      const queryFy = Number(router.currentRoute.value.query.fy);
+      const matched = fiscalYearState.list.find((f) => f.id === queryFy);
+
+      if (matched) {
+        fiscalYearState.activeId = matched.id;
+      } else if (
+        fiscalYearState.list.length &&
+        !fiscalYearState.list.some((f) => f.id === fiscalYearState.activeId)
+      ) {
+        // 2) ไม่งั้น default เป็นปีงบล่าสุด (ตัวสุดท้ายของ list) — เฉพาะตอนที่ค่าที่เลือกไว้เดิม
+        // ใช้ไม่ได้แล้ว (ยังไม่เคยเลือก หรือปีงบที่เคยเลือกไว้ถูกลบไปแล้ว) ไม่งั้นจะไปทับปีงบที่
+        // ผู้ใช้ตั้งใจเลือกไว้อยู่ทุกครั้งที่มีคน add/edit ปีงบใหม่จากหน้า Admin
+        setActiveFiscalYear(fiscalYearState.list[fiscalYearState.list.length - 1].id);
+      }
+
+      // ล็อกว่าโหลดสำเร็จแล้วก็ต่อเมื่อ "สำเร็จจริง" เท่านั้น — ถ้าพลาดจะไม่ล็อก เพื่อให้เรียกซ้ำได้ใหม่
+      loaded = true;
+    } catch (err) {
+      console.error("Load fiscal years error:", err);
+    } finally {
+      fiscalYearState.loading = false;
+      loadingPromise = null;
+    }
+  })();
+
+  return loadingPromise;
+}
 
 export async function loadFiscalYears() {
-  // กันโหลดซ้ำหลายรอบ ถ้าหลายหน้าเรียกพร้อมกัน
+  // กันยิงซ้ำถ้าหลายหน้าเรียกพร้อมกัน "ระหว่างที่กำลังโหลดอยู่" เท่านั้น
+  // (เดิม lock ด้วย loaded = true ก่อนเรียก API เลย ถ้ารอบแรกพลาด เช่น token ยังไม่ทันแนบตอน
+  // login เสร็จใหม่ๆ จะค้าง loaded = true ตลอดไป ทำให้ปีงบไม่มีให้เลือกจนกว่าจะ refresh หน้าเอง)
   if (loaded) return;
-  loaded = true;
+  if (loadingPromise) return loadingPromise;
+  return fetchFiscalYears();
+}
 
-  fiscalYearState.loading = true;
-  try {
-    const res = await api.get("/fiscal-years");
-    fiscalYearState.list = res.data;
+// บังคับโหลดใหม่เสมอ ไม่สนใจ loaded flag — ใช้ตอนมีการ add/edit/delete ปีงบจากหน้า Admin
+// เพื่อให้ dropdown ปีงบที่ Navbar (และทุกหน้าที่ subscribe fiscalYearState) เห็นข้อมูลล่าสุดทันที
+// โดยไม่ต้อง refresh หน้าเว็บเอง
+export async function refreshFiscalYears() {
+  if (loadingPromise) return loadingPromise;
+  return fetchFiscalYears();
+}
 
-    // 1) ถ้า URL มี ?fy= อยู่แล้ว (เช่น refresh หน้า หรือ share link มา) ใช้ค่านั้นก่อน
-    const queryFy = Number(router.currentRoute.value.query.fy);
-    const matched = fiscalYearState.list.find((f) => f.id === queryFy);
-
-    if (matched) {
-      fiscalYearState.activeId = matched.id;
-    } else if (fiscalYearState.list.length) {
-      // 2) ไม่งั้น default เป็นปีงบล่าสุด (ตัวสุดท้ายของ list)
-      setActiveFiscalYear(fiscalYearState.list[fiscalYearState.list.length - 1].id);
-    }
-  } catch (err) {
-    console.error("Load fiscal years error:", err);
-  } finally {
-    fiscalYearState.loading = false;
-  }
+export function resetFiscalYearState() {
+  loaded = false;
+  loadingPromise = null;
+  fiscalYearState.list = [];
+  fiscalYearState.activeId = null;
 }
 
 export function setActiveFiscalYear(id) {

@@ -138,7 +138,16 @@ const filteredDepartmentOptions = computed(() => {
 
 // ตัวเลือกสำหรับ SearchableSelect ของแต่ละ filter
 const buildingFilterOptions = computed(() => buildings.value.map((b) => ({ value: b.name, label: b.name })));
-const floorFilterOptions = computed(() => filteredFloorOptions.value.map((f) => ({ value: f.name, label: f.name })));
+const floorFilterOptions = computed(() => {
+  const seen = new Set();
+  const options = [];
+  for (const f of filteredFloorOptions.value) {
+    if (seen.has(f.name)) continue;
+    seen.add(f.name);
+    options.push({ value: f.name, label: f.name });
+  }
+  return options;
+});
 const divisionFilterOptions = computed(() => divisions.value.map((d) => ({ value: d.name, label: d.name })));
 const departmentFilterOptions = computed(() => filteredDepartmentOptions.value.map((d) => ({ value: d.name, label: d.name })));
 const brandFilterOptions = computed(() => brands.value.map((b) => ({ value: b.name, label: b.name })));
@@ -449,7 +458,7 @@ onMounted(init);
         <button
           type="button"
           @click="resetFilters"
-          class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap"
+          class="text-sm text-red-500 hover:text-gray-700 underline whitespace-nowrap"
         >
           ล้างตัวกรองทั้งหมด
         </button>

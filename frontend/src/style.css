@@ -58,6 +58,9 @@
   --status-success-text: #6ee7a0;
   --status-warning-bg: #2a2410;
   --status-warning-text: #fde68a;
+  --status-info-bg: #182634;
+  --status-info-border: #2b5064;
+  --status-info-text: #8db5c7;
 
   --body-bg: #17150f;
 }
@@ -93,6 +96,9 @@
   --status-success-text: #16a34a;
   --status-warning-bg: #fefce8;
   --status-warning-text: #ca8a04;
+  --status-info-bg: #eff6ff;
+  --status-info-border: #bfdbfe;
+  --status-info-text: #1e40af;
 
   --body-bg: #ffffff;
 }

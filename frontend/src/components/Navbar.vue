@@ -26,7 +26,9 @@
       <!-- ปีงบ (Global) — ทุกหน้า subscribe ค่านี้ร่วมกัน -->
       <div class="flex items-center gap-2">
         <label class="text-sm text-gray-500 hidden md:inline">ปีงบ</label>
+
         <select
+          v-if="fiscalYearState.list.length"
           :value="fiscalYearState.activeId ?? ''"
           @change="setActiveFiscalYear(Number($event.target.value))"
           class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm bg-gray-100 hover:border-gray-300 transition-colors"
@@ -39,6 +41,19 @@
             {{ Number(fy.year)}}
           </option>
         </select>
+
+        <span v-else-if="fiscalYearState.loading" class="text-sm text-gray-400">
+          กำลังโหลดปีงบ...
+        </span>
+
+        <RouterLink
+          v-else
+          to="/admin/fiscal-years"
+          class="text-sm text-orange-600 hover:underline"
+          title="ยังไม่มีปีงบในระบบ กดเพื่อไปสร้างปีงบใหม่"
+        >
+          ⚠️ ยังไม่มีปีงบ — กดเพื่อสร้าง
+        </RouterLink>
       </div>
 
       <ThemeSwitcher />
@@ -67,7 +82,7 @@
 import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { authState, clearAuth } from "../store/auth";
-import { fiscalYearState, loadFiscalYears, setActiveFiscalYear } from "../store/fiscalYear";
+import { fiscalYearState, loadFiscalYears, setActiveFiscalYear, resetFiscalYearState } from "../store/fiscalYear";
 import { openMobileSidebar } from "../store/ui";
 import ThemeSwitcher from "./ThemeSwitcher.vue";
 
@@ -75,6 +90,7 @@ const router = useRouter();
 
 const logout = () => {
   clearAuth();
+  resetFiscalYearState();
   router.push("/login");
 };
 

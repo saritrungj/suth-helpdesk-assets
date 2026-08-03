@@ -176,7 +176,7 @@
           <tbody>
             <tr v-for="c in highlights.contracts" :key="c.id" class="border-b last:border-0">
               <td class="py-2">{{ c.contract_no }}</td>
-              <td class="py-2">{{ c.fiscal_year ? Number(c.fiscal_year) + 543 : "-" }}</td>
+              <td class="py-2">{{ c.fiscal_year ? Number(c.fiscal_year) : "-" }}</td>
               <td class="py-2 text-right">{{ formatMoney(c.price_per_page) }}</td>
               <td class="py-2 text-right">{{ Number(c.device_count).toLocaleString() }}</td>
               <td class="py-2 text-right">{{ Number(c.total_pages).toLocaleString() }}</td>
@@ -199,7 +199,7 @@
           :aria-selected="chartTab === 'usage'"
           class="px-4 py-2.5 text-sm font-medium rounded-t-lg -mb-px border-b-2 transition-colors"
           :class="chartTab === 'usage'
-            ? 'border-blue-600 text-blue-600'
+            ? 'border-blue-600 text-[var(--brand-text)]'
             : 'border-transparent text-gray-500 hover:text-gray-700'"
           @click="chartTab = 'usage'"
         >
@@ -211,7 +211,7 @@
           :aria-selected="chartTab === 'cost'"
           class="px-4 py-2.5 text-sm font-medium rounded-t-lg -mb-px border-b-2 transition-colors"
           :class="chartTab === 'cost'
-            ? 'border-blue-600 text-blue-600'
+            ? 'border-blue-600 text-[var(--brand-text)]'
             : 'border-transparent text-gray-500 hover:text-gray-700'"
           @click="chartTab = 'cost'"
         >

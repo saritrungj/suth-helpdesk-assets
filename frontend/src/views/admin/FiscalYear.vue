@@ -1,12 +1,16 @@
 <script setup>
-import { ref, onMounted, computed } from "vue"
+import { ref, computed, onMounted } from "vue"
 import api from "../../services/api"
 import DataTable from "../../components/DataTable.vue"
 import { toastError } from "../../store/toast"
 import { askConfirm } from "../../store/confirmDialog"
+import { fiscalYearState, loadFiscalYears, refreshFiscalYears } from "../../store/fiscalYear"
 
-const fiscalYears = ref([])
-const loading = ref(false)
+// ใช้ fiscalYearState ตัวเดียวกับที่ Navbar ใช้ (ไม่เก็บ list แยกเป็น local state ของหน้านี้เอง)
+// เพราะเดิมหน้านี้ดึงข้อมูลของตัวเองแยกต่างหาก พอ add/edit/delete แล้ว Navbar ไม่รู้เรื่อง
+// ต้อง refresh หน้าเว็บเองถึงจะเห็นปีงบที่เพิ่งเพิ่มไป
+const fiscalYears = computed(() => fiscalYearState.list)
+const loading = computed(() => fiscalYearState.loading)
 
 const editingId = ref(null)
 const editYear = ref("")
@@ -55,25 +59,12 @@ async function submitAdd() {
   try {
     await api.post("/fiscal-years", { year: form.value.year.trim() })
     showAddModal.value = false
-    await load()
+    await refreshFiscalYears() // แทน load() เดิม — อัปเดต fiscalYearState กลาง ทุกหน้าเห็นทันที ไม่ต้อง refresh เอง
   } catch (err) {
     console.error(err)
     formError.value = err.response?.data?.error || "เพิ่มข้อมูลไม่สำเร็จ"
   } finally {
     saving.value = false
-  }
-}
-
-async function load() {
-  loading.value = true
-  try {
-    const res = await api.get("/fiscal-years")
-    fiscalYears.value = res.data
-  } catch (err) {
-    console.error(err)
-    toastError("โหลดข้อมูลไม่สำเร็จ")
-  } finally {
-    loading.value = false
   }
 }
 
@@ -92,7 +83,7 @@ async function saveFiscalYear(id) {
     await api.put(`/fiscal-years/${id}`, { year: editYear.value })
     editingId.value = null
     editYear.value = ""
-    load()
+    await refreshFiscalYears()
   } catch (err) {
     console.error(err)
     toastError("แก้ไขข้อมูลไม่สำเร็จ")
@@ -104,14 +95,14 @@ async function deleteFiscalYear(id) {
 
   try {
     await api.delete(`/fiscal-years/${id}`)
-    load()
+    await refreshFiscalYears()
   } catch (err) {
     console.error(err)
     toastError("ลบข้อมูลไม่สำเร็จ")
   }
 }
 
-onMounted(load)
+onMounted(loadFiscalYears)
 </script>
 
 <template>
