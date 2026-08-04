@@ -1,12 +1,26 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const rateLimit = require("express-rate-limit");
 const db = require("../db");
 
 const router = express.Router();
 
+// กัน brute force เดารหัสผ่าน — จำกัดไว้ 10 ครั้ง/15 นาที ต่อ IP
+// (นับเฉพาะ request ที่ตอบกลับด้วย error 4xx/5xx ไม่นับ login สำเร็จ)
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    message: {
+        message: "Too many login attempts, please try again later",
+        error: "Too many login attempts, please try again later"
+    }
+});
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
 
     const { username, password } = req.body || {};
 
@@ -24,11 +38,15 @@ router.post("/login", async (req, res) => {
             [username]
         );
 
+        // ใช้ข้อความ error เดียวกันไม่ว่า username จะไม่มีอยู่จริง หรือ password ผิด
+        // เพื่อกัน user enumeration (ไม่ให้คนร้ายเดาได้ว่า username ไหนมีอยู่ในระบบ)
+        const INVALID_CREDENTIALS = {
+            message: "Invalid username or password",
+            error: "Invalid username or password"
+        };
+
         if (users.length === 0) {
-            return res.status(401).json({
-                message: "User not found",
-                error: "User not found"
-            });
+            return res.status(401).json(INVALID_CREDENTIALS);
         }
 
         const user = users[0];
@@ -39,10 +57,7 @@ router.post("/login", async (req, res) => {
         );
 
         if (!match) {
-            return res.status(401).json({
-                message: "Password incorrect",
-                error: "Password incorrect"
-            });
+            return res.status(401).json(INVALID_CREDENTIALS);
         }
 
         const token = jwt.sign(

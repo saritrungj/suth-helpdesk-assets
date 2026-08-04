@@ -23,10 +23,6 @@ exports.importDevices = async (req, res) => {
         });
 
 
-        console.log("Headers:", Object.keys(rows[0] || {}));
-        console.log("First Row:", rows[0]);
-
-
         // โหลด Master Data
         const [brand] = await db.query(
             "SELECT id, name FROM brand"
@@ -99,19 +95,8 @@ exports.importDevices = async (req, res) => {
             const building_id = buildingMap[building];
 
 
-            console.log({
-                serial_number,
-                brand,
-                brand_id,
-                building,
-                building_id
-            });
-
-
 
             if (!brand_id || !building_id) {
-
-                console.log("SKIP:", row);
 
                 const reasons = [];
                 if (!brand_id) reasons.push(`ไม่พบยี่ห้อ "${brand || "(ว่าง)"}" ในระบบ`);
@@ -137,13 +122,6 @@ exports.importDevices = async (req, res) => {
             ]);
 
         }
-
-
-
-        console.log(
-            "Insert count:",
-            insertData.length
-        );
 
 
 

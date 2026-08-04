@@ -21,7 +21,7 @@
       </span>
       <div class="leading-tight min-w-0 flex-1">
         <p class="font-semibold text-gray-800 truncate">IT Asset</p>
-        <p class="text-xs text-gray-400 truncate">ระบบทรัพย์สินโรงพยาบาล</p>
+        <p class="text-sm text-gray-400 truncate">ระบบทรัพย์สินโรงพยาบาล</p>
       </div>
 
       <!-- ปุ่มปิด — เฉพาะจอมือถือ/แท็บเล็ต -->
@@ -38,7 +38,7 @@
     </div>
 
     <!-- เมนู (เลื่อนแยกจากส่วนหัว/ท้าย) -->
-    <nav class="sidebar-nav flex-1 overflow-y-auto px-3.5 py-4 space-y-1 text-sm">
+    <nav class="sidebar-nav flex-1 overflow-y-auto px-3.5 py-4 space-y-1 text-base">
 
       <RouterLink
         to="/"
@@ -69,7 +69,7 @@
 
       <!-- Admin -->
       <div v-if="authState.user?.role === 'admin'" class="pt-4 mt-4 border-t border-gray-200">
-        <p class="flex items-center gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1.5">
+        <p class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1.5">
           <IconSvg :d="ICONS.shield" class="w-3.5 h-3.5" />
           Admin
         </p>
@@ -98,7 +98,7 @@
 
     <!-- ท้าย sidebar -->
     <div class="px-5 py-3.5 border-t border-gray-200">
-      <div class="flex items-center gap-2 text-xs text-gray-400">
+      <div class="flex items-center gap-2 text-sm text-gray-400">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
         <span class="truncate">เชื่อมต่อระบบแล้ว</span>
       </div>
@@ -315,7 +315,7 @@ const SidebarGroup = (props, { slots }) => {
         type: "button",
         onClick: () => toggleGroup(props.groupKey),
         class: [
-          "w-full flex items-center gap-2.5 text-xs font-semibold uppercase tracking-wide px-2.5 py-2 rounded-lg hover:bg-gray-100 transition-colors",
+          "w-full flex items-center gap-2.5 text-sm font-semibold uppercase tracking-wide px-2.5 py-2 rounded-lg hover:bg-gray-100 transition-colors",
           headerColor,
         ],
       },
