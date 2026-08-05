@@ -7,6 +7,18 @@ const authMiddleware = require('../middlewares/authMiddleware');
 router.use(authMiddleware);
 
 
+// รับ query.month เป็นเดือนเดียว "YYYY-MM" หรือหลายเดือนคั่นด้วย comma
+// "YYYY-MM,YYYY-MM" (ตามที่ MonthPicker หน้า Dashboard ส่งมาตอนเลือกได้หลายเดือน)
+// คืนเป็น array เสมอ ว่างเปล่าถ้าไม่ได้ส่งมา ใช้คู่กับ "col IN (?)" ผ่าน mysql2
+function parseMonths(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean);
+}
+
+
 // ============================================================
 // GET /api/dashboard/monthly-kpi
 // ============================================================
@@ -38,14 +50,15 @@ const params=[];
 const conditions=[];
 
 
-if(req.query.month){
+const monthlyKpiMonths = parseMonths(req.query.month);
+if(monthlyKpiMonths.length){
 
 conditions.push(
-"m.month = ?"
+"m.month IN (?)"
 );
 
 params.push(
-req.query.month
+monthlyKpiMonths
 );
 
 }
@@ -159,16 +172,17 @@ router.get('/summary-by-building', async (req,res)=>{
 
 
 
-    if(req.query.month){
+    const summaryMonths = parseMonths(req.query.month);
+    if(summaryMonths.length){
 
 
       sql += `
-        AND v.month = ?
+        AND v.month IN (?)
       `;
 
 
       params.push(
-        req.query.month
+        summaryMonths
       );
 
 
@@ -242,14 +256,15 @@ router.get('/compare', async(req,res)=>{
 
 
 
-    if(req.query.month){
+    const compareMonths = parseMonths(req.query.month);
+    if(compareMonths.length){
 
       conditions.push(
-        "month = ?"
+        "month IN (?)"
       );
 
       params.push(
-        req.query.month
+        compareMonths
       );
 
     }
@@ -395,16 +410,17 @@ router.get('/stats', async(req,res)=>{
 
 
     // Filter เดือน
-    if(req.query.month){
+    const statsMonths = parseMonths(req.query.month);
+    if(statsMonths.length){
 
 
       transactionConditions.push(
-        "pt.month = ?"
+        "pt.month IN (?)"
       );
 
 
       transactionParams.push(
-        req.query.month
+        statsMonths
       );
 
 
@@ -897,10 +913,11 @@ router.get('/highlights', async (req, res) => {
       WHERE 1=1
     `;
     const topDeptParams = [];
+    const highlightMonths = parseMonths(month);
 
-    if (month) {
-      topDeptSql += ' AND v.month = ? ';
-      topDeptParams.push(month);
+    if (highlightMonths.length) {
+      topDeptSql += ' AND v.month IN (?) ';
+      topDeptParams.push(highlightMonths);
     }
 
     if (building_name) {
@@ -920,9 +937,9 @@ router.get('/highlights', async (req, res) => {
     let contractJoin = 'LEFT JOIN v_monthly_kpi v ON v.device_id = d.id';
     const contractParams = [];
 
-    if (month) {
-      contractJoin = 'LEFT JOIN v_monthly_kpi v ON v.device_id = d.id AND v.month = ?';
-      contractParams.push(month);
+    if (highlightMonths.length) {
+      contractJoin = 'LEFT JOIN v_monthly_kpi v ON v.device_id = d.id AND v.month IN (?)';
+      contractParams.push(highlightMonths);
     }
 
     let contractSql = `

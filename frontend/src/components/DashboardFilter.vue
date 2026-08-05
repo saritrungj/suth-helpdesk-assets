@@ -3,26 +3,19 @@ import { ref, computed, onMounted, watch } from "vue";
 import api from "../services/api";
 import { activeGregorianYear } from "../store/fiscalYear";
 import SearchableSelect from "./SearchableSelect.vue";
+import MonthPicker from "./MonthPicker.vue";
 
 const emit = defineEmits(["filter"]);
 
 const building_name = ref("");
-const month = ref("");
+
+// เดือนที่เลือก — เลือกได้หลายเดือน ใช้ MonthPicker แบบเดียวกับหน้า "เปรียบเทียบข้อมูลรายเดือน"
+// ส่งให้ backend เป็น string คั่นด้วย comma "YYYY-MM,YYYY-MM" (ไม่จำกัด max)
+const monthSelection = ref([]);
+const month = computed(() => monthSelection.value.join(","));
 
 const buildings = ref([]);
 const allMonths = ref([]); // เดือนทั้งหมด "YYYY-MM" ที่เคยมีข้อมูล (ทุกปี) — ยังไม่กรองปีงบ
-
-const monthsTH = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
-  "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม",
-  "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-];
-
-function formatMonth(value) {
-  if (!value || typeof value !== "string") return "";
-  const [y, m] = value.split("-");
-  return `${monthsTH[Number(m) - 1]} ${Number(y) + 543}`;
-}
 
 // โหลดอาคาร
 async function loadBuildings() {
@@ -47,12 +40,10 @@ async function loadMonths() {
 // ปีอ้างอิงตามปีงบที่ active อยู่ตอนนี้เสมอ (global, เลือกที่ Navbar) — filter นี้จึงเหลือให้เลือกแค่ "เดือน"
 const year = computed(() => activeGregorianYear.value);
 
-// ตัวเลือกเดือนที่โชว์ในดรอปดาวน์ — จำกัดเฉพาะเดือนของปีงบปัจจุบันเท่านั้น
+// ตัวเลือกเดือนที่โชว์ใน MonthPicker — จำกัดเฉพาะเดือนของปีงบปัจจุบันเท่านั้น
 const months = computed(() => {
   if (!year.value) return [];
-  return allMonths.value
-    .filter((m) => m.startsWith(`${year.value}-`))
-    .map((m) => ({ value: m, label: formatMonth(m) }));
+  return allMonths.value.filter((m) => m.startsWith(`${year.value}-`));
 });
 
 // ตัวเลือกอาคารสำหรับ SearchableSelect (เลือกจากรายการเสมอ ไม่มีปัญหาพิมพ์ชื่อไม่ตรงแบบ input ธรรมดา)
@@ -72,16 +63,15 @@ function sendFilter() {
 watch([building_name, month], sendFilter);
 
 // ปีงบเปลี่ยน (จาก Navbar) → เดือนที่เคยเลือกไว้อาจเป็นของปีงบเก่า ใช้ต่อไม่ได้แล้ว ล้างทิ้งให้เริ่มเลือกใหม่
+// (MonthPicker เองก็ watch ปีงบแล้วเคลียร์ตัวเองอยู่แล้ว แต่กันไว้เผื่อ options ยังไม่ทันอัปเดต)
 watch(year, () => {
-  if (month.value && !months.value.some((m) => m.value === month.value)) {
-    month.value = "";
-  }
+  if (monthSelection.value.length) monthSelection.value = [];
 });
 
 // Reset
 function resetFilter() {
   building_name.value = "";
-  month.value = "";
+  monthSelection.value = [];
 }
 
 onMounted(async () => {
@@ -111,10 +101,7 @@ onMounted(async () => {
         <label class="block text-xs text-gray-500 mb-1">
           เดือน (ปีงบ {{ year ? year + 543 : "-" }})
         </label>
-        <select v-model="month" class="border rounded p-2 w-full bg-gray-50">
-          <option value="">ทุกเดือน</option>
-          <option v-for="m in months" :key="m.value" :value="m.value">{{ m.label }}</option>
-        </select>
+        <MonthPicker v-model="monthSelection" :options="months" />
       </div>
 
       <button
