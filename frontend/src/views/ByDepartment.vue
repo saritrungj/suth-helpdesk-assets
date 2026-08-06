@@ -16,6 +16,7 @@ import api from "../services/api";
 import DepartmentPicker from "../components/DepartmentPicker.vue";
 import MonthPicker from "../components/MonthPicker.vue";
 import { useChartTheme } from "../composables/useChartTheme";
+import { fiscalYearState } from "../store/fiscalYear";
 
 const { baseChartOptions } = useChartTheme();
 
@@ -82,11 +83,18 @@ async function loadMonths() {
 }
 
 async function loadByDepartment() {
+  // อิงตามปีงบ global — ยังไม่มีปีงบ active ก็ยังไม่ต้องยิง (เหมือนหน้า Expense)
+  if (!fiscalYearState.activeId) {
+    divisions.value = [];
+    unassignedDevices.value = [];
+    return;
+  }
+
   loading.value = true;
   error.value = null;
 
   try {
-    const params = {};
+    const params = { fiscal_year_id: fiscalYearState.activeId };
     if (month.value) params.month = month.value;
 
     const res = await api.get("/dashboard/by-department", { params });
@@ -96,6 +104,8 @@ async function loadByDepartment() {
   } catch (err) {
     console.error("Load by-department error:", err);
     error.value = "โหลดข้อมูลไม่สำเร็จ";
+    divisions.value = [];
+    unassignedDevices.value = [];
   } finally {
     loading.value = false;
   }
@@ -105,6 +115,15 @@ async function loadByDepartment() {
 watch(trendMonthSelection, () => {
   loadByDepartment();
 });
+
+// เปลี่ยนปีงบ (จาก Navbar, URL, หรือ back/forward) -> โหลดข้อมูลใหม่ทันที เหมือนหน้า Expense
+watch(
+  () => fiscalYearState.activeId,
+  (id) => {
+    if (id) loadByDepartment();
+  },
+  { immediate: true }
+);
 
 function toggleDivision(id) {
   const next = new Set(openDivisions.value);
@@ -420,8 +439,9 @@ const lineChartOptions = computed(() => {
 });
 
 onMounted(async () => {
+  // โหลดข้อมูลหลักผ่าน watch(fiscalYearState.activeId, { immediate: true }) ด้านบนแล้ว
+  // (แบบเดียวกับหน้า Expense) ตรงนี้แค่โหลดรายชื่อเดือนสำหรับ MonthPicker เพิ่ม
   await loadMonths();
-  await loadByDepartment();
 });
 </script>
 

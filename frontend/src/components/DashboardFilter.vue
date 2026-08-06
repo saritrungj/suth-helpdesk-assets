@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import api from "../services/api";
-import { activeGregorianYear } from "../store/fiscalYear";
+import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
 import SearchableSelect from "./SearchableSelect.vue";
 import MonthPicker from "./MonthPicker.vue";
 
@@ -12,7 +12,16 @@ const building_name = ref("");
 // เดือนที่เลือก — เลือกได้หลายเดือน ใช้ MonthPicker แบบเดียวกับหน้า "เปรียบเทียบข้อมูลรายเดือน"
 // ส่งให้ backend เป็น string คั่นด้วย comma "YYYY-MM,YYYY-MM" (ไม่จำกัด max)
 const monthSelection = ref([]);
-const month = computed(() => monthSelection.value.join(","));
+
+// ถ้าผู้ใช้ยังไม่ได้เลือกเดือนเจาะจงใน MonthPicker ให้ default เป็น "ทั้งปีงบที่ active อยู่"
+// (ต.ค.-ก.ย. เรียงตามปีงบจริงจาก fiscalYearMonths()) แทนการส่ง "" ว่างๆ ซึ่งเดิมแปลว่า
+// "ไม่กรองเดือนเลย" ทำให้กราฟไปดึงข้อมูลทุกเดือนที่เคยมีย้อนหลังข้ามปีงบมาปนกัน
+// (เห็นเป็นเดือนเรียงข้ามปีงบ/กราฟไม่ตรงปีงบที่เลือกไว้บน Navbar)
+const month = computed(() => {
+  if (monthSelection.value.length) return monthSelection.value.join(",");
+  if (!range.value) return "";
+  return fiscalYearMonths(range.value).join(",");
+});
 
 const buildings = ref([]);
 const allMonths = ref([]); // เดือนทั้งหมด "YYYY-MM" ที่เคยมีข้อมูล (ทุกปี) — ยังไม่กรองปีงบ
@@ -37,13 +46,17 @@ async function loadMonths() {
   }
 }
 
-// ปีอ้างอิงตามปีงบที่ active อยู่ตอนนี้เสมอ (global, เลือกที่ Navbar) — filter นี้จึงเหลือให้เลือกแค่ "เดือน"
-const year = computed(() => activeGregorianYear.value);
+// ช่วงเดือนตามปีงบที่ active อยู่ตอนนี้เสมอ (global, เลือกที่ Navbar) — filter นี้จึงเหลือให้เลือกแค่ "เดือน"
+const range = computed(() => activeFiscalYearRange.value);
 
 // ตัวเลือกเดือนที่โชว์ใน MonthPicker — จำกัดเฉพาะเดือนของปีงบปัจจุบันเท่านั้น
+// เดิม filter ด้วย m.startsWith(`${year}-`) ซึ่งจับได้แค่ปีปฏิทินเดียว แต่ปีงบราชการไทย
+// คร่อม 2 ปีปฏิทิน (ต.ค.-ก.ย.) จึงต้องเทียบเป็นช่วง (BETWEEN) แทนการเทียบ prefix ปีเดียว
 const months = computed(() => {
-  if (!year.value) return [];
-  return allMonths.value.filter((m) => m.startsWith(`${year.value}-`));
+  if (!range.value) return [];
+  return allMonths.value.filter(
+    (m) => m >= range.value.startMonth && m <= range.value.endMonth
+  );
 });
 
 // ตัวเลือกอาคารสำหรับ SearchableSelect (เลือกจากรายการเสมอ ไม่มีปัญหาพิมพ์ชื่อไม่ตรงแบบ input ธรรมดา)
@@ -59,12 +72,13 @@ function sendFilter() {
   emit("filter", filter);
 }
 
-// จับการเปลี่ยนค่า
-watch([building_name, month], sendFilter);
+// จับการเปลี่ยนค่า — immediate:true เพราะ default "month" ตอนนี้คือทั้งปีงบ (ไม่ใช่ "" ว่างๆ
+// เหมือนเดิม) ต้อง emit filter ให้ Dashboard ตั้งแต่โหลดหน้าครั้งแรกเลย ไม่ใช่รอผู้ใช้แตะ filter ก่อน
+watch([building_name, month], sendFilter, { immediate: true });
 
 // ปีงบเปลี่ยน (จาก Navbar) → เดือนที่เคยเลือกไว้อาจเป็นของปีงบเก่า ใช้ต่อไม่ได้แล้ว ล้างทิ้งให้เริ่มเลือกใหม่
 // (MonthPicker เองก็ watch ปีงบแล้วเคลียร์ตัวเองอยู่แล้ว แต่กันไว้เผื่อ options ยังไม่ทันอัปเดต)
-watch(year, () => {
+watch(range, () => {
   if (monthSelection.value.length) monthSelection.value = [];
 });
 
@@ -99,7 +113,7 @@ onMounted(async () => {
       <!-- เดือน (ปีอ้างอิงจากปีงบที่เลือกที่ Navbar) -->
       <div>
         <label class="block text-xs text-gray-500 mb-1">
-          เดือน (ปีงบ {{ year ? year + 543 : "-" }})
+          เดือน (ปีงบ {{ range ? Number(range.endMonth.split("-")[0]) + 543 : "-" }})
         </label>
         <MonthPicker v-model="monthSelection" :options="months" />
       </div>

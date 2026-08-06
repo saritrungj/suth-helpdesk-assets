@@ -694,15 +694,34 @@ function calcChangePercent(current, previous, hasPrevious) {
 }
 
 router.get('/by-department', async (req, res) => {
-  const { month } = req.query;
+  const { month, fiscal_year_id } = req.query;
 
   try {
+    // อิงตามปีงบที่เลือก (เหมือนหน้า "ค่าใช้จ่ายแยกตามสัญญา") — เดิม route นี้ไม่กรองปีงบเลย
+    // ดึงยอดพิมพ์ทุกเดือนที่มีในระบบมารวม ทำให้ยอดรวมไม่ตรงกับหน้า Expense ที่กรองตามปีงบ
+    // ถ้าไม่ส่ง fiscal_year_id มา (เผื่อ backward-compat) จะคงพฤติกรรมเดิมคือรวมทุกเดือน
+    let fiscalYear = null;
+    if (fiscal_year_id) {
+      const [[fy]] = await db.query(
+        `SELECT start_month, end_month FROM fiscal_year WHERE id = ?`,
+        [fiscal_year_id]
+      );
+
+      if (!fy) {
+        return res.status(404).json({ error: "ไม่พบปีงบประมาณนี้" });
+      }
+
+      fiscalYear = fy;
+    }
+
     const [divisions] = await db.query('SELECT id, name FROM division ORDER BY name');
     const [departments] = await db.query('SELECT id, name, division_id FROM department ORDER BY name');
 
     // Query เดียว ดึงทุกเครื่อง + ยอดพิมพ์ทุกเดือนของทุกเครื่องพร้อมกัน (LEFT JOIN)
-    // เครื่องที่ไม่เคยมีคนกรอกยอดพิมพ์เลยจะได้ month/net_pages/total_cost เป็น NULL แถวเดียว
-    const [rows] = await db.query(`
+    // เครื่องที่ไม่เคยมีคนกรอกยอดพิมพ์เลย (หรือไม่มีข้อมูลในช่วงปีงบนี้) จะได้ month/net_pages/total_cost
+    // เป็น NULL แถวเดียว — เงื่อนไขช่วงเดือนต้องอยู่ใน "ON" ไม่ใช่ "WHERE" ไม่งั้น LEFT JOIN จะ
+    // กลายเป็น INNER JOIN โดยปริยาย (เครื่องที่ไม่มีข้อมูลในช่วงนี้จะหายไปจากรายงานทั้งเครื่อง)
+    const sql = `
       SELECT
         d.id AS device_id,
         d.serial_number,
@@ -714,9 +733,14 @@ router.get('/by-department', async (req, res) => {
         v.total_cost
       FROM devices d
       LEFT JOIN brand b ON d.brand_id = b.id
-      LEFT JOIN v_monthly_kpi v ON v.device_id = d.id
+      LEFT JOIN v_monthly_kpi v
+        ON v.device_id = d.id
+        ${fiscalYear ? 'AND v.month BETWEEN ? AND ?' : ''}
       ORDER BY d.department_id, d.id, v.month
-    `);
+    `;
+    const params = fiscalYear ? [fiscalYear.start_month, fiscalYear.end_month] : [];
+
+    const [rows] = await db.query(sql, params);
 
     // จัดกลุ่มแถวดิบให้เป็น device -> { ...info, monthly: [...] }
     const deviceMap = new Map();
@@ -850,7 +874,12 @@ router.get('/by-department', async (req, res) => {
 
     divisionList.sort((a, b) => b.total_cost - a.total_cost);
 
-    res.json({ month: month || null, divisions: divisionList, unassignedDevices });
+    res.json({
+      month: month || null,
+      fiscal_year_id: fiscal_year_id || null,
+      divisions: divisionList,
+      unassignedDevices,
+    });
 
   } catch (err) {
     console.error('By-department error:', err.message);

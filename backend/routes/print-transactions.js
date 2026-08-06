@@ -184,24 +184,36 @@ router.post("/bulk", async (req, res) => {
 });
 
 // ============================================================
-// GET /api/print-transactions/summary?year=YYYY
-// นับจำนวนเดือนที่กรอกแล้วของแต่ละเครื่อง ในปีที่ระบุ (ใช้โชว์ badge ในตารางหลัก)
+// GET /api/print-transactions/summary?fiscal_year_id=ID
+// นับจำนวนเดือนที่กรอกแล้วของแต่ละเครื่อง ในปีงบที่ระบุ (ใช้โชว์ badge ในตารางหลัก)
+//
+// เดิมรับ ?year=YYYY แล้ว filter ด้วย "month LIKE 'YYYY-%'" ซึ่งสมมติว่าปีงบตรงกับ
+// ปีปฏิทิน (ม.ค.-ธ.ค.) — ผิด เพราะปีงบราชการไทยจริงคือ ต.ค.-ก.ย. คร่อมสองปีปฏิทิน
+// เปลี่ยนมารับ fiscal_year_id แล้วดึงช่วงเดือนจริงจากตาราง fiscal_year แทน
 // ============================================================
 router.get("/summary", async (req, res) => {
   try {
-    const year = String(req.query.year || "").trim();
-    if (!/^\d{4}$/.test(year)) {
-      return res.status(400).json({ error: "รูปแบบปีไม่ถูกต้อง (ต้องเป็น YYYY)" });
+    const fiscalYearId = Number(req.query.fiscal_year_id);
+    if (!fiscalYearId) {
+      return res.status(400).json({ error: "fiscal_year_id ไม่ถูกต้อง" });
+    }
+
+    const [[fiscalYear]] = await db.query(
+      `SELECT start_month, end_month FROM fiscal_year WHERE id = ?`,
+      [fiscalYearId]
+    );
+    if (!fiscalYear) {
+      return res.status(404).json({ error: "ไม่พบปีงบประมาณนี้" });
     }
 
     const [rows] = await db.query(
       `
       SELECT device_id, COUNT(*) AS filled, SUM(pages) AS total_pages
       FROM print_transactions
-      WHERE month LIKE ?
+      WHERE month BETWEEN ? AND ?
       GROUP BY device_id
       `,
-      [`${year}-%`]
+      [fiscalYear.start_month, fiscalYear.end_month]
     );
 
     res.json(rows);
@@ -211,28 +223,39 @@ router.get("/summary", async (req, res) => {
 });
 
 // ============================================================
-// GET /api/print-transactions/by-device/:deviceId?year=YYYY
-// ดึงยอดพิมพ์ทั้ง 12 เดือนของเครื่องเดียว ในปีที่ระบุ (ใช้ตอนเปิด Modal กรอกข้อมูล)
+// GET /api/print-transactions/by-device/:deviceId?fiscal_year_id=ID
+// ดึงยอดพิมพ์ทั้ง 12 เดือนของเครื่องเดียว ในปีงบที่ระบุ (ใช้ตอนเปิด Modal กรอกข้อมูล)
+//
+// เดิมรับ ?year=YYYY แล้ว filter ด้วย "month LIKE 'YYYY-%'" (สมมติปีงบ = ปีปฏิทิน ผิด)
+// เปลี่ยนมารับ fiscal_year_id แล้วดึงช่วงเดือนจริง (ต.ค.-ก.ย.) จากตาราง fiscal_year แทน
 // ============================================================
 router.get("/by-device/:deviceId", async (req, res) => {
   try {
     const deviceId = Number(req.params.deviceId);
-    const year = String(req.query.year || "").trim();
+    const fiscalYearId = Number(req.query.fiscal_year_id);
 
     if (!deviceId) {
       return res.status(400).json({ error: "device_id ไม่ถูกต้อง" });
     }
-    if (!/^\d{4}$/.test(year)) {
-      return res.status(400).json({ error: "รูปแบบปีไม่ถูกต้อง (ต้องเป็น YYYY)" });
+    if (!fiscalYearId) {
+      return res.status(400).json({ error: "fiscal_year_id ไม่ถูกต้อง" });
+    }
+
+    const [[fiscalYear]] = await db.query(
+      `SELECT start_month, end_month FROM fiscal_year WHERE id = ?`,
+      [fiscalYearId]
+    );
+    if (!fiscalYear) {
+      return res.status(404).json({ error: "ไม่พบปีงบประมาณนี้" });
     }
 
     const [rows] = await db.query(
       `
       SELECT month, pages
       FROM print_transactions
-      WHERE device_id = ? AND month LIKE ?
+      WHERE device_id = ? AND month BETWEEN ? AND ?
       `,
-      [deviceId, `${year}-%`]
+      [deviceId, fiscalYear.start_month, fiscalYear.end_month]
     );
 
     res.json(rows);

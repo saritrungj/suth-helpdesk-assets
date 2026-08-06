@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 
 import { Bar } from "vue-chartjs";
 
@@ -21,7 +21,18 @@ import { useChartTheme } from "../composables/useChartTheme";
 
 const { baseChartOptions } = useChartTheme();
 
-
+// รับ Filter จาก Dashboard (เดิมไฟล์นี้ไม่รับ prop นี้เลย เลยไม่เคยส่ง building_name/month
+// ไปกรองที่ backend เลยแม้ backend /dashboard/summary-by-building จะรองรับอยู่แล้ว —
+// เพราะงั้นกราฟนี้เดิมจึงโชว์ยอดรวมทุกอาคาร/ทุกเดือนตลอดกาลเสมอ ไม่ตามปีงบ/filter ที่เลือกไว้)
+const props = defineProps({
+  filter: {
+    type: Object,
+    default: () => ({
+      building_name: "",
+      month: "",
+    }),
+  },
+});
 
 ChartJS.register(
   Title,
@@ -153,13 +164,22 @@ const chartOptions = computed(() => {
 
 async function loadBuildingCost(){
 
+  loading.value = true;
+  error.value = null;
 
   try {
 
 
     const res = await api.get(
 
-      "/dashboard/summary-by-building"
+      "/dashboard/summary-by-building",
+
+      {
+        params: {
+          building_name: props.filter.building_name || undefined,
+          month: props.filter.month || undefined,
+        },
+      }
 
     );
 
@@ -276,6 +296,17 @@ async function loadBuildingCost(){
 
 onMounted(loadBuildingCost);
 
+// เมื่อเปลี่ยน Filter (อาคาร/เดือน/ปีงบ) ให้โหลดใหม่ — เดิมไม่มี watch นี้เลย
+// กราฟเลยไม่อัปเดตตาม filter ที่เลือกบนหน้า dashboard
+watch(
+  () => props.filter,
+  () => {
+    loadBuildingCost();
+  },
+  {
+    deep: true,
+  }
+);
 
 </script>
 

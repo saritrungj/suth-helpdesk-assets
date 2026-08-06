@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import api from "../services/api";
-import { activeGregorianYear } from "../store/fiscalYear";
+import { activeFiscalYearRange, fiscalYearMonths, fiscalYearState } from "../store/fiscalYear";
 import SearchableSelect from "../components/SearchableSelect.vue";
 import DataTable from "../components/DataTable.vue";
 
@@ -32,9 +32,13 @@ const divisions = ref([]);
 const departments = ref([]);
 const brands = ref([]);
 
-// ปีที่ใช้กรอก/แสดงผล อ้างอิงจากปีงบที่ active อยู่ตอนนี้เสมอ (เลือกที่ Navbar) — ไม่มี dropdown ปีแยกต่างหากอีกต่อไป
-// ปีงบเริ่มเดือน ม.ค. จึงตรงกับปีปฏิทินปกติ (ค.ศ.) ตัวเดียวกันเป๊ะๆ
-const year = computed(() => activeGregorianYear.value);
+// ปีงบที่ active อยู่ตอนนี้เสมอ (เลือกที่ Navbar) — ไม่มี dropdown ปีแยกต่างหากอีกต่อไป
+// ปีงบราชการไทยคือ ต.ค.-ก.ย. (คร่อม 2 ปีปฏิทิน) — เดิมที่นี่สมมติผิดว่าตรงกับปีปฏิทินเดียวกันเป๊ะ
+const fiscalYearId = computed(() => fiscalYearState.activeId);
+const range = computed(() => activeFiscalYearRange.value);
+const displayYearBE = computed(() =>
+  range.value ? Number(range.value.endMonth.split("-")[0]) + 543 : "-"
+);
 
 const monthsTH = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
@@ -85,14 +89,14 @@ async function loadMasterData() {
 }
 
 async function loadSummary() {
-  if (!year.value) {
+  if (!fiscalYearId.value) {
     filledSummary.value = {};
     return;
   }
 
   try {
     const res = await api.get("/print-transactions/summary", {
-      params: { year: year.value },
+      params: { fiscal_year_id: fiscalYearId.value },
     });
     filledSummary.value = Object.fromEntries(
       res.data.map((r) => [r.device_id, { filled: r.filled, totalPages: Number(r.total_pages || 0) }])
@@ -117,7 +121,7 @@ async function init() {
 
 // ปีงบเปลี่ยน (จาก Navbar) → สรุปจำนวนเดือนที่กรอกแล้ว/ยอดรวมต้องโหลดใหม่
 // immediate: true เผื่อปีงบโหลดเสร็จ/ถูกตั้งค่าเริ่มต้นหลังจาก init() ทำงานไปแล้ว
-watch(year, loadSummary, { immediate: true });
+watch(fiscalYearId, loadSummary, { immediate: true });
 
 // -------------------------------------------------------
 // Cascading filter — เลือกอาคารแล้วค่อยกรองชั้น, เลือกฝ่ายแล้วค่อยกรองแผนก (เหมือน AssetList)
@@ -248,19 +252,21 @@ const modalError = ref(null);
 // state เป็น array ตาม index เดือน (0 = ม.ค. ... 11 = ธ.ค.)
 const modalMonths = ref([]);
 
-function buildMonthRows(targetYear) {
-  return Array.from({ length: 12 }, (_, i) => {
-    const m = String(i + 1).padStart(2, "0");
+function buildMonthRows(fiscalRange) {
+  return fiscalYearMonths(fiscalRange).map((month) => {
+    const [year, monthNum] = month.split("-").map(Number);
+    // ต่อท้ายปี พ.ศ. ให้เดือนด้วยเสมอ เพราะปีงบราชการไทยคร่อม 2 ปีปฏิทิน (ต.ค.-ธ.ค. ของปีก่อนหน้า
+    // + ม.ค.-ก.ย. ของปีถัดไป) แค่ชื่อเดือนเฉยๆ จะกำกวมว่าเป็นเดือนของปีไหน (เช่น "ธันวาคม" ปีไหนแน่)
     return {
-      month: `${targetYear}-${m}`,
-      label: monthsTH[i],
+      month,
+      label: `${monthsTH[monthNum - 1]} ${year + 543}`,
       pages: null,
     };
   });
 }
 
 async function openModal(device) {
-  if (!year.value) {
+  if (!fiscalYearId.value || !range.value) {
     message.value = "กรุณาเลือกปีงบก่อน (มุมขวาบน)";
     messageType.value = "error";
     return;
@@ -268,13 +274,13 @@ async function openModal(device) {
 
   modalDevice.value = device;
   modalError.value = null;
-  modalMonths.value = buildMonthRows(year.value);
+  modalMonths.value = buildMonthRows(range.value);
   showModal.value = true;
 
   modalLoading.value = true;
   try {
     const res = await api.get(`/print-transactions/by-device/${device.id}`, {
-      params: { year: year.value },
+      params: { fiscal_year_id: fiscalYearId.value },
     });
 
     const byMonth = Object.fromEntries(res.data.map((r) => [r.month, Number(r.pages)]));
@@ -367,7 +373,7 @@ onMounted(init);
         <div>
           <label class="block text-sm text-gray-500 mb-1">ปีงบ</label>
           <div class="border rounded p-2 bg-gray-50 text-gray-700 min-w-[80px]">
-            {{ year ? year + 543 : "-" }}
+            {{ displayYearBE }}
           </div>
           <p class="text-xs text-gray-400 mt-1">เปลี่ยนปีงบได้ที่มุมขวาบน</p>
         </div>
@@ -446,7 +452,7 @@ onMounted(init);
         </div>
 
         <div>
-          <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ year ? year + 543 : "-" }})</label>
+          <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ displayYearBE }})</label>
           <select v-model="fillStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
             <option value="">ทั้งหมด</option>
             <option value="done">กรอกครบ 12 เดือน</option>
@@ -474,7 +480,7 @@ onMounted(init);
       </div>
 
       <div class="text-sm text-gray-500 mb-3">
-        ปีงบ {{ year ? year + 543 : "-" }}
+        ปีงบ {{ displayYearBE }}
       </div>
 
       <div v-if="loading" class="text-center text-gray-500 py-10">กำลังโหลดข้อมูล...</div>
@@ -553,7 +559,7 @@ onMounted(init);
             <h2 class="text-lg font-bold">กรอกยอดพิมพ์รายเดือน</h2>
             <p class="text-sm text-gray-500">
               {{ modalDevice?.serial_number }} — {{ modalDevice?.brand_name }} {{ modalDevice?.model }}
-              (ปีงบ {{ year ? year + 543 : "-" }})
+              (ปีงบ {{ displayYearBE }})
             </p>
           </div>
           <button @click="closeModal" class="text-gray-400 hover:text-gray-700 text-xl leading-none">

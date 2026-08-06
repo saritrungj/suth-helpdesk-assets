@@ -179,6 +179,8 @@ registerChildLookup('floor', '/floors', 'building_id');
 registerChildLookup('department', '/departments', 'division_id');
 
 // fiscal_year uses "year" column instead of "name"
+const { getFiscalYearRange } = require('../utils/fiscalYear');
+
 router.get('/fiscal-years', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM fiscal_year ORDER BY year');
@@ -193,8 +195,19 @@ router.post('/fiscal-years', adminMiddleware, async (req, res) => {
     const { year } = req.body;
     if (!year) return res.status(400).json({ error: 'year is required' });
 
-    const [result] = await db.query('INSERT INTO fiscal_year (year) VALUES (?)', [year.trim()]);
-    res.status(201).json({ id: result.insertId, year: year.trim() });
+    // คำนวณช่วงเดือน (ต.ค.-ก.ย.) ของปีงบนี้เก็บไว้เลยตอนสร้าง แทนที่จะให้แต่ละหน้าไปเดาเอาเอง
+    const { startMonth, endMonth } = getFiscalYearRange(year.trim());
+
+    const [result] = await db.query(
+      'INSERT INTO fiscal_year (year, start_month, end_month) VALUES (?, ?, ?)',
+      [year.trim(), startMonth, endMonth]
+    );
+    res.status(201).json({
+      id: result.insertId,
+      year: year.trim(),
+      start_month: startMonth,
+      end_month: endMonth,
+    });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: `Fiscal year "${req.body.year}" already exists` });
@@ -210,13 +223,21 @@ router.put('/fiscal-years/:id', adminMiddleware, async (req, res) => {
     const { year } = req.body;
     if (!year) return res.status(400).json({ error: 'year is required' });
 
+    // แก้เลขปีงบแล้ว ช่วงเดือนต้องคำนวณใหม่ให้ตรงกันด้วย ไม่งั้นจะค้างช่วงเดือนของปีเก่าไว้
+    const { startMonth, endMonth } = getFiscalYearRange(year.trim());
+
     const [result] = await db.query(
-      'UPDATE fiscal_year SET year = ? WHERE id = ?',
-      [year.trim(), req.params.id]
+      'UPDATE fiscal_year SET year = ?, start_month = ?, end_month = ? WHERE id = ?',
+      [year.trim(), startMonth, endMonth, req.params.id]
     );
 
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
-    res.json({ id: parseInt(req.params.id), year: year.trim() });
+    res.json({
+      id: parseInt(req.params.id),
+      year: year.trim(),
+      start_month: startMonth,
+      end_month: endMonth,
+    });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: `Fiscal year "${req.body.year}" already exists` });

@@ -17,6 +17,10 @@ CREATE TABLE users (
 CREATE TABLE fiscal_year (
     id INT AUTO_INCREMENT PRIMARY KEY,
     year VARCHAR(10) NOT NULL UNIQUE,
+    -- ช่วงเดือน "YYYY-MM" ที่ปีงบนี้ครอบคลุมจริง (ต.ค.-ก.ย. ตามปีงบราชการไทย)
+    -- คำนวณและเก็บไว้ตอนสร้าง/แก้ไขปีงบ ดู backend/utils/fiscalYear.js
+    start_month CHAR(7) NOT NULL,
+    end_month CHAR(7) NOT NULL,
     status ENUM('active','inactive') DEFAULT 'active'
 );
 

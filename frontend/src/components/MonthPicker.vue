@@ -12,7 +12,7 @@
       <ChevronIcon :open="open" class="text-gray-400" />
     </button>
 
-    <!-- Dropdown รายชื่อเดือนไทย (ม.ค.–ธ.ค.) ของปีงบที่ active อยู่ตอนนี้ (เลือกปีจาก Navbar เท่านั้น ที่นี่เลือกได้แค่เดือน) -->
+    <!-- Dropdown รายชื่อเดือนไทย (ต.ค.–ก.ย. ตามปีงบราชการไทย) ของปีงบที่ active อยู่ตอนนี้ (เลือกปีจาก Navbar เท่านั้น ที่นี่เลือกได้แค่เดือน) -->
     <div
       v-if="open"
       class="absolute z-20 mt-1 w-64 bg-gray-50 border rounded-lg shadow-lg p-3"
@@ -34,7 +34,7 @@
         </button>
       </div>
 
-      <div v-if="!year" class="text-xs text-gray-400 px-1 py-4 text-center">
+      <div v-if="!range" class="text-xs text-gray-400 px-1 py-4 text-center">
         กรุณาเลือกปีงบก่อน (มุมขวาบน)
       </div>
 
@@ -43,16 +43,16 @@
       </div>
 
       <ul v-else class="divide-y max-h-72 overflow-y-auto">
-        <li v-for="(label, idx) in monthsTH" :key="idx">
+        <li v-for="opt in fiscalMonthOptions" :key="opt.value">
           <button
             type="button"
-            :disabled="isDisabled(monthValue(idx))"
-            @click="toggle(monthValue(idx))"
+            :disabled="isDisabled(opt.value)"
+            @click="toggle(opt.value)"
             class="w-full flex items-center justify-between text-sm py-2 px-2 rounded transition-colors"
-            :class="cellClass(monthValue(idx))"
+            :class="cellClass(opt.value)"
           >
-            <span>{{ label }}</span>
-            <span v-if="modelValue.includes(monthValue(idx))">✓</span>
+            <span>{{ opt.label }}</span>
+            <span v-if="modelValue.includes(opt.value)">✓</span>
           </button>
         </li>
       </ul>
@@ -63,7 +63,7 @@
 <script setup>
 import ChevronIcon from "./ChevronIcon.vue";
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
-import { activeGregorianYear } from "../store/fiscalYear";
+import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] }, // array ของ "YYYY-MM"
@@ -82,14 +82,17 @@ const monthsTH = [
   "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
 ];
 
-// ปีอ้างอิงมาจากปีงบ (global, เลือกที่ Navbar) เสมอ — ตัวเลือกเดือนที่นี่จึงเหลือแค่ "เดือน" อย่างเดียว
-const year = computed(() => activeGregorianYear.value);
-const displayYearBE = computed(() => (year.value ? year.value + 543 : "-"));
+// ช่วงเดือนอ้างอิงมาจากปีงบ (global, เลือกที่ Navbar) เสมอ — ตัวเลือกเดือนที่นี่จึงเหลือแค่ "เดือน" อย่างเดียว
+// ปีงบราชการไทยคือ ต.ค.-ก.ย. (คร่อม 2 ปีปฏิทิน) จึงต้องไล่จาก fiscalYearMonths() แทนการวนลูป ม.ค.-ธ.ค. ปีเดียว
+const range = computed(() => activeFiscalYearRange.value);
+const displayYearBE = computed(() =>
+  range.value ? Number(range.value.endMonth.split("-")[0]) + 543 : "-"
+);
 
-function monthValue(idx) {
-  if (!year.value) return "";
-  return `${year.value}-${String(idx + 1).padStart(2, "0")}`;
-}
+// ตัวเลือกเดือนที่แสดงจริง เรียงตามลำดับปีงบ (ต.ค. ปีก่อนหน้า ... ก.ย. ปีที่ตรงกับปีงบ)
+const fiscalMonthOptions = computed(() =>
+  fiscalYearMonths(range.value).map((value) => ({ value, label: formatMonth(value) }))
+);
 
 function formatMonth(value) {
   if (!value) return "";
@@ -149,7 +152,7 @@ function toggle(m) {
 }
 
 // ปีงบเปลี่ยน (จาก Navbar) → เดือนที่เคยเลือกไว้เป็นของปีงบเก่า ใช้ต่อไม่ได้แล้ว เคลียร์ทิ้งให้เริ่มเลือกใหม่
-watch(year, () => {
+watch(range, () => {
   if (props.modelValue.length) emit("update:modelValue", []);
 });
 

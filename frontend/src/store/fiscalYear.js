@@ -15,13 +15,37 @@ export const activeFiscalYear = computed(
   () => fiscalYearState.list.find((f) => f.id === fiscalYearState.activeId) || null
 );
 
-// ปีงบเริ่มเดือน ม.ค. (ปีปฏิทินปกติ) จึงตรงกับปี ค.ศ. ตัวเดียวกันเป๊ะๆ
-// ค่า year ในตาราง fiscal_year เก็บเป็น พ.ศ. (เช่น "2567") ต้อง -543 ให้เป็น ค.ศ. (2024)
-// ก่อนเอาไปประกอบเป็น "YYYY-MM" เพื่อ query กับ backend
+// ช่วงเดือนจริงของปีงบที่ active อยู่ตอนนี้ (ปีงบราชการไทย = 1 ต.ค. - 30 ก.ย. เสมอ คร่อม 2 ปีปฏิทิน)
+// เดิมที่นี่คำนวณเองแบบผิดๆ ว่าปีงบเริ่ม ม.ค. ตรงกับปี ค.ศ. เดียวกันเป๊ะ (แค่ -543 จาก พ.ศ.)
+// ทำให้เดือนที่โชว์ให้เลือก/ใช้ query ผิดจากปีงบจริง ตอนนี้อ่าน start_month/end_month ที่
+// backend คำนวณเก็บไว้ให้แล้วตอนสร้าง/แก้ไขปีงบ (ดู backend/utils/fiscalYear.js) แทน
 // null = ยังไม่มีปีงบ active ให้ component ที่ใช้ค่านี้เช็คเองก่อนสร้างเดือน
-export const activeGregorianYear = computed(() =>
-  activeFiscalYear.value ? Number(activeFiscalYear.value.year) - 543 : null
-);
+export const activeFiscalYearRange = computed(() => {
+  const fy = activeFiscalYear.value;
+  if (!fy || !fy.start_month || !fy.end_month) return null;
+  return { startMonth: fy.start_month, endMonth: fy.end_month };
+});
+
+// สร้างรายชื่อเดือน "YYYY-MM" เรียงจาก start_month ถึง end_month ของปีงบ (12 เดือน ต.ค.-ก.ย.)
+export function fiscalYearMonths(range) {
+  if (!range) return [];
+
+  const [startY, startM] = range.startMonth.split("-").map(Number);
+  const months = [];
+  let y = startY;
+  let m = startM;
+
+  for (let i = 0; i < 12; i++) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+
+  return months;
+}
 
 let loaded = false;
 let loadingPromise = null;
