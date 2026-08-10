@@ -128,7 +128,7 @@ function cellClass(m) {
   if (isDisabled(m)) {
     return "opacity-40 cursor-not-allowed text-gray-400";
   }
-  return "hover:bg-blue-50";
+  return "hover:bg-gray-300";
 }
 
 function toggle(m) {

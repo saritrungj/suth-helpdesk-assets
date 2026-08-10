@@ -7,12 +7,7 @@ import { askConfirm } from "../../store/confirmDialog"
 
 const contracts = ref([])
 const fiscalYears = ref([])
-
-const form = ref({
-  contract_no: "",
-  fiscal_year_id: "",
-  price_per_page: ""
-})
+const loading = ref(false)
 
 const editingId = ref(null)
 
@@ -36,8 +31,56 @@ const columns = computed(() => [
   { key: "price_per_page", label: "Price / Page", align: "right" },
 ])
 
+// -------------------------------------------------------
+// Modal เพิ่มข้อมูล (แทนแถวฟอร์มเดิมด้านบนตาราง — ให้เหมือนหน้า Master Data อื่นๆ)
+// -------------------------------------------------------
+const showAddModal = ref(false)
+const form = ref({ contract_no: "", fiscal_year_id: "", price_per_page: "" })
+const formError = ref(null)
+const saving = ref(false)
+
+function openAddModal() {
+  form.value = { contract_no: "", fiscal_year_id: "", price_per_page: "" }
+  formError.value = null
+  showAddModal.value = true
+}
+
+function closeAddModal() {
+  if (saving.value) return
+  showAddModal.value = false
+}
+
+function validate(values) {
+  if (!values.contract_no.trim()) return "กรุณากรอกเลขที่สัญญา"
+  if (!values.fiscal_year_id) return "กรุณาเลือกปีงบประมาณ"
+  return null
+}
+
+async function submitAdd() {
+  const err = validate(form.value)
+  if (err) {
+    formError.value = err
+    return
+  }
+
+  saving.value = true
+  formError.value = null
+
+  try {
+    await api.post("/contracts", form.value)
+    showAddModal.value = false
+    await load()
+  } catch (err) {
+    console.error(err)
+    formError.value = err.response?.data?.error || "เพิ่มข้อมูลไม่สำเร็จ"
+  } finally {
+    saving.value = false
+  }
+}
+
 // Load
 async function load() {
+  loading.value = true
   try {
     const [contractRes, fiscalRes] = await Promise.all([
       api.get("/contracts"),
@@ -49,24 +92,8 @@ async function load() {
   } catch (err) {
     console.error(err)
     toastError("โหลดข้อมูลไม่สำเร็จ")
-  }
-}
-
-// Add
-async function addContract() {
-  try {
-    await api.post("/contracts", form.value)
-
-    form.value = {
-      contract_no: "",
-      fiscal_year_id: "",
-      price_per_page: ""
-    }
-
-    load()
-  } catch (err) {
-    console.error(err)
-    toastError(err.response?.data?.error || "เพิ่มข้อมูลไม่สำเร็จ")
+  } finally {
+    loading.value = false
   }
 }
 
@@ -82,6 +109,12 @@ function editContract(c) {
 
 // Save
 async function saveContract(id) {
+  const err = validate(editForm.value)
+  if (err) {
+    toastError(err)
+    return
+  }
+
   try {
     await api.put(`/contracts/${id}`, editForm.value)
     editingId.value = null
@@ -116,50 +149,23 @@ onMounted(load)
 <template>
 <div class="p-6">
 
-  <h1 class="text-2xl font-bold mb-6">Contract Management</h1>
-
-  <!-- Add Contract -->
-  <div class="grid grid-cols-2 gap-3 mb-6">
-
-    <input
-      v-model="form.contract_no"
-      placeholder="เลขที่สัญญา"
-      class="border rounded px-3 py-2 bg-gray-50"
-    />
-
-    <select
-      v-model="form.fiscal_year_id"
-      class="border rounded px-3 py-2 bg-gray-50"
-    >
-      <option value="">เลือกปีงบประมาณ</option>
-      <option
-        v-for="f in fiscalYears"
-        :key="f.id"
-        :value="f.id"
-      >
-        {{ f.year }}
-      </option>
-    </select>
-
-    <input
-      v-model="form.price_per_page"
-      placeholder="ราคาต่อแผ่น"
-      type="number"
-      step="0.01"
-      class="border rounded px-3 py-2 bg-gray-50"
-    />
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">Contract Management</h1>
 
     <button
-      @click="addContract"
-      class="bg-blue-600 text-white rounded px-4 py-2"
+      @click="openAddModal"
+      class="bg-blue-600 text-white w-10 h-10 rounded-full text-xl leading-none hover:bg-blue-700"
+      title="เพิ่มสัญญา"
     >
-      Add Contract
+      +
     </button>
-
   </div>
+
+  <div v-if="loading" class="text-center text-gray-500 py-6">กำลังโหลดข้อมูล...</div>
 
   <!-- Table -> DataTable (มี sort/ค้นหา/pagination/export CSV ในตัว เหมือนหน้าทรัพย์สิน) -->
   <DataTable
+    v-else
     :rows="contracts"
     :columns="columns"
     row-key="id"
@@ -248,6 +254,72 @@ onMounted(load)
       </template>
     </template>
   </DataTable>
+
+  <!-- Modal: เพิ่มสัญญา -->
+  <div
+    v-if="showAddModal"
+    class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+    @click.self="closeAddModal"
+  >
+    <div class="bg-gray-50 rounded-lg shadow-xl w-full max-w-sm">
+      <div class="p-5 border-b flex items-center justify-between">
+        <h2 class="text-lg font-bold">เพิ่มสัญญา</h2>
+        <button @click="closeAddModal" class="text-gray-400 hover:text-gray-700 text-xl leading-none">
+          &times;
+        </button>
+      </div>
+
+      <div class="p-5 space-y-3">
+        <div>
+          <label class="block text-sm text-gray-500 mb-1">เลขที่สัญญา</label>
+          <input
+            v-model="form.contract_no"
+            type="text"
+            placeholder="เช่น SUTH 86-2567"
+            class="border rounded px-3 py-2 w-full bg-gray-50"
+            autofocus
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm text-gray-500 mb-1">ปีงบประมาณ</label>
+          <select v-model="form.fiscal_year_id" class="border rounded px-3 py-2 w-full bg-gray-50">
+            <option value="">-- เลือกปีงบประมาณ --</option>
+            <option v-for="f in fiscalYears" :key="f.id" :value="f.id">{{ f.year }}</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm text-gray-500 mb-1">ราคาต่อแผ่น</label>
+          <input
+            v-model="form.price_per_page"
+            @keyup.enter="submitAdd"
+            type="number"
+            step="0.01"
+            placeholder="เช่น 0.32"
+            class="border rounded px-3 py-2 w-full bg-gray-50"
+          />
+        </div>
+
+        <div v-if="formError" class="bg-red-100 text-red-700 p-2 rounded text-sm">
+          {{ formError }}
+        </div>
+      </div>
+
+      <div class="p-5 border-t flex justify-end gap-2">
+        <button @click="closeAddModal" :disabled="saving" class="border px-4 py-2 rounded hover:bg-gray-50">
+          ยกเลิก
+        </button>
+        <button
+          @click="submitAdd"
+          :disabled="saving"
+          class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {{ saving ? "กำลังบันทึก..." : "บันทึก" }}
+        </button>
+      </div>
+    </div>
+  </div>
 
 </div>
 </template>

@@ -1,13 +1,14 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { Bar } from "vue-chartjs";
+import { Line } from "vue-chartjs";
 import {
   Chart as ChartJS,
   Title,
   Tooltip,
   Legend,
-  BarElement,
+  LineElement,
+  PointElement,
   CategoryScale,
   LinearScale,
 } from "chart.js";
@@ -17,7 +18,7 @@ import { useChartTheme } from "../composables/useChartTheme";
 
 const { baseChartOptions } = useChartTheme();
 
-ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
+ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale);
 
 const route = useRoute();
 const router = useRouter();
@@ -164,15 +165,23 @@ function deltaVsPrevious(metricKey, index) {
   return diffPercent(prev[metricKey], curr[metricKey]);
 }
 
+// สไตล์กราฟเดียวกับ "เปรียบเทียบฝ่าย/แผนก" ในหน้ายอดพิมพ์แยกตามฝ่าย/แผนก (ByDepartment.vue)
+// เปลี่ยนจากกราฟแท่งเป็นกราฟเส้น พร้อม tooltip/point style ชุดเดียวกัน
 function chartDataFor(metric) {
   return {
     labels: monthStats.value.map((s) => s.label),
     datasets: [
       {
         label: metric.label,
-        data: monthStats.value.map((s) => s.stats?.[metric.key] || 0),
+        data: monthStats.value.map((s) => s.stats?.[metric.key] ?? null),
+        borderColor: metric.color,
         backgroundColor: metric.color,
-        borderRadius: 6,
+        pointBackgroundColor: metric.color,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+        tension: 0.25,
+        spanGaps: true,
       },
     ],
   };
@@ -184,9 +193,19 @@ const chartOptions = computed(() => {
   return {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
     plugins: {
       legend: { display: false },
-      tooltip: theme.plugins.tooltip,
+      tooltip: {
+        ...theme.plugins.tooltip,
+        callbacks: {
+          label(ctx) {
+            const v = ctx.raw;
+            if (v === null || v === undefined) return `${ctx.dataset.label}: ไม่มีข้อมูล`;
+            return `${ctx.dataset.label}: ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+          },
+        },
+      },
     },
     scales: {
       x: theme.scales.x,
@@ -338,7 +357,7 @@ onMounted(loadData);
           >
             <h3 class="font-semibold mb-3">{{ m.label }}</h3>
             <div class="h-56">
-              <Bar :data="chartDataFor(m)" :options="chartOptions" />
+              <Line :data="chartDataFor(m)" :options="chartOptions" />
             </div>
           </div>
         </div>

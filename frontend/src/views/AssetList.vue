@@ -16,6 +16,7 @@ const isAdmin = computed(() => authState.user?.role === "admin");
 const assets = ref([]);
 
 const search = ref(""); // ตัวกรองเฉพาะทาง (dropdown) — ยังทำเอง แยกจากช่องค้นหาทั่วไปใน DataTable
+const selectedFiscalYear = ref("");
 const selectedBrand = ref("");
 const selectedBuilding = ref("");
 const selectedFloor = ref("");
@@ -23,6 +24,7 @@ const selectedDivision = ref("");
 const selectedDepartment = ref("");
 const selectedStatus = ref("");
 
+const fiscalYears = ref([]);
 const brands = ref([]);
 const buildings = ref([]);
 const floors = ref([]);
@@ -103,7 +105,8 @@ async function loadAssets() {
 
 async function loadFilterData() {
   try {
-    const [brandRes, buildingRes, floorRes, divisionRes, departmentRes] = await Promise.all([
+    const [fiscalYearRes, brandRes, buildingRes, floorRes, divisionRes, departmentRes] = await Promise.all([
+      api.get("/fiscal-years"),
       api.get("/brands"),
       api.get("/buildings"),
       api.get("/floors"),
@@ -111,6 +114,7 @@ async function loadFilterData() {
       api.get("/departments"),
     ]);
 
+    fiscalYears.value = fiscalYearRes.data;
     brands.value = brandRes.data;
     buildings.value = buildingRes.data;
     floors.value = floorRes.data;
@@ -140,6 +144,7 @@ const filteredDepartmentOptions = computed(() => {
 });
 
 // ตัวเลือกสำหรับ SearchableSelect ของแต่ละ filter
+const fiscalYearOptions = computed(() => fiscalYears.value.map((f) => ({ value: f.year, label: `ปีงบ ${f.year}` })));
 const brandOptions = computed(() => brands.value.map((b) => ({ value: b.name, label: b.name })));
 const buildingOptions = computed(() => buildings.value.map((b) => ({ value: b.name, label: b.name })));
 const floorOptions = computed(() => {
@@ -164,6 +169,18 @@ watch(selectedDivision, () => {
   selectedDepartment.value = "";
 });
 
+// ล้างตัวกรองเฉพาะทาง (dropdown) ทั้งหมดกลับเป็นค่าเริ่มต้นในคลิกเดียว — เหมือนหน้า Report
+function resetFilters() {
+  search.value = "";
+  selectedFiscalYear.value = "";
+  selectedBrand.value = "";
+  selectedBuilding.value = "";
+  selectedFloor.value = "";
+  selectedDivision.value = "";
+  selectedDepartment.value = "";
+  selectedStatus.value = "";
+}
+
 
 // ==========================
 // Filter (เฉพาะทาง — dropdown) — DataTable จะรับผิดชอบ search ทั่วไป/sort/pagination/export ต่อ
@@ -179,6 +196,8 @@ const filteredAssets = computed(() => {
       a.brand_name?.toLowerCase().includes(keyword) ||
       a.contract_no?.toLowerCase().includes(keyword);
 
+    const matchFiscalYear = !selectedFiscalYear.value || String(a.fiscal_year) === String(selectedFiscalYear.value);
+
     const matchBrand = !selectedBrand.value || a.brand_name === selectedBrand.value;
 
     const matchBuilding = !selectedBuilding.value || a.building_name === selectedBuilding.value;
@@ -191,7 +210,7 @@ const filteredAssets = computed(() => {
 
     const matchStatus = !selectedStatus.value || a.status === selectedStatus.value;
 
-    return matchSearch && matchBrand && matchBuilding && matchFloor && matchDivision && matchDepartment && matchStatus;
+    return matchSearch && matchFiscalYear && matchBrand && matchBuilding && matchFloor && matchDivision && matchDepartment && matchStatus;
   });
 });
 
@@ -303,6 +322,13 @@ onMounted(async () => {
       search-placeholder="พิมพ์/เลือกแผนก"
     />
 
+    <SearchableSelect
+      v-model="selectedFiscalYear"
+      :options="fiscalYearOptions"
+      placeholder="ทุกปีงบ"
+      search-placeholder="พิมพ์/เลือกปีงบ"
+    />
+
     <select v-model="selectedStatus" class="border p-2 rounded bg-gray-50">
       <option value="">ทุกสถานะ</option>
       <option value="active">ใช้งานอยู่</option>
@@ -310,12 +336,21 @@ onMounted(async () => {
       <option value="retired">ปลดระวาง</option>
     </select>
 
+    <button
+      type="button"
+      @click="resetFilters"
+      class="text-sm text-red-500 hover:text-gray-700 underline whitespace-nowrap"
+    >
+      ล้างตัวกรองทั้งหมด
+    </button>
+
     <RouterLink
       v-if="isAdmin"
       to="/admin/add-asset"
-      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded ml-auto"
+      title="เพิ่มอุปกรณ์"
+      class="inline-flex items-center justify-center bg-blue-600 text-white w-10 h-10 rounded-full text-xl leading-none hover:bg-blue-700 ml-auto shrink-0"
     >
-      + เพิ่มอุปกรณ์
+      +
     </RouterLink>
 
   </div>

@@ -7,11 +7,7 @@ import { askConfirm } from "../../store/confirmDialog"
 
 const departments = ref([])
 const divisions = ref([])
-
-const form = ref({
-  division_id: "",
-  name: "",
-})
+const loading = ref(false)
 
 const editingId = ref(null)
 
@@ -32,8 +28,56 @@ const columns = computed(() => [
   { key: "name", label: "Department" },
 ])
 
+// -------------------------------------------------------
+// Modal เพิ่มข้อมูล (แทนแถวฟอร์มเดิมด้านบนตาราง — ให้เหมือนหน้า Master Data อื่นๆ)
+// -------------------------------------------------------
+const showAddModal = ref(false)
+const form = ref({ division_id: "", name: "" })
+const formError = ref(null)
+const saving = ref(false)
+
+function openAddModal() {
+  form.value = { division_id: "", name: "" }
+  formError.value = null
+  showAddModal.value = true
+}
+
+function closeAddModal() {
+  if (saving.value) return
+  showAddModal.value = false
+}
+
+function validate(values) {
+  if (!values.division_id) return "กรุณาเลือกฝ่าย"
+  if (!values.name.trim()) return "กรุณากรอกชื่อแผนก"
+  return null
+}
+
+async function submitAdd() {
+  const err = validate(form.value)
+  if (err) {
+    formError.value = err
+    return
+  }
+
+  saving.value = true
+  formError.value = null
+
+  try {
+    await api.post("/departments", form.value)
+    showAddModal.value = false
+    await load()
+  } catch (err) {
+    console.error(err)
+    formError.value = err.response?.data?.error || "เพิ่มข้อมูลไม่สำเร็จ"
+  } finally {
+    saving.value = false
+  }
+}
+
 // โหลดข้อมูล
 async function load() {
+  loading.value = true
   try {
 
     const [departmentRes, divisionRes] = await Promise.all([
@@ -49,35 +93,9 @@ async function load() {
     console.error(err)
     toastError("โหลดข้อมูลไม่สำเร็จ")
 
+  } finally {
+    loading.value = false
   }
-}
-
-// เพิ่ม
-async function addDepartment() {
-
-  if (!form.value.division_id || !form.value.name.trim()) {
-    toastError("กรุณากรอกข้อมูลให้ครบ")
-    return
-  }
-
-  try {
-
-    await api.post("/departments", form.value)
-
-    form.value = {
-      division_id: "",
-      name: "",
-    }
-
-    load()
-
-  } catch (err) {
-
-    console.error(err)
-    toastError("เพิ่มข้อมูลไม่สำเร็จ")
-
-  }
-
 }
 
 // เริ่มแก้ไข
@@ -95,8 +113,9 @@ function editDepartment(item) {
 // บันทึก
 async function saveDepartment(id) {
 
-  if (!editForm.value.division_id || !editForm.value.name.trim()) {
-    toastError("กรุณากรอกข้อมูลให้ครบ")
+  const err = validate(editForm.value)
+  if (err) {
+    toastError(err)
     return
   }
 
@@ -144,48 +163,22 @@ onMounted(load)
 
 <div class="p-6">
 
-<h1 class="text-2xl font-bold mb-6">
-Department Management
-</h1>
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Department Management</h1>
 
-<div class="flex gap-3 mb-6">
-
-<select
-v-model="form.division_id"
-class="border rounded px-3 py-2 bg-gray-50">
-
-<option value="">
-เลือกฝ่าย
-</option>
-
-<option
-v-for="d in divisions"
-:key="d.id"
-:value="d.id">
-
-{{ d.name }}
-
-</option>
-
-</select>
-
-<input
-v-model="form.name"
-placeholder="Department Name"
-class="border rounded px-3 py-2 bg-gray-50"
-/>
-
-<button
-@click="addDepartment"
-class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-
-Add
-
-</button>
-
+  <button
+    @click="openAddModal"
+    class="bg-blue-600 text-white w-10 h-10 rounded-full text-xl leading-none hover:bg-blue-700"
+    title="เพิ่มแผนก"
+  >
+    +
+  </button>
 </div>
 
+<div v-if="loading" class="text-center text-gray-500 py-6">กำลังโหลดข้อมูล...</div>
+
 <DataTable
+  v-else
   :rows="departments"
   :columns="columns"
   row-key="id"
@@ -238,6 +231,61 @@ Add
     </button>
   </template>
 </DataTable>
+
+<!-- Modal: เพิ่มแผนก -->
+<div
+  v-if="showAddModal"
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+  @click.self="closeAddModal"
+>
+  <div class="bg-gray-50 rounded-lg shadow-xl w-full max-w-sm">
+    <div class="p-5 border-b flex items-center justify-between">
+      <h2 class="text-lg font-bold">เพิ่มแผนก</h2>
+      <button @click="closeAddModal" class="text-gray-400 hover:text-gray-700 text-xl leading-none">
+        &times;
+      </button>
+    </div>
+
+    <div class="p-5 space-y-3">
+      <div>
+        <label class="block text-sm text-gray-500 mb-1">ฝ่าย</label>
+        <select v-model="form.division_id" class="border rounded px-3 py-2 w-full bg-gray-50">
+          <option value="">-- เลือกฝ่าย --</option>
+          <option v-for="d in divisions" :key="d.id" :value="d.id">{{ d.name }}</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-500 mb-1">ชื่อแผนก</label>
+        <input
+          v-model="form.name"
+          @keyup.enter="submitAdd"
+          type="text"
+          placeholder="เช่น ICU"
+          class="border rounded px-3 py-2 w-full bg-gray-50"
+          autofocus
+        />
+      </div>
+
+      <div v-if="formError" class="bg-red-100 text-red-700 p-2 rounded text-sm">
+        {{ formError }}
+      </div>
+    </div>
+
+    <div class="p-5 border-t flex justify-end gap-2">
+      <button @click="closeAddModal" :disabled="saving" class="border px-4 py-2 rounded hover:bg-gray-50">
+        ยกเลิก
+      </button>
+      <button
+        @click="submitAdd"
+        :disabled="saving"
+        class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+      >
+        {{ saving ? "กำลังบันทึก..." : "บันทึก" }}
+      </button>
+    </div>
+  </div>
+</div>
 
 </div>
 </template>

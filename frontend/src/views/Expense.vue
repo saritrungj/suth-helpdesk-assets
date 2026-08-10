@@ -3,6 +3,7 @@ import { ref, onMounted, watch, computed } from "vue";
 import api from "../services/api";
 import { fiscalYearState } from "../store/fiscalYear";
 import ChevronIcon from "../components/ChevronIcon.vue";
+import AppIcon from "../components/AppIcon.vue";
 
 const loading = ref(false);
 const error = ref(null);
@@ -160,7 +161,7 @@ onMounted(() => {
           class="w-full flex items-center justify-between p-4 hover:bg-gray-50 text-left"
         >
           <div class="flex items-center gap-2">
-            <span class="text-lg">📄</span>
+            <AppIcon name="document" class="w-4 h-4 text-gray-400 shrink-0" />
             <span class="font-semibold">สัญญา {{ contract.contract_no }}</span>
             <span class="text-xs text-gray-400">
               ({{ (contract.devices || []).length }} เครื่อง)
@@ -187,7 +188,7 @@ onMounted(() => {
               class="w-full flex items-center justify-between p-3 pl-8 hover:bg-gray-50 text-left"
             >
               <div class="flex items-center gap-2">
-                <span>🖨️</span>
+                <AppIcon name="printer" class="w-4 h-4 text-gray-400 shrink-0" />
                 <span class="font-medium">
                   {{ device.brand_name || "-" }} {{ device.model || "" }}
                 </span>
@@ -210,7 +211,12 @@ onMounted(() => {
               >
                 <thead>
                   <tr class="text-gray-500 text-left">
-                    <th class="py-1">💰 เดือน</th>
+                    <th class="py-1">
+                      <span class="inline-flex items-center gap-1">
+                        <AppIcon name="currency" class="w-3.5 h-3.5" />
+                        เดือน
+                      </span>
+                    </th>
                     <th class="py-1 text-right">จำนวนหน้า</th>
                     <th class="py-1 text-right">ค่าใช้จ่าย</th>
                   </tr>
@@ -240,7 +246,7 @@ onMounted(() => {
         class="w-full flex items-center justify-between p-4 hover:bg-yellow-100 text-left"
       >
         <div class="flex items-center gap-2">
-          <span>⚠️</span>
+          <AppIcon name="warning" class="w-4 h-4 text-yellow-600 shrink-0" />
           <span class="font-semibold text-yellow-800">
             เครื่องที่ยังไม่ได้ผูกสัญญา ({{ unassignedDevices.length }} เครื่อง)
           </span>
@@ -249,7 +255,7 @@ onMounted(() => {
           <span class="font-bold text-yellow-800">
             {{ formatMoney(unassignedDevices.reduce((s, d) => s + Number(d.total_cost || 0), 0)) }} บาท
           </span>
-          <ChevronIcon :open="showUnassigned" />
+          <ChevronIcon :open="showUnassigned" class="text-yellow-700" />
         </div>
       </button>
 

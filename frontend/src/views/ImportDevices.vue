@@ -11,6 +11,23 @@
       </RouterLink>
     </div>
 
+    <!-- เทมเพลตไฟล์ CSV — ดาวน์โหลดไปกรอกข้อมูลของจริงแล้วอัปโหลดกลับเข้ามาที่นี่ -->
+    <div class="flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm">
+      <p class="text-blue-800">
+        ยังไม่มีไฟล์? ดาวน์โหลดเทมเพลต CSV ไปกรอกข้อมูลอุปกรณ์ตามตัวอย่างได้เลย
+      </p>
+      <button
+        type="button"
+        @click="downloadTemplate"
+        class="inline-flex items-center gap-1.5 bg-white border border-blue-300 text-[var(--brand-text)] hover:bg-blue-100 text-sm font-medium px-3 py-1.5 rounded-lg whitespace-nowrap"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+        ดาวน์โหลดเทมเพลต
+      </button>
+    </div>
+
     <!-- Dropzone / เลือกไฟล์ -->
     <label
       class="block border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors"
@@ -139,6 +156,29 @@ const result = ref(null);
 const dragOver = ref(false);
 
 const skippedCount = computed(() => result.value?.skipped?.length || 0);
+
+// เทมเพลต CSV — คอลัมน์เดียวกับที่ backend อ่าน (serial_number, brand, model, building)
+// พร้อมคอลัมน์เผื่ออนาคต (floor, division, department, contract_no, price_override)
+// และแถวตัวอย่างเดียวกับ docs/mock_import_devices.csv ที่ตกลงกันไว้กับทีม
+const TEMPLATE_CSV = [
+  "serial_number,brand,model,building,floor,division,department,contract_no,price_override",
+  "SN-HP-001,HP,LaserJet M404dn,อาคารบริหาร,ชั้น 2,ฝ่ายบริหารงานทั่วไป,แผนกการเงินและบัญชี,CONT-67-001,",
+  "SN-CN-002,Canon,imageCLASS LBP6030,อาคารบริหาร,ชั้น 3,ฝ่ายบริหารงานทั่วไป,แผนกทรัพยากรบุคคล,CONT-67-001,",
+  "SN-EP-003,Epson,EcoTank L3250,อาคารผู้ป่วยนอก (OPD),ชั้น 1,ฝ่ายการแพทย์,แผนกอายุรกรรม,CONT-67-001,1.50",
+].join("\r\n");
+
+function downloadTemplate() {
+  // ใส่ BOM กัน Excel เปิดภาษาไทยแล้วเพี้ยน (แบบเดียวกับ export CSV ใน DataTable.vue)
+  const blob = new Blob(["\uFEFF" + TEMPLATE_CSV], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "template_import_devices.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from "vue";
 import ChevronIcon from "../components/ChevronIcon.vue";
+import AppIcon from "../components/AppIcon.vue";
 import { Line } from "vue-chartjs";
 import {
   Chart as ChartJS,
@@ -16,7 +17,7 @@ import api from "../services/api";
 import DepartmentPicker from "../components/DepartmentPicker.vue";
 import MonthPicker from "../components/MonthPicker.vue";
 import { useChartTheme } from "../composables/useChartTheme";
-import { fiscalYearState } from "../store/fiscalYear";
+import { fiscalYearState, activeFiscalYear } from "../store/fiscalYear";
 
 const { baseChartOptions } = useChartTheme();
 
@@ -215,15 +216,15 @@ function trendBadge(department) {
 
   const pctLabel = pct !== null && pct !== undefined ? ` ${Math.abs(pct).toFixed(1)}%` : "";
 
-  if (trend === "up") return { icon: "📈", cls: "bg-red-100 text-red-700", label: `เพิ่มขึ้น${pctLabel}` };
-  if (trend === "down") return { icon: "📉", cls: "bg-green-100 text-green-700", label: `ลดลง${pctLabel}` };
-  if (trend === "no-data") return { icon: "❔", cls: "bg-gray-100 text-gray-400", label: "ไม่มีข้อมูล" };
+  if (trend === "up") return { icon: "trendUp", cls: "bg-red-100 text-red-700", label: `เพิ่มขึ้น${pctLabel}` };
+  if (trend === "down") return { icon: "trendDown", cls: "bg-green-100 text-green-700", label: `ลดลง${pctLabel}` };
+  if (trend === "no-data") return { icon: "questionCircle", cls: "bg-gray-100 text-gray-400", label: "ไม่มีข้อมูล" };
 
   if (pct === null && trend !== "no-data") {
-    return { icon: "🆕", cls: "bg-blue-100 text-[var(--brand-text)]", label: "ข้อมูลใหม่" };
+    return { icon: "sparkles", cls: "bg-blue-100 text-[var(--brand-text)]", label: "ข้อมูลใหม่" };
   }
 
-  return { icon: "➖", cls: "bg-gray-100 text-gray-600", label: "เท่าเดิม" };
+  return { icon: "minus", cls: "bg-gray-100 text-gray-600", label: "เท่าเดิม" };
 }
 
 function trendDetail(department) {
@@ -309,7 +310,7 @@ const chartEntities = computed(() => {
     const devices = (division.departments || []).flatMap((dep) => dep.devices || []);
     list.push({
       key: `div-${id}`,
-      label: `🏢 ${division.name}`,
+      label: division.name,
       devices,
     });
   }
@@ -319,7 +320,7 @@ const chartEntities = computed(() => {
     if (!found) continue;
     list.push({
       key: `dep-${id}`,
-      label: `📁 ${found.department.name} (${found.division.name})`,
+      label: `${found.department.name} (${found.division.name})`,
       devices: found.department.devices || [],
     });
   }
@@ -449,6 +450,52 @@ onMounted(async () => {
   <div>
     <h1 class="text-2xl font-bold mb-6">ยอดพิมพ์แยกตามฝ่าย/แผนก</h1>
 
+    <!-- สรุปยอดรวมทั้งหมด — อยู่บนสุด เห็นก่อนเป็นอันดับแรกว่าดูปีงบไหนอยู่และยอดรวมเท่าไหร่ -->
+    <div
+      v-if="!loading && divisions.length"
+      class="bg-gray-50 shadow rounded-lg p-5 mb-6 flex flex-wrap items-center gap-6"
+    >
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center shrink-0">
+          <AppIcon name="building" class="w-5 h-5" />
+        </div>
+        <div>
+          <div class="text-sm text-gray-500">ปีงบ</div>
+          <div class="text-2xl font-bold text-gray-700 leading-tight">
+            {{ activeFiscalYear?.year ?? "-" }}
+          </div>
+        </div>
+      </div>
+
+      <div class="w-px h-10 bg-gray-200 hidden sm:block"></div>
+
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-full bg-blue-100 text-[var(--brand-text)] flex items-center justify-center shrink-0">
+          <AppIcon name="folder" class="w-5 h-5" />
+        </div>
+        <div>
+          <div class="text-sm text-gray-500">รวมค่าใช้จ่ายทั้งหมด</div>
+          <div class="text-2xl font-bold text-[var(--brand-text)] leading-tight">
+            {{ formatMoney(grandTotalCost) }} <span class="text-base font-medium text-gray-500">บาท</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="w-px h-10 bg-gray-200 hidden sm:block"></div>
+
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center shrink-0">
+          <AppIcon name="printer" class="w-5 h-5" />
+        </div>
+        <div>
+          <div class="text-sm text-gray-500">รวมจำนวนหน้า</div>
+          <div class="text-2xl font-bold text-gray-700 leading-tight">
+            {{ grandTotalPages.toLocaleString() }} <span class="text-base font-medium text-gray-500">หน้า</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- แถบควบคุม -->
     <div class="bg-gray-50 shadow rounded-lg p-4 mb-6 flex items-center gap-4 flex-wrap">
       <div class="w-64">
@@ -482,20 +529,15 @@ onMounted(async () => {
           ย่อทั้งหมด
         </button>
       </div>
-
-      <div v-if="!loading && divisions.length" class="ml-auto text-right">
-        <div class="text-sm text-gray-500">รวมค่าใช้จ่ายทั้งหมด</div>
-        <div class="text-xl font-bold text-[var(--brand-text)]">{{ formatMoney(grandTotalCost) }} บาท</div>
-        <div class="text-xs text-gray-400">รวม {{ grandTotalPages.toLocaleString() }} หน้า</div>
-      </div>
     </div>
 
     <!-- สรุปแผนกที่ยังไม่มีข้อมูลเดือนนี้ -->
     <div
       v-if="month && noDataCount > 0"
-      class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 text-sm text-yellow-800"
+      class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 text-sm text-yellow-800 flex items-center gap-1.5"
     >
-      ⚠️ มี {{ noDataCount }} จาก {{ totalDepartmentCount }} แผนก ที่ยังไม่มีข้อมูลยอดพิมพ์ในเดือนนี้ (ทั้งเดือนนี้และเดือนก่อน)
+      <AppIcon name="warning" class="w-4 h-4 shrink-0" />
+      มี {{ noDataCount }} จาก {{ totalDepartmentCount }} แผนก ที่ยังไม่มีข้อมูลยอดพิมพ์ในเดือนนี้ (ทั้งเดือนนี้และเดือนก่อน)
     </div>
 
     <div v-if="loading" class="text-center text-gray-500 py-10">กำลังโหลดข้อมูล...</div>
@@ -581,7 +623,7 @@ onMounted(async () => {
             class="w-full flex items-center justify-between p-4 hover:bg-gray-50 text-left"
           >
             <div class="flex items-center gap-2">
-              <span class="text-lg">🏢</span>
+              <AppIcon name="building" class="w-4 h-4 text-gray-400 shrink-0" />
               <span class="font-semibold">{{ division.name }}</span>
               <span class="text-xs text-gray-400">
                 ({{ (division.departments || []).length }} แผนก)
@@ -606,17 +648,18 @@ onMounted(async () => {
               >
                 <div class="flex-1">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span>📁</span>
+                    <AppIcon name="folder" class="w-4 h-4 text-gray-400 shrink-0" />
                     <span class="font-medium">{{ department.name }}</span>
                     <span class="text-xs text-gray-400">
                       ({{ (department.devices || []).length }} เครื่อง)
                     </span>
                     <span
                       v-if="month && department.trend"
-                      class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
+                      class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
                       :class="trendBadge(department).cls"
                     >
-                      {{ trendBadge(department).icon }} {{ trendBadge(department).label }}
+                      <AppIcon :name="trendBadge(department).icon" class="w-3 h-3 shrink-0" />
+                      {{ trendBadge(department).label }}
                     </span>
                   </div>
 
@@ -658,7 +701,7 @@ onMounted(async () => {
                     class="w-full flex items-center justify-between py-2 hover:bg-gray-50 text-left"
                   >
                     <div class="flex items-center gap-2">
-                      <span>🖨️</span>
+                      <AppIcon name="printer" class="w-4 h-4 text-gray-400 shrink-0" />
                       <span>{{ device.brand_name || "-" }} {{ device.model || "" }}</span>
                       <span class="text-xs text-gray-400">S/N: {{ device.serial_number }}</span>
                     </div>
@@ -699,12 +742,17 @@ onMounted(async () => {
         class="w-full flex items-center justify-between p-4 hover:bg-yellow-100 text-left"
       >
         <div class="flex items-center gap-2">
-          <span>⚠️</span>
+          <AppIcon name="warning" class="w-4 h-4 text-yellow-600 shrink-0" />
           <span class="font-semibold text-yellow-800">
             เครื่องที่ยังไม่ได้ผูกฝ่าย/แผนก ({{ unassignedDevices.length }} เครื่อง)
           </span>
         </div>
-        <ChevronIcon :open="showUnassigned" />
+        <div class="flex items-center gap-4">
+          <span class="font-bold text-yellow-800">
+            {{ formatMoney(unassignedDevices.reduce((s, d) => s + Number(d.total_cost || 0), 0)) }} บาท
+          </span>
+          <ChevronIcon :open="showUnassigned" class="text-yellow-700" />
+        </div>
       </button>
 
       <div v-if="showUnassigned" class="border-t divide-y bg-gray-50">
