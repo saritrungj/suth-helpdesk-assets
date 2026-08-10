@@ -41,7 +41,7 @@ No automated test framework or coverage threshold is configured; backend `npm te
 
 ## Commit & Pull Request Guidelines
 
-Recent history includes `fix: add fiscal year ranges to seed data` and generic “update latest changes” commits. Prefer short, imperative Conventional Commit-style subjects (`feat:`, `fix:`, `docs:`, `db:`). PRs should explain behavior/schema changes, list commands, identify migration order, link an issue when available, and include UI screenshots.
+Recent commits include `fix: add fiscal year ranges to seed data` and generic “update latest changes”. Prefer imperative Conventional Commit subjects (`feat:`, `fix:`, `docs:`, `db:`). PRs should explain behavior/schema changes, list commands, migration order, originating GitHub Issue, and relevant UI screenshots.
 
 ## Security & Configuration
 
@@ -50,11 +50,11 @@ Never commit `.env`, credentials, tokens, or production data. Keep MySQL credent
 ## Team Workflow
 
 - Two developers; AI-assisted workflow.
-- Start each task from a GitHub Issue and dedicated branch; never edit or commit on `main`.
+- Start every development task from a GitHub Issue and dedicated branch linked to it; never edit or commit on `main`.
 - Before editing, check the branch and `git status`; on `main`, stop and notify the user.
-- Read relevant code first; propose a plan for risky or multi-file work.
+- Read relevant context, analyze the task, and propose a plan before editing.
 - Stay within the Issue scope; do not fix unrelated code.
-- Before finishing, inspect `git diff`, run relevant checks, and state anything untested.
+- Before committing, inspect `git diff` and run relevant tests/checks; report anything untested.
 - Do not commit, push, merge, delete branches, deploy, or change production without explicit user instruction.
 - Get approval before schema/migration, auth/security, secrets, destructive-operation, or production work.
 - Summarize changed files, test results, and remaining risks.
