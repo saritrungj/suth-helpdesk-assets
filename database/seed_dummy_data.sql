@@ -31,9 +31,9 @@ ALTER TABLE fiscal_year AUTO_INCREMENT = 1;
 -- Fiscal Year
 -- ==============================================================================
 
-INSERT INTO fiscal_year (id, year, status) VALUES
-(1,'2566','active'),
-(2,'2567','active');
+INSERT INTO fiscal_year (id, year, start_month, end_month, status) VALUES
+(1,'2566','2022-10','2023-09','active'),
+(2,'2567','2023-10','2024-09','active');
 
 -- ==============================================================================
 -- Brand
