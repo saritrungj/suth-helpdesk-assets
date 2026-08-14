@@ -59,7 +59,7 @@
         >
           <SidebarLink
             v-for="item in g.items"
-            :key="item.to"
+            :key="item.label"
             :to="item.to"
             :label="item.label"
             :icon="item.icon"
@@ -85,7 +85,7 @@
           >
             <SidebarLink
               v-for="item in g.items"
-              :key="item.to"
+              :key="item.label"
               :to="item.to"
               :label="item.label"
               :icon="item.icon"
@@ -158,6 +158,7 @@ const ICONS = {
   calendar: "M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5",
   wrench: "M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437 5.877 5.877",
   upload: "M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3",
+  userCog: "M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z",
 };
 
 const IconSvg = (props) =>
@@ -187,6 +188,7 @@ const groups = [
     key: "record",
     label: "บันทึกข้อมูล",
     icon: ICONS.pencil,
+    // แยกกลับมาเป็น route เดี่ยวของตัวเอง (ไม่ได้รวมกับหน้า "ค่าใช้จ่าย" แล้ว)
     items: [{ to: "/print-transactions", label: "บันทึกยอดพิมพ์", icon: ICONS.printer }],
   },
   {
@@ -194,9 +196,10 @@ const groups = [
     label: "รายงาน",
     icon: ICONS.chart,
     items: [
+      // "ค่าใช้จ่าย" กับ "ยอดพิมพ์แยกตามฝ่าย/แผนก" รวมเป็นหน้าเดียวกันแล้ว (ดู views/UsageReport.vue)
+      // เหลือลิงก์เดียวในเมนู พอเข้าไปแล้วมีแท็บให้เลือกดูอีกทีในหน้า
       { to: "/expense", label: "ค่าใช้จ่าย", icon: ICONS.currency },
       { to: "/compare", label: "เปรียบเทียบข้อมูลรายเดือน", icon: ICONS.swap },
-      { to: "/by-department", label: "ยอดพิมพ์แยกตามฝ่าย/แผนก", icon: ICONS.folder },
       { to: "/report", label: "รายงาน", icon: ICONS.document },
     ],
   },
@@ -247,11 +250,15 @@ const adminGroups = [
       { to: "/admin/contracts", label: "จัดการสัญญา", icon: ICONS.briefcase },
     ],
   },
+  // "Import CSV" ย้ายไปรวมเป็นแท็บในหน้า "เพิ่มทรัพย์สิน" แล้ว (ดู admin-devices ด้านบน)
+  // จึงตัดกลุ่ม admin-tools ที่มีแค่รายการเดียวนี้ทิ้ง ไม่ต้องมีเมนูซ้ำซ้อน
   {
-    key: "admin-tools",
-    label: "Tools",
-    icon: ICONS.wrench,
-    items: [{ to: "/admin/import-devices", label: "Import CSV", icon: ICONS.upload }],
+    key: "admin-users",
+    label: "ผู้ใช้งานระบบ",
+    icon: ICONS.userCog,
+    items: [
+      { to: "/admin/users", label: "จัดการผู้ใช้งาน", icon: ICONS.userCog },
+    ],
   },
 ];
 
@@ -263,15 +270,25 @@ const adminGroups = [
 const route = useRoute();
 const openGroups = reactive({});
 
+// item.to อาจเป็น string ("/expense") หรือ object ({ path, query }) แบบที่ใช้กับลิงก์ที่ต้องระบุ query ด้วย
+// เทียบ path เสมอ + เทียบ query เฉพาะ key ที่ item ระบุไว้ (ไม่สนใจ query อื่นที่ route มีเพิ่ม)
+function itemMatchesRoute(item, currentRoute) {
+  const path = typeof item.to === "string" ? item.to : item.to.path;
+  const query = typeof item.to === "string" ? {} : item.to.query || {};
+
+  if (path !== currentRoute.path) return false;
+  return Object.entries(query).every(([key, value]) => currentRoute.query[key] === value);
+}
+
 function isGroupActive(group) {
-  return group.items.some((item) => item.to === route.path);
+  return group.items.some((item) => itemMatchesRoute(item, route));
 }
 
 watch(
-  () => route.path,
-  (path) => {
+  () => [route.path, route.query.tab],
+  () => {
     for (const g of [...groups, ...adminGroups]) {
-      if (g.items.some((item) => item.to === path)) openGroups[g.key] = true;
+      if (g.items.some((item) => itemMatchesRoute(item, route))) openGroups[g.key] = true;
     }
   },
   { immediate: true }

@@ -449,6 +449,7 @@ onMounted(async () => {
 <template>
   <div>
     <h1 class="text-2xl font-bold mb-6">ยอดพิมพ์แยกตามฝ่าย/แผนก</h1>
+    <p class="text-sm text-gray-500 -mt-4 mb-6">ยอดค่าใช้จ่ายทั้งหมดเป็นยอดสุทธิหลังหัก 20%</p>
 
     <!-- สรุปยอดรวมทั้งหมด — อยู่บนสุด เห็นก่อนเป็นอันดับแรกว่าดูปีงบไหนอยู่และยอดรวมเท่าไหร่ -->
     <div
@@ -474,7 +475,7 @@ onMounted(async () => {
           <AppIcon name="folder" class="w-5 h-5" />
         </div>
         <div>
-          <div class="text-sm text-gray-500">รวมค่าใช้จ่ายทั้งหมด</div>
+          <div class="text-sm text-gray-500">รวมค่าใช้จ่ายสุทธิ (หัก 20%)</div>
           <div class="text-2xl font-bold text-[var(--brand-text)] leading-tight">
             {{ formatMoney(grandTotalCost) }} <span class="text-base font-medium text-gray-500">บาท</span>
           </div>
@@ -704,6 +705,13 @@ onMounted(async () => {
                       <AppIcon name="printer" class="w-4 h-4 text-gray-400 shrink-0" />
                       <span>{{ device.brand_name || "-" }} {{ device.model || "" }}</span>
                       <span class="text-xs text-gray-400">S/N: {{ device.serial_number }}</span>
+                      <span
+                        v-if="device.moved_during_period"
+                        class="text-xs bg-amber-100 text-amber-700 rounded px-1.5 py-0.5"
+                        title="เครื่องนี้ย้ายแผนกระหว่างช่วงเวลาที่ดูอยู่ — ยอดพิมพ์แต่ละเดือนแยกไปตามแผนกที่สังกัดตอนนั้นจริงๆ"
+                      >
+                        ย้ายแผนกระหว่างช่วงนี้
+                      </span>
                     </div>
                     <div class="flex items-center gap-4">
                       <span class="text-sm text-gray-700">{{ formatMoney(device.total_cost) }} บาท</span>

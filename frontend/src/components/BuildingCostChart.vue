@@ -60,7 +60,7 @@ const chartData = ref({
 
     {
 
-      label: "ค่าใช้จ่าย (บาท)",
+      label: "ค่าใช้จ่ายสุทธิ (หัก 20%)",
 
 
       data: [],
@@ -106,7 +106,7 @@ const chartOptions = computed(() => {
           label(context) {
 
             return (
-              "ค่าใช้จ่าย: " +
+              "ค่าใช้จ่ายสุทธิ (หัก 20%): " +
               Number(context.raw)
                 .toLocaleString(
                   undefined,
@@ -217,7 +217,7 @@ async function loadBuildingCost(){
 
           label:
 
-            "ค่าใช้จ่าย (บาท)",
+            "ค่าใช้จ่ายสุทธิ (หัก 20%)",
 
 
 

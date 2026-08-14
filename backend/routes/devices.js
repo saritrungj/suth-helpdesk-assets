@@ -19,6 +19,13 @@ router.get(
   deviceController.getOne
 );
 
+// ประวัติการย้ายอาคาร/ชั้น/ฝ่าย/แผนกของเครื่อง — ดูได้เหมือนหน้ารายงานอื่นๆ ไม่ต้องเป็น admin
+router.get(
+  "/:id/history",
+  authMiddleware,
+  deviceController.getHistory
+);
+
 // Admin เท่านั้น
 router.post(
   "/",

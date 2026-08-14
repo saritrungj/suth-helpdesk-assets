@@ -166,3 +166,29 @@ ALTER TABLE department AUTO_INCREMENT = 6;
 ALTER TABLE contracts AUTO_INCREMENT = 3;
 ALTER TABLE devices AUTO_INCREMENT = 6;
 ALTER TABLE print_transactions AUTO_INCREMENT = 15;
+
+=======
+
+-- ==============================================================================
+-- ประวัติการย้าย (device_location_history) — ตั้งต้นช่วง "ปัจจุบัน" ให้เครื่องที่ seed มา
+-- ใช้เดือนแรกสุดที่มียอดพิมพ์ของเครื่องนั้นเป็นจุดเริ่ม เพื่อให้รายงานแยกตามฝ่าย/แผนก
+-- ดึงข้อมูล seed เดือนย้อนหลังได้ครบ (ดูรายละเอียดที่ migration_add_device_location_history.sql)
+-- ==============================================================================
+INSERT INTO device_location_history
+    (device_id, building_id, floor_id, location, division_id, department_id, effective_from, effective_to)
+SELECT
+    d.id,
+    d.building_id,
+    d.floor_id,
+    d.location,
+    d.division_id,
+    d.department_id,
+    COALESCE(
+        (SELECT MIN(STR_TO_DATE(CONCAT(pt.month, '-01'), '%Y-%m-%d'))
+         FROM print_transactions pt
+         WHERE pt.device_id = d.id),
+        CURDATE()
+    ),
+    NULL
+FROM devices d;
+

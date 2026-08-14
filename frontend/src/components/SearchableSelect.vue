@@ -42,7 +42,7 @@
         :class="opt.value === modelValue ? 'font-semibold text-blue-600' : ''"
       >
         <span class="truncate">{{ opt.label }}</span>
-        <span v-if="opt.value === modelValue">✓</span>
+        <AppIcon v-if="opt.value === modelValue" name="check" class="w-3.5 h-3.5 shrink-0" />
       </button>
 
       <div v-if="!options.length" class="text-xs text-gray-400 px-2 py-2">
@@ -57,6 +57,7 @@
 
 <script setup>
 import ChevronIcon from "./ChevronIcon.vue";
+import AppIcon from "./AppIcon.vue";
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 
 const props = defineProps({

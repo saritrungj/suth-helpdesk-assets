@@ -3,6 +3,7 @@ const router = express.Router();
 
 const db = require("../db");
 const authMiddleware = require("../middlewares/authMiddleware");
+const staffMiddleware = require("../middlewares/staffMiddleware");
 
 // ต้อง login ก่อนถึงจะบันทึก/ดูยอดพิมพ์ได้ (เดิมไม่มีการป้องกันเลย)
 router.use(authMiddleware);
@@ -93,7 +94,7 @@ router.get("/months", async (req, res) => {
 // POST /api/print-transactions
 // เพิ่ม/แก้ไขยอดพิมพ์ 1 รายการ (upsert — กันข้อมูลซ้ำเวลาบันทึกซ้ำเดือนเดิม)
 // ============================================================
-router.post("/", async (req, res) => {
+router.post("/", staffMiddleware, async (req, res) => {
   try {
     const { device_id, month: rawMonth, pages } = req.body;
 
@@ -133,7 +134,7 @@ router.post("/", async (req, res) => {
 // ON DUPLICATE KEY UPDATE จะไม่ทำงาน (ตาราง print_transactions ต้องมี
 // UNIQUE KEY (device_id, month))
 // ============================================================
-router.post("/bulk", async (req, res) => {
+router.post("/bulk", staffMiddleware, async (req, res) => {
   const { month: rawMonth, items } = req.body;
 
   if (!rawMonth || !Array.isArray(items) || items.length === 0) {
@@ -208,10 +209,20 @@ router.get("/summary", async (req, res) => {
 
     const [rows] = await db.query(
       `
-      SELECT device_id, COUNT(*) AS filled, SUM(pages) AS total_pages
-      FROM print_transactions
-      WHERE month BETWEEN ? AND ?
-      GROUP BY device_id
+      SELECT
+        totals.device_id,
+        totals.filled,
+        totals.total_pages,
+        totals.latest_month,
+        latest.pages AS latest_pages
+      FROM (
+        SELECT device_id, COUNT(*) AS filled, SUM(pages) AS total_pages, MAX(month) AS latest_month
+        FROM print_transactions
+        WHERE month BETWEEN ? AND ?
+        GROUP BY device_id
+      ) totals
+      JOIN print_transactions latest
+        ON latest.device_id = totals.device_id AND latest.month = totals.latest_month
       `,
       [fiscalYear.start_month, fiscalYear.end_month]
     );
@@ -267,8 +278,14 @@ router.get("/by-device/:deviceId", async (req, res) => {
 // ============================================================
 // POST /api/print-transactions/bulk-device
 // บันทึกยอดพิมพ์ทีเดียวหลายเดือน สำหรับเครื่องเดียว (ใช้กับ Modal กรอก 12 เดือน)
+//
+// เดือนที่ "ลบออกจนว่าง" ในฟอร์ม (pages เป็น null/undefined/ค่าว่าง) ต้องถือว่า
+// "ยังไม่กรอก" จริงๆ ไม่ใช่แค่ข้ามไม่ส่งมา — เดิมโค้ดนี้ skip เฉยๆ ทำให้ถ้าเดือนนั้น
+// เคยมีค่าบันทึกไว้ก่อนหน้า (เช่น กรอกผิดแล้วลบออก) แถวเก่าใน print_transactions
+// จะไม่ถูกลบ ค่าเก่าเลยยังค้างอยู่ และ "สถานะการกรอก" (X/12 เดือน) ก็เลยไม่ลดตาม
+// ทั้งที่หน้าจอโชว์ว่าช่องนั้นว่างอยู่ — ต้อง DELETE แถวเดือนนั้นทิ้งไปเลยแทน
 // ============================================================
-router.post("/bulk-device", async (req, res) => {
+router.post("/bulk-device", staffMiddleware, async (req, res) => {
   const { device_id, items } = req.body;
 
   if (!device_id || !Array.isArray(items) || items.length === 0) {
@@ -281,16 +298,22 @@ router.post("/bulk-device", async (req, res) => {
     await connection.beginTransaction();
 
     let saved = 0;
+    let cleared = 0;
 
     for (const item of items) {
-      // ข้ามเดือนที่ไม่ได้กรอกจริงๆ (null/undefined/ค่าว่าง)
-      if (item.pages === null || item.pages === undefined || item.pages === "") {
-        continue;
-      }
-
       const month = normalizeMonth(item.month);
       if (!month) {
         throw new Error(`รูปแบบเดือนไม่ถูกต้อง: ${item.month}`);
+      }
+
+      // เดือนที่ถูกลบออกจนว่าง (null/undefined/"") — ลบแถวเดือนนี้ทิ้ง ถือว่า "ยังไม่กรอก"
+      if (item.pages === null || item.pages === undefined || item.pages === "") {
+        const [result] = await connection.query(
+          `DELETE FROM print_transactions WHERE device_id = ? AND month = ?`,
+          [device_id, month]
+        );
+        if (result.affectedRows > 0) cleared++;
+        continue;
       }
 
       const pagesNum = Number(item.pages);
@@ -312,7 +335,15 @@ router.post("/bulk-device", async (req, res) => {
 
     await connection.commit();
 
-    res.json({ message: `บันทึกยอดพิมพ์สำเร็จ ${saved} เดือน` });
+    const parts = [];
+    if (saved > 0) parts.push(`บันทึก ${saved} เดือน`);
+    if (cleared > 0) parts.push(`ลบออก ${cleared} เดือน`);
+
+    res.json({
+      message: parts.length ? parts.join(" / ") : "ไม่มีการเปลี่ยนแปลง",
+      saved,
+      cleared,
+    });
   } catch (err) {
     await connection.rollback();
     console.error("Bulk-device save error:", err.message);

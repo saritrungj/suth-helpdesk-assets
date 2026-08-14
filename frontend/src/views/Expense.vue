@@ -125,6 +125,7 @@ onMounted(() => {
 <template>
   <div class="p-6">
     <h1 class="text-2xl font-bold mb-6">ค่าใช้จ่ายแยกตามสัญญา</h1>
+    <p class="text-sm text-gray-500 -mt-4 mb-6">ยอดค่าใช้จ่ายทั้งหมดเป็นยอดสุทธิหลังหัก 20%</p>
 
     <!-- สรุปยอดรวม — ตัว selector ปีงบย้ายไปอยู่ที่ Navbar แล้ว (global state) -->
     <div
@@ -132,7 +133,7 @@ onMounted(() => {
       class="bg-gray-50 shadow rounded-lg p-4 mb-6 flex items-center justify-end"
     >
       <div class="text-right">
-        <div class="text-sm text-gray-500">รวมค่าใช้จ่ายทั้งปีงบ</div>
+        <div class="text-sm text-gray-500">รวมค่าใช้จ่ายสุทธิทั้งปีงบ (หัก 20% แล้ว)</div>
         <div class="text-xl font-bold text-[var(--brand-text)]">{{ formatMoney(grandTotal) }} บาท</div>
         <div class="text-xs text-gray-400">รวม {{ grandTotalPages.toLocaleString() }} หน้า</div>
       </div>
@@ -218,7 +219,7 @@ onMounted(() => {
                       </span>
                     </th>
                     <th class="py-1 text-right">จำนวนหน้า</th>
-                    <th class="py-1 text-right">ค่าใช้จ่าย</th>
+                    <th class="py-1 text-right">ค่าใช้จ่ายสุทธิ (หัก 20%)</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -10,6 +10,7 @@ const deviceSchema = z.object({
   model: z.string().optional().nullable(),
   building_id: z.number().int().positive().optional().nullable(),
   floor_id: z.number().int().positive().optional().nullable(),
+  location: z.string().max(255).optional().nullable(),
   division_id: z.number().int().positive().optional().nullable(),
   department_id: z.number().int().positive().optional().nullable(),
   contract_id: z.number().int().positive().optional().nullable(),
@@ -18,7 +19,72 @@ const deviceSchema = z.object({
 });
 
 // ============================================================
+// ประวัติการย้าย (device_location_history)
+// ============================================================
+// เรียกทุกครั้งหลัง insert/update devices เพื่อ "ปิด" ช่วงเดิมที่ยังเปิดอยู่ (effective_to IS NULL)
+// แล้วเปิดช่วงใหม่ ถ้าตำแหน่ง/ฝ่าย/แผนกเปลี่ยนไปจากช่วงล่าสุดจริงๆ เท่านั้น — กันไม่ให้กด "บันทึก"
+// ซ้ำโดยไม่ได้แก้อะไรแล้วเกิดแถวประวัติขยะเพิ่มขึ้นเรื่อยๆ
+//
+// ใช้ conn ตัวเดียวกับที่ทำ insert/update devices (ส่งเข้ามาจากผู้เรียก) เพื่อให้อยู่ใน
+// transaction เดียวกัน ถ้า insert/update devices สำเร็จแต่บันทึกประวัติพัง จะได้ rollback ทั้งคู่
+async function recordLocationHistory(conn, deviceId, loc) {
+  const [[latest]] = await conn.query(
+    `SELECT * FROM device_location_history
+     WHERE device_id = ? AND effective_to IS NULL
+     ORDER BY id DESC LIMIT 1`,
+    [deviceId]
+  );
+
+  const sameAsLatest =
+    latest &&
+    latest.building_id === loc.building_id &&
+    latest.floor_id === loc.floor_id &&
+    (latest.location || null) === (loc.location || null) &&
+    latest.division_id === loc.division_id &&
+    latest.department_id === loc.department_id;
+
+  if (sameAsLatest) return;
+
+  // effective_from ของช่วงเดิม (ถ้ามี) ต้องมาก่อนวันนี้เท่านั้น ถ้าแก้ไขเครื่องซ้ำในวันเดียวกัน
+  // (เช่น แก้ผิดแล้วรีบแก้ใหม่) ให้ "แทนที่" ช่วงล่าสุดแทนการเปิดช่วงใหม่ซ้อนวันเดียวกัน
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (latest && latest.effective_from === today) {
+    await conn.query(
+      `UPDATE device_location_history SET
+         building_id=?, floor_id=?, location=?, division_id=?, department_id=?
+       WHERE id=?`,
+      [loc.building_id, loc.floor_id, loc.location, loc.division_id, loc.department_id, latest.id]
+    );
+    return;
+  }
+
+  if (latest) {
+    await conn.query(`UPDATE device_location_history SET effective_to=? WHERE id=?`, [
+      today,
+      latest.id,
+    ]);
+  }
+
+  await conn.query(
+    `INSERT INTO device_location_history
+       (device_id, building_id, floor_id, location, division_id, department_id, effective_from, effective_to)
+     VALUES (?,?,?,?,?,?,?,NULL)`,
+    [
+      deviceId,
+      loc.building_id,
+      loc.floor_id,
+      loc.location,
+      loc.division_id,
+      loc.department_id,
+      today,
+    ]
+  );
+}
+
+// ============================================================
 // GET /api/devices
+
 // ============================================================
 exports.getAll = async (req, res) => {
   try {
@@ -27,6 +93,7 @@ exports.getAll = async (req, res) => {
         d.id,
         d.serial_number,
         d.model,
+        d.location,
         d.status,
         d.price_override,
         br.name AS brand_name,
@@ -104,6 +171,7 @@ exports.getOne = async (req, res) => {
 // POST /api/devices
 // ============================================================
 exports.create = async (req, res) => {
+  const conn = await db.getConnection();
   try {
     const validatedData = deviceSchema.parse(req.body);
 
@@ -113,6 +181,7 @@ exports.create = async (req, res) => {
       model,
       building_id,
       floor_id,
+      location,
       division_id,
       department_id,
       contract_id,
@@ -120,7 +189,9 @@ exports.create = async (req, res) => {
       status,
     } = validatedData;
 
-    const [result] = await db.query(
+    await conn.beginTransaction();
+
+    const [result] = await conn.query(
       `
       INSERT INTO devices
       (
@@ -129,13 +200,14 @@ exports.create = async (req, res) => {
         model,
         building_id,
         floor_id,
+        location,
         division_id,
         department_id,
         contract_id,
         price_override,
         status
       )
-      VALUES (?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)
     `,
       [
         serial_number,
@@ -143,6 +215,7 @@ exports.create = async (req, res) => {
         model || null,
         building_id || null,
         floor_id || null,
+        location?.trim() || null,
         division_id || null,
         department_id || null,
         contract_id || null,
@@ -151,11 +224,24 @@ exports.create = async (req, res) => {
       ]
     );
 
+    // เครื่องใหม่ ยังไม่มีช่วงประวัติเดิม — เปิดช่วง "ปัจจุบัน" แรกให้เลย
+    await recordLocationHistory(conn, result.insertId, {
+      building_id: building_id || null,
+      floor_id: floor_id || null,
+      location: location?.trim() || null,
+      division_id: division_id || null,
+      department_id: department_id || null,
+    });
+
+    await conn.commit();
+
     res.status(201).json({
       id: result.insertId,
       serial_number,
     });
   } catch (err) {
+    await conn.rollback();
+
     if (err instanceof z.ZodError) {
       return res.status(400).json({
         error: "Validation failed",
@@ -174,6 +260,8 @@ exports.create = async (req, res) => {
     res.status(500).json({
       error: err.message,
     });
+  } finally {
+    conn.release();
   }
 };
 
@@ -181,6 +269,7 @@ exports.create = async (req, res) => {
 // PUT /api/devices/:id
 // ============================================================
 exports.update = async (req, res) => {
+  const conn = await db.getConnection();
   try {
     const validatedData = deviceSchema.parse(req.body);
 
@@ -190,6 +279,7 @@ exports.update = async (req, res) => {
       model,
       building_id,
       floor_id,
+      location,
       division_id,
       department_id,
       contract_id,
@@ -197,7 +287,9 @@ exports.update = async (req, res) => {
       status,
     } = validatedData;
 
-    const [result] = await db.query(
+    await conn.beginTransaction();
+
+    const [result] = await conn.query(
       `
       UPDATE devices SET
         serial_number=?,
@@ -205,6 +297,7 @@ exports.update = async (req, res) => {
         model=?,
         building_id=?,
         floor_id=?,
+        location=?,
         division_id=?,
         department_id=?,
         contract_id=?,
@@ -218,6 +311,7 @@ exports.update = async (req, res) => {
         model || null,
         building_id || null,
         floor_id || null,
+        location?.trim() || null,
         division_id || null,
         department_id || null,
         contract_id || null,
@@ -228,15 +322,29 @@ exports.update = async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
+      await conn.rollback();
       return res.status(404).json({
         error: "Device not found",
       });
     }
 
+    // ปิด/เปิดช่วงประวัติใหม่ ถ้าตำแหน่ง/ฝ่าย/แผนกเปลี่ยนไปจากช่วงล่าสุด (ดู recordLocationHistory ด้านบน)
+    await recordLocationHistory(conn, req.params.id, {
+      building_id: building_id || null,
+      floor_id: floor_id || null,
+      location: location?.trim() || null,
+      division_id: division_id || null,
+      department_id: department_id || null,
+    });
+
+    await conn.commit();
+
     res.json({
       message: "Device updated successfully",
     });
   } catch (err) {
+    await conn.rollback();
+
     if (err instanceof z.ZodError) {
       return res.status(400).json({
         error: "Validation failed",
@@ -246,6 +354,45 @@ exports.update = async (req, res) => {
 
     console.error(err);
 
+    res.status(500).json({
+      error: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+};
+
+// ============================================================
+// GET /api/devices/:id/history
+// ประวัติการย้ายอาคาร/ชั้น/ฝ่าย/แผนกของเครื่องนี้ — เรียงล่าสุดก่อน
+// ============================================================
+exports.getHistory = async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `
+      SELECT
+        h.id,
+        h.effective_from,
+        h.effective_to,
+        b.name AS building_name,
+        f.name AS floor_name,
+        h.location,
+        divi.name AS division_name,
+        dept.name AS department_name
+      FROM device_location_history h
+      LEFT JOIN building b ON h.building_id = b.id
+      LEFT JOIN floor f ON h.floor_id = f.id
+      LEFT JOIN division divi ON h.division_id = divi.id
+      LEFT JOIN department dept ON h.department_id = dept.id
+      WHERE h.device_id = ?
+      ORDER BY h.effective_from DESC, h.id DESC
+      `,
+      [req.params.id]
+    );
+
+    res.json({ history: rows });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({
       error: err.message,
     });

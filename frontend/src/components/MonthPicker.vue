@@ -42,26 +42,57 @@
         ไม่มีเดือนที่มีข้อมูลในปีงบนี้
       </div>
 
-      <ul v-else class="divide-y max-h-72 overflow-y-auto">
-        <li v-for="opt in fiscalMonthOptions" :key="opt.value">
+      <template v-else>
+        <!-- เลือกด่วน: ไตรมาส / ครึ่งปี — เฉพาะตัวที่เลือกได้ไม่จำกัดจำนวนเดือน (max=0) เท่านั้น
+             เพราะหน้าที่จำกัด max (เช่น max=1 ของ "เดือนที่เทียบแนวโน้ม") เลือกได้ทีละเดือนอยู่แล้ว -->
+        <div v-if="!max" class="mb-2 pb-2 border-b">
+          <div class="text-xs text-gray-400 px-1 pb-1">เลือกด่วน</div>
+          <div class="grid grid-cols-2 gap-1 px-1">
+            <button
+              v-for="q in quarterOptions"
+              :key="q.label"
+              type="button"
+              :disabled="!q.available"
+              @click="selectQuick(q.months)"
+              class="text-xs py-1.5 rounded border transition-colors"
+              :class="quickButtonClass(q)"
+            >
+              {{ q.label }}
+            </button>
+          </div>
           <button
             type="button"
-            :disabled="isDisabled(opt.value)"
-            @click="toggle(opt.value)"
-            class="w-full flex items-center justify-between text-sm py-2 px-2 rounded transition-colors"
-            :class="cellClass(opt.value)"
+            :disabled="!halfYearOption.available"
+            @click="selectQuick(halfYearOption.months)"
+            class="mt-1 mx-1 w-[calc(100%-0.5rem)] text-xs py-1.5 rounded border transition-colors"
+            :class="quickButtonClass(halfYearOption)"
           >
-            <span>{{ opt.label }}</span>
-            <span v-if="modelValue.includes(opt.value)">✓</span>
+            {{ halfYearOption.label }}
           </button>
-        </li>
-      </ul>
+        </div>
+
+        <ul class="divide-y max-h-72 overflow-y-auto">
+          <li v-for="opt in fiscalMonthOptions" :key="opt.value">
+            <button
+              type="button"
+              :disabled="isDisabled(opt.value)"
+              @click="toggle(opt.value)"
+              class="w-full flex items-center justify-between text-sm py-2 px-2 rounded transition-colors"
+              :class="cellClass(opt.value)"
+            >
+              <span>{{ opt.label }}</span>
+              <AppIcon v-if="modelValue.includes(opt.value)" name="check" class="w-3.5 h-3.5 shrink-0" />
+            </button>
+          </li>
+        </ul>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup>
 import ChevronIcon from "./ChevronIcon.vue";
+import AppIcon from "./AppIcon.vue";
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
 
@@ -93,6 +124,56 @@ const displayYearBE = computed(() =>
 const fiscalMonthOptions = computed(() =>
   fiscalYearMonths(range.value).map((value) => ({ value, label: formatMonth(value) }))
 );
+
+// เลือกด่วนเป็นไตรมาส/ครึ่งปี — อิงตามลำดับเดือนของปีงบ (fiscalMonthOptions ไล่จาก ต.ค. ปีก่อนหน้า
+// ถึง ก.ย. ปีที่ตรงกับปีงบ) ไม่ใช่ ม.ค.-ธ.ค. ปีปฏิทิน: ไตรมาส 1 = ต.ค.-ธ.ค., ไตรมาส 2 = ม.ค.-มี.ค.,
+// ไตรมาส 3 = เม.ย.-มิ.ย., ไตรมาส 4 = ก.ค.-ก.ย., ครึ่งปี (6 เดือนแรก) = ต.ค.-มี.ค.
+function buildQuickOption(label, months) {
+  return {
+    label,
+    months,
+    // enable ก็ต่อเมื่อทุกเดือนในกลุ่มนั้นมีข้อมูลจริง (อยู่ใน options) ครบทุกเดือน
+    available: months.length > 0 && months.every((m) => props.options.includes(m)),
+  };
+}
+
+const quarterOptions = computed(() => {
+  const all = fiscalMonthOptions.value.map((o) => o.value);
+  return [
+    buildQuickOption("ไตรมาส 1", all.slice(0, 3)),
+    buildQuickOption("ไตรมาส 2", all.slice(3, 6)),
+    buildQuickOption("ไตรมาส 3", all.slice(6, 9)),
+    buildQuickOption("ไตรมาส 4", all.slice(9, 12)),
+  ];
+});
+
+const halfYearOption = computed(() => {
+  const all = fiscalMonthOptions.value.map((o) => o.value);
+  return buildQuickOption("ครึ่งปี (6 เดือนแรก)", all.slice(0, 6));
+});
+
+// ปุ่มเลือกด่วนถือว่า "active" เมื่อเดือนที่เลือกอยู่ตรงกับกลุ่มนั้นเป๊ะ (set เท่ากัน ไม่ใช่แค่ superset)
+function isQuickActive(months) {
+  if (!months.length || months.length !== props.modelValue.length) return false;
+  const set = new Set(props.modelValue);
+  return months.every((m) => set.has(m));
+}
+
+function quickButtonClass(q) {
+  if (!q.available) {
+    return "opacity-30 cursor-not-allowed text-gray-400 border-gray-200";
+  }
+  if (isQuickActive(q.months)) {
+    return "bg-blue-600 text-white border-blue-600 hover:bg-blue-700";
+  }
+  return "border-gray-300 hover:bg-gray-200";
+}
+
+// เลือกด่วน = แทนที่ selection ทั้งหมดด้วยเดือนในกลุ่มนั้น (ไม่ merge กับที่เลือกไว้เดิม)
+function selectQuick(months) {
+  if (!months.every((m) => props.options.includes(m))) return;
+  emit("update:modelValue", [...months].sort());
+}
 
 function formatMonth(value) {
   if (!value) return "";

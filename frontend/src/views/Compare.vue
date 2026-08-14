@@ -14,6 +14,8 @@ import {
 } from "chart.js";
 import api from "../services/api";
 import MonthPicker from "../components/MonthPicker.vue";
+import SearchableSelect from "../components/SearchableSelect.vue";
+import AppIcon from "../components/AppIcon.vue";
 import { useChartTheme } from "../composables/useChartTheme";
 
 const { baseChartOptions } = useChartTheme();
@@ -31,6 +33,116 @@ const selectedMonths = ref([]);
 
 const rawRows = ref([]);
 const months = ref([]);
+
+// -------------------------------------------------------
+// Filter แบบเจาะจง — เหมือนหน้า "บันทึกยอดพิมพ์รายเดือน" (PrintTransactions) และหน้า "รายงาน" (Report)
+// อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่อง — กรองฝั่ง client จาก device_id ในข้อมูลดิบ เทียบกับ
+// รายชื่อเครื่องเต็ม (/devices) เพื่อไม่ต้องแก้ query ฝั่ง backend
+// -------------------------------------------------------
+const buildingName = ref("");
+const floorFilter = ref("");
+const divisionFilter = ref("");
+const departmentFilter = ref("");
+const brandFilter = ref("");
+const deviceStatusFilter = ref("");
+
+const buildings = ref([]);
+const floors = ref([]);
+const divisions = ref([]);
+const departments = ref([]);
+const brands = ref([]);
+const devices = ref([]); // ใช้แค่หา dimension (ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะ) ของแต่ละ device_id มา join กับ rawRows
+
+const buildingOptions = computed(() => buildings.value.map((b) => ({ value: b.name, label: b.name })));
+
+// Cascading filter — เลือกอาคารแล้วค่อยกรองชั้น, เลือกฝ่ายแล้วค่อยกรองแผนก (แบบเดียวกับหน้าอื่นๆ)
+const filteredFloorOptions = computed(() => {
+  if (!buildingName.value) return floors.value;
+  const bld = buildings.value.find((b) => b.name === buildingName.value);
+  if (!bld) return floors.value;
+  return floors.value.filter((f) => Number(f.building_id) === Number(bld.id));
+});
+
+const filteredDepartmentOptions = computed(() => {
+  if (!divisionFilter.value) return departments.value;
+  const div = divisions.value.find((d) => d.name === divisionFilter.value);
+  if (!div) return departments.value;
+  return departments.value.filter((d) => Number(d.division_id) === Number(div.id));
+});
+
+const floorFilterOptions = computed(() => {
+  const seen = new Set();
+  const options = [];
+  for (const f of filteredFloorOptions.value) {
+    if (seen.has(f.name)) continue;
+    seen.add(f.name);
+    options.push({ value: f.name, label: f.name });
+  }
+  return options;
+});
+const divisionFilterOptions = computed(() => divisions.value.map((d) => ({ value: d.name, label: d.name })));
+const departmentFilterOptions = computed(() => filteredDepartmentOptions.value.map((d) => ({ value: d.name, label: d.name })));
+const brandFilterOptions = computed(() => brands.value.map((b) => ({ value: b.name, label: b.name })));
+
+watch(buildingName, () => {
+  floorFilter.value = "";
+});
+
+watch(divisionFilter, () => {
+  departmentFilter.value = "";
+});
+
+async function loadBuildings() {
+  try {
+    const res = await api.get("/buildings");
+    buildings.value = res.data;
+  } catch (err) {
+    console.error("Load buildings error:", err);
+  }
+}
+
+async function loadFilterMasterData() {
+  try {
+    const [floorRes, divisionRes, departmentRes, brandRes, deviceRes] = await Promise.all([
+      api.get("/floors"),
+      api.get("/divisions"),
+      api.get("/departments"),
+      api.get("/brands"),
+      api.get("/devices"),
+    ]);
+    floors.value = floorRes.data;
+    divisions.value = divisionRes.data;
+    departments.value = departmentRes.data;
+    brands.value = brandRes.data;
+    devices.value = deviceRes.data;
+  } catch (err) {
+    console.error("Load filter master data error:", err);
+  }
+}
+
+// device_id -> ข้อมูล dimension ของเครื่องนั้น (ใช้กรอง rawRows โดยไม่ต้องยิง API เพิ่ม)
+const deviceById = computed(() => new Map(devices.value.map((d) => [d.id, d])));
+
+// เครื่องไหนผ่าน filter ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะบ้าง (อาคาร + เดือน กรองที่ query/selectedMonths อยู่แล้ว)
+function deviceMatchesFilters(deviceId) {
+  const d = deviceById.value.get(deviceId);
+  if (!d) return true; // ไม่มีข้อมูลเครื่องให้ join (เช่นเครื่องถูกลบไปแล้ว) — ไม่กรองออก กันข้อมูลหาย
+  if (floorFilter.value && d.floor_name !== floorFilter.value) return false;
+  if (divisionFilter.value && d.division_name !== divisionFilter.value) return false;
+  if (departmentFilter.value && d.department_name !== departmentFilter.value) return false;
+  if (brandFilter.value && d.brand_name !== brandFilter.value) return false;
+  if (deviceStatusFilter.value && d.status !== deviceStatusFilter.value) return false;
+  return true;
+}
+
+function resetFilter() {
+  buildingName.value = "";
+  floorFilter.value = "";
+  divisionFilter.value = "";
+  departmentFilter.value = "";
+  brandFilter.value = "";
+  deviceStatusFilter.value = "";
+}
 
 function formatMonth(value) {
   if (!value) return "";
@@ -63,20 +175,34 @@ watch(selectedMonths, (val) => {
   });
 });
 
+// true เฉพาะตอนโหลดครั้งแรก — ใช้แยกว่าจะอ่านเดือนจาก query string (?months=) หรือคงเดือนที่เลือกไว้
+// (แค่ตัดเดือนที่ไม่มีข้อมูลในอาคารที่เพิ่งเปลี่ยนออก) ตอน filter เปลี่ยน
+let initialLoad = true;
+
 async function loadData() {
   loading.value = true;
   error.value = null;
 
   try {
-    const res = await api.get("/dashboard/monthly-kpi");
+    const params = {};
+    if (buildingName.value) params.building_name = buildingName.value;
+
+    const res = await api.get("/dashboard/monthly-kpi", { params });
     rawRows.value = res.data;
 
     const unique = [...new Set(res.data.map((r) => r.month))].sort();
     months.value = unique;
 
-    // ถ้า URL มี ?months= อยู่แล้ว (refresh หรือ share link) ใช้ค่านั้นก่อน
     syncingFromRoute = true;
-    selectedMonths.value = readMonthsFromQuery(unique);
+    if (initialLoad) {
+      // ถ้า URL มี ?months= อยู่แล้ว (refresh หรือ share link) ใช้ค่านั้นก่อน
+      selectedMonths.value = readMonthsFromQuery(unique);
+      initialLoad = false;
+    } else {
+      // เปลี่ยนตัวกรองอาคารแล้ว — เดือนที่เคยเลือกไว้บางเดือนอาจไม่มีข้อมูลในอาคารใหม่
+      // ตัดเฉพาะเดือนที่ยังมีข้อมูลจริงออก แทนที่จะล้างเดือนที่เลือกไว้ทั้งหมด
+      selectedMonths.value = selectedMonths.value.filter((m) => unique.includes(m));
+    }
     syncingFromRoute = false;
   } catch (err) {
     console.error("Load compare data error:", err);
@@ -86,11 +212,13 @@ async function loadData() {
   }
 }
 
-// รวมยอดของเดือนหนึ่งๆ จากข้อมูลดิบ
+watch(buildingName, loadData);
+
+// รวมยอดของเดือนหนึ่งๆ จากข้อมูลดิบ (กรองด้วย filter ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่องด้วย)
 function aggregate(month) {
   if (!month) return null;
 
-  const rows = rawRows.value.filter((r) => r.month === month);
+  const rows = rawRows.value.filter((r) => r.month === month && deviceMatchesFilters(r.device_id));
   if (rows.length === 0) return null;
 
   const totalPages = rows.reduce((s, r) => s + Number(r.pages_printed || 0), 0);
@@ -128,7 +256,7 @@ const metrics = computed(() => [
   },
   {
     key: "totalCost",
-    label: "ค่าใช้จ่ายรวม",
+    label: "ค่าใช้จ่ายสุทธิ (หัก 20%)",
     unit: "บาท",
     color: "#DC2626",
     format: (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }),
@@ -142,7 +270,7 @@ const metrics = computed(() => [
   },
   {
     key: "costPerPage",
-    label: "ต้นทุนเฉลี่ยต่อหน้า",
+    label: "ต้นทุนเฉลี่ยต่อหน้า (หัก 20%)",
     unit: "บาท/หน้า",
     color: "#D97706",
     format: (v) => Number(v).toFixed(3),
@@ -229,6 +357,8 @@ const summaryLast = computed(() =>
   monthStats.value.length > 1 ? monthStats.value[monthStats.value.length - 1] : null
 );
 
+// แต่ละบรรทัด: { trend: "up" | "down" | null, text } — เดิมฝัง emoji ไว้ในสตริงตรงๆ
+// เปลี่ยนมาแยก trend ออกมาต่างหาก เพื่อให้ template render เป็นไอคอน AppIcon แทน emoji
 const summarySentences = computed(() => {
   if (!summaryFirst.value?.stats || !summaryLast.value?.stats) return [];
 
@@ -239,35 +369,178 @@ const summarySentences = computed(() => {
     const pct = diffPercent(before, after);
 
     if (Math.abs(pct) < 0.05) {
-      lines.push(`${m.label}ไม่เปลี่ยนแปลงมากนัก (${m.format(before)} → ${m.format(after)} ${m.unit})`);
+      lines.push({
+        trend: null,
+        text: `${m.label}ไม่เปลี่ยนแปลงมากนัก (${m.format(before)} → ${m.format(after)} ${m.unit})`,
+      });
       continue;
     }
 
     const direction = pct > 0 ? "เพิ่มขึ้น" : "ลดลง";
-    const arrow = pct > 0 ? "📈" : "📉";
 
-    lines.push(
-      `${arrow} ${m.label}${direction} ${Math.abs(pct).toFixed(1)}% ` +
-        `(จาก ${m.format(before)} เป็น ${m.format(after)} ${m.unit})`
-    );
+    lines.push({
+      trend: pct > 0 ? "up" : "down",
+      text:
+        `${m.label}${direction} ${Math.abs(pct).toFixed(1)}% ` +
+        `(จาก ${m.format(before)} เป็น ${m.format(after)} ${m.unit})`,
+    });
   }
   return lines;
 });
 
-onMounted(loadData);
+// -------------------------------------------------------
+// เครื่องที่ใช้งานมาก/น้อย — แยกย่อยรายเครื่องของช่วงเดือนที่เลือก
+// (ตารางสรุปด้านบนรวมยอดพิมพ์ + ค่าใช้จ่ายของทุกเครื่องเข้าด้วยกันแล้ว
+// ส่วนนี้ทุบข้อมูลดิบเดิม (rawRows) แยกย่อยกลับเป็นรายเครื่องอีกที ไม่ต้องยิง API เพิ่ม)
+// -------------------------------------------------------
+const deviceSort = ref("desc"); // "desc" = มากไปน้อย, "asc" = น้อยไปมาก
+
+const deviceUsage = computed(() => {
+  if (!selectedMonths.value.length) return [];
+
+  const rows = rawRows.value.filter(
+    (r) => selectedMonths.value.includes(r.month) && deviceMatchesFilters(r.device_id)
+  );
+  const byDevice = new Map();
+
+  for (const r of rows) {
+    if (!byDevice.has(r.device_id)) {
+      byDevice.set(r.device_id, {
+        deviceId: r.device_id,
+        serialNumber: r.serial_number,
+        buildingName: r.building_name,
+        totalPages: 0,
+        netPages: 0,
+        totalCost: 0,
+      });
+    }
+
+    const entry = byDevice.get(r.device_id);
+    entry.totalPages += Number(r.pages_printed || 0);
+    entry.netPages += Number(r.net_pages || 0);
+    entry.totalCost += Number(r.total_cost || 0);
+  }
+
+  return [...byDevice.values()];
+});
+
+const deviceUsageSorted = computed(() => {
+  const list = [...deviceUsage.value];
+  list.sort((a, b) =>
+    deviceSort.value === "desc" ? b.netPages - a.netPages : a.netPages - b.netPages
+  );
+  return list;
+});
+
+function toggleDeviceSort() {
+  deviceSort.value = deviceSort.value === "desc" ? "asc" : "desc";
+}
+
+const hasActiveFilter = computed(
+  () =>
+    !!(
+      buildingName.value ||
+      floorFilter.value ||
+      divisionFilter.value ||
+      departmentFilter.value ||
+      brandFilter.value ||
+      deviceStatusFilter.value
+    )
+);
+
+onMounted(() => {
+  loadBuildings();
+  loadFilterMasterData();
+  loadData();
+});
 </script>
 
 <template>
   <div>
     <h1 class="text-3xl font-bold mb-6">เปรียบเทียบข้อมูลรายเดือน</h1>
+    <p class="text-sm text-gray-500 -mt-4 mb-6">ยอดค่าใช้จ่ายทั้งหมดเป็นยอดสุทธิหลังหัก 20%</p>
 
     <div class="bg-gray-50 shadow rounded-lg p-6 mb-6">
       <p class="text-sm text-gray-500 mb-4">
         เลือกเดือนที่ต้องการเปรียบเทียบ (เลือกได้มากกว่า 2 เดือน)
       </p>
 
-      <div class="max-w-sm">
-        <MonthPicker v-model="selectedMonths" :options="months" />
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-4">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">เดือน</label>
+          <MonthPicker v-model="selectedMonths" :options="months" />
+        </div>
+      </div>
+
+      <!-- Filter เจาะจง — อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่อง เหมือนหน้าบันทึกยอด/รายงาน -->
+      <div class="flex flex-wrap items-end gap-3 pt-4 border-t">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
+          <SearchableSelect
+            v-model="buildingName"
+            :options="buildingOptions"
+            placeholder="ทุกอาคาร"
+            search-placeholder="พิมพ์ชื่ออาคาร..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">ชั้น</label>
+          <SearchableSelect
+            v-model="floorFilter"
+            :options="floorFilterOptions"
+            placeholder="ทุกชั้น"
+            search-placeholder="พิมพ์ชื่อชั้น..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">ฝ่าย</label>
+          <SearchableSelect
+            v-model="divisionFilter"
+            :options="divisionFilterOptions"
+            placeholder="ทุกฝ่าย"
+            search-placeholder="พิมพ์ชื่อฝ่าย..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">แผนก</label>
+          <SearchableSelect
+            v-model="departmentFilter"
+            :options="departmentFilterOptions"
+            placeholder="ทุกแผนก"
+            search-placeholder="พิมพ์ชื่อแผนก..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">ยี่ห้อ</label>
+          <SearchableSelect
+            v-model="brandFilter"
+            :options="brandFilterOptions"
+            placeholder="ทุกยี่ห้อ"
+            search-placeholder="พิมพ์ชื่อยี่ห้อ..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">สถานะเครื่อง</label>
+          <select v-model="deviceStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
+            <option value="">ทุกสถานะ</option>
+            <option value="active">ใช้งานอยู่</option>
+            <option value="repair">ซ่อมบำรุง</option>
+            <option value="retired">ปลดระวาง</option>
+          </select>
+        </div>
+
+        <button
+          v-if="hasActiveFilter"
+          @click="resetFilter"
+          class="text-sm text-red-500 hover:text-gray-700 underline whitespace-nowrap"
+        >
+          ล้างตัวกรองทั้งหมด
+        </button>
       </div>
     </div>
 
@@ -288,20 +561,32 @@ onMounted(loadData);
           v-if="summaryFirst && summaryLast"
           class="summary-box rounded-lg p-5 mb-6"
         >
-          <h2 class="summary-box__title font-bold mb-2">📝 สรุปการเปลี่ยนแปลง</h2>
+          <h2 class="summary-box__title font-bold mb-2 flex items-center gap-1.5">
+            <AppIcon name="document" class="w-5 h-5 shrink-0" />
+            สรุปการเปลี่ยนแปลง
+          </h2>
           <p class="text-sm text-gray-600 mb-3">
             เปรียบเทียบ {{ summaryFirst.label }} กับ {{ summaryLast.label }}
             <span v-if="monthStats.length > 2">(รวม {{ monthStats.length }} เดือนที่เลือก)</span>
           </p>
-          <ul class="space-y-1 text-sm">
-            <li v-for="(line, idx) in summarySentences" :key="idx">{{ line }}</li>
+          <ul class="space-y-1.5 text-sm">
+            <li v-for="(line, idx) in summarySentences" :key="idx" class="flex items-center gap-1.5">
+              <AppIcon
+                v-if="line.trend"
+                :name="line.trend === 'up' ? 'trendUp' : 'trendDown'"
+                class="w-3.5 h-3.5 shrink-0"
+                :class="line.trend === 'up' ? 'text-red-600' : 'text-green-600'"
+              />
+              <span>{{ line.text }}</span>
+            </li>
           </ul>
         </div>
         <div
           v-else
-          class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-sm text-yellow-800"
+          class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-sm text-yellow-800 flex items-center gap-1.5"
         >
-          ⚠️ เลือกแค่เดือนเดียว ({{ summaryFirst?.label }}) — เลือกอีกเดือนเพื่อดูบทสรุปการเปลี่ยนแปลง
+          <AppIcon name="warning" class="w-4 h-4 shrink-0" />
+          <span>เลือกแค่เดือนเดียว ({{ summaryFirst?.label }}) — เลือกอีกเดือนเพื่อดูบทสรุปการเปลี่ยนแปลง</span>
         </div>
 
         <!-- ตารางเปรียบเทียบทุกเดือนที่เลือก -->
@@ -359,6 +644,74 @@ onMounted(loadData);
             <div class="h-56">
               <Line :data="chartDataFor(m)" :options="chartOptions" />
             </div>
+          </div>
+        </div>
+
+        <!-- เครื่องที่ใช้งานมาก/น้อย — แยกย่อยรายเครื่องของช่วงเดือนที่เลือกทั้งหมด -->
+        <div class="bg-gray-50 shadow rounded-lg p-4 mt-8">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h2 class="font-bold flex items-center gap-1.5">
+              <AppIcon name="printer" class="w-5 h-5 shrink-0" />
+              เครื่องที่ใช้งานมาก / น้อย
+            </h2>
+            <button
+              @click="toggleDeviceSort"
+              class="text-sm border rounded px-3 py-1.5 hover:bg-gray-100 flex items-center gap-1"
+            >
+              {{ deviceSort === "desc" ? "เรียง: ใช้มากไปน้อย" : "เรียง: ใช้น้อยไปมาก" }}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="w-3.5 h-3.5"
+              >
+                <path v-if="deviceSort === 'desc'" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                <path v-else d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+              </svg>
+            </button>
+          </div>
+
+          <p class="text-xs text-gray-500 mb-3">
+            รวมยอดพิมพ์และค่าใช้จ่ายของแต่ละเครื่องตลอดช่วงเดือนที่เลือกไว้ด้านบน
+          </p>
+
+          <div v-if="!deviceUsageSorted.length" class="text-center text-gray-400 py-6 text-sm">
+            ไม่มีข้อมูลเครื่องในช่วงที่เลือก
+          </div>
+
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-sm border-collapse min-w-max">
+              <thead>
+                <tr class="text-left text-gray-500 border-b">
+                  <th class="py-2 pr-4">อันดับ</th>
+                  <th class="py-2 pr-4">หมายเลขเครื่อง</th>
+                  <th class="py-2 pr-4">อาคาร</th>
+                  <th class="py-2 pr-4 text-right">ยอดพิมพ์สุทธิ (หน้า)</th>
+                  <th class="py-2 pr-4 text-right">ค่าใช้จ่ายสุทธิ (บาท)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(d, idx) in deviceUsageSorted"
+                  :key="d.deviceId"
+                  class="border-b"
+                >
+                  <td class="py-2 pr-4 text-gray-400">{{ idx + 1 }}</td>
+                  <td class="py-2 pr-4 font-medium">{{ d.serialNumber || "-" }}</td>
+                  <td class="py-2 pr-4 text-gray-500">{{ d.buildingName || "-" }}</td>
+                  <td class="py-2 pr-4 text-right">
+                    {{ d.netPages.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
+                  </td>
+                  <td class="py-2 pr-4 text-right">
+                    {{ d.totalCost.toLocaleString(undefined, { maximumFractionDigits: 2 }) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </template>

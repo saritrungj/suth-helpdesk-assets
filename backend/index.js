@@ -58,6 +58,9 @@ const authRoutes =
 const importRoutes =
   require("./routes/importRoutes");
 
+const usersRoutes =
+  require("./routes/users");
+
 
 // ⭐ เพิ่มบรรทัดนี้
 const expenseRoutes =
@@ -134,6 +137,13 @@ app.use(
 app.use(
   "/api/dashboard",
   dashboardRoutes
+);
+
+
+// การป้องกันสิทธิ์ (auth + admin) ทำอยู่ในตัว routes/users.js เองแล้ว (router.use)
+app.use(
+  "/api/users",
+  usersRoutes
 );
 
 

@@ -3,30 +3,28 @@ import { createRouter, createWebHistory } from "vue-router";
 import Login from "../views/Login.vue";
 import Dashboard from "../views/Dashboard.vue";
 import AssetList from "../views/AssetList.vue";
-import ImportDevices from "../views/ImportDevices.vue";
 
 
 // =======================
 // Lazy Load Pages
 // =======================
 
-const Expense = () =>
-  import("../views/Expense.vue");
+// Expense.vue และ ByDepartment.vue ถูกรวมเข้าเป็นหน้าเดียว (แท็บ) ที่ UsageReport.vue แล้ว
+// ทั้งสอง route เดิมด้านล่างจึงชี้มาที่คอมโพเนนต์เดียวกันนี้ ต่างกันแค่แท็บเริ่มต้น
+const UsageReport = () =>
+  import("../views/UsageReport.vue");
 
 
 const Report = () =>
   import("../views/Report.vue");
 
 
-const PrintTransactions = () =>
-  import("../views/PrintTransactions.vue");
-
-
 const Compare = () =>
   import("../views/Compare.vue");
 
-const ByDepartment = () =>
-  import("../views/ByDepartment.vue");
+// PrintTransactions.vue แยกกลับมาเป็น route ของตัวเอง (ไม่ได้รวมกับหน้าค่าใช้จ่ายแล้ว)
+const PrintTransactions = () =>
+  import("../views/PrintTransactions.vue");
 
 // Admin
 
@@ -60,6 +58,10 @@ const Contract = () =>
 
 const AddAsset = () =>
   import("../views/admin/AddAsset.vue");
+
+
+const Users = () =>
+  import("../views/admin/Users.vue");
 
 
 // =======================
@@ -97,11 +99,12 @@ const routes = [
   },
 
 
-  // Expense
+  // Expense + ยอดพิมพ์แยกตามฝ่าย/แผนก — รวมเป็นหน้าเดียว (แท็บ) ที่ UsageReport.vue
+  // ?tab=expense (default) | ?tab=department
   {
     path: "/expense",
     name: "Expense",
-    component: Expense,
+    component: UsageReport,
   },
 
 
@@ -111,11 +114,12 @@ const routes = [
     component: Compare,
   },
 
+  // ByDepartment — ย้ายไปรวมกับหน้าค่าใช้จ่ายแล้ว (ดูคอมเมนต์ที่ /expense) เก็บ path เดิมไว้
+  // redirect กันลิงก์เก่า/บุ๊กมาร์กพัง (แบบเดียวกับ /admin/import-devices)
   {
-  path: "/by-department",
-  name: "ByDepartment",
-  component: ByDepartment,
-},
+    path: "/by-department",
+    redirect: (to) => ({ path: "/expense", query: { ...to.query, tab: "department" } }),
+  },
   // Report
   {
     path: "/report",
@@ -124,7 +128,7 @@ const routes = [
   },
 
 
-  // Print
+  // Print — แยกกลับมาเป็น route เดี่ยวของตัวเอง (ไม่ได้รวมกับหน้าค่าใช้จ่ายแล้ว)
   {
     path: "/print-transactions",
     name: "PrintTransactions",
@@ -187,11 +191,17 @@ const routes = [
     component: AddAsset,
   },
 
-  // Import CSV/Excel — เป็นเครื่องมือของ Admin เช่นกัน
+  // Import CSV/Excel — รวมเข้าไปเป็นแท็บในหน้า "เพิ่มทรัพย์สิน" แล้ว (ดู views/admin/AddAsset.vue)
+  // เก็บ path เดิมไว้ redirect กันลิงก์เก่า/บุ๊กมาร์กพัง
   {
     path: "/admin/import-devices",
-    name: "ImportDevices",
-    component: ImportDevices,
+    redirect: { path: "/admin/add-asset", query: { tab: "import" } },
+  },
+
+  {
+    path: "/admin/users",
+    name: "Users",
+    component: Users,
   },
 
 

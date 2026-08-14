@@ -77,6 +77,7 @@ CREATE TABLE devices (
     model VARCHAR(100),
     building_id INT,
     floor_id INT,
+    location VARCHAR(255) DEFAULT NULL,
     division_id INT,
     department_id INT,
     contract_id INT,
@@ -107,6 +108,34 @@ CREATE TABLE print_transactions (
 
     FOREIGN KEY (device_id) REFERENCES devices(id),
     UNIQUE KEY uq_device_month (device_id, month)
+);
+
+-- ประวัติการย้ายเครื่อง (อาคาร/ชั้น/ฝ่าย/แผนก) — ดูรายละเอียดเหตุผลที่
+-- database/migration_add_device_location_history.sql (เดิมคีย์นี้อยู่แยกไว้ในไฟล์ migration นั้น
+-- ตอนนี้รวมเข้ามาไว้ใน schema หลักเช่นเดียวกับ print_transactions ด้านบน เพื่อให้ setup ฐานข้อมูลใหม่ได้ครบในครั้งเดียว)
+-- effective_to = NULL คือช่วงปัจจุบันที่เครื่องยังสังกัดอยู่
+CREATE TABLE device_location_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id INT NOT NULL,
+
+    building_id INT NULL,
+    floor_id INT NULL,
+    location VARCHAR(255) NULL,
+    division_id INT NULL,
+    department_id INT NULL,
+
+    effective_from DATE NOT NULL,
+    effective_to DATE NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
+    FOREIGN KEY (building_id) REFERENCES building(id),
+    FOREIGN KEY (floor_id) REFERENCES floor(id),
+    FOREIGN KEY (division_id) REFERENCES division(id),
+    FOREIGN KEY (department_id) REFERENCES department(id),
+
+    INDEX idx_device_effective (device_id, effective_from, effective_to)
 );
 
 -- ==============================================================================

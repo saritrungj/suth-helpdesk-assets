@@ -96,7 +96,7 @@
       <!-- Top 5 แผนกที่ค่าใช้จ่ายสูงสุด -->
       <div class="bg-gray-50 shadow rounded-lg p-6">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold">แผนกที่ค่าใช้จ่ายสูงสุด (Top 5)</h2>
+          <h2 class="text-xl font-bold">แผนกที่ค่าใช้จ่ายสุทธิสูงสุด (หัก 20%)</h2>
           <RouterLink to="/by-department" class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap">
             ดูทั้งหมด →
           </RouterLink>
@@ -118,7 +118,7 @@
               <th class="py-2">แผนก</th>
               <th class="py-2">ฝ่าย</th>
               <th class="py-2 text-right">หน้า</th>
-              <th class="py-2 text-right">ค่าใช้จ่าย (บาท)</th>
+              <th class="py-2 text-right">ค่าใช้จ่ายสุทธิ (หัก 20%)</th>
             </tr>
           </thead>
           <tbody>
@@ -170,7 +170,7 @@
               <th class="py-2 text-right">ราคา/แผ่น (บาท)</th>
               <th class="py-2 text-right">จำนวนเครื่อง</th>
               <th class="py-2 text-right">จำนวนหน้ารวม</th>
-              <th class="py-2 text-right">ค่าใช้จ่ายรวม (บาท)</th>
+              <th class="py-2 text-right">ค่าใช้จ่ายสุทธิรวม (หัก 20%)</th>
             </tr>
           </thead>
           <tbody>
@@ -233,12 +233,12 @@
 
       <div v-else>
         <div class="bg-gray-50 shadow rounded-lg p-6">
-          <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายรายเดือน</h2>
+          <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายสุทธิรายเดือน (หัก 20%)</h2>
           <CostChart :filter="dashboardFilter" />
         </div>
 
         <div class="mt-6 bg-gray-50 shadow rounded-lg p-6">
-          <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายรายอาคาร</h2>
+          <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายสุทธิรายอาคาร (หัก 20%)</h2>
           <BuildingCostChart :filter="dashboardFilter" />
         </div>
       </div>

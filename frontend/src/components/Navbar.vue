@@ -49,10 +49,13 @@
         <RouterLink
           v-else
           to="/admin/fiscal-years"
-          class="text-sm text-orange-600 hover:underline"
+          class="text-sm text-orange-600 hover:underline flex items-center gap-1"
           title="ยังไม่มีปีงบในระบบ กดเพื่อไปสร้างปีงบใหม่"
         >
-          ⚠️ ยังไม่มีปีงบ — กดเพื่อสร้าง
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0">
+            <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+          </svg>
+          ยังไม่มีปีงบ — กดเพื่อสร้าง
         </RouterLink>
       </div>
 
@@ -88,10 +91,19 @@ import ThemeSwitcher from "./ThemeSwitcher.vue";
 
 const router = useRouter();
 
-const logout = () => {
+// clearAuth() ต้องทำก่อน router.push() เสมอ เพราะ router guard (router/index.js)
+// เช็ค token ใน localStorage ตรงๆ ก่อนอนุญาตให้เข้าหน้า /login — ถ้ายังมี token อยู่
+// จะโดนเด้งกลับ /dashboard ทันที
+//
+// แต่ resetFiscalYearState() ต้องรอ "หลัง" จากที่เปลี่ยนหน้าไป /login สำเร็จแล้ว (Dashboard
+// unmount ไปแล้ว) เพราะเดิมเรียกก่อนหน้านี้ ทำให้หน้า Dashboard ที่ยังไม่ทัน unmount เห็นปีงบ
+// ถูกเคลียร์ แล้วมี watch ใน DashboardFilter.vue ไปยิง API รีโหลดข้อมูลซ้ำ ทั้งที่ token ถูกลบ
+// ไปแล้วตั้งแต่ clearAuth() ข้างบน เลยได้ 401 เต็มไปหมด พร้อม toast "เซสชันหมดอายุ" ที่ข้อความ
+// ผิด (นี่คือ logout ตั้งใจ ไม่ใช่ session หมดอายุ)
+const logout = async () => {
   clearAuth();
+  await router.push("/login");
   resetFiscalYearState();
-  router.push("/login");
 };
 
 onMounted(loadFiscalYears);

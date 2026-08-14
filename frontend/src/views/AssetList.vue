@@ -194,6 +194,7 @@ const filteredAssets = computed(() => {
       a.serial_number?.toLowerCase().includes(keyword) ||
       a.model?.toLowerCase().includes(keyword) ||
       a.brand_name?.toLowerCase().includes(keyword) ||
+      a.location?.toLowerCase().includes(keyword) ||
       a.contract_no?.toLowerCase().includes(keyword);
 
     const matchFiscalYear = !selectedFiscalYear.value || String(a.fiscal_year) === String(selectedFiscalYear.value);
@@ -223,6 +224,7 @@ const columns = computed(() => [
   { key: "brand_name", label: "Brand / Model", value: (a) => `${a.brand_name || "-"} ${a.model || ""}` },
   { key: "building_name", label: "อาคาร" },
   { key: "floor_name", label: "ชั้น" },
+  { key: "location", label: "ตำแหน่งเครื่อง" },
   { key: "division_name", label: "ฝ่าย" },
   { key: "department_name", label: "แผนก" },
   { key: "contract_no", label: "สัญญา" },
@@ -398,7 +400,7 @@ onMounted(async () => {
         <span>ยังไม่มีอุปกรณ์ในระบบ</span>
         <RouterLink
           v-if="isAdmin"
-          to="/admin/import-devices"
+          to="/admin/add-asset?tab=import"
           class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
         >
           นำเข้าอุปกรณ์จากไฟล์ CSV/Excel

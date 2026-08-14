@@ -721,44 +721,63 @@ router.get('/by-department', async (req, res) => {
     // เครื่องที่ไม่เคยมีคนกรอกยอดพิมพ์เลย (หรือไม่มีข้อมูลในช่วงปีงบนี้) จะได้ month/net_pages/total_cost
     // เป็น NULL แถวเดียว — เงื่อนไขช่วงเดือนต้องอยู่ใน "ON" ไม่ใช่ "WHERE" ไม่งั้น LEFT JOIN จะ
     // กลายเป็น INNER JOIN โดยปริยาย (เครื่องที่ไม่มีข้อมูลในช่วงนี้จะหายไปจากรายงานทั้งเครื่อง)
+    //
+    // effective_department_id: แผนกที่เครื่อง "สังกัดอยู่จริง ณ เดือนนั้น" ไม่ใช่แผนกปัจจุบันของเครื่อง —
+    // join กับ device_location_history โดยเทียบวันที่ 1 ของเดือนนั้นกับช่วง effective_from/effective_to
+    // เครื่องที่เคยย้ายแผนกระหว่างทาง ยอดพิมพ์เดือนเก่าจะยังค้างอยู่กับแผนกเดิมที่เคยสังกัดตอนนั้น
+    // (แถวที่ไม่มีประวัติตรงช่วงเลย เช่น ยังไม่เคยรัน backfill หรือไม่มียอดพิมพ์เดือนนั้น
+    // จะ fallback ไปใช้ d.department_id ปัจจุบันแทน กันไม่ให้เครื่องหลุดจากรายงาน)
     const sql = `
       SELECT
         d.id AS device_id,
         d.serial_number,
         d.model,
-        d.department_id,
         b.name AS brand_name,
         v.month,
         v.net_pages,
-        v.total_cost
+        v.total_cost,
+        COALESCE(h.department_id, d.department_id) AS effective_department_id
       FROM devices d
       LEFT JOIN brand b ON d.brand_id = b.id
       LEFT JOIN v_monthly_kpi v
         ON v.device_id = d.id
         ${fiscalYear ? 'AND v.month BETWEEN ? AND ?' : ''}
-      ORDER BY d.department_id, d.id, v.month
+      LEFT JOIN device_location_history h
+        ON h.device_id = d.id
+        AND v.month IS NOT NULL
+        AND STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') >= h.effective_from
+        AND (h.effective_to IS NULL OR STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') <= h.effective_to)
+      ORDER BY effective_department_id, d.id, v.month
     `;
     const params = fiscalYear ? [fiscalYear.start_month, fiscalYear.end_month] : [];
 
     const [rows] = await db.query(sql, params);
 
     // จัดกลุ่มแถวดิบให้เป็น device -> { ...info, monthly: [...] }
+    // key เป็น "department_id:device_id" (ไม่ใช่แค่ device_id เฉยๆ) เพราะเครื่องเดียวอาจมีบาง
+    // เดือนสังกัดแผนกเดิม บางเดือนสังกัดแผนกใหม่ (ย้ายกลางปีงบ) ต้องแยกเป็นคนละก้อนในรายงาน
+    // ไม่ให้ยอดของสองแผนกไปปนกันเป็นเครื่องเดียว
     const deviceMap = new Map();
+    const deviceDeptCount = new Map(); // นับว่าเครื่องแต่ละตัวไปโผล่กี่แผนก (ไว้ติดป้าย "ย้ายแผนกระหว่างช่วงนี้")
 
     for (const row of rows) {
-      if (!deviceMap.has(row.device_id)) {
-        deviceMap.set(row.device_id, {
+      const key = `${row.effective_department_id ?? 'none'}:${row.device_id}`;
+
+      if (!deviceMap.has(key)) {
+        deviceMap.set(key, {
           id: row.device_id,
           serial_number: row.serial_number,
           model: row.model,
           brand_name: row.brand_name,
-          department_id: row.department_id,
+          department_id: row.effective_department_id,
           monthly: [],
         });
+
+        deviceDeptCount.set(row.device_id, (deviceDeptCount.get(row.device_id) || 0) + 1);
       }
 
       if (row.month) {
-        deviceMap.get(row.device_id).monthly.push({
+        deviceMap.get(key).monthly.push({
           month: row.month,
           net_pages: row.net_pages,
           total_cost: row.total_cost,
@@ -771,6 +790,8 @@ router.get('/by-department', async (req, res) => {
     for (const device of deviceMap.values()) {
       device.total_pages = device.monthly.reduce((sum, r) => sum + Number(r.net_pages || 0), 0);
       device.total_cost = device.monthly.reduce((sum, r) => sum + Number(r.total_cost || 0), 0);
+      // true ถ้าเครื่องนี้ (serial เดียวกัน) ไปโผล่มากกว่า 1 แผนกในรายงานนี้ เพราะย้ายแผนกระหว่างช่วงเวลาที่ดู
+      device.moved_during_period = (deviceDeptCount.get(device.id) || 1) > 1;
 
       if (month) {
         const current = device.monthly.find((r) => r.month === month);

@@ -4,6 +4,12 @@ import api from "../services/api";
 import { activeFiscalYearRange, fiscalYearMonths, fiscalYearState } from "../store/fiscalYear";
 import SearchableSelect from "../components/SearchableSelect.vue";
 import DataTable from "../components/DataTable.vue";
+import AppIcon from "../components/AppIcon.vue";
+import { authState } from "../store/auth";
+
+// viewer = สิทธิ์ดูอย่างเดียว กรอก/แก้ไขยอดพิมพ์ไม่ได้ (backend บังคับด้วย staffMiddleware อยู่แล้ว
+// ส่วนนี้แค่ซ่อน/ปิดการกรอกฝั่ง UI ไม่ให้พยายามกรอกแล้วเจอ error กลับมา)
+const canEdit = computed(() => authState.user?.role !== "viewer");
 
 const loading = ref(false);
 const message = ref(null);
@@ -21,9 +27,11 @@ const departmentFilter = ref("");
 const brandFilter = ref("");
 const deviceStatusFilter = ref("");
 const fillStatusFilter = ref(""); // "" | done | partial | none
+const monthFilter = ref("");
 
 const devices = ref([]); // [{ id, serial_number, model, brand_name, building_name, floor_name, division_name, department_name, status, ... }]
 const filledSummary = ref({}); // { [device_id]: { filled, total_pages } }
+const monthPages = ref({}); // { [device_id]: pages } สำหรับเดือนที่ใช้กรอง
 
 // Master data สำหรับตัวเลือก filter (ดึงจาก endpoint เดียวกับหน้า AssetList)
 const buildings = ref([]);
@@ -99,10 +107,30 @@ async function loadSummary() {
       params: { fiscal_year_id: fiscalYearId.value },
     });
     filledSummary.value = Object.fromEntries(
-      res.data.map((r) => [r.device_id, { filled: r.filled, totalPages: Number(r.total_pages || 0) }])
+      res.data.map((r) => [r.device_id, {
+        filled: r.filled,
+        totalPages: Number(r.total_pages || 0),
+        latestMonth: r.latest_month || null,
+        latestPages: Number(r.latest_pages || 0),
+      }])
     );
   } catch (err) {
     console.error(err);
+  }
+}
+
+async function loadMonthPages() {
+  if (!monthFilter.value) {
+    monthPages.value = {};
+    return;
+  }
+
+  try {
+    const res = await api.get("/print-transactions", { params: { month: monthFilter.value } });
+    monthPages.value = Object.fromEntries(res.data.map((row) => [row.device_id, Number(row.pages || 0)]));
+  } catch (err) {
+    console.error("Load selected month error:", err);
+    monthPages.value = {};
   }
 }
 
@@ -121,7 +149,16 @@ async function init() {
 
 // ปีงบเปลี่ยน (จาก Navbar) → สรุปจำนวนเดือนที่กรอกแล้ว/ยอดรวมต้องโหลดใหม่
 // immediate: true เผื่อปีงบโหลดเสร็จ/ถูกตั้งค่าเริ่มต้นหลังจาก init() ทำงานไปแล้ว
-watch(fiscalYearId, loadSummary, { immediate: true });
+watch(
+  fiscalYearId,
+  () => {
+    // เดือนที่เลือกอาจอยู่นอกช่วงของปีงบใหม่ จึงล้างก่อนโหลดข้อมูลสรุปใหม่
+    monthFilter.value = "";
+    loadSummary();
+  },
+  { immediate: true }
+);
+watch(monthFilter, loadMonthPages);
 
 // -------------------------------------------------------
 // Cascading filter — เลือกอาคารแล้วค่อยกรองชั้น, เลือกฝ่ายแล้วค่อยกรองแผนก (เหมือน AssetList)
@@ -174,13 +211,24 @@ function resetFilters() {
   brandFilter.value = "";
   deviceStatusFilter.value = "";
   fillStatusFilter.value = "";
+  monthFilter.value = "";
 }
 
 // -------------------------------------------------------
 // สถานะการกรอกของเครื่องหนึ่งๆ ในปีที่เลือก — ครบ 12 / กรอกบางส่วน / ยังไม่กรอกเลย
 // -------------------------------------------------------
 function fillInfo(deviceId) {
-  return filledSummary.value[deviceId] || { filled: 0, totalPages: 0 };
+  return filledSummary.value[deviceId] || { filled: 0, totalPages: 0, latestMonth: null, latestPages: 0 };
+}
+
+function formatMonth(month) {
+  if (!month) return "-";
+  const [year, monthNumber] = month.split("-").map(Number);
+  return `${monthsTH[monthNumber - 1]} ${year + 543}`;
+}
+
+function selectedMonthPages(deviceId) {
+  return monthPages.value[deviceId] ?? 0;
 }
 
 function filledCount(deviceId) {
@@ -209,6 +257,7 @@ const filteredDevices = computed(() => {
       !keyword ||
       d.serial_number?.toLowerCase().includes(keyword) ||
       d.model?.toLowerCase().includes(keyword) ||
+      d.location?.toLowerCase().includes(keyword) ||
       d.department_name?.toLowerCase().includes(keyword) ||
       d.contract_no?.toLowerCase().includes(keyword);
 
@@ -225,6 +274,7 @@ const filteredDevices = computed(() => {
     const matchDeviceStatus = !deviceStatusFilter.value || d.status === deviceStatusFilter.value;
 
     const matchFillStatus = !fillStatusFilter.value || fillStatusOf(d.id) === fillStatusFilter.value;
+    const matchMonth = !monthFilter.value || Object.hasOwn(monthPages.value, d.id);
 
     return (
       matchKeyword &&
@@ -234,7 +284,8 @@ const filteredDevices = computed(() => {
       matchDepartment &&
       matchBrand &&
       matchDeviceStatus &&
-      matchFillStatus
+      matchFillStatus &&
+      matchMonth
     );
   });
 });
@@ -311,30 +362,30 @@ function isFilled(pages) {
 async function saveModal() {
   modalError.value = null;
 
-  // validate: ห้ามติดลบ
+  // validate: ห้ามติดลบ (เดือนที่ว่างไว้ = ยังไม่กรอก ไม่ต้องเช็ค)
   const invalid = modalMonths.value.find((row) => isFilled(row.pages) && Number(row.pages) < 0);
   if (invalid) {
     modalError.value = `จำนวนหน้าของเดือน ${invalid.label} ต้องไม่ติดลบ`;
     return;
   }
 
-  const items = modalMonths.value
-    .filter((row) => isFilled(row.pages))
-    .map((row) => ({ month: row.month, pages: Number(row.pages) }));
-
-  if (items.length === 0) {
-    modalError.value = "ยังไม่ได้กรอกเดือนไหนเลย";
-    return;
-  }
+  // ส่งครบทั้ง 12 เดือนเสมอ (ไม่ filter เดือนที่ว่างออก) เพราะเดือนที่ "ลบออกจนว่าง"
+  // ก็ต้องแจ้ง backend ไปด้วยว่าให้ลบค่าที่เคยบันทึกไว้ทิ้ง ไม่ใช่แค่ไม่พูดถึงเดือนนั้นเฉยๆ
+  // (ไม่งั้น backend จะไม่รู้ว่าต้องลบ ค่าที่เคยกรอกไว้ก่อนหน้าจะยังค้างอยู่ในฐานข้อมูล
+  // ทั้งที่หน้าจอโชว์ว่าช่องนั้นว่างแล้ว — ดู comment ที่ backend bulk-device)
+  const items = modalMonths.value.map((row) => ({
+    month: row.month,
+    pages: isFilled(row.pages) ? Number(row.pages) : null,
+  }));
 
   modalSaving.value = true;
   try {
-    await api.post("/print-transactions/bulk-device", {
+    const res = await api.post("/print-transactions/bulk-device", {
       device_id: modalDevice.value.id,
       items,
     });
 
-    message.value = `บันทึกยอดพิมพ์ของ ${modalDevice.value.serial_number} สำเร็จ ${items.length} เดือน`;
+    message.value = `${modalDevice.value.serial_number}: ${res.data.message}`;
     messageType.value = "success";
 
     await loadSummary();
@@ -353,10 +404,24 @@ async function saveModal() {
 const columns = computed(() => [
   { key: "serial_number", label: "SN" },
   { key: "brand_name", label: "ยี่ห้อ / รุ่น", value: (d) => `${d.brand_name || "-"} ${d.model || ""}` },
-  { key: "building_name", label: "อาคาร / ชั้น", value: (d) => `${d.building_name || "-"} ${d.floor_name || ""}` },
+  { key: "building_name", label: "อาคาร / ชั้น", value: (d) => [d.building_name, d.floor_name].filter(Boolean).join(" / ") || "-" },
+  { key: "location", label: "ตำแหน่งที่เครื่องอยู่", value: (d) => d.location || "-" },
   { key: "division_name", label: "ฝ่าย / แผนก", value: (d) => `${d.division_name || "-"} ${d.department_name || ""}` },
   { key: "status", label: "สถานะเครื่อง", align: "center", value: (d) => statusLabel(d.status), csv: (d) => statusLabel(d.status) },
-  { key: "total_pages", label: "ยอดรวมปีนี้ (หน้า)", align: "right", value: (d) => totalPages(d.id), csv: (d) => totalPages(d.id) },
+  {
+    key: "latest_transaction",
+    label: "ยอดล่าสุดที่กรอก",
+    align: "right",
+    value: (d) => fillInfo(d.id).latestMonth ? `${formatMonth(fillInfo(d.id).latestMonth)}: ${fillInfo(d.id).latestPages.toLocaleString()} หน้า` : "-",
+    csv: (d) => fillInfo(d.id).latestMonth ? `${fillInfo(d.id).latestMonth}: ${fillInfo(d.id).latestPages}` : "",
+  },
+  {
+    key: "total_pages",
+    label: monthFilter.value ? `ยอดเดือน ${formatMonth(monthFilter.value)} (หน้า)` : "ยอดรวมปีนี้ (หน้า)",
+    align: "right",
+    value: (d) => monthFilter.value ? selectedMonthPages(d.id) : totalPages(d.id),
+    csv: (d) => monthFilter.value ? selectedMonthPages(d.id) : totalPages(d.id),
+  },
   { key: "fill_status", label: "สถานะการกรอก", align: "center", value: (d) => `${filledCount(d.id)}/12 เดือน`, csv: (d) => `${filledCount(d.id)}/12` },
 ]);
 
@@ -386,6 +451,16 @@ onMounted(init);
             placeholder="พิมพ์เพื่อค้นหา..."
             class="border rounded p-2 w-full bg-gray-50"
           />
+        </div>
+
+        <div class="min-w-[180px]">
+          <label class="block text-sm text-gray-500 mb-1">ดูข้อมูลเดือน</label>
+          <select v-model="monthFilter" class="border rounded p-2 w-full bg-gray-50">
+            <option value="">ทุกเดือนในปีงบ</option>
+            <option v-for="month in fiscalYearMonths(range)" :key="month" :value="month">
+              {{ formatMonth(month) }}
+            </option>
+          </select>
         </div>
       </div>
 
@@ -506,13 +581,25 @@ onMounted(init);
           <div class="text-gray-500">{{ row.floor_name || "-" }}</div>
         </template>
 
+        <template #cell-location="{ row }">
+          {{ row.location || "-" }}
+        </template>
+
         <template #cell-division_name="{ row }">
           <div>{{ row.division_name || "-" }}</div>
           <div class="text-gray-500">{{ row.department_name || "-" }}</div>
         </template>
 
         <template #cell-total_pages="{ row }">
-          {{ totalPages(row.id).toLocaleString() }}
+          {{ (monthFilter ? selectedMonthPages(row.id) : totalPages(row.id)).toLocaleString() }}
+        </template>
+
+        <template #cell-latest_transaction="{ row }">
+          <template v-if="fillInfo(row.id).latestMonth">
+            <div>{{ formatMonth(fillInfo(row.id).latestMonth) }}</div>
+            <div class="text-gray-500">{{ fillInfo(row.id).latestPages.toLocaleString() }} หน้า</div>
+          </template>
+          <span v-else>-</span>
         </template>
 
         <template #cell-status="{ row }">
@@ -539,9 +626,10 @@ onMounted(init);
         <template #actions="{ row }">
           <button
             @click="openModal(row)"
-            class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+            :class="canEdit ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-500 hover:bg-gray-600'"
+            class="text-white px-3 py-1 rounded"
           >
-            กรอกข้อมูล
+            {{ canEdit ? "กรอกข้อมูล" : "ดูข้อมูล" }}
           </button>
         </template>
       </DataTable>
@@ -556,7 +644,7 @@ onMounted(init);
       <div class="bg-gray-50 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div class="p-5 border-b flex items-center justify-between">
           <div>
-            <h2 class="text-lg font-bold">กรอกยอดพิมพ์รายเดือน</h2>
+            <h2 class="text-lg font-bold">{{ canEdit ? "กรอกยอดพิมพ์รายเดือน" : "ดูยอดพิมพ์รายเดือน" }}</h2>
             <p class="text-sm text-gray-500">
               {{ modalDevice?.serial_number }} — {{ modalDevice?.brand_name }} {{ modalDevice?.model }}
               (ปีงบ {{ displayYearBE }})
@@ -586,7 +674,8 @@ onMounted(init);
                     min="0"
                     v-model.number="modalMonths[i].pages"
                     placeholder="ยังไม่กรอก"
-                    class="border rounded p-1 w-28 text-right bg-gray-50"
+                    :disabled="!canEdit"
+                    class="border rounded p-1 w-28 text-right bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </td>
               </tr>
@@ -604,14 +693,16 @@ onMounted(init);
             :disabled="modalSaving"
             class="border px-4 py-2 rounded hover:bg-gray-50"
           >
-            ยกเลิก
+            {{ canEdit ? "ยกเลิก" : "ปิด" }}
           </button>
           <button
+            v-if="canEdit"
             @click="saveModal"
             :disabled="modalSaving || modalLoading"
-            class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+            class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
           >
-            {{ modalSaving ? "กำลังบันทึก..." : "💾 บันทึกทั้ง 12 เดือน" }}
+            <AppIcon v-if="!modalSaving" name="check" class="w-4 h-4 shrink-0" />
+            {{ modalSaving ? "กำลังบันทึก..." : "บันทึกทั้ง 12 เดือน" }}
           </button>
         </div>
       </div>

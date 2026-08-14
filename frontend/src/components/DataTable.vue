@@ -2,7 +2,7 @@
 /**
  * DataTable.vue — ตาราง generic แทน <table> ธรรมดา
  * ฟีเจอร์ในตัว: sort (คลิกหัวคอลัมน์), search (ค้นหาข้ามทุกคอลัมน์),
- * pagination, sticky header, export CSV/Excel
+ * pagination, sticky header, export Excel (.xlsx)
  *
  * หมายเหตุ: ตัว filter เฉพาะทาง (เช่น dropdown อาคาร/แผนก) ยังทำที่หน้า parent
  * เหมือนเดิม แล้วส่ง "rows" ที่ filter แล้วเข้ามา — DataTable รับผิดชอบแค่
@@ -17,6 +17,7 @@
  * columns: [{ key, label, align: 'left'|'right'|'center', sortable: true, csv: (row) => value }]
  */
 import { ref, computed, watch } from "vue";
+import * as XLSX from "xlsx";
 import SortIcon from "./SortIcon.vue";
 
 const props = defineProps({
@@ -133,38 +134,23 @@ function sortTooltip(col) {
 }
 
 // -------------------------------------------------------
-// Export CSV (เปิดด้วย Excel ได้ตรงๆ) — ใช้ค่าที่ sort/search แล้ว ไม่ตัดตาม pagination
+// Export Excel (.xlsx) — ใช้ค่าที่ sort/search แล้ว ไม่ตัดตาม pagination
 // -------------------------------------------------------
-function csvEscape(value) {
-  const s = value === null || value === undefined ? "" : String(value);
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
+function exportExcel() {
+  const header = props.columns.map((c) => c.label);
 
-function exportCsv() {
-  const header = props.columns.map((c) => csvEscape(c.label)).join(",");
-
-  const lines = sortedRows.value.map((row) =>
-    props.columns
-      .map((col) => {
-        const raw = typeof col.csv === "function" ? col.csv(row) : cellValue(row, col);
-        return csvEscape(raw);
-      })
-      .join(",")
+  const rows = sortedRows.value.map((row) =>
+    props.columns.map((col) => {
+      const raw = typeof col.csv === "function" ? col.csv(row) : cellValue(row, col);
+      return raw === null || raw === undefined ? "" : raw;
+    })
   );
 
-  // ใส่ BOM กัน Excel เปิดภาษาไทยแล้วเพี้ยน
-  const csvContent = "\uFEFF" + [header, ...lines].join("\r\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${props.exportFilename}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  XLSX.writeFile(workbook, `${props.exportFilename}.xlsx`);
 }
 </script>
 
@@ -189,11 +175,11 @@ function exportCsv() {
       <button
         v-if="showExport"
         type="button"
-        @click="exportCsv"
+        @click="exportExcel"
         class="border border-gray-300 text-gray-600 px-3 py-2 rounded hover:bg-gray-50 text-sm whitespace-nowrap"
-        title="ดาวน์โหลดเป็น CSV / เปิดด้วย Excel ได้"
+        title="ดาวน์โหลดเป็นไฟล์ Excel (.xlsx)"
       >
-        ⬇ Export CSV
+        ⬇ Export Excel
       </button>
     </div>
 

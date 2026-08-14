@@ -115,6 +115,26 @@ exports.importDevices = async (req, res) => {
             ).trim();
 
 
+            // สถานะ — ถ้าไม่กรอกมา/พิมพ์ค่าที่ไม่รู้จัก ให้ default เป็น "active" เหมือนฟอร์มเพิ่มทีละรายการ
+            // รองรับทั้งค่า enum อังกฤษ (active/repair/retired) และป้ายภาษาไทยที่ผู้ใช้อาจพิมพ์มา
+            const STATUS_MAP = {
+                active: "active",
+                repair: "repair",
+                retired: "retired",
+                "ใช้งานอยู่": "active",
+                "ซ่อมบำรุง": "repair",
+                "ปลดระวาง": "retired",
+            };
+
+            const statusRaw = String(
+                row.status ||
+                row.Status ||
+                row.สถานะ ||
+                ""
+            ).trim();
+
+            const status = STATUS_MAP[statusRaw.toLowerCase()] || STATUS_MAP[statusRaw] || "active";
+
 
             const brand_id = brandMap[brand];
 
@@ -144,7 +164,8 @@ exports.importDevices = async (req, res) => {
                 serial_number,
                 brand_id,
                 model,
-                building_id
+                building_id,
+                status
             ]);
 
         }
@@ -161,7 +182,8 @@ exports.importDevices = async (req, res) => {
                     serial_number,
                     brand_id,
                     model,
-                    building_id
+                    building_id,
+                    status
                 )
                 VALUES ?
                 `,

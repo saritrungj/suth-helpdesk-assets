@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from "vue";
 import api from "../services/api";
 import DataTable from "../components/DataTable.vue";
 import SearchableSelect from "../components/SearchableSelect.vue";
+import MonthPicker from "../components/MonthPicker.vue";
 import {
   fiscalYearState,
   activeFiscalYear,
@@ -125,6 +126,16 @@ const displayYearBE = computed(() => activeFiscalYear.value?.year ?? "-");
 // เดือนทั้งหมดของปีงบที่เลือกอยู่ (ต.ค. - ก.ย. เสมอ) — ใช้ store กลางตัวเดียวกับหน้าอื่นๆ
 const fyMonths = computed(() => fiscalYearMonths(activeFiscalYearRange.value));
 
+// เดือนที่ "เลือกจะแสดง" ในตาราง — ไม่ว่างเปล่า = เอาแค่บางเดือนของปีงบนี้ (ให้ผู้ใช้เจาะจงเดือนได้
+// ตามที่ขอในมีตติ้ง "ปีงบนี้เลือกเป็นรายเดือนได้ไหม") ว่างเปล่า = ยังไม่ได้เจาะจง แสดงทั้งปีงบตามเดิม
+// (ดู displayMonths ด้านล่าง — MonthPicker เองมี watcher ที่ล้างค่านี้ให้อัตโนมัติเมื่อเปลี่ยนปีงบ)
+const reportMonths = ref([]);
+
+// เดือนที่ใช้จริงในการสร้างคอลัมน์ตาราง: ถ้าผู้ใช้เจาะจงไว้ใช้ตามนั้น ไม่งั้น fallback เป็นทั้งปีงบ
+const displayMonths = computed(() =>
+  reportMonths.value.length ? [...reportMonths.value].sort() : fyMonths.value
+);
+
 function formatMonthShort(value) {
   if (!value) return "";
   const monthsTH = [
@@ -222,16 +233,16 @@ const filteredDevices = computed(() => {
   });
 });
 
-// แถวของตาราง: ข้อมูลเครื่อง + ยอดพิมพ์รายเดือน (_monthly) + รวมทั้งปีงบ (_total)
+// แถวของตาราง: ข้อมูลเครื่อง + ยอดพิมพ์รายเดือน (_monthly) + รวมเฉพาะเดือนที่เลือกแสดง (_total)
 const reportRows = computed(() =>
   filteredDevices.value.map((d) => {
     const monthly = monthlyMap.value[d.id] || {};
-    const total = fyMonths.value.reduce((sum, m) => sum + (monthly[m] || 0), 0);
+    const total = displayMonths.value.reduce((sum, m) => sum + (monthly[m] || 0), 0);
     return { ...d, _monthly: monthly, _total: total };
   })
 );
 
-// คอลัมน์ของ DataTable — คอลัมน์ข้อมูลเครื่อง + 1 คอลัมน์ต่อเดือนในปีงบ + คอลัมน์รวม
+// คอลัมน์ของ DataTable — คอลัมน์ข้อมูลเครื่อง + 1 คอลัมน์ต่อเดือนที่เลือกแสดง + คอลัมน์รวม
 const columns = computed(() => {
   const base = [
     { key: "serial_number", label: "Serial" },
@@ -244,7 +255,7 @@ const columns = computed(() => {
     { key: "department_name", label: "แผนก" },
   ];
 
-  const monthCols = fyMonths.value.map((m) => ({
+  const monthCols = displayMonths.value.map((m) => ({
     key: `m_${m}`,
     label: formatMonthShort(m),
     align: "right",
@@ -254,7 +265,7 @@ const columns = computed(() => {
 
   const totalCol = {
     key: "total_pages",
-    label: "รวมทั้งปีงบ",
+    label: reportMonths.value.length ? "รวมเดือนที่เลือก" : "รวมทั้งปีงบ",
     align: "right",
     value: (r) => r._total,
     csv: (r) => r._total,
@@ -307,6 +318,12 @@ onMounted(async () => {
             {{ displayYearBE }}
           </div>
           <p class="text-xs text-gray-400 mt-1">เปลี่ยนปีงบได้ที่มุมขวาบน</p>
+        </div>
+
+        <div class="min-w-[200px]">
+          <label class="block text-sm text-gray-500 mb-1">เดือนที่แสดง</label>
+          <MonthPicker v-model="reportMonths" :options="fyMonths" />
+          <p class="text-xs text-gray-400 mt-1">ไม่เลือก = แสดงทั้งปีงบ</p>
         </div>
 
         <div class="flex-1 min-w-[200px]">
