@@ -1,14 +1,15 @@
 <script setup>
 
 import { ref, computed, onMounted, watch } from "vue";
-import { Bar } from "vue-chartjs";
+import { Line } from "vue-chartjs";
 
 import {
   Chart as ChartJS,
   Title,
   Tooltip,
   Legend,
-  BarElement,
+  LineElement,
+  PointElement,
   CategoryScale,
   LinearScale,
 } from "chart.js";
@@ -24,7 +25,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  BarElement,
+  LineElement,
+  PointElement,
   CategoryScale,
   LinearScale
 );
@@ -66,9 +68,21 @@ const chartData = ref({
 
       data:[],
 
+      borderColor:"#2563EB",
+
       backgroundColor:"#2563EB",
 
-      borderWidth:1
+      pointBackgroundColor:"#2563EB",
+
+      pointRadius:3,
+
+      pointHoverRadius:5,
+
+      borderWidth:2,
+
+      tension:0.25,
+
+      spanGaps:true
 
     }
 
@@ -214,9 +228,21 @@ async function loadMonthly(){
 
           data:Object.values(monthly),
 
+          borderColor:"#2563EB",
+
           backgroundColor:"#2563EB",
 
-          borderWidth:1
+          pointBackgroundColor:"#2563EB",
+
+          pointRadius:3,
+
+          pointHoverRadius:5,
+
+          borderWidth:2,
+
+          tension:0.25,
+
+          spanGaps:true
 
         }
 
@@ -320,7 +346,7 @@ watch(
 
 
 
-  <Bar
+  <Line
 
     v-else
 

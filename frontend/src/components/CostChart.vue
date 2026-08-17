@@ -2,7 +2,7 @@
 
 import { ref, computed, onMounted, watch } from "vue";
 
-import { Bar } from "vue-chartjs";
+import { Line } from "vue-chartjs";
 
 
 import {
@@ -10,7 +10,8 @@ import {
   Title,
   Tooltip,
   Legend,
-  BarElement,
+  LineElement,
+  PointElement,
   CategoryScale,
   LinearScale,
 } from "chart.js";
@@ -28,7 +29,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  BarElement,
+  LineElement,
+  PointElement,
   CategoryScale,
   LinearScale
 
@@ -75,9 +77,21 @@ const chartData = ref({
 
       data: [],
 
+      borderColor: "#DC2626",
+
       backgroundColor: "#DC2626",
 
-      borderWidth: 1
+      pointBackgroundColor: "#DC2626",
+
+      pointRadius: 3,
+
+      pointHoverRadius: 5,
+
+      borderWidth: 2,
+
+      tension: 0.25,
+
+      spanGaps: true
 
     }
 
@@ -269,14 +283,27 @@ async function loadCost(){
 
 
 
+          borderColor:
+
+            "#DC2626",
+
           backgroundColor:
 
             "#DC2626",
 
+          pointBackgroundColor:
 
+            "#DC2626",
 
-          borderWidth:1
+          pointRadius:3,
 
+          pointHoverRadius:5,
+
+          borderWidth:2,
+
+          tension:0.25,
+
+          spanGaps:true
 
         }
 
@@ -403,7 +430,7 @@ watch(
 
 
 
-  <Bar
+  <Line
 
     v-else
 

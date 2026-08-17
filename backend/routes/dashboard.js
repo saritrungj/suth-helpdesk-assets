@@ -983,6 +983,54 @@ router.get('/highlights', async (req, res) => {
 
     const [top_departments] = await db.query(topDeptSql, topDeptParams);
 
+    // ---------- 2.5) Top/Bottom 5 devices by pages printed ----------
+    // ใช้ LEFT JOIN จาก devices (ไม่ใช่เริ่มจาก v_monthly_kpi แบบ top_departments ด้านบน)
+    // เพราะโจทย์ "เครื่องไหนปริ้นน้อยที่สุด" ต้องเห็นเครื่องที่ไม่เคยมีคนกรอกยอดเลยด้วย
+    // (ถ้าเริ่มจาก v_monthly_kpi เครื่อง 0 หน้าจะไม่มีแถวให้ join เลย หลุดออกจากอันดับ "น้อยที่สุด" ไปเงียบๆ)
+    // เงื่อนไขเดือนจึงต้องอยู่ใน ON ของ LEFT JOIN ไม่ใช่ WHERE ไม่งั้น LEFT JOIN จะกลายเป็น INNER JOIN โดยปริยาย
+    let topDeviceJoin = 'LEFT JOIN v_monthly_kpi v ON v.device_id = d.id';
+    const topDeviceJoinParams = [];
+
+    if (highlightMonths.length) {
+      topDeviceJoin = 'LEFT JOIN v_monthly_kpi v ON v.device_id = d.id AND v.month IN (?)';
+      topDeviceJoinParams.push(highlightMonths);
+    }
+
+    let topDeviceSql = `
+      SELECT
+        d.id AS device_id,
+        d.serial_number,
+        d.model,
+        d.status,
+        b.name AS building_name,
+        dept.name AS department_name,
+        COALESCE(SUM(v.net_pages), 0) AS total_pages,
+        COALESCE(SUM(v.total_cost), 0) AS total_cost
+      FROM devices d
+      LEFT JOIN building b ON d.building_id = b.id
+      LEFT JOIN department dept ON d.department_id = dept.id
+      ${topDeviceJoin}
+      WHERE 1=1
+    `;
+    const topDeviceParams = [...topDeviceJoinParams];
+
+    if (building_name) {
+      topDeviceSql += ' AND b.name = ? ';
+      topDeviceParams.push(building_name);
+    }
+
+    // ?device_order=asc -> น้อยที่สุดก่อน (เครื่องปริ้นน้อย) | ค่าอื่น/ไม่ส่ง -> มากที่สุดก่อน (default)
+    // whitelist ค่าก่อนต่อ string ตรงๆ ลง SQL เพราะ ASC/DESC ใช้ผ่าน parameterized query (?) ไม่ได้
+    const deviceOrderDir = req.query.device_order === 'asc' ? 'ASC' : 'DESC';
+
+    topDeviceSql += `
+      GROUP BY d.id, d.serial_number, d.model, d.status, b.name, dept.name
+      ORDER BY total_pages ${deviceOrderDir}
+      LIMIT 5
+    `;
+
+    const [top_devices] = await db.query(topDeviceSql, topDeviceParams);
+
     // ---------- 3) Contract usage summary ----------
     let contractJoin = 'LEFT JOIN v_monthly_kpi v ON v.device_id = d.id';
     const contractParams = [];
@@ -1021,7 +1069,7 @@ router.get('/highlights', async (req, res) => {
 
     const [contracts] = await db.query(contractSql, contractParams);
 
-    res.json({ device_status, top_departments, contracts });
+    res.json({ device_status, top_departments, top_devices, contracts });
   } catch (err) {
     console.error('Highlights Error:', err.message);
     res.status(500).json({ error: err.message });

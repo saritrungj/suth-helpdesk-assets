@@ -26,6 +26,13 @@ router.get(
   deviceController.getHistory
 );
 
+// ยอดพิมพ์สะสมของช่วงที่ตั้ง/สังกัดปัจจุบัน — โชว์ในหน้าต่าง "ย้ายเครื่อง" ก่อนย้ายจริง
+router.get(
+  "/:id/current-usage",
+  authMiddleware,
+  deviceController.getCurrentUsage
+);
+
 // Admin เท่านั้น
 router.post(
   "/",
@@ -39,6 +46,14 @@ router.put(
   authMiddleware,
   adminMiddleware,
   deviceController.update
+);
+
+// ย้ายเครื่อง (อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก) — แยกออกจากการแก้ไขทรัพย์สินทั่วไปด้านบน
+router.put(
+  "/:id/move",
+  authMiddleware,
+  adminMiddleware,
+  deviceController.move
 );
 
 router.delete(

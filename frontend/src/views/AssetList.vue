@@ -5,6 +5,7 @@ import api from "../services/api";
 import { authState } from "../store/auth";
 import DataTable from "../components/DataTable.vue";
 import AssetForm from "./AssetForm.vue";
+import MoveDeviceModal from "./MoveDeviceModal.vue";
 import SearchableSelect from "../components/SearchableSelect.vue";
 import { toastSuccess, toastError } from "../store/toast";
 import { askConfirm } from "../store/confirmDialog";
@@ -50,6 +51,15 @@ function openEditModal(id) {
 
 function onAssetSaved() {
   loadAssets(); // refresh ตารางหลัง submit สำเร็จ (ไม่ต้อง reload ทั้งหน้า)
+}
+
+// Modal ย้ายเครื่อง — แยกออกจากปุ่ม "แก้ไข" (จัดการเฉพาะอาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก)
+const showMoveModal = ref(false);
+const movingAssetId = ref(null);
+
+function openMoveModal(id) {
+  movingAssetId.value = id;
+  showMoveModal.value = true;
 }
 
 
@@ -421,6 +431,21 @@ onMounted(async () => {
       </button>
 
       <button
+        @click="openMoveModal(row.id)"
+        title="ย้ายเครื่อง"
+        class="bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded mr-2"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v20" />
+          <path d="m15 19-3 3-3-3" />
+          <path d="m19 9 3 3-3 3" />
+          <path d="M2 12h20" />
+          <path d="m5 9-3 3 3 3" />
+          <path d="m9 5 3-3 3 3" />
+        </svg>
+      </button>
+
+      <button
         @click="deleteAsset(row.id)"
         title="ลบ"
         class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded"
@@ -440,6 +465,13 @@ onMounted(async () => {
   <AssetForm
     v-model="showFormModal"
     :asset-id="editingAssetId"
+    @saved="onAssetSaved"
+  />
+
+  <!-- Modal ย้ายเครื่อง (แยกจากแก้ไขทรัพย์สินทั่วไป) -->
+  <MoveDeviceModal
+    v-model="showMoveModal"
+    :asset-id="movingAssetId"
     @saved="onAssetSaved"
   />
 

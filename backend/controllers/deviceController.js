@@ -18,6 +18,26 @@ const deviceSchema = z.object({
   status: z.enum(["active", "repair", "retired"]).optional(),
 });
 
+// แก้ไขทรัพย์สิน (ทั่วไป) — ไม่รวมอาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก
+// การย้ายเครื่องแยกไปใช้ moveSchema + exports.move ด้านล่างแทน
+// เพื่อไม่ให้กด "บันทึก" ที่ฟอร์มแก้ไขทั่วไปเผลอย้ายเครื่อง (และไม่เขียนประวัติการย้ายซ้ำซ้อน)
+const updateSchema = deviceSchema.omit({
+  building_id: true,
+  floor_id: true,
+  location: true,
+  division_id: true,
+  department_id: true,
+});
+
+// ย้ายเครื่อง (อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก) — แยกออกจากการแก้ไขทรัพย์สินทั่วไป
+const moveSchema = z.object({
+  building_id: z.number().int().positive().optional().nullable(),
+  floor_id: z.number().int().positive().optional().nullable(),
+  location: z.string().max(255).optional().nullable(),
+  division_id: z.number().int().positive().optional().nullable(),
+  department_id: z.number().int().positive().optional().nullable(),
+});
+
 // ============================================================
 // ประวัติการย้าย (device_location_history)
 // ============================================================
@@ -271,17 +291,12 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   const conn = await db.getConnection();
   try {
-    const validatedData = deviceSchema.parse(req.body);
+    const validatedData = updateSchema.parse(req.body);
 
     const {
       serial_number,
       brand_id,
       model,
-      building_id,
-      floor_id,
-      location,
-      division_id,
-      department_id,
       contract_id,
       price_override,
       status,
@@ -289,17 +304,14 @@ exports.update = async (req, res) => {
 
     await conn.beginTransaction();
 
+    // ไม่แตะอาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก และไม่เขียนประวัติการย้ายที่นี่ —
+    // ใช้ PUT /api/devices/:id/move (exports.move) แยกต่างหากสำหรับย้ายเครื่อง
     const [result] = await conn.query(
       `
       UPDATE devices SET
         serial_number=?,
         brand_id=?,
         model=?,
-        building_id=?,
-        floor_id=?,
-        location=?,
-        division_id=?,
-        department_id=?,
         contract_id=?,
         price_override=?,
         status=?
@@ -309,11 +321,6 @@ exports.update = async (req, res) => {
         serial_number,
         brand_id || null,
         model || null,
-        building_id || null,
-        floor_id || null,
-        location?.trim() || null,
-        division_id || null,
-        department_id || null,
         contract_id || null,
         price_override || null,
         status || "active",
@@ -327,15 +334,6 @@ exports.update = async (req, res) => {
         error: "Device not found",
       });
     }
-
-    // ปิด/เปิดช่วงประวัติใหม่ ถ้าตำแหน่ง/ฝ่าย/แผนกเปลี่ยนไปจากช่วงล่าสุด (ดู recordLocationHistory ด้านบน)
-    await recordLocationHistory(conn, req.params.id, {
-      building_id: building_id || null,
-      floor_id: floor_id || null,
-      location: location?.trim() || null,
-      division_id: division_id || null,
-      department_id: department_id || null,
-    });
 
     await conn.commit();
 
@@ -363,11 +361,90 @@ exports.update = async (req, res) => {
 };
 
 // ============================================================
+// PUT /api/devices/:id/move
+// ย้ายเครื่อง (อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก) — แยกออกจากการแก้ไขทรัพย์สินทั่วไป (exports.update)
+// อัปเดตค่า "ปัจจุบัน" ในตาราง devices และเขียนประวัติการย้ายผ่าน recordLocationHistory
+// ============================================================
+exports.move = async (req, res) => {
+  const conn = await db.getConnection();
+  try {
+    const validatedData = moveSchema.parse(req.body);
+
+    const { building_id, floor_id, location, division_id, department_id } = validatedData;
+
+    await conn.beginTransaction();
+
+    const [result] = await conn.query(
+      `
+      UPDATE devices SET
+        building_id=?,
+        floor_id=?,
+        location=?,
+        division_id=?,
+        department_id=?
+      WHERE id=?
+    `,
+      [
+        building_id || null,
+        floor_id || null,
+        location?.trim() || null,
+        division_id || null,
+        department_id || null,
+        req.params.id,
+      ]
+    );
+
+    if (result.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(404).json({
+        error: "Device not found",
+      });
+    }
+
+    await recordLocationHistory(conn, req.params.id, {
+      building_id: building_id || null,
+      floor_id: floor_id || null,
+      location: location?.trim() || null,
+      division_id: division_id || null,
+      department_id: department_id || null,
+    });
+
+    await conn.commit();
+
+    res.json({
+      message: "Device moved successfully",
+    });
+  } catch (err) {
+    await conn.rollback();
+
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: err.errors,
+      });
+    }
+
+    console.error(err);
+
+    res.status(500).json({
+      error: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+};
+
+// ============================================================
 // GET /api/devices/:id/history
 // ประวัติการย้ายอาคาร/ชั้น/ฝ่าย/แผนกของเครื่องนี้ — เรียงล่าสุดก่อน
 // ============================================================
 exports.getHistory = async (req, res) => {
   try {
+    // ยอดพิมพ์สะสม (แผ่นสุทธิ/ค่าใช้จ่าย) ต่อ "ช่วง" ที่ตั้ง/สังกัด — ไม่ใช่แค่ช่วงปัจจุบัน
+    // (h.effective_to IS NULL) แบบ getCurrentUsage แต่คำนวณให้ทุกแถวในประวัติ เพื่อรองรับ
+    // การย้ายบ่อยๆ แล้วยังย้อนดูยอดพิมพ์สะสมของที่ตั้งเดิมแต่ละช่วงได้
+    // ขอบเขตช่วง: v_monthly_kpi.month >= effective_from และ < effective_to (ถ้ายังเปิดอยู่ไม่จำกัดบน)
+    // ใช้ตรรกะเดียวกับ exports.getCurrentUsage เพื่อให้ตัวเลขตรงกัน
     const [rows] = await db.query(
       `
       SELECT
@@ -378,7 +455,27 @@ exports.getHistory = async (req, res) => {
         f.name AS floor_name,
         h.location,
         divi.name AS division_name,
-        dept.name AS department_name
+        dept.name AS department_name,
+        COALESCE((
+          SELECT SUM(v.net_pages)
+          FROM v_monthly_kpi v
+          WHERE v.device_id = h.device_id
+            AND STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') >= h.effective_from
+            AND (
+              h.effective_to IS NULL
+              OR STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') < h.effective_to
+            )
+        ), 0) AS total_pages,
+        COALESCE((
+          SELECT SUM(v.total_cost)
+          FROM v_monthly_kpi v
+          WHERE v.device_id = h.device_id
+            AND STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') >= h.effective_from
+            AND (
+              h.effective_to IS NULL
+              OR STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') < h.effective_to
+            )
+        ), 0) AS total_cost
       FROM device_location_history h
       LEFT JOIN building b ON h.building_id = b.id
       LEFT JOIN floor f ON h.floor_id = f.id
@@ -390,7 +487,75 @@ exports.getHistory = async (req, res) => {
       [req.params.id]
     );
 
-    res.json({ history: rows });
+    // mysql2 คืนค่า SUM() เป็น string เมื่อมาจาก DECIMAL — แปลงเป็น number ให้ frontend ใช้ตรงๆ
+    const history = rows.map((row) => ({
+      ...row,
+      total_pages: Number(row.total_pages),
+      total_cost: Number(row.total_cost),
+    }));
+
+    res.json({ history });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+};
+
+// ============================================================
+// GET /api/devices/:id/current-usage
+// ยอดพิมพ์สะสม (แผ่นสุทธิ/ค่าใช้จ่าย) ของเครื่องนี้ นับตั้งแต่ช่วงที่ตั้ง/สังกัดปัจจุบัน
+// (effective_to IS NULL) เริ่มต้น — ใช้โชว์ในหน้าต่าง "ย้ายเครื่อง" ก่อนย้ายจริง
+// ให้รู้ว่าที่เดิมสะสมยอดพิมพ์ไว้เท่าไหร่แล้วก่อนจะตัดไปเริ่มช่วงใหม่
+// คำนวณแบบเดียวกับรายงาน "ยอดพิมพ์แยกตามฝ่าย/แผนก" (v_monthly_kpi + device_location_history)
+// เพื่อให้ตัวเลขตรงกัน
+// ============================================================
+exports.getCurrentUsage = async (req, res) => {
+  try {
+    const [[latest]] = await db.query(
+      `SELECT h.*,
+         b.name AS building_name,
+         f.name AS floor_name,
+         divi.name AS division_name,
+         dept.name AS department_name
+       FROM device_location_history h
+       LEFT JOIN building b ON h.building_id = b.id
+       LEFT JOIN floor f ON h.floor_id = f.id
+       LEFT JOIN division divi ON h.division_id = divi.id
+       LEFT JOIN department dept ON h.department_id = dept.id
+       WHERE h.device_id = ? AND h.effective_to IS NULL
+       ORDER BY h.id DESC LIMIT 1`,
+      [req.params.id]
+    );
+
+    // ยังไม่เคยมีประวัติเลย (ไม่ควรเกิดขึ้นถ้าเพิ่มเครื่องผ่านฟอร์มปกติ) — ไม่มียอดให้โชว์
+    if (!latest) {
+      return res.json({ usage: null });
+    }
+
+    const [[usage]] = await db.query(
+      `SELECT
+         COALESCE(SUM(v.net_pages), 0) AS total_pages,
+         COALESCE(SUM(v.total_cost), 0) AS total_cost
+       FROM v_monthly_kpi v
+       WHERE v.device_id = ?
+         AND STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') >= ?`,
+      [req.params.id, latest.effective_from]
+    );
+
+    res.json({
+      usage: {
+        effective_from: latest.effective_from,
+        building_name: latest.building_name,
+        floor_name: latest.floor_name,
+        location: latest.location,
+        division_name: latest.division_name,
+        department_name: latest.department_name,
+        total_pages: Number(usage.total_pages),
+        total_cost: Number(usage.total_cost),
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({

@@ -1,13 +1,14 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import { Bar } from "vue-chartjs";
+import { Line } from "vue-chartjs";
 
 import {
   Chart as ChartJS,
   Title,
   Tooltip,
   Legend,
-  BarElement,
+  LineElement,
+  PointElement,
   CategoryScale,
   LinearScale,
 } from "chart.js";
@@ -33,7 +34,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  BarElement,
+  LineElement,
+  PointElement,
   CategoryScale,
   LinearScale
 );
@@ -48,9 +50,14 @@ const chartData = ref({
     {
       label: "จำนวนหน้าพิมพ์",
       data: [],
-      backgroundColor: "#10B981",
       borderColor: "#059669",
-      borderWidth: 1,
+      backgroundColor: "#059669",
+      pointBackgroundColor: "#059669",
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      borderWidth: 2,
+      tension: 0.25,
+      spanGaps: true,
     },
   ],
 });
@@ -153,11 +160,21 @@ async function loadBuilding() {
             ),
 
 
-          backgroundColor:"#10B981",
-
           borderColor:"#059669",
 
-          borderWidth:1
+          backgroundColor:"#059669",
+
+          pointBackgroundColor:"#059669",
+
+          pointRadius:3,
+
+          pointHoverRadius:5,
+
+          borderWidth:2,
+
+          tension:0.25,
+
+          spanGaps:true
 
         }
 
@@ -225,7 +242,7 @@ watch(
       {{ error }}
     </div>
 
-    <Bar
+    <Line
       v-else
       :data="chartData"
       :options="chartOptions"

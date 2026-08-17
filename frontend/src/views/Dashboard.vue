@@ -138,6 +138,88 @@
 
     </div>
 
+    <!-- ============================================================
+         เครื่องที่ปริ้นมากสุด/น้อยสุด — ตอบโจทย์ "อยากดูว่าเครื่องไหนปริ้นน้อยที่สุด"
+         สไตล์เดียวกับการ์ด "แผนกที่ค่าใช้จ่ายสุทธิสูงสุด" ด้านบน แต่สลับมาก/น้อยได้ด้วยปุ่มเดียว
+         ============================================================ -->
+    <div class="mt-6 bg-gray-50 shadow rounded-lg p-6">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h2 class="text-xl font-bold">
+          เครื่องที่ปริ้น{{ topDevicesOrder === "desc" ? "มากที่สุด" : "น้อยที่สุด" }} (หัก 20%)
+        </h2>
+
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            @click="toggleTopDevicesOrder"
+            class="text-sm border rounded px-3 py-1.5 hover:bg-gray-100 flex items-center gap-1"
+          >
+            {{ topDevicesOrder === "desc" ? "มากที่สุด" : "น้อยที่สุด" }}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="w-3.5 h-3.5"
+            >
+              <path v-if="topDevicesOrder === 'desc'" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+              <path v-else d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+            </svg>
+          </button>
+
+          <RouterLink to="/compare" class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap">
+            ดูทั้งหมด →
+          </RouterLink>
+        </div>
+      </div>
+
+      <div v-if="highlightsError" class="text-sm text-red-600">{{ highlightsError }}</div>
+
+      <div v-else-if="highlightsLoading" class="space-y-2">
+        <SkeletonBlock v-for="n in 5" :key="n" height="1.75rem" />
+      </div>
+
+      <div v-else-if="highlights.top_devices.length === 0" class="text-gray-400 text-sm">
+        ไม่มีข้อมูลในช่วงที่เลือก
+      </div>
+
+      <table v-else class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-500 border-b">
+            <th class="py-2">อันดับ</th>
+            <th class="py-2">SN / รุ่น</th>
+            <th class="py-2">อาคาร</th>
+            <th class="py-2">แผนก</th>
+            <th class="py-2">สถานะ</th>
+            <th class="py-2 text-right">หน้า (สุทธิ)</th>
+            <th class="py-2 text-right">ค่าใช้จ่ายสุทธิ (หัก 20%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="(d, idx) in highlights.top_devices"
+            :key="d.device_id"
+            class="border-b last:border-0"
+          >
+            <td class="py-2 text-gray-400">{{ idx + 1 }}</td>
+            <td class="py-2 font-medium">{{ d.serial_number || "-" }} <span class="text-gray-400 font-normal">{{ d.model }}</span></td>
+            <td class="py-2 text-gray-500">{{ d.building_name || "-" }}</td>
+            <td class="py-2 text-gray-500">{{ d.department_name || "-" }}</td>
+            <td class="py-2">
+              <span class="text-xs px-2 py-0.5 rounded-full" :class="deviceStatusBadgeMeta[d.status]?.class || 'bg-gray-100 text-gray-600'">
+                {{ deviceStatusBadgeMeta[d.status]?.label || d.status || "-" }}
+              </span>
+            </td>
+            <td class="py-2 text-right">{{ Number(d.total_pages || 0).toLocaleString() }}</td>
+            <td class="py-2 text-right font-medium">{{ formatMoney(d.total_cost) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- สรุปการใช้งานตามสัญญา -->
     <div class="mt-6 bg-gray-50 shadow rounded-lg p-6">
       <div class="flex items-center justify-between mb-4">
@@ -280,8 +362,20 @@ const highlightsError = ref(null);
 const highlights = ref({
   device_status: [],
   top_departments: [],
+  top_devices: [],
   contracts: [],
 });
+
+// สลับอันดับเครื่อง "มากที่สุด" (desc, ค่าเริ่มต้น) / "น้อยที่สุด" (asc)
+const topDevicesOrder = ref("desc"); // "desc" | "asc"
+
+// ป้ายสถานะเครื่องแบบ pill เล็กๆ ในตาราง — ใช้ label/class เดียวกับหน้า PrintTransactions.vue,
+// Report.vue, AssetList.vue เพื่อให้ป้ายสถานะเครื่องหน้าตาเหมือนกันทุกหน้าในระบบ
+const deviceStatusBadgeMeta = {
+  active: { label: "ใช้งานอยู่", class: "bg-green-100 text-green-700" },
+  repair: { label: "ซ่อมบำรุง", class: "bg-yellow-100 text-yellow-700" },
+  retired: { label: "ปลดระวาง", class: "bg-gray-200 text-gray-600" },
+};
 
 // ไอคอนเล็กๆ กำกับสถานะ ไม่ให้พึ่งสีอย่างเดียว (ช่วยผู้ใช้ตาบอดสี/พื้นหลังคอนทราสต์ต่ำ)
 const CheckCircleIcon = () =>
@@ -396,11 +490,14 @@ async function loadHighlights() {
       params.month = dashboardFilter.value.month;
     }
 
+    params.device_order = topDevicesOrder.value;
+
     const res = await api.get("/dashboard/highlights", { params });
 
     highlights.value = {
       device_status: res.data.device_status || [],
       top_departments: res.data.top_departments || [],
+      top_devices: res.data.top_devices || [],
       contracts: res.data.contracts || [],
     };
   } catch (err) {
@@ -409,6 +506,13 @@ async function loadHighlights() {
   } finally {
     highlightsLoading.value = false;
   }
+}
+
+// สลับปุ่ม "มากที่สุด" / "น้อยที่สุด" ของตารางเครื่องปริ้นมาก/น้อย — โหลดใหม่แค่ highlights
+// (ไม่ต้องโหลด stats card ซ้ำ เพราะ KPI ด้านบนไม่เกี่ยวกับลำดับมาก/น้อยของตารางนี้)
+function toggleTopDevicesOrder() {
+  topDevicesOrder.value = topDevicesOrder.value === "desc" ? "asc" : "desc";
+  loadHighlights();
 }
 
 // =====================

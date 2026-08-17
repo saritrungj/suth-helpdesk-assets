@@ -166,45 +166,6 @@ async function loadAsset(id) {
 }
 
 // =======================
-// ประวัติการย้าย (อาคาร/ชั้น/ฝ่าย/แผนก) — ดูอย่างเดียว แสดงเฉพาะโหมดแก้ไข
-// =======================
-const showHistory = ref(false);
-const historyLoading = ref(false);
-const historyRows = ref([]);
-const historyLoaded = ref(false);
-
-function formatHistoryDate(value) {
-  if (!value) return "-";
-  // value เป็น "YYYY-MM-DD" จาก backend
-  const [y, m, d] = value.split("-");
-  const monthsTH = [
-    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-    "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-  ];
-  return `${Number(d)} ${monthsTH[Number(m) - 1] || m} ${Number(y) + 543}`;
-}
-
-async function loadHistory(id) {
-  historyLoading.value = true;
-  try {
-    const res = await api.get(`/devices/${id}/history`);
-    historyRows.value = res.data.history || [];
-    historyLoaded.value = true;
-  } catch (err) {
-    console.error("Load device history error:", err);
-  } finally {
-    historyLoading.value = false;
-  }
-}
-
-function toggleHistory() {
-  showHistory.value = !showHistory.value;
-  if (showHistory.value && !historyLoaded.value && isEdit.value) {
-    loadHistory(props.assetId);
-  }
-}
-
-// =======================
 // นำเข้าไฟล์ (CSV/Excel) — ย้ายมาจาก ImportDevices.vue เดิม
 // ประกาศ ref ของส่วนนี้ไว้ก่อน watch ด้านล่าง เพราะ watch มี immediate:true
 // จะรันตอน setup ทันที ถ้า resetImportState() ถูกเรียกก่อน const พวกนี้ถูก initialize
@@ -235,10 +196,6 @@ watch(
     resetImportState();
     loadMasterData();
 
-    showHistory.value = false;
-    historyLoaded.value = false;
-    historyRows.value = [];
-
     if (assetId !== null && assetId !== undefined) {
       loadAsset(assetId);
     } else {
@@ -265,11 +222,6 @@ async function submit() {
     serial_number: form.value.serial_number.trim(),
     brand_id: Number(form.value.brand_id),
     model: form.value.model,
-    building_id: form.value.building_id ? Number(form.value.building_id) : null,
-    floor_id: form.value.floor_id ? Number(form.value.floor_id) : null,
-    location: form.value.location?.trim() || null,
-    division_id: form.value.division_id ? Number(form.value.division_id) : null,
-    department_id: form.value.department_id ? Number(form.value.department_id) : null,
     contract_id: form.value.contract_id ? Number(form.value.contract_id) : null,
     price_override:
       form.value.price_override !== "" && form.value.price_override !== null
@@ -277,6 +229,16 @@ async function submit() {
         : null,
     status: form.value.status || "active",
   };
+
+  // อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก ใส่ได้เฉพาะตอน "เพิ่มทรัพย์สินใหม่" เท่านั้น
+  // โหมดแก้ไขให้ไปย้ายเครื่องผ่านปุ่ม "ย้ายเครื่อง" แยกต่างหาก (ดู MoveDeviceModal.vue)
+  if (!isEdit.value) {
+    data.building_id = form.value.building_id ? Number(form.value.building_id) : null;
+    data.floor_id = form.value.floor_id ? Number(form.value.floor_id) : null;
+    data.location = form.value.location?.trim() || null;
+    data.division_id = form.value.division_id ? Number(form.value.division_id) : null;
+    data.department_id = form.value.department_id ? Number(form.value.department_id) : null;
+  }
 
   saving.value = true;
   formError.value = null;
@@ -455,61 +417,65 @@ function close() {
               </select>
             </div>
 
-            <!-- Building -->
-            <div>
-              <label class="block text-sm text-gray-500 mb-1">อาคาร</label>
-              <SearchableSelect
-                :model-value="form.building_id"
-                @update:model-value="onBuildingChange"
-                :options="buildingOptions"
-                placeholder="-- เลือกอาคาร --"
-                search-placeholder="พิมพ์ชื่ออาคาร..."
-              />
-            </div>
+            <!-- อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก — กรอกได้เฉพาะตอนเพิ่มทรัพย์สินใหม่เท่านั้น
+                 โหมดแก้ไขให้ไปกดปุ่ม "ย้ายเครื่อง" แยกต่างหากแทน (ดู MoveDeviceModal.vue) -->
+            <template v-if="!isEdit">
+              <!-- Building -->
+              <div>
+                <label class="block text-sm text-gray-500 mb-1">อาคาร</label>
+                <SearchableSelect
+                  :model-value="form.building_id"
+                  @update:model-value="onBuildingChange"
+                  :options="buildingOptions"
+                  placeholder="-- เลือกอาคาร --"
+                  search-placeholder="พิมพ์ชื่ออาคาร..."
+                />
+              </div>
 
-            <!-- Floor -->
-            <div>
-              <label class="block text-sm text-gray-500 mb-1">ชั้น</label>
-              <SearchableSelect
-                v-model="form.floor_id"
-                :options="floorOptions"
-                :placeholder="form.building_id ? '-- เลือกชั้น --' : 'เลือกอาคารก่อน'"
-                search-placeholder="พิมพ์ชื่อชั้น..."
-              />
-            </div>
+              <!-- Floor -->
+              <div>
+                <label class="block text-sm text-gray-500 mb-1">ชั้น</label>
+                <SearchableSelect
+                  v-model="form.floor_id"
+                  :options="floorOptions"
+                  :placeholder="form.building_id ? '-- เลือกชั้น --' : 'เลือกอาคารก่อน'"
+                  search-placeholder="พิมพ์ชื่อชั้น..."
+                />
+              </div>
 
-            <!-- Location detail -->
-            <div>
-              <label class="block text-sm text-gray-500 mb-1">ตำแหน่งเครื่อง</label>
-              <input
-                v-model="form.location"
-                placeholder="เช่น ห้องการเงิน, หน้าห้องพยาบาล"
-                class="border rounded p-2 w-full bg-gray-50"
-              />
-            </div>
+              <!-- Location detail -->
+              <div>
+                <label class="block text-sm text-gray-500 mb-1">ตำแหน่งเครื่อง</label>
+                <input
+                  v-model="form.location"
+                  placeholder="เช่น ห้องการเงิน, หน้าห้องพยาบาล"
+                  class="border rounded p-2 w-full bg-gray-50"
+                />
+              </div>
 
-            <!-- Division -->
-            <div>
-              <label class="block text-sm text-gray-500 mb-1">ฝ่าย</label>
-              <SearchableSelect
-                :model-value="form.division_id"
-                @update:model-value="onDivisionChange"
-                :options="divisionOptions"
-                placeholder="-- เลือกฝ่าย --"
-                search-placeholder="พิมพ์ชื่อฝ่าย..."
-              />
-            </div>
+              <!-- Division -->
+              <div>
+                <label class="block text-sm text-gray-500 mb-1">ฝ่าย</label>
+                <SearchableSelect
+                  :model-value="form.division_id"
+                  @update:model-value="onDivisionChange"
+                  :options="divisionOptions"
+                  placeholder="-- เลือกฝ่าย --"
+                  search-placeholder="พิมพ์ชื่อฝ่าย..."
+                />
+              </div>
 
-            <!-- Department -->
-            <div>
-              <label class="block text-sm text-gray-500 mb-1">แผนก</label>
-              <SearchableSelect
-                v-model="form.department_id"
-                :options="departmentOptions"
-                :placeholder="form.division_id ? '-- เลือกแผนก --' : 'เลือกฝ่ายก่อน'"
-                search-placeholder="พิมพ์ชื่อแผนก..."
-              />
-            </div>
+              <!-- Department -->
+              <div>
+                <label class="block text-sm text-gray-500 mb-1">แผนก</label>
+                <SearchableSelect
+                  v-model="form.department_id"
+                  :options="departmentOptions"
+                  :placeholder="form.division_id ? '-- เลือกแผนก --' : 'เลือกฝ่ายก่อน'"
+                  search-placeholder="พิมพ์ชื่อแผนก..."
+                />
+              </div>
+            </template>
 
             <!-- Contract -->
             <div>
@@ -527,45 +493,7 @@ function close() {
             </div>
           </div>
 
-          <!-- ประวัติการย้าย — แสดงเฉพาะโหมดแก้ไข (เครื่องใหม่ยังไม่มีประวัติ) -->
-          <div v-if="isEdit" class="mt-4 border rounded-lg overflow-hidden bg-gray-50">
-            <button
-              type="button"
-              @click="toggleHistory"
-              class="w-full flex items-center justify-between p-3 text-left hover:bg-gray-100"
-            >
-              <span class="text-sm font-medium text-gray-700">ประวัติการย้าย (อาคาร/ชั้น/ฝ่าย/แผนก)</span>
-              <span class="text-xs text-gray-400">{{ showHistory ? "ซ่อน" : "แสดง" }}</span>
-            </button>
-
-            <div v-if="showHistory" class="border-t p-3">
-              <div v-if="historyLoading" class="text-center text-gray-400 text-sm py-3">กำลังโหลด...</div>
-
-              <div v-else-if="!historyRows.length" class="text-center text-gray-400 text-sm py-3">
-                ยังไม่มีประวัติการย้ายบันทึกไว้
-              </div>
-
-              <div v-else class="space-y-2">
-                <div
-                  v-for="row in historyRows"
-                  :key="row.id"
-                  class="text-sm bg-gray-50 rounded p-2 border"
-                >
-                  <div class="text-xs text-gray-400 mb-1">
-                    {{ formatHistoryDate(row.effective_from) }}
-                    —
-                    {{ row.effective_to ? formatHistoryDate(row.effective_to) : "ปัจจุบัน" }}
-                  </div>
-                  <div class="text-gray-700">
-                    {{ row.division_name || "ไม่ระบุฝ่าย" }} / {{ row.department_name || "ไม่ระบุแผนก" }}
-                    <span class="text-gray-400">
-                      ({{ row.building_name || "-" }}{{ row.floor_name ? " ชั้น " + row.floor_name : "" }}{{ row.location ? " " + row.location : "" }})
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <!-- ประวัติการย้าย ย้ายไปแสดงในหน้าต่าง "ย้ายเครื่อง" แยกต่างหากแล้ว (ดู MoveDeviceModal.vue) -->
 
           <div v-if="formError" class="mt-4 bg-red-100 text-red-700 p-3 rounded text-sm">
             {{ formError }}
