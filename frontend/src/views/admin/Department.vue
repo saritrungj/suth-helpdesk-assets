@@ -22,10 +22,11 @@ const divisionMap = computed(() => {
   )
 })
 
+// ชื่อแผนกขึ้นก่อนเพราะเป็นตัวระบุหลักของแถวนี้ ตามด้วยฝ่าย (บริบท/พ่อ) แล้วค่อย ID ภายในระบบท้ายสุด
 const columns = computed(() => [
-  { key: "id", label: "ID", align: "right" },
-  { key: "division_id", label: "Division", value: (d) => divisionMap.value[d.division_id] || "-" },
   { key: "name", label: "Department" },
+  { key: "division_id", label: "Division", value: (d) => divisionMap.value[d.division_id] || "-" },
+  { key: "id", label: "ID", align: "right" },
 ])
 
 // -------------------------------------------------------

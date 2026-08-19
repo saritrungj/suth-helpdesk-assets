@@ -2,7 +2,9 @@
 /**
  * AssetForm.vue — Popup เพิ่ม/แก้ไขทรัพย์สิน
  *
- * โหมดแก้ไข (assetId เป็น number): แสดงฟอร์มแก้ไขอย่างเดียว เหมือนเดิม
+ * โหมดแก้ไข (assetId เป็น number): แสดงฟอร์มแก้ไขอย่างเดียว — แก้ได้ครบทุกฟิลด์ที่แสดงในตาราง
+ *   ทรัพย์สิน รวมถึงอาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก (ยิง PUT /devices/:id แล้วต่อด้วย PUT /devices/:id/move
+ *   เพื่อให้ยังบันทึกประวัติการย้ายเหมือนเดิม)
  * โหมดเพิ่มใหม่ (assetId เป็น null): มีแท็บให้เลือก 2 แบบ อยู่ใน popup เดียวกัน
  *   1) "เพิ่มทีละรายการ" — ฟอร์มเดิม
  *   2) "นำเข้าไฟล์ (CSV/Excel)" — อัปโหลดไฟล์เพื่อเพิ่มหลายรายการพร้อมกัน
@@ -230,14 +232,18 @@ async function submit() {
     status: form.value.status || "active",
   };
 
-  // อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก ใส่ได้เฉพาะตอน "เพิ่มทรัพย์สินใหม่" เท่านั้น
-  // โหมดแก้ไขให้ไปย้ายเครื่องผ่านปุ่ม "ย้ายเครื่อง" แยกต่างหาก (ดู MoveDeviceModal.vue)
+  // อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก — กรอกได้ทั้งตอนเพิ่มและแก้ไขแล้ว
+  const locationData = {
+    building_id: form.value.building_id ? Number(form.value.building_id) : null,
+    floor_id: form.value.floor_id ? Number(form.value.floor_id) : null,
+    location: form.value.location?.trim() || null,
+    division_id: form.value.division_id ? Number(form.value.division_id) : null,
+    department_id: form.value.department_id ? Number(form.value.department_id) : null,
+  };
+
   if (!isEdit.value) {
-    data.building_id = form.value.building_id ? Number(form.value.building_id) : null;
-    data.floor_id = form.value.floor_id ? Number(form.value.floor_id) : null;
-    data.location = form.value.location?.trim() || null;
-    data.division_id = form.value.division_id ? Number(form.value.division_id) : null;
-    data.department_id = form.value.department_id ? Number(form.value.department_id) : null;
+    // เพิ่มทรัพย์สินใหม่ — backend รับอาคาร/ชั้น/ฯลฯ พร้อมกันใน POST เดียวอยู่แล้ว
+    Object.assign(data, locationData);
   }
 
   saving.value = true;
@@ -246,7 +252,11 @@ async function submit() {
   try {
     let res;
     if (isEdit.value) {
+      // โหมดแก้ไข: PUT /devices/:id ไม่รับฟิลด์อาคาร/ชั้น/ฯลฯ (กันเขียนประวัติซ้ำซ้อนจากจุดอื่น)
+      // จึงต้องยิง PUT /devices/:id/move ต่อ เพื่อให้บันทึกอาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก
+      // และเขียนประวัติการย้ายให้ครบเหมือนกดปุ่ม "ย้ายเครื่อง" แยก
       res = await api.put(`/devices/${props.assetId}`, data);
+      await api.put(`/devices/${props.assetId}/move`, locationData);
     } else {
       res = await api.post("/devices", data);
     }
@@ -417,9 +427,10 @@ function close() {
               </select>
             </div>
 
-            <!-- อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก — กรอกได้เฉพาะตอนเพิ่มทรัพย์สินใหม่เท่านั้น
-                 โหมดแก้ไขให้ไปกดปุ่ม "ย้ายเครื่อง" แยกต่างหากแทน (ดู MoveDeviceModal.vue) -->
-            <template v-if="!isEdit">
+            <!-- อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก — แก้ไขได้ทั้งตอนเพิ่มและแก้ไขทรัพย์สิน
+                 (โหมดแก้ไข: ยิงไปที่ PUT /devices/:id/move ต่อจาก PUT /devices/:id เพื่อให้ยังบันทึกประวัติการย้ายเหมือนเดิม
+                 ปุ่ม "ย้ายเครื่อง" แยกใน AssetList.vue ยังใช้งานได้ตามปกติ สำหรับกรณีอยากดูยอดพิมพ์สะสมก่อนย้าย) -->
+            <template>
               <!-- Building -->
               <div>
                 <label class="block text-sm text-gray-500 mb-1">อาคาร</label>

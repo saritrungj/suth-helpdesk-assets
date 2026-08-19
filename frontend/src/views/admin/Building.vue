@@ -11,9 +11,10 @@ const loading = ref(false)
 const editingId = ref(null)
 const editName = ref("")
 
+// ชื่ออาคารขึ้นก่อนเพราะเป็นตัวระบุที่คนอ่าน/ค้นหาจริง ส่วน ID ภายในระบบย้ายไปท้ายตาราง
 const columns = computed(() => [
-  { key: "id", label: "ID", align: "right" },
   { key: "name", label: "Building" },
+  { key: "id", label: "ID", align: "right" },
 ])
 
 const showAddModal = ref(false)

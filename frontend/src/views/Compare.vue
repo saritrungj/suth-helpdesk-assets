@@ -458,7 +458,7 @@ onMounted(() => {
 <template>
   <div>
     <h1 class="text-3xl font-bold mb-6">เปรียบเทียบข้อมูลรายเดือน</h1>
-    <p class="text-sm text-gray-500 -mt-4 mb-6">ยอดค่าใช้จ่ายทั้งหมดเป็นยอดสุทธิหลังหัก 20%</p>
+    <p class="text-sm text-gray-500 -mt-4 mb-6">"จำนวนหน้าพิมพ์สุทธิ" และ "ค่าใช้จ่ายสุทธิ" เป็นยอดหลังหัก 20% ส่วน "จำนวนหน้าพิมพ์รวม" เป็นยอดดิบตามที่กรอกจริง ยังไม่หัก</p>
 
     <div class="bg-gray-50 shadow rounded-lg p-6 mb-6">
       <p class="text-sm text-gray-500 mb-4">

@@ -401,20 +401,11 @@ async function saveModal() {
 // -------------------------------------------------------
 // คอลัมน์ของ DataTable (เหมือนหน้าทรัพย์สิน)
 // -------------------------------------------------------
+// เรียงคอลัมน์ให้ "สถานะการกรอก" กับยอดพิมพ์ (สิ่งที่หน้านี้มีไว้ให้ดู) ขึ้นก่อน
+// ส่วนข้อมูลระบุ/บริบทของเครื่อง (ยี่ห้อ อาคาร ตำแหน่ง ฝ่าย/แผนก สถานะเครื่อง) ตามหลัง
 const columns = computed(() => [
   { key: "serial_number", label: "SN" },
-  { key: "brand_name", label: "ยี่ห้อ / รุ่น", value: (d) => `${d.brand_name || "-"} ${d.model || ""}` },
-  { key: "building_name", label: "อาคาร / ชั้น", value: (d) => [d.building_name, d.floor_name].filter(Boolean).join(" / ") || "-" },
-  { key: "location", label: "ตำแหน่งที่เครื่องอยู่", value: (d) => d.location || "-" },
-  { key: "division_name", label: "ฝ่าย / แผนก", value: (d) => `${d.division_name || "-"} ${d.department_name || ""}` },
-  { key: "status", label: "สถานะเครื่อง", align: "center", value: (d) => statusLabel(d.status), csv: (d) => statusLabel(d.status) },
-  {
-    key: "latest_transaction",
-    label: "ยอดล่าสุดที่กรอก",
-    align: "right",
-    value: (d) => fillInfo(d.id).latestMonth ? `${formatMonth(fillInfo(d.id).latestMonth)}: ${fillInfo(d.id).latestPages.toLocaleString()} หน้า` : "-",
-    csv: (d) => fillInfo(d.id).latestMonth ? `${fillInfo(d.id).latestMonth}: ${fillInfo(d.id).latestPages}` : "",
-  },
+  { key: "fill_status", label: "สถานะการกรอก", align: "center", value: (d) => `${filledCount(d.id)}/12 เดือน`, csv: (d) => `${filledCount(d.id)}/12` },
   {
     key: "total_pages",
     label: monthFilter.value ? `ยอดเดือน ${formatMonth(monthFilter.value)} (หน้า)` : "ยอดรวมปีนี้ (หน้า)",
@@ -422,7 +413,18 @@ const columns = computed(() => [
     value: (d) => monthFilter.value ? selectedMonthPages(d.id) : totalPages(d.id),
     csv: (d) => monthFilter.value ? selectedMonthPages(d.id) : totalPages(d.id),
   },
-  { key: "fill_status", label: "สถานะการกรอก", align: "center", value: (d) => `${filledCount(d.id)}/12 เดือน`, csv: (d) => `${filledCount(d.id)}/12` },
+  {
+    key: "latest_transaction",
+    label: "ยอดล่าสุดที่กรอก",
+    align: "right",
+    value: (d) => fillInfo(d.id).latestMonth ? `${formatMonth(fillInfo(d.id).latestMonth)}: ${fillInfo(d.id).latestPages.toLocaleString()} หน้า` : "-",
+    csv: (d) => fillInfo(d.id).latestMonth ? `${fillInfo(d.id).latestMonth}: ${fillInfo(d.id).latestPages}` : "",
+  },
+  { key: "brand_name", label: "ยี่ห้อ / รุ่น", value: (d) => `${d.brand_name || "-"} ${d.model || ""}` },
+  { key: "building_name", label: "อาคาร / ชั้น", value: (d) => [d.building_name, d.floor_name].filter(Boolean).join(" / ") || "-" },
+  { key: "location", label: "ตำแหน่งที่เครื่องอยู่", value: (d) => d.location || "-" },
+  { key: "division_name", label: "ฝ่าย / แผนก", value: (d) => `${d.division_name || "-"} ${d.department_name || ""}` },
+  { key: "status", label: "สถานะเครื่อง", align: "center", value: (d) => statusLabel(d.status), csv: (d) => statusLabel(d.status) },
 ]);
 
 onMounted(init);
@@ -464,8 +466,20 @@ onMounted(init);
         </div>
       </div>
 
-      <!-- Filter เจาะจง — อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่อง/สถานะการกรอก -->
+      <!-- Filter เจาะจง — สถานะการกรอก/อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่อง
+           "สถานะการกรอก" ขึ้นก่อนตัวอื่นเพราะเป็นจุดประสงค์หลักของหน้านี้
+           (คนเปิดหน้านี้มาเพื่อกรอง "ยังไม่ได้กรอกเลย" ก่อนอย่างอื่นทั้งนั้น) -->
       <div class="flex flex-wrap items-end gap-3 mb-4 pt-4 border-t">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ displayYearBE }})</label>
+          <select v-model="fillStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
+            <option value="">ทั้งหมด</option>
+            <option value="done">กรอกครบ 12 เดือน</option>
+            <option value="partial">กรอกบางส่วน</option>
+            <option value="none">ยังไม่ได้กรอกเลย</option>
+          </select>
+        </div>
+
         <div>
           <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
           <SearchableSelect
@@ -523,16 +537,6 @@ onMounted(init);
             <option value="active">ใช้งานอยู่</option>
             <option value="repair">ซ่อมบำรุง</option>
             <option value="retired">ปลดระวาง</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ displayYearBE }})</label>
-          <select v-model="fillStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
-            <option value="">ทั้งหมด</option>
-            <option value="done">กรอกครบ 12 เดือน</option>
-            <option value="partial">กรอกบางส่วน</option>
-            <option value="none">ยังไม่ได้กรอกเลย</option>
           </select>
         </div>
 

@@ -15,9 +15,10 @@ const loading = computed(() => fiscalYearState.loading)
 const editingId = ref(null)
 const editYear = ref("")
 
+// ปีงบขึ้นก่อนเพราะเป็นตัวระบุที่คนอ่าน/ค้นหาจริง ส่วน ID ภายในระบบย้ายไปท้ายตาราง
 const columns = computed(() => [
-  { key: "id", label: "ID", align: "right" },
   { key: "year", label: "Fiscal Year" },
+  { key: "id", label: "ID", align: "right" },
 ])
 
 const showAddModal = ref(false)

@@ -24,11 +24,12 @@ const fiscalYearMap = computed(() => {
 })
 
 // คอลัมน์ของ DataTable (เหมือนหน้าทรัพย์สิน)
+// เลขที่สัญญาขึ้นก่อนเพราะเป็นตัวระบุหลักที่คนอ่าน/ค้นหาจริง ส่วน ID ภายในระบบย้ายไปท้ายตาราง
 const columns = computed(() => [
-  { key: "id", label: "ID" },
   { key: "contract_no", label: "Contract No" },
   { key: "fiscal_year_id", label: "Fiscal Year", value: (c) => fiscalYearMap.value[c.fiscal_year_id] || "-" },
   { key: "price_per_page", label: "Price / Page", align: "right" },
+  { key: "id", label: "ID" },
 ])
 
 // -------------------------------------------------------

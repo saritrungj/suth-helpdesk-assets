@@ -337,8 +337,20 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Filter เจาะจง — อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่อง/สถานะการกรอก -->
+      <!-- Filter เจาะจง — สถานะการกรอก/อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่อง
+           "สถานะการกรอก" ขึ้นก่อน เหมือนหน้า "บันทึกยอดพิมพ์รายเดือน" เพื่อให้เรียงตัวกรองสม่ำเสมอ
+           ระหว่างหน้าที่ใช้ชุด filter เดียวกัน -->
       <div class="flex flex-wrap items-end gap-3 mb-4 pt-4 border-t">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ displayYearBE }})</label>
+          <select v-model="fillStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
+            <option value="">ทั้งหมด</option>
+            <option value="done">กรอกครบ 12 เดือน</option>
+            <option value="partial">กรอกบางส่วน</option>
+            <option value="none">ยังไม่ได้กรอกเลย</option>
+          </select>
+        </div>
+
         <div>
           <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
           <SearchableSelect
@@ -396,16 +408,6 @@ onMounted(async () => {
             <option value="active">ใช้งานอยู่</option>
             <option value="repair">ซ่อมบำรุง</option>
             <option value="retired">ปลดระวาง</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ displayYearBE }})</label>
-          <select v-model="fillStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
-            <option value="">ทั้งหมด</option>
-            <option value="done">กรอกครบ 12 เดือน</option>
-            <option value="partial">กรอกบางส่วน</option>
-            <option value="none">ยังไม่ได้กรอกเลย</option>
           </select>
         </div>
 

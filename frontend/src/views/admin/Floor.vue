@@ -15,10 +15,11 @@ const editForm = ref({ building_id: "", name: "" })
 // Mapping id -> building name
 const buildingMap = computed(() => Object.fromEntries(buildings.value.map((b) => [b.id, b.name])))
 
+// ชื่อชั้นขึ้นก่อนเพราะเป็นตัวระบุหลักของแถวนี้ ตามด้วยอาคาร (บริบท/พ่อ) แล้วค่อย ID ภายในระบบท้ายสุด
 const columns = computed(() => [
-  { key: "id", label: "ID", align: "right" },
-  { key: "building_id", label: "Building", value: (f) => buildingMap.value[f.building_id] || "-" },
   { key: "name", label: "Floor" },
+  { key: "building_id", label: "Building", value: (f) => buildingMap.value[f.building_id] || "-" },
+  { key: "id", label: "ID", align: "right" },
 ])
 
 // -------------------------------------------------------

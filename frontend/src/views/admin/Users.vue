@@ -17,8 +17,9 @@ const ROLES = [
 const roleHint = computed(() => ROLES.find((r) => r.value === form.value.role)?.hint || "")
 const roleLabel = (role) => ROLES.find((r) => r.value === role)?.label || role || "-"
 
+// Username ขึ้นก่อนเพราะเป็นสิ่งที่แอดมินใช้จำ/ค้นหาจริง ส่วน ID เป็นเลขภายในฐานข้อมูล
+// ย้ายไปไว้ท้ายตาราง (สอดคล้องกับหน้าอื่นๆ ที่ขึ้นด้วยตัวระบุที่คนอ่านได้ก่อน)
 const columns = computed(() => [
-  { key: "id", label: "ID", align: "right" },
   { key: "username", label: "Username" },
   { key: "role", label: "สิทธิ์การใช้งาน", value: (u) => roleLabel(u.role) },
   {
@@ -26,6 +27,7 @@ const columns = computed(() => [
     label: "สร้างเมื่อ",
     value: (u) => (u.created_at ? new Date(u.created_at).toLocaleDateString("th-TH") : "-"),
   },
+  { key: "id", label: "ID", align: "right" },
 ])
 
 function isSelf(user) {
