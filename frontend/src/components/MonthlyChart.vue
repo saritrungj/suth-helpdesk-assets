@@ -169,13 +169,6 @@ async function loadMonthly(){
 
 
 
-    console.log(
-      "Monthly KPI:",
-      res.data
-    );
-
-
-
     const monthly = {};
 
 

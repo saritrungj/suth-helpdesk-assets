@@ -686,6 +686,20 @@ function previousMonthOf(month) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// ช่วงก่อนหน้า — คืน N เดือนที่อยู่ก่อนหน้า "เดือนแรก" ของช่วงที่เลือกทันที (N = จำนวนเดือนในช่วงที่เลือก)
+// เพื่อให้เทียบ "ช่วงนี้" (อาจเป็น 1 เดือน หรือทั้งไตรมาส/ครึ่งปี ที่ MonthPicker เลือกด่วนมาให้) กับ
+// "ช่วงก่อนหน้า" ที่มีจำนวนเดือนเท่ากันเสมอ ไม่ใช่แค่เทียบเดือนก่อนเดือนเดียวเหมือนเดิม
+function previousPeriodMonths(sortedMonths) {
+  if (!sortedMonths.length) return [];
+  const result = [];
+  let cursor = sortedMonths[0];
+  for (let i = 0; i < sortedMonths.length; i++) {
+    cursor = previousMonthOf(cursor);
+    result.unshift(cursor);
+  }
+  return result;
+}
+
 // % เปลี่ยนแปลง — null หมายถึงคำนวณไม่ได้ (ไม่มีข้อมูลเดือนก่อน)
 function calcChangePercent(current, previous, hasPrevious) {
   if (!hasPrevious) return null;
@@ -694,7 +708,14 @@ function calcChangePercent(current, previous, hasPrevious) {
 }
 
 router.get('/by-department', async (req, res) => {
-  const { month, fiscal_year_id } = req.query;
+  const { fiscal_year_id } = req.query;
+
+  // ช่วงที่เทียบแนวโน้ม — รับได้ทั้งเดือนเดียว หรือหลายเดือนคั่นด้วย comma (ตอนกดเลือกด่วน
+  // "ไตรมาส"/"ครึ่งปี" จาก MonthPicker) เหมือน parseMonths() ที่ใช้กับ filter อื่นๆ ในไฟล์นี้
+  const currentMonths = parseMonths(req.query.month).sort();
+  const previousMonths = previousPeriodMonths(currentMonths);
+  const currentMonthsSet = new Set(currentMonths);
+  const previousMonthsSet = new Set(previousMonths);
 
   try {
     // อิงตามปีงบที่เลือก (เหมือนหน้า "ค่าใช้จ่ายแยกตามสัญญา") — เดิม route นี้ไม่กรองปีงบเลย
@@ -747,7 +768,7 @@ router.get('/by-department', async (req, res) => {
         AND v.month IS NOT NULL
         AND STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') >= h.effective_from
         AND (h.effective_to IS NULL OR STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') <= h.effective_to)
-      ORDER BY effective_department_id, d.id, v.month
+      ORDER BY effective_department_id, d.serial_number, v.month
     `;
     const params = fiscalYear ? [fiscalYear.start_month, fiscalYear.end_month] : [];
 
@@ -785,24 +806,24 @@ router.get('/by-department', async (req, res) => {
       }
     }
 
-    const prevMonth = month ? previousMonthOf(month) : null;
-
     for (const device of deviceMap.values()) {
       device.total_pages = device.monthly.reduce((sum, r) => sum + Number(r.net_pages || 0), 0);
       device.total_cost = device.monthly.reduce((sum, r) => sum + Number(r.total_cost || 0), 0);
       // true ถ้าเครื่องนี้ (serial เดียวกัน) ไปโผล่มากกว่า 1 แผนกในรายงานนี้ เพราะย้ายแผนกระหว่างช่วงเวลาที่ดู
       device.moved_during_period = (deviceDeptCount.get(device.id) || 1) > 1;
 
-      if (month) {
-        const current = device.monthly.find((r) => r.month === month);
-        const previous = device.monthly.find((r) => r.month === prevMonth);
+      if (currentMonths.length) {
+        // รวมยอดของทุกเดือนในช่วงที่เลือก (ไม่ใช่แค่เดือนเดียวเหมือนเดิม) แล้วเทียบกับช่วงก่อนหน้า
+        // ที่มีจำนวนเดือนเท่ากัน — รองรับทั้งเลือก 1 เดือน หรือเลือกด่วนเป็นไตรมาส/ครึ่งปี
+        const currentRows = device.monthly.filter((r) => currentMonthsSet.has(r.month));
+        const previousRows = device.monthly.filter((r) => previousMonthsSet.has(r.month));
 
-        device.current_month_pages = current ? Number(current.net_pages) : 0;
-        device.previous_month_pages = previous ? Number(previous.net_pages) : 0;
-        device.current_month_cost = current ? Number(current.total_cost) : 0;
-        device.previous_month_cost = previous ? Number(previous.total_cost) : 0;
-        device.has_current_data = !!current;
-        device.has_previous_data = !!previous;
+        device.current_month_pages = currentRows.reduce((s, r) => s + Number(r.net_pages || 0), 0);
+        device.previous_month_pages = previousRows.reduce((s, r) => s + Number(r.net_pages || 0), 0);
+        device.current_month_cost = currentRows.reduce((s, r) => s + Number(r.total_cost || 0), 0);
+        device.previous_month_cost = previousRows.reduce((s, r) => s + Number(r.total_cost || 0), 0);
+        device.has_current_data = currentRows.length > 0;
+        device.has_previous_data = previousRows.length > 0;
       }
     }
 
@@ -826,7 +847,7 @@ router.get('/by-department', async (req, res) => {
       department.total_pages = department.devices.reduce((sum, d) => sum + d.total_pages, 0);
       department.total_cost = department.devices.reduce((sum, d) => sum + d.total_cost, 0);
 
-      if (month) {
+      if (currentMonths.length) {
         department.current_month_pages = department.devices.reduce((sum, d) => sum + (d.current_month_pages || 0), 0);
         department.previous_month_pages = department.devices.reduce((sum, d) => sum + (d.previous_month_pages || 0), 0);
         department.current_month_cost = department.devices.reduce((sum, d) => sum + (d.current_month_cost || 0), 0);
@@ -896,7 +917,7 @@ router.get('/by-department', async (req, res) => {
     divisionList.sort((a, b) => b.total_cost - a.total_cost);
 
     res.json({
-      month: month || null,
+      month: currentMonths.length ? currentMonths.join(',') : null,
       fiscal_year_id: fiscal_year_id || null,
       divisions: divisionList,
       unassignedDevices,

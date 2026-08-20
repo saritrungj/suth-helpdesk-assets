@@ -130,12 +130,6 @@ async function loadBuilding() {
 );
 
 
-    console.log(
-      "Building Summary:",
-      res.data
-    );
-
-
     chartData.value = {
 
       labels:

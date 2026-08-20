@@ -62,12 +62,21 @@
           </div>
           <button
             type="button"
-            :disabled="!halfYearOption.available"
-            @click="selectQuick(halfYearOption.months)"
+            :disabled="!firstHalfYearOption.available"
+            @click="selectQuick(firstHalfYearOption.months)"
             class="mt-1 mx-1 w-[calc(100%-0.5rem)] text-xs py-1.5 rounded border transition-colors"
-            :class="quickButtonClass(halfYearOption)"
+            :class="quickButtonClass(firstHalfYearOption)"
           >
-            {{ halfYearOption.label }}
+            {{ firstHalfYearOption.label }}
+          </button>
+          <button
+            type="button"
+            :disabled="!secondHalfYearOption.available"
+            @click="selectQuick(secondHalfYearOption.months)"
+            class="mt-1 mx-1 w-[calc(100%-0.5rem)] text-xs py-1.5 rounded border transition-colors"
+            :class="quickButtonClass(secondHalfYearOption)"
+          >
+            {{ secondHalfYearOption.label }}
           </button>
         </div>
 
@@ -127,7 +136,8 @@ const fiscalMonthOptions = computed(() =>
 
 // เลือกด่วนเป็นไตรมาส/ครึ่งปี — อิงตามลำดับเดือนของปีงบ (fiscalMonthOptions ไล่จาก ต.ค. ปีก่อนหน้า
 // ถึง ก.ย. ปีที่ตรงกับปีงบ) ไม่ใช่ ม.ค.-ธ.ค. ปีปฏิทิน: ไตรมาส 1 = ต.ค.-ธ.ค., ไตรมาส 2 = ม.ค.-มี.ค.,
-// ไตรมาส 3 = เม.ย.-มิ.ย., ไตรมาส 4 = ก.ค.-ก.ย., ครึ่งปี (6 เดือนแรก) = ต.ค.-มี.ค.
+// ไตรมาส 3 = เม.ย.-มิ.ย., ไตรมาส 4 = ก.ค.-ก.ย., ครึ่งปีแรก (6 เดือนแรก) = ต.ค.-มี.ค.,
+// ครึ่งปีหลัง (6 เดือนหลัง) = เม.ย.-ก.ย.
 function buildQuickOption(label, months) {
   return {
     label,
@@ -147,9 +157,14 @@ const quarterOptions = computed(() => {
   ];
 });
 
-const halfYearOption = computed(() => {
+const firstHalfYearOption = computed(() => {
   const all = fiscalMonthOptions.value.map((o) => o.value);
-  return buildQuickOption("ครึ่งปี (6 เดือนแรก)", all.slice(0, 6));
+  return buildQuickOption("ครึ่งปีแรก (6 เดือนแรก)", all.slice(0, 6));
+});
+
+const secondHalfYearOption = computed(() => {
+  const all = fiscalMonthOptions.value.map((o) => o.value);
+  return buildQuickOption("ครึ่งปีหลัง (6 เดือนหลัง)", all.slice(6, 12));
 });
 
 // ปุ่มเลือกด่วนถือว่า "active" เมื่อเดือนที่เลือกอยู่ตรงกับกลุ่มนั้นเป๊ะ (set เท่ากัน ไม่ใช่แค่ superset)

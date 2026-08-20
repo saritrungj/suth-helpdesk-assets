@@ -102,6 +102,11 @@ async function recordLocationHistory(conn, deviceId, loc) {
   );
 }
 
+// ส่งออกให้ importController.js เรียกใช้ตอนนำเข้าไฟล์หลายเครื่องพร้อมกัน
+// เพื่อให้เครื่องที่มาจากการ import ได้เปิด "ช่วงประวัติแรก" เหมือนเครื่องที่เพิ่มทีละรายการทุกประการ
+// (กันไม่ให้ logic เปิด/ปิดช่วงประวัติ ไปเขียนซ้ำอีกชุดในอีกไฟล์ แล้วพลาดไม่ตรงกัน)
+exports.recordLocationHistory = recordLocationHistory;
+
 // ============================================================
 // GET /api/devices
 
@@ -132,7 +137,7 @@ exports.getAll = async (req, res) => {
       LEFT JOIN department dept ON d.department_id = dept.id
       LEFT JOIN contracts c ON d.contract_id = c.id
       LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
-      ORDER BY d.id
+      ORDER BY d.serial_number
     `);
 
     res.json(rows);

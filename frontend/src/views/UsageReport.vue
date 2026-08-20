@@ -23,7 +23,7 @@ const router = useRouter();
 
 const tabs = [
   { key: "expense", label: "ค่าใช้จ่ายแยกตามสัญญา", component: Expense },
-  { key: "department", label: "ยอดพิมพ์แยกตามฝ่าย/แผนก", component: ByDepartment },
+  { key: "department", label: "ค่าใช้จ่ายและยอดพิมพ์แยกตามฝ่าย/แผนก", component: ByDepartment },
 ];
 
 const activeTab = computed(() => {

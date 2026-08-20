@@ -1,9 +1,11 @@
 <script setup>
 import { ref, onMounted, watch, computed } from "vue";
+import * as XLSX from "xlsx";
 import api from "../services/api";
 import { fiscalYearState } from "../store/fiscalYear";
 import ChevronIcon from "../components/ChevronIcon.vue";
 import AppIcon from "../components/AppIcon.vue";
+import MonthPicker from "../components/MonthPicker.vue";
 
 const loading = ref(false);
 const error = ref(null);
@@ -12,9 +14,72 @@ const contracts = ref([]);
 const unassignedDevices = ref([]);
 const showUnassigned = ref(false);
 
+// Filter เดือน — ใช้ MonthPicker แบบเดียวกับหน้า "ค่าใช้จ่ายและยอดพิมพ์แยกตามฝ่าย/แผนก"
+// ไม่จำกัด max จึงกดเลือกด่วนเป็น "ไตรมาส"/"ครึ่งปี" ได้เหมือนหน้าอื่นๆ นอกจากเลือกทีละเดือนก็ยังทำได้
+const months = ref([]); // เดือนทั้งหมดที่เคยมีข้อมูล (สำหรับ MonthPicker ใช้ enable/disable ตัวเลือก)
+const monthSelection = ref([]);
+const month = computed(() =>
+  monthSelection.value.length ? [...monthSelection.value].sort().join(",") : ""
+);
+
+async function loadMonths() {
+  try {
+    const res = await api.get("/dashboard/monthly-kpi");
+    const unique = [...new Set(res.data.map((r) => r.month))].sort();
+    months.value = unique;
+  } catch (err) {
+    console.error("Load months error:", err);
+  }
+}
+
 // เก็บสถานะเปิด/ปิดของแต่ละสัญญา และแต่ละเครื่อง
 const openContracts = ref(new Set());
 const openDevices = ref(new Set());
+
+// -------------------------------------------------------
+// ค้นหา — กรองสัญญา/เครื่อง ตามคำค้น (เลขที่สัญญา, รุ่น, S/N) เหมือนแท็บ
+// "ค่าใช้จ่ายและยอดพิมพ์แยกตามฝ่าย/แผนก" (ByDepartment.vue) ที่มีอยู่แล้ว
+// -------------------------------------------------------
+const search = ref("");
+
+const filteredContracts = computed(() => {
+  const keyword = search.value.trim().toLowerCase();
+  if (!keyword) return contracts.value;
+
+  return contracts.value
+    .map((contract) => {
+      const contractMatches = contract.contract_no?.toLowerCase().includes(keyword);
+
+      const devices = (contract.devices || []).filter(
+        (d) =>
+          d.serial_number?.toLowerCase().includes(keyword) ||
+          d.model?.toLowerCase().includes(keyword) ||
+          d.brand_name?.toLowerCase().includes(keyword)
+      );
+
+      if (contractMatches || devices.length > 0) {
+        return { ...contract, devices: contractMatches ? contract.devices : devices };
+      }
+      return null;
+    })
+    .filter(Boolean);
+});
+
+// -------------------------------------------------------
+// ขยายทั้งหมด / ย่อทั้งหมด
+// -------------------------------------------------------
+function expandAll() {
+  const ids = new Set();
+  for (const contract of filteredContracts.value) {
+    ids.add(contract.id);
+  }
+  openContracts.value = ids;
+}
+
+function collapseAll() {
+  openContracts.value = new Set();
+  openDevices.value = new Set();
+}
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString(undefined, {
@@ -58,7 +123,10 @@ async function loadExpense() {
   error.value = null;
 
   try {
-    const res = await api.get(`/expense/${fiscalYearState.activeId}`);
+    const params = {};
+    if (month.value) params.month = month.value;
+
+    const res = await api.get(`/expense/${fiscalYearState.activeId}`, { params });
 
     contracts.value = res.data.contracts || [];
 
@@ -107,6 +175,45 @@ function toggleUnassigned() {
   showUnassigned.value = !showUnassigned.value;
 }
 
+// -------------------------------------------------------
+// Export Excel — 1 แถวต่อเครื่อง (รวมยอดตามตัวกรองเดือนที่เลือกอยู่ตอนนี้) เหมือนที่เห็นใน
+// accordion เป๊ะๆ — ใช้ contracts.value ทั้งหมด (ไม่ตัดตามคำค้นหา ผู้ใช้มักอยากได้ข้อมูลครบไป export)
+// -------------------------------------------------------
+function exportExcel() {
+  const header = [
+    "เลขที่สัญญา",
+    "ราคา/แผ่น (บาท)",
+    "S/N",
+    "ยี่ห้อ",
+    "รุ่น",
+    "จำนวนหน้ารวม",
+    "ค่าใช้จ่ายสุทธิรวม (หัก 20%)",
+  ];
+
+  const rows = [];
+  for (const contract of contracts.value) {
+    for (const device of contract.devices || []) {
+      const totalPages = (device.monthly || []).reduce((s, m) => s + Number(m.pages || 0), 0);
+      rows.push([
+        contract.contract_no,
+        Number(contract.price_per_page || 0),
+        device.serial_number || "",
+        device.brand_name || "",
+        device.model || "",
+        totalPages,
+        Number(device.total_cost || 0),
+      ]);
+    }
+  }
+
+  const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "ค่าใช้จ่ายแยกตามสัญญา");
+
+  const suffix = month.value ? `-${month.value.replace(/,/g, "_")}` : "";
+  XLSX.writeFile(workbook, `expense-by-contract${suffix}.xlsx`);
+}
+
 // ปีงบตอนนี้เป็น global state (Navbar เป็นคนโหลด/เซ็ตค่าเริ่มต้นให้)
 // หน้านี้แค่ "subscribe" — พอ activeId เปลี่ยน (ไม่ว่าจะเปลี่ยนจาก Navbar, URL, หรือ back/forward) ให้โหลดข้อมูลใหม่ทันที
 watch(
@@ -117,15 +224,65 @@ watch(
   { immediate: true }
 );
 
+// เปลี่ยนเดือนที่กรอง -> โหลดข้อมูลใหม่ (MonthPicker เองจะเคลียร์ค่าให้อัตโนมัติเมื่อเปลี่ยนปีงบ)
+watch(monthSelection, () => loadExpense());
+
 onMounted(() => {
   loadUnassignedDevices();
+  loadMonths();
 });
 </script>
 
 <template>
   <div class="p-6">
-    <h1 class="text-2xl font-bold mb-6">ค่าใช้จ่ายแยกตามสัญญา</h1>
-    <p class="text-sm text-gray-500 -mt-4 mb-6">ยอดค่าใช้จ่ายทั้งหมดเป็นยอดสุทธิหลังหัก 20%</p>
+    <!-- ไม่มี h1 ซ้ำแล้ว — ชื่อหน้านี้ขึ้นเป็นแท็บ "ค่าใช้จ่ายแยกตามสัญญา" ใน UsageReport.vue อยู่แล้ว -->
+    <p class="text-sm text-gray-500 mb-6">ยอดค่าใช้จ่ายทั้งหมดเป็นยอดสุทธิหลังหัก 20%</p>
+
+    <!-- Filter เดือน — วางไว้ก่อนสรุปยอดรวม (control ก่อนผลลัพธ์) ให้เรียงลำดับแบบเดียวกับ
+         Dashboard/Compare/Report: เลือกตัวกรองก่อน แล้วค่อยเห็นตัวเลขที่กรองแล้ว ไม่ใช่เห็นยอดรวม
+         ก่อนแล้วค่อยมาเจอตัวกรองด้านล่างที่ทำให้ยอดด้านบน "กระโดด" เปลี่ยนโดยไม่ทันสังเกต -->
+    <div class="bg-gray-50 shadow rounded-lg p-4 mb-6 flex items-center gap-4 flex-wrap">
+      <div class="w-64">
+        <label class="block text-xs text-gray-500 mb-1">เดือน</label>
+        <MonthPicker v-model="monthSelection" :options="months" />
+      </div>
+
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-xs text-gray-500 mb-1">ค้นหา (เลขที่สัญญา/รุ่น/S-N)</label>
+        <input
+          v-model="search"
+          type="text"
+          placeholder="พิมพ์เพื่อค้นหา..."
+          class="border rounded p-2 w-full bg-gray-50"
+        />
+      </div>
+
+      <div class="flex gap-2">
+        <button
+          @click="expandAll"
+          type="button"
+          class="border border-gray-300 text-gray-600 px-3 py-2 rounded hover:bg-gray-50 text-sm"
+        >
+          ขยายทั้งหมด
+        </button>
+        <button
+          @click="collapseAll"
+          type="button"
+          class="border border-gray-300 text-gray-600 px-3 py-2 rounded hover:bg-gray-50 text-sm"
+        >
+          ย่อทั้งหมด
+        </button>
+        <button
+          v-if="contracts.length"
+          @click="exportExcel"
+          type="button"
+          class="border border-gray-300 text-gray-600 px-3 py-2 rounded hover:bg-gray-50 text-sm whitespace-nowrap"
+          title="ดาวน์โหลดเป็นไฟล์ Excel (.xlsx)"
+        >
+          ⬇ Export Excel
+        </button>
+      </div>
+    </div>
 
     <!-- สรุปยอดรวม — ตัว selector ปีงบย้ายไปอยู่ที่ Navbar แล้ว (global state) -->
     <div
@@ -133,7 +290,9 @@ onMounted(() => {
       class="bg-gray-50 shadow rounded-lg p-4 mb-6 flex items-center justify-end"
     >
       <div class="text-right">
-        <div class="text-sm text-gray-500">รวมค่าใช้จ่ายสุทธิทั้งปีงบ (หัก 20% แล้ว)</div>
+        <div class="text-sm text-gray-500">
+          {{ month ? "รวมค่าใช้จ่ายสุทธิตามเดือนที่เลือก (หัก 20% แล้ว)" : "รวมค่าใช้จ่ายสุทธิทั้งปีงบ (หัก 20% แล้ว)" }}
+        </div>
         <div class="text-xl font-bold text-[var(--brand-text)]">{{ formatMoney(grandTotal) }} บาท</div>
         <div class="text-xs text-gray-400">รวม {{ grandTotalPages.toLocaleString() }} หน้า</div>
       </div>
@@ -149,10 +308,17 @@ onMounted(() => {
       ไม่พบสัญญาในปีงบประมาณนี้
     </div>
 
+    <div
+      v-else-if="!filteredContracts.length"
+      class="text-center text-gray-400 border border-dashed rounded-lg py-10"
+    >
+      ไม่พบรายการที่ตรงกับคำค้นหา
+    </div>
+
     <!-- Hierarchy Tree -->
     <div v-else class="space-y-3">
       <div
-        v-for="contract in contracts"
+        v-for="contract in filteredContracts"
         :key="contract.id"
         class="bg-gray-50 shadow rounded-lg overflow-hidden"
       >

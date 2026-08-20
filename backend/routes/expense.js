@@ -4,6 +4,17 @@ const router = express.Router();
 const db = require("../db");
 const authMiddleware = require("../middlewares/authMiddleware");
 
+// รับ query.month เป็นเดือนเดียว "YYYY-MM" หรือหลายเดือนคั่นด้วย comma "YYYY-MM,YYYY-MM"
+// (ตอนกดเลือกด่วน "ไตรมาส"/"ครึ่งปี" จาก MonthPicker ฝั่งหน้า "ค่าใช้จ่ายแยกตามสัญญา")
+// คืนเป็น array เสมอ ว่างเปล่าถ้าไม่ได้ส่งมา — แบบเดียวกับ parseMonths() ใน routes/dashboard.js
+function parseMonths(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+}
+
 // ต้อง login ก่อนถึงจะดูค่าใช้จ่ายได้ (เดิมไม่มีการป้องกันเลย)
 router.use(authMiddleware);
 
@@ -23,6 +34,7 @@ router.get("/unassigned-devices", async (req, res) => {
             FROM devices d
             LEFT JOIN brand b ON d.brand_id = b.id
             WHERE d.contract_id IS NULL
+            ORDER BY d.serial_number
         `);
 
         for (const device of devices) {
@@ -72,8 +84,14 @@ router.get("/:fiscal_year_id", async (req, res) => {
 
         const { start_month, end_month } = fiscalYear;
 
+        // Filter เดือน (ไม่บังคับ) — ถ้าไม่ส่งมาเลย ยังเห็นข้อมูลทั้งปีงบเหมือนเดิม
+        // ถ้าเลือกมา (เดือนเดียว หรือหลายเดือนจากปุ่มเลือกด่วน "ไตรมาส"/"ครึ่งปี") จะกรองเหลือ
+        // เฉพาะเดือนที่เลือก โดยยังคง AND อยู่ในช่วงปีงบเดิมไว้เป็นเซฟตี้อีกชั้น
+        const monthsFilter = parseMonths(req.query.month);
 
-        // ดึงสัญญาตามปีงบ
+
+        // ดึงสัญญาตามปีงบ — เรียงตามเลขที่สัญญา (เดิมไม่มี ORDER BY เลย ลำดับที่ขึ้นจะสุ่มตามลำดับ
+        // แถวในตาราง ทำให้สัญญาสลับที่ไปมาเวลาโหลดหน้าใหม่ เปิด/ปิด accordion แล้วงง)
         const [contracts] = await db.query(`
 
             SELECT
@@ -86,6 +104,8 @@ router.get("/:fiscal_year_id", async (req, res) => {
 
             WHERE c.fiscal_year_id = ?
 
+            ORDER BY c.contract_no
+
         `,
         [
             fiscal_year_id
@@ -96,7 +116,7 @@ router.get("/:fiscal_year_id", async (req, res) => {
         for (const contract of contracts) {
 
 
-            // ดึงเครื่องในสัญญา
+            // ดึงเครื่องในสัญญา — เรียงตาม serial number ให้หาเครื่องเจอง่าย (เดิมไม่มี ORDER BY)
             const [devices] = await db.query(`
 
                 SELECT
@@ -115,6 +135,8 @@ router.get("/:fiscal_year_id", async (req, res) => {
 
                 WHERE d.contract_id = ?
 
+                ORDER BY d.serial_number
+
             `,
             [
                 contract.id
@@ -132,7 +154,7 @@ router.get("/:fiscal_year_id", async (req, res) => {
                 // ตัวเดียว พอสัญญาไหนไม่ได้กรอกราคาต่อแผ่นไว้ (price_per_page = NULL) ค่าใช้จ่าย
                 // จะกลายเป็น NULL ทั้งหมดทันที (ทั้งที่บางเครื่องมี price_override ของตัวเองอยู่แล้ว)
                 // ทำให้หน้า "ค่าใช้จ่ายแยกตามสัญญา" โชว์ 0.00 บาท เหมือนไม่มีเลขค่าใช้จ่ายเลย
-                const [transactions] = await db.query(`
+                let transactionSql = `
 
                     SELECT
 
@@ -147,17 +169,27 @@ router.get("/:fiscal_year_id", async (req, res) => {
                     WHERE pt.device_id = ?
                     AND pt.month BETWEEN ? AND ?
 
+                `;
 
-                    ORDER BY pt.month
-
-                `,
-                [
+                const transactionParams = [
                     device.price_override,
                     contract.price_per_page,
                     device.id,
                     start_month,
                     end_month
-                ]);
+                ];
+
+                if (monthsFilter.length) {
+                    transactionSql += ` AND pt.month IN (?) `;
+                    transactionParams.push(monthsFilter);
+                }
+
+                transactionSql += ` ORDER BY pt.month `;
+
+                const [transactions] = await db.query(
+                    transactionSql,
+                    transactionParams
+                );
 
 
 
@@ -196,6 +228,8 @@ router.get("/:fiscal_year_id", async (req, res) => {
         res.json({
 
             fiscal_year_id,
+
+            month: monthsFilter.length ? monthsFilter.join(",") : null,
 
             contracts
 

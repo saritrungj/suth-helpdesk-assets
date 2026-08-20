@@ -271,14 +271,16 @@ async function submit() {
   }
 }
 
-// เทมเพลต CSV — คอลัมน์เดียวกับที่ backend อ่าน (serial_number, brand, model, status, building)
-// พร้อมคอลัมน์เผื่ออนาคต (floor, division, department, contract_no, price_override)
+// เทมเพลต CSV — คอลัมน์ตรงกับฟิลด์ทั้งหมดที่ฟอร์ม "เพิ่มทรัพย์สิน" (แท็บเพิ่มทีละรายการ) รองรับ
+// serial_number/brand/model/status/building บังคับกรอกเหมือนเดิม ส่วน floor/location/division/
+// department/contract_no/price_override เป็นฟิลด์เสริม เว้นว่างได้เหมือนไม่เลือกใน dropdown ของฟอร์ม
+// (ถ้ากรอกมาต้องตรงกับชื่อที่มีอยู่ในระบบจริง ไม่งั้นแถวนั้นจะถูกข้ามพร้อมแจ้งเหตุผล — ดู importController.js)
 // status ใส่เป็น active / repair / retired ได้เลย (ไม่กรอก = default "active" เหมือนฟอร์มเพิ่มทีละรายการ)
 const TEMPLATE_CSV = [
-  "serial_number,brand,model,status,building,floor,division,department,contract_no,price_override",
-  "SN-HP-001,HP,LaserJet M404dn,active,อาคารบริหาร,ชั้น 2,ฝ่ายบริหารงานทั่วไป,แผนกการเงินและบัญชี,CONT-67-001,",
-  "SN-CN-002,Canon,imageCLASS LBP6030,active,อาคารบริหาร,ชั้น 3,ฝ่ายบริหารงานทั่วไป,แผนกทรัพยากรบุคคล,CONT-67-001,",
-  "SN-EP-003,Epson,EcoTank L3250,repair,อาคารผู้ป่วยนอก (OPD),ชั้น 1,ฝ่ายการแพทย์,แผนกอายุรกรรม,CONT-67-001,1.50",
+  "serial_number,brand,model,status,building,floor,location,division,department,contract_no,price_override",
+  "SN-HP-001,HP,LaserJet M404dn,active,อาคารบริหาร,ชั้น 2,ห้อง 201,ฝ่ายบริหารงานทั่วไป,แผนกการเงินและบัญชี,CONT-67-001,",
+  "SN-CN-002,Canon,imageCLASS LBP6030,active,อาคารบริหาร,ชั้น 3,ห้อง 305,ฝ่ายบริหารงานทั่วไป,แผนกทรัพยากรบุคคล,CONT-67-001,",
+  "SN-EP-003,Epson,EcoTank L3250,repair,อาคารผู้ป่วยนอก (OPD),ชั้น 1,เคาน์เตอร์ OPD,ฝ่ายการแพทย์,แผนกอายุรกรรม,CONT-67-001,1.50",
 ].join("\r\n");
 
 function downloadTemplate() {
@@ -430,63 +432,62 @@ function close() {
             <!-- อาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก — แก้ไขได้ทั้งตอนเพิ่มและแก้ไขทรัพย์สิน
                  (โหมดแก้ไข: ยิงไปที่ PUT /devices/:id/move ต่อจาก PUT /devices/:id เพื่อให้ยังบันทึกประวัติการย้ายเหมือนเดิม
                  ปุ่ม "ย้ายเครื่อง" แยกใน AssetList.vue ยังใช้งานได้ตามปกติ สำหรับกรณีอยากดูยอดพิมพ์สะสมก่อนย้าย) -->
-            <template>
-              <!-- Building -->
-              <div>
-                <label class="block text-sm text-gray-500 mb-1">อาคาร</label>
-                <SearchableSelect
-                  :model-value="form.building_id"
-                  @update:model-value="onBuildingChange"
-                  :options="buildingOptions"
-                  placeholder="-- เลือกอาคาร --"
-                  search-placeholder="พิมพ์ชื่ออาคาร..."
-                />
-              </div>
 
-              <!-- Floor -->
-              <div>
-                <label class="block text-sm text-gray-500 mb-1">ชั้น</label>
-                <SearchableSelect
-                  v-model="form.floor_id"
-                  :options="floorOptions"
-                  :placeholder="form.building_id ? '-- เลือกชั้น --' : 'เลือกอาคารก่อน'"
-                  search-placeholder="พิมพ์ชื่อชั้น..."
-                />
-              </div>
+            <!-- Building -->
+            <div>
+              <label class="block text-sm text-gray-500 mb-1">อาคาร</label>
+              <SearchableSelect
+                :model-value="form.building_id"
+                @update:model-value="onBuildingChange"
+                :options="buildingOptions"
+                placeholder="-- เลือกอาคาร --"
+                search-placeholder="พิมพ์ชื่ออาคาร..."
+              />
+            </div>
 
-              <!-- Location detail -->
-              <div>
-                <label class="block text-sm text-gray-500 mb-1">ตำแหน่งเครื่อง</label>
-                <input
-                  v-model="form.location"
-                  placeholder="เช่น ห้องการเงิน, หน้าห้องพยาบาล"
-                  class="border rounded p-2 w-full bg-gray-50"
-                />
-              </div>
+            <!-- Floor -->
+            <div>
+              <label class="block text-sm text-gray-500 mb-1">ชั้น</label>
+              <SearchableSelect
+                v-model="form.floor_id"
+                :options="floorOptions"
+                :placeholder="form.building_id ? '-- เลือกชั้น --' : 'เลือกอาคารก่อน'"
+                search-placeholder="พิมพ์ชื่อชั้น..."
+              />
+            </div>
 
-              <!-- Division -->
-              <div>
-                <label class="block text-sm text-gray-500 mb-1">ฝ่าย</label>
-                <SearchableSelect
-                  :model-value="form.division_id"
-                  @update:model-value="onDivisionChange"
-                  :options="divisionOptions"
-                  placeholder="-- เลือกฝ่าย --"
-                  search-placeholder="พิมพ์ชื่อฝ่าย..."
-                />
-              </div>
+            <!-- Location detail -->
+            <div>
+              <label class="block text-sm text-gray-500 mb-1">ตำแหน่งเครื่อง</label>
+              <input
+                v-model="form.location"
+                placeholder="เช่น ห้องการเงิน, หน้าห้องพยาบาล"
+                class="border rounded p-2 w-full bg-gray-50"
+              />
+            </div>
 
-              <!-- Department -->
-              <div>
-                <label class="block text-sm text-gray-500 mb-1">แผนก</label>
-                <SearchableSelect
-                  v-model="form.department_id"
-                  :options="departmentOptions"
-                  :placeholder="form.division_id ? '-- เลือกแผนก --' : 'เลือกฝ่ายก่อน'"
-                  search-placeholder="พิมพ์ชื่อแผนก..."
-                />
-              </div>
-            </template>
+            <!-- Division -->
+            <div>
+              <label class="block text-sm text-gray-500 mb-1">ฝ่าย</label>
+              <SearchableSelect
+                :model-value="form.division_id"
+                @update:model-value="onDivisionChange"
+                :options="divisionOptions"
+                placeholder="-- เลือกฝ่าย --"
+                search-placeholder="พิมพ์ชื่อฝ่าย..."
+              />
+            </div>
+
+            <!-- Department -->
+            <div>
+              <label class="block text-sm text-gray-500 mb-1">แผนก</label>
+              <SearchableSelect
+                v-model="form.department_id"
+                :options="departmentOptions"
+                :placeholder="form.division_id ? '-- เลือกแผนก --' : 'เลือกฝ่ายก่อน'"
+                search-placeholder="พิมพ์ชื่อแผนก..."
+              />
+            </div>
 
             <!-- Contract -->
             <div>

@@ -1,6 +1,7 @@
 const fs = require("fs");
 const XLSX = require("xlsx");
 const db = require("../db");
+const { recordLocationHistory } = require("./deviceController");
 
 // ============================================================
 // แปลง "เดือน/ปี พ.ศ. 2 หลัก" ในหัวคอลัมน์ไฟล์มิเตอร์ (เช่น "meter 9/67",
@@ -30,6 +31,8 @@ function parseMeterMonthHeader(header) {
 
 exports.importDevices = async (req, res) => {
 
+    let conn;
+
     try {
 
         if (!req.file) {
@@ -49,29 +52,31 @@ exports.importDevices = async (req, res) => {
         });
 
 
-        // โหลด Master Data
-        const [brand] = await db.query(
-            "SELECT id, name FROM brand"
-        );
-
-        const [building] = await db.query(
-            "SELECT id, name FROM building"
-        );
+        // โหลด Master Data — ต้องครบทุกฟิลด์ที่ฟอร์ม "เพิ่มทรัพย์สิน" (เพิ่มทีละรายการ) รองรับ
+        // (brand/building เดิม + floor/division/department/contract ที่เทมเพลตสัญญาไว้แต่ import เดิมไม่เคยอ่าน)
+        const [brand] = await db.query("SELECT id, name FROM brand");
+        const [building] = await db.query("SELECT id, name FROM building");
+        const [floor] = await db.query("SELECT id, building_id, name FROM floor");
+        const [division] = await db.query("SELECT id, name FROM division");
+        const [department] = await db.query("SELECT id, division_id, name FROM department");
+        const [contract] = await db.query("SELECT id, contract_no FROM contracts");
 
 
         const brandMap = {};
         const buildingMap = {};
+        // ชื่อชั้น/แผนก ไม่ unique ทั้งระบบ (ซ้ำกันได้คนละอาคาร/คนละฝ่าย) ต้อง scope คีย์ด้วย
+        // building_id / division_id เหมือนที่ AssetForm.vue กรอง floor ตาม building ที่เลือกไว้
+        const floorMap = {};
+        const divisionMap = {};
+        const departmentMap = {};
+        const contractMap = {};
 
-
-        brand.forEach((b) => {
-            brandMap[String(b.name).trim()] = b.id;
-        });
-
-
-        building.forEach((b) => {
-            buildingMap[String(b.name).trim()] = b.id;
-        });
-
+        brand.forEach((b) => { brandMap[String(b.name).trim()] = b.id; });
+        building.forEach((b) => { buildingMap[String(b.name).trim()] = b.id; });
+        floor.forEach((f) => { floorMap[`${f.building_id}::${String(f.name).trim()}`] = f.id; });
+        division.forEach((d) => { divisionMap[String(d.name).trim()] = d.id; });
+        department.forEach((d) => { departmentMap[`${d.division_id}::${String(d.name).trim()}`] = d.id; });
+        contract.forEach((c) => { contractMap[String(c.contract_no).trim()] = c.id; });
 
 
         const insertData = [];
@@ -114,6 +119,16 @@ exports.importDevices = async (req, res) => {
                 ""
             ).trim();
 
+            // ฟิลด์เพิ่มเติมที่ฟอร์ม "เพิ่มทรัพย์สิน" (เพิ่มทีละรายการ) กรอกได้ — ไม่บังคับเหมือน brand/building
+            const floorName = String(row.floor || row.Floor || row.ชั้น || "").trim();
+            const divisionName = String(row.division || row.Division || row.ฝ่าย || "").trim();
+            const departmentName = String(row.department || row.Department || row.แผนก || "").trim();
+            const contractNo = String(row.contract_no || row["Contract No"] || row.เลขที่สัญญา || "").trim();
+            const priceOverrideRaw = String(
+                row.price_override ?? row["Price Override"] ?? row.ราคาเฉพาะเครื่อง ?? ""
+            ).trim();
+            const location = String(row.location || row.Location || row.ตำแหน่ง || "").trim();
+
 
             // สถานะ — ถ้าไม่กรอกมา/พิมพ์ค่าที่ไม่รู้จัก ให้ default เป็น "active" เหมือนฟอร์มเพิ่มทีละรายการ
             // รองรับทั้งค่า enum อังกฤษ (active/repair/retired) และป้ายภาษาไทยที่ผู้ใช้อาจพิมพ์มา
@@ -141,12 +156,55 @@ exports.importDevices = async (req, res) => {
             const building_id = buildingMap[building];
 
 
+            const reasons = [];
+            if (!brand_id) reasons.push(`ไม่พบยี่ห้อ "${brand || "(ว่าง)"}" ในระบบ`);
+            if (!building_id) reasons.push(`ไม่พบอาคาร "${building || "(ว่าง)"}" ในระบบ`);
 
-            if (!brand_id || !building_id) {
 
-                const reasons = [];
-                if (!brand_id) reasons.push(`ไม่พบยี่ห้อ "${brand || "(ว่าง)"}" ในระบบ`);
-                if (!building_id) reasons.push(`ไม่พบอาคาร "${building || "(ว่าง)"}" ในระบบ`);
+            // ฟิลด์เสริม — ถ้าผู้ใช้กรอกมาต้องหาเจอจริง (กันพิมพ์ชื่อผิด/สะกดคลาดเงียบๆ)
+            // แต่ถ้าเว้นว่างไว้ก็ปล่อยผ่านเป็น null ได้เหมือนตอนไม่เลือกใน dropdown ของฟอร์มเพิ่มทีละรายการ
+            let floor_id = null;
+            if (floorName) {
+                floor_id = building_id ? floorMap[`${building_id}::${floorName}`] : undefined;
+                if (!floor_id) reasons.push(`ไม่พบชั้น "${floorName}" ในอาคาร "${building || "(ว่าง)"}"`);
+            }
+
+            let division_id = null;
+            if (divisionName) {
+                division_id = divisionMap[divisionName];
+                if (!division_id) reasons.push(`ไม่พบฝ่าย "${divisionName}" ในระบบ`);
+            }
+
+            let department_id = null;
+            if (departmentName) {
+                department_id = division_id ? departmentMap[`${division_id}::${departmentName}`] : undefined;
+                if (!department_id) {
+                    reasons.push(
+                        divisionName
+                            ? `ไม่พบแผนก "${departmentName}" ในฝ่าย "${divisionName}"`
+                            : `ไม่พบแผนก "${departmentName}" (กรุณาระบุคอลัมน์ฝ่ายด้วย)`
+                    );
+                }
+            }
+
+            let contract_id = null;
+            if (contractNo) {
+                contract_id = contractMap[contractNo];
+                if (!contract_id) reasons.push(`ไม่พบเลขที่สัญญา "${contractNo}" ในระบบ`);
+            }
+
+            let price_override = null;
+            if (priceOverrideRaw !== "") {
+                const parsedPrice = Number(priceOverrideRaw);
+                if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+                    reasons.push(`ราคาเฉพาะเครื่อง "${priceOverrideRaw}" ไม่ใช่ตัวเลข`);
+                } else {
+                    price_override = parsedPrice;
+                }
+            }
+
+
+            if (reasons.length) {
 
                 skipped.push({
                     serial_number: serial_number || "(ไม่มีเลขซีเรียล)",
@@ -160,35 +218,77 @@ exports.importDevices = async (req, res) => {
 
 
 
-            insertData.push([
+            insertData.push({
                 serial_number,
                 brand_id,
-                model,
+                model: model || null,
                 building_id,
-                status
-            ]);
+                floor_id,
+                location: location || null,
+                division_id,
+                department_id,
+                contract_id,
+                price_override,
+                status,
+            });
 
         }
 
 
 
-        // Insert Database
+        // Insert ทีละแถวในทรานแซกชันเดียว (แทนที่จะ bulk INSERT ... VALUES ?) เพราะต้องได้ insertId
+        // ของแต่ละเครื่องมาเปิด "ช่วงประวัติแรก" ผ่าน recordLocationHistory เหมือนฟอร์มเพิ่มทีละรายการ
+        // (ดู deviceController.js create()) ไม่งั้นเครื่องที่มาจาก import จะไม่มีประวัติการย้ายเลย
+        // และหน้ารายงานที่อ้างอิงปีงบ/ช่วงเวลาของ device_location_history จะไม่เห็นเครื่องกลุ่มนี้
         if (insertData.length > 0) {
 
-            await db.query(
-                `
-                INSERT INTO devices
-                (
-                    serial_number,
-                    brand_id,
-                    model,
-                    building_id,
-                    status
-                )
-                VALUES ?
-                `,
-                [insertData]
-            );
+            conn = await db.getConnection();
+            await conn.beginTransaction();
+
+            for (const d of insertData) {
+                const [result] = await conn.query(
+                    `
+                    INSERT INTO devices
+                    (
+                        serial_number,
+                        brand_id,
+                        model,
+                        building_id,
+                        floor_id,
+                        location,
+                        division_id,
+                        department_id,
+                        contract_id,
+                        price_override,
+                        status
+                    )
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                    `,
+                    [
+                        d.serial_number,
+                        d.brand_id,
+                        d.model,
+                        d.building_id,
+                        d.floor_id,
+                        d.location,
+                        d.division_id,
+                        d.department_id,
+                        d.contract_id,
+                        d.price_override,
+                        d.status,
+                    ]
+                );
+
+                await recordLocationHistory(conn, result.insertId, {
+                    building_id: d.building_id,
+                    floor_id: d.floor_id,
+                    location: d.location,
+                    division_id: d.division_id,
+                    department_id: d.department_id,
+                });
+            }
+
+            await conn.commit();
 
         }
 
@@ -218,6 +318,9 @@ exports.importDevices = async (req, res) => {
 
         console.error("IMPORT ERROR:", err);
 
+        if (conn) {
+            try { await conn.rollback(); } catch (rollbackErr) { console.error("IMPORT ROLLBACK ERROR:", rollbackErr); }
+        }
 
         if (
             req.file &&
@@ -227,12 +330,21 @@ exports.importDevices = async (req, res) => {
         }
 
 
+        // ซ้ำเลขซีเรียล — ให้ error อ่านง่ายเหมือนตอนเพิ่มทีละรายการ (ER_DUP_ENTRY)
+        if (err.code === "ER_DUP_ENTRY") {
+            return res.status(409).json({
+                error: "มีเลขซีเรียลในไฟล์ซ้ำกับที่มีอยู่แล้วในระบบ กรุณาตรวจสอบและลบแถวที่ซ้ำออกก่อนนำเข้าใหม่",
+            });
+        }
+
         res.status(500).json({
 
             error: err.message
 
         });
 
+    } finally {
+        if (conn) conn.release();
     }
 
 };

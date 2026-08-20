@@ -205,16 +205,6 @@ async function loadBuildingCost(){
 
 
 
-    console.log(
-
-      "Building Cost:",
-
-      res.data
-
-    );
-
-
-
 
     chartData.value = {
 

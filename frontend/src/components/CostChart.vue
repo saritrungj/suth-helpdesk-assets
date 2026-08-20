@@ -198,16 +198,6 @@ async function loadCost(){
 
 
 
-    console.log(
-
-      "Cost Data:",
-
-      res.data
-
-    );
-
-
-
     const monthly = {};
 
 

@@ -1,7 +1,7 @@
 <template>
   <div>
 
-    <h1 class="text-3xl font-bold mb-6">Dashboard</h1>
+    <h1 class="text-3xl font-bold mb-6">แดชบอร์ด</h1>
 
     <DashboardFilter @filter="handleFilter" />
 
@@ -170,7 +170,10 @@
             </svg>
           </button>
 
-          <RouterLink to="/compare" class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap">
+          <!-- ลิงก์ไปตารางเต็มที่ "เครื่องที่ใช้งานมาก/น้อย" — ย้ายจาก Compare.vue ไปอยู่ในแท็บ
+               "ค่าใช้จ่ายและยอดพิมพ์แยกตามฝ่าย/แผนก" (ByDepartment.vue) แล้ว ต้องลิงก์ไปที่นั่น
+               ไม่ใช่ /compare เหมือนเดิม (หน้า /compare ไม่มีตารางนี้แล้ว) -->
+          <RouterLink to="/by-department" class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap">
             ดูทั้งหมด →
           </RouterLink>
         </div>
@@ -225,11 +228,10 @@
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-bold">สรุปการใช้งานตามสัญญา</h2>
         <RouterLink
-          v-if="authState.user?.role === 'admin'"
-          to="/admin/contracts"
+          to="/expense"
           class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap"
         >
-          จัดการสัญญา →
+          ดูทั้งหมด →
         </RouterLink>
       </div>
 
@@ -303,7 +305,7 @@
 
       <div v-if="chartTab === 'usage'">
         <div class="bg-gray-50 shadow rounded-lg p-6">
-          <h2 class="text-xl font-bold mb-4">Print Usage รายเดือน</h2>
+          <h2 class="text-xl font-bold mb-4">ยอดพิมพ์รายเดือน</h2>
           <MonthlyChart :filter="dashboardFilter" />
         </div>
 
@@ -333,7 +335,6 @@
 import { ref, onMounted, h } from "vue";
 import { RouterLink } from "vue-router";
 import api from "../services/api";
-import { authState } from "../store/auth";
 
 import MonthlyChart from "../components/MonthlyChart.vue";
 import BuildingChart from "../components/BuildingChart.vue";

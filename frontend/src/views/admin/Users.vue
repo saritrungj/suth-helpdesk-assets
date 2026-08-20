@@ -183,7 +183,7 @@ onMounted(load)
       :class="{
         'bg-purple-100 text-purple-700': row.role === 'admin',
         'bg-blue-100 text-blue-700': row.role === 'staff',
-        'bg-gray-100 text-gray-600': row.role === 'viewer',
+        'bg-emerald-100 text-emerald-700': row.role === 'viewer',
       }"
     >
       {{ value }}

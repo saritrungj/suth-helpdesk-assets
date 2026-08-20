@@ -388,53 +388,9 @@ const summarySentences = computed(() => {
   return lines;
 });
 
-// -------------------------------------------------------
-// เครื่องที่ใช้งานมาก/น้อย — แยกย่อยรายเครื่องของช่วงเดือนที่เลือก
-// (ตารางสรุปด้านบนรวมยอดพิมพ์ + ค่าใช้จ่ายของทุกเครื่องเข้าด้วยกันแล้ว
-// ส่วนนี้ทุบข้อมูลดิบเดิม (rawRows) แยกย่อยกลับเป็นรายเครื่องอีกที ไม่ต้องยิง API เพิ่ม)
-// -------------------------------------------------------
-const deviceSort = ref("desc"); // "desc" = มากไปน้อย, "asc" = น้อยไปมาก
-
-const deviceUsage = computed(() => {
-  if (!selectedMonths.value.length) return [];
-
-  const rows = rawRows.value.filter(
-    (r) => selectedMonths.value.includes(r.month) && deviceMatchesFilters(r.device_id)
-  );
-  const byDevice = new Map();
-
-  for (const r of rows) {
-    if (!byDevice.has(r.device_id)) {
-      byDevice.set(r.device_id, {
-        deviceId: r.device_id,
-        serialNumber: r.serial_number,
-        buildingName: r.building_name,
-        totalPages: 0,
-        netPages: 0,
-        totalCost: 0,
-      });
-    }
-
-    const entry = byDevice.get(r.device_id);
-    entry.totalPages += Number(r.pages_printed || 0);
-    entry.netPages += Number(r.net_pages || 0);
-    entry.totalCost += Number(r.total_cost || 0);
-  }
-
-  return [...byDevice.values()];
-});
-
-const deviceUsageSorted = computed(() => {
-  const list = [...deviceUsage.value];
-  list.sort((a, b) =>
-    deviceSort.value === "desc" ? b.netPages - a.netPages : a.netPages - b.netPages
-  );
-  return list;
-});
-
-function toggleDeviceSort() {
-  deviceSort.value = deviceSort.value === "desc" ? "asc" : "desc";
-}
+// ตาราง "เครื่องที่ใช้งานมาก/น้อย" ย้ายไปอยู่หน้า "ค่าใช้จ่ายและยอดพิมพ์แยกตามฝ่าย/แผนก"
+// (ByDepartment.vue) แล้ว เพราะเนื้อหา (ยอดพิมพ์+ค่าใช้จ่ายรายเครื่อง) เข้ากับหน้านั้นมากกว่า
+// — filter อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะด้านล่างนี้ยังใช้อยู่ (aggregate()/monthStats/กราฟ)
 
 const hasActiveFilter = computed(
   () =>
@@ -644,74 +600,6 @@ onMounted(() => {
             <div class="h-56">
               <Line :data="chartDataFor(m)" :options="chartOptions" />
             </div>
-          </div>
-        </div>
-
-        <!-- เครื่องที่ใช้งานมาก/น้อย — แยกย่อยรายเครื่องของช่วงเดือนที่เลือกทั้งหมด -->
-        <div class="bg-gray-50 shadow rounded-lg p-4 mt-8">
-          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <h2 class="font-bold flex items-center gap-1.5">
-              <AppIcon name="printer" class="w-5 h-5 shrink-0" />
-              เครื่องที่ใช้งานมาก / น้อย
-            </h2>
-            <button
-              @click="toggleDeviceSort"
-              class="text-sm border rounded px-3 py-1.5 hover:bg-gray-100 flex items-center gap-1"
-            >
-              {{ deviceSort === "desc" ? "เรียง: ใช้มากไปน้อย" : "เรียง: ใช้น้อยไปมาก" }}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="w-3.5 h-3.5"
-              >
-                <path v-if="deviceSort === 'desc'" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                <path v-else d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-              </svg>
-            </button>
-          </div>
-
-          <p class="text-xs text-gray-500 mb-3">
-            รวมยอดพิมพ์และค่าใช้จ่ายของแต่ละเครื่องตลอดช่วงเดือนที่เลือกไว้ด้านบน
-          </p>
-
-          <div v-if="!deviceUsageSorted.length" class="text-center text-gray-400 py-6 text-sm">
-            ไม่มีข้อมูลเครื่องในช่วงที่เลือก
-          </div>
-
-          <div v-else class="overflow-x-auto">
-            <table class="w-full text-sm border-collapse min-w-max">
-              <thead>
-                <tr class="text-left text-gray-500 border-b">
-                  <th class="py-2 pr-4">อันดับ</th>
-                  <th class="py-2 pr-4">หมายเลขเครื่อง</th>
-                  <th class="py-2 pr-4">อาคาร</th>
-                  <th class="py-2 pr-4 text-right">ยอดพิมพ์สุทธิ (หน้า)</th>
-                  <th class="py-2 pr-4 text-right">ค่าใช้จ่ายสุทธิ (บาท)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(d, idx) in deviceUsageSorted"
-                  :key="d.deviceId"
-                  class="border-b"
-                >
-                  <td class="py-2 pr-4 text-gray-400">{{ idx + 1 }}</td>
-                  <td class="py-2 pr-4 font-medium">{{ d.serialNumber || "-" }}</td>
-                  <td class="py-2 pr-4 text-gray-500">{{ d.buildingName || "-" }}</td>
-                  <td class="py-2 pr-4 text-right">
-                    {{ d.netPages.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
-                  </td>
-                  <td class="py-2 pr-4 text-right">
-                    {{ d.totalCost.toLocaleString(undefined, { maximumFractionDigits: 2 }) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
           </div>
         </div>
       </template>

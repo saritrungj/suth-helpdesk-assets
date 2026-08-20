@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
         c.fiscal_year_id
       FROM contracts c
       LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
-      ORDER BY c.id
+      ORDER BY fy.year, c.contract_no
     `);
     res.json(rows);
   } catch (err) {

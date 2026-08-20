@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, watch } from "vue";
+import * as XLSX from "xlsx";
 import ChevronIcon from "../components/ChevronIcon.vue";
 import AppIcon from "../components/AppIcon.vue";
 import { Line } from "vue-chartjs";
@@ -16,6 +17,7 @@ import {
 import api from "../services/api";
 import DepartmentPicker from "../components/DepartmentPicker.vue";
 import MonthPicker from "../components/MonthPicker.vue";
+import SearchableSelect from "../components/SearchableSelect.vue";
 import { useChartTheme } from "../composables/useChartTheme";
 import { fiscalYearState, activeFiscalYear } from "../store/fiscalYear";
 
@@ -30,9 +32,13 @@ const months = ref([]);
 const search = ref("");
 const chartMetric = ref("cost"); // cost | pages
 
-// เดือนที่เทียบแนวโน้ม — ใช้ MonthPicker แบบเดียวกับหน้า "เปรียบเทียบข้อมูลรายเดือน" (จำกัดเลือกได้ 1 เดือน)
+// ช่วงที่เทียบแนวโน้ม — ใช้ MonthPicker แบบเดียวกับหน้าอื่นๆ (Compare/Report/DashboardFilter)
+// เลือกได้หลายเดือน ไม่จำกัด max แล้ว จึงกดเลือกด่วนเป็น "ไตรมาส"/"ครึ่งปี" ได้ (เดิมจำกัดแค่ 1 เดือน)
+// "เดือนก่อน" ที่เทียบด้วยจะกลายเป็น "ช่วงก่อนหน้า" ที่มีจำนวนเดือนเท่ากับช่วงที่เลือก (ดู backend)
 const trendMonthSelection = ref([]);
-const month = computed(() => trendMonthSelection.value[0] || "");
+const month = computed(() =>
+  trendMonthSelection.value.length ? [...trendMonthSelection.value].sort().join(",") : ""
+);
 
 // เลือกฝ่าย และ แผนก แยกกันคนละ filter — เลือกได้ทั้งสองอย่างพร้อมกัน กราฟจะโชว์ตามที่เลือกทั้งหมด
 const selectedDivisionIds = ref([]);
@@ -112,7 +118,7 @@ async function loadByDepartment() {
   }
 }
 
-// เปลี่ยนเดือนที่เทียบแนวโน้ม -> โหลดข้อมูลใหม่ (badge เพิ่มขึ้น/ลดลงของแต่ละแผนก)
+// เปลี่ยนช่วงที่เทียบแนวโน้ม -> โหลดข้อมูลใหม่ (badge เพิ่มขึ้น/ลดลงของแต่ละแผนก)
 watch(trendMonthSelection, () => {
   loadByDepartment();
 });
@@ -207,6 +213,45 @@ function collapseAll() {
   openDivisions.value = new Set();
   openDepartments.value = new Set();
   openDevices.value = new Set();
+}
+
+// -------------------------------------------------------
+// Export Excel — hierarchy tree (ฝ่าย/แผนก/เครื่อง) 1 แถวต่อเครื่อง ยอดทั้งปีงบเสมอ
+// (ตรงกับตัวเลขที่เห็นใน tree — ไม่ขึ้นกับ "ช่วงที่เทียบแนวโน้ม" เหมือนกับยอดรวมด้านบน)
+// ใช้ divisions.value ทั้งหมด ไม่ตัดตามคำค้นหา ผู้ใช้มักอยากได้ข้อมูลครบไป export
+// -------------------------------------------------------
+function exportExcel() {
+  const header = [
+    "ฝ่าย",
+    "แผนก",
+    "S/N",
+    "รุ่น",
+    "ยี่ห้อ",
+    "จำนวนหน้ารวม (ทั้งปีงบ)",
+    "ค่าใช้จ่ายสุทธิรวม (ทั้งปีงบ)",
+  ];
+
+  const rows = [];
+  for (const division of divisions.value) {
+    for (const department of division.departments || []) {
+      for (const device of department.devices || []) {
+        rows.push([
+          division.name,
+          department.name,
+          device.serial_number || "",
+          device.model || "",
+          device.brand_name || "",
+          Number(device.total_pages || 0),
+          Number(device.total_cost || 0),
+        ]);
+      }
+    }
+  }
+
+  const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "แยกตามฝ่าย-แผนก");
+  XLSX.writeFile(workbook, "expense-by-department.xlsx");
 }
 
 // สีตามแนวโน้ม: แดง = ปริ้นเพิ่มขึ้น, เขียว = ปริ้นลดลง, เทา = เท่าเดิม, ไม่มีข้อมูล = ยังไม่มีใครกรอกเลย
@@ -439,19 +484,275 @@ const lineChartOptions = computed(() => {
   };
 });
 
+// -------------------------------------------------------
+// เครื่องที่ใช้งานมาก/น้อย — ย้ายมาจากหน้า "เปรียบเทียบข้อมูลรายเดือน" (Compare.vue)
+// เพราะเนื้อหา (ยอดพิมพ์สุทธิ + ค่าใช้จ่ายสุทธิ รายเครื่อง) เข้ากับหน้านี้มากกว่า —
+// ต่างจาก Compare ตรงที่นี่คือยอดรวม "ทั้งปีงบ" (ไม่ใช่ยอดของเดือนที่เลือกเทียบ)
+//
+// ข้อมูลอุปกรณ์จาก /dashboard/by-department (divisions/unassignedDevices) ยังไม่มี
+// อาคาร/ชั้น/สถานะเครื่อง เลยต้องโหลด /devices, /buildings, /floors, /brands เพิ่ม
+// มาต่อ (join) กับ device id เอา — เหมือนที่ Compare.vue ทำกับ deviceMatchesFilters()
+// -------------------------------------------------------
+const usageBuildingFilter = ref("");
+const usageFloorFilter = ref("");
+const usageDivisionFilter = ref("");
+const usageDepartmentFilter = ref("");
+const usageBrandFilter = ref("");
+const usageStatusFilter = ref("");
+const usageSort = ref("desc"); // "desc" = มากไปน้อย, "asc" = น้อยไปมาก
+
+const usageBuildings = ref([]);
+const usageFloors = ref([]);
+const usageBrands = ref([]);
+const deviceDimensionById = ref(new Map()); // device_id -> { building_name, floor_name, status }
+
+async function loadUsageFilterMasterData() {
+  try {
+    const [buildingRes, floorRes, brandRes, deviceRes] = await Promise.all([
+      api.get("/buildings"),
+      api.get("/floors"),
+      api.get("/brands"),
+      api.get("/devices"),
+    ]);
+    usageBuildings.value = buildingRes.data;
+    usageFloors.value = floorRes.data;
+    usageBrands.value = brandRes.data;
+    deviceDimensionById.value = new Map(
+      deviceRes.data.map((d) => [
+        d.id,
+        { building_name: d.building_name, floor_name: d.floor_name, status: d.status },
+      ])
+    );
+  } catch (err) {
+    console.error("Load usage filter master data error:", err);
+  }
+}
+
+const usageBuildingOptions = computed(() => usageBuildings.value.map((b) => ({ value: b.name, label: b.name })));
+const usageFilteredFloorOptions = computed(() => {
+  if (!usageBuildingFilter.value) return usageFloors.value;
+  const bld = usageBuildings.value.find((b) => b.name === usageBuildingFilter.value);
+  if (!bld) return usageFloors.value;
+  return usageFloors.value.filter((f) => Number(f.building_id) === Number(bld.id));
+});
+const usageFloorOptions = computed(() => {
+  const seen = new Set();
+  const options = [];
+  for (const f of usageFilteredFloorOptions.value) {
+    if (seen.has(f.name)) continue;
+    seen.add(f.name);
+    options.push({ value: f.name, label: f.name });
+  }
+  return options;
+});
+const usageDivisionOptions = computed(() => divisions.value.map((d) => ({ value: d.name, label: d.name })));
+const usageFilteredDepartmentOptions = computed(() => {
+  if (!usageDivisionFilter.value) {
+    return divisions.value.flatMap((d) => d.departments || []);
+  }
+  const div = divisions.value.find((d) => d.name === usageDivisionFilter.value);
+  return div ? div.departments || [] : [];
+});
+const usageDepartmentOptions = computed(() =>
+  usageFilteredDepartmentOptions.value.map((d) => ({ value: d.name, label: d.name }))
+);
+const usageBrandOptions = computed(() => usageBrands.value.map((b) => ({ value: b.name, label: b.name })));
+
+watch(usageBuildingFilter, () => {
+  usageFloorFilter.value = "";
+});
+watch(usageDivisionFilter, () => {
+  usageDepartmentFilter.value = "";
+});
+
+const hasActiveUsageFilter = computed(
+  () =>
+    !!(
+      usageBuildingFilter.value ||
+      usageFloorFilter.value ||
+      usageDivisionFilter.value ||
+      usageDepartmentFilter.value ||
+      usageBrandFilter.value ||
+      usageStatusFilter.value
+    )
+);
+
+function resetUsageFilter() {
+  usageBuildingFilter.value = "";
+  usageFloorFilter.value = "";
+  usageDivisionFilter.value = "";
+  usageDepartmentFilter.value = "";
+  usageBrandFilter.value = "";
+  usageStatusFilter.value = "";
+}
+
+// รวมเครื่องทั้งหมดจากทุกฝ่าย/แผนก (รวมเครื่องที่ยังไม่ได้ผูกฝ่าย/แผนกด้วย) เป็น list แบนราบเดียว
+const allDevicesFlat = computed(() => {
+  const list = [];
+  for (const division of divisions.value) {
+    for (const department of division.departments || []) {
+      for (const device of department.devices || []) {
+        list.push({ ...device, divisionName: division.name, departmentName: department.name });
+      }
+    }
+  }
+  for (const device of unassignedDevices.value) {
+    list.push({ ...device, divisionName: "", departmentName: "" });
+  }
+  return list;
+});
+
+function usageDeviceMatchesFilters(device) {
+  const dim = deviceDimensionById.value.get(device.id) || {};
+  if (usageBuildingFilter.value && dim.building_name !== usageBuildingFilter.value) return false;
+  if (usageFloorFilter.value && dim.floor_name !== usageFloorFilter.value) return false;
+  if (usageDivisionFilter.value && device.divisionName !== usageDivisionFilter.value) return false;
+  if (usageDepartmentFilter.value && device.departmentName !== usageDepartmentFilter.value) return false;
+  if (usageBrandFilter.value && device.brand_name !== usageBrandFilter.value) return false;
+  if (usageStatusFilter.value && dim.status !== usageStatusFilter.value) return false;
+  return true;
+}
+
+const deviceUsageFiltered = computed(() =>
+  allDevicesFlat.value
+    .filter((d) => usageDeviceMatchesFilters(d))
+    .map((d) => ({
+      ...d,
+      buildingName: deviceDimensionById.value.get(d.id)?.building_name || "",
+    }))
+);
+
+const deviceUsageSorted = computed(() => {
+  const list = [...deviceUsageFiltered.value];
+  list.sort((a, b) =>
+    usageSort.value === "desc" ? b.total_pages - a.total_pages : a.total_pages - b.total_pages
+  );
+  return list;
+});
+
+function toggleUsageSort() {
+  usageSort.value = usageSort.value === "desc" ? "asc" : "desc";
+}
+
+// -------------------------------------------------------
+// Export Excel — ตาราง "เครื่องที่ใช้งานมาก/น้อย" ใช้ deviceUsageSorted (กรอง+เรียงแล้ว
+// ตามตัวกรองเจาะจงด้านล่าง/ปุ่มมาก-น้อย) ไม่ตัดตาม pagination เหมือน DataTable.vue
+// -------------------------------------------------------
+function exportUsageExcel() {
+  const header = [
+    "อันดับ",
+    "หมายเลขเครื่อง",
+    "อาคาร",
+    "ฝ่าย",
+    "แผนก",
+    "ยอดพิมพ์สุทธิ (หน้า)",
+    "ค่าใช้จ่ายสุทธิ (บาท)",
+  ];
+
+  const rows = deviceUsageSorted.value.map((d, idx) => [
+    idx + 1,
+    d.serial_number || "",
+    d.buildingName || "",
+    d.divisionName || "",
+    d.departmentName || "",
+    Number(d.total_pages || 0),
+    Number(d.total_cost || 0),
+  ]);
+
+  const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "เครื่องมาก-น้อย");
+  XLSX.writeFile(workbook, `device-usage-ranking-${usageSort.value}.xlsx`);
+}
+
+// -------------------------------------------------------
+// Pagination — 10 รายการ/หน้า (ตามค่า default ของ DataTable.vue ที่หน้าอื่นๆ ใช้)
+// ตารางนี้ไม่ได้ใช้ DataTable.vue เพราะคอลัมน์ "อันดับ" ต้องอิงลำดับตาม usageSort เดิม
+// (มากไปน้อย/น้อยไปมาก) ไม่ใช่ sort ทั่วไปแบบคลิกหัวคอลัมน์ของ DataTable
+// -------------------------------------------------------
+const usagePageSizeOptions = [10, 20, 50, 100];
+const usagePageSize = ref(10);
+const usagePage = ref(1);
+
+const usageTotalPages = computed(() =>
+  Math.max(1, Math.ceil(deviceUsageSorted.value.length / usagePageSize.value))
+);
+
+const deviceUsagePaginated = computed(() => {
+  const start = (usagePage.value - 1) * usagePageSize.value;
+  return deviceUsageSorted.value.slice(start, start + usagePageSize.value);
+});
+
+// รีเซ็ตกลับหน้า 1 ทุกครั้งที่ filter/sort/ขนาดหน้าเปลี่ยน ไม่งั้นอาจค้างอยู่หน้าที่ไม่มีข้อมูลแล้ว
+watch([deviceUsageFiltered, usageSort, usagePageSize], () => {
+  usagePage.value = 1;
+});
+
+watch(usageTotalPages, (tp) => {
+  if (usagePage.value > tp) usagePage.value = tp;
+});
+
 onMounted(async () => {
   // โหลดข้อมูลหลักผ่าน watch(fiscalYearState.activeId, { immediate: true }) ด้านบนแล้ว
   // (แบบเดียวกับหน้า Expense) ตรงนี้แค่โหลดรายชื่อเดือนสำหรับ MonthPicker เพิ่ม
   await loadMonths();
+  await loadUsageFilterMasterData();
 });
 </script>
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold mb-6">ยอดพิมพ์แยกตามฝ่าย/แผนก</h1>
-    <p class="text-sm text-gray-500 -mt-4 mb-6">ตัวเลขในหน้านี้ (ทั้งจำนวนหน้าและค่าใช้จ่าย) เป็นยอดสุทธิหลังหัก 20% ทั้งหมด</p>
+    <!-- ไม่มี h1 ซ้ำแล้ว — ชื่อหน้านี้ขึ้นเป็นแท็บ "ยอดพิมพ์แยกตามฝ่าย/แผนก" ใน UsageReport.vue อยู่แล้ว -->
+    <p class="text-sm text-gray-500 mb-6">ตัวเลขในหน้านี้ (ทั้งจำนวนหน้าและค่าใช้จ่าย) เป็นยอดสุทธิหลังหัก 20% ทั้งหมด</p>
 
-    <!-- สรุปยอดรวมทั้งหมด — อยู่บนสุด เห็นก่อนเป็นอันดับแรกว่าดูปีงบไหนอยู่และยอดรวมเท่าไหร่ -->
+    <!-- แถบควบคุม — ย้ายมาไว้ก่อนสรุปยอดรวม (control ก่อนผลลัพธ์) ให้เรียงลำดับแบบเดียวกับ
+         Dashboard/Compare/Report ทั้งแอป: เลือกตัวกรองก่อน แล้วค่อยเห็นตัวเลข ไม่ใช่เจอยอดรวม
+         ก่อนแล้วมาเจอตัวกรองข้างล่างที่ทำให้ยอดรวมด้านบน "กระโดด" เปลี่ยนโดยไม่ทันสังเกต -->
+    <div class="bg-gray-50 shadow rounded-lg p-4 mb-6 flex items-center gap-4 flex-wrap">
+      <div class="w-64">
+        <label class="block text-xs text-gray-500 mb-1">ช่วงที่เทียบแนวโน้ม</label>
+        <MonthPicker v-model="trendMonthSelection" :options="months" />
+      </div>
+
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-xs text-gray-500 mb-1">ค้นหา (ฝ่าย/แผนก/รุ่น/S-N)</label>
+        <input
+          v-model="search"
+          type="text"
+          placeholder="พิมพ์เพื่อค้นหา..."
+          class="border rounded p-2 w-full bg-gray-50"
+        />
+      </div>
+
+      <div class="flex gap-2">
+        <button
+          @click="expandAll"
+          type="button"
+          class="border border-gray-300 text-gray-600 px-3 py-2 rounded hover:bg-gray-50 text-sm"
+        >
+          ขยายทั้งหมด
+        </button>
+        <button
+          @click="collapseAll"
+          type="button"
+          class="border border-gray-300 text-gray-600 px-3 py-2 rounded hover:bg-gray-50 text-sm"
+        >
+          ย่อทั้งหมด
+        </button>
+        <button
+          v-if="divisions.length"
+          @click="exportExcel"
+          type="button"
+          class="border border-gray-300 text-gray-600 px-3 py-2 rounded hover:bg-gray-50 text-sm whitespace-nowrap"
+          title="ดาวน์โหลดเป็นไฟล์ Excel (.xlsx)"
+        >
+          ⬇ Export Excel
+        </button>
+      </div>
+    </div>
+
+    <!-- สรุปยอดรวมทั้งหมด — ยอดนี้อ้างอิงทั้งปีงบเสมอ ไม่ขึ้นกับ "ช่วงที่เทียบแนวโน้ม" ด้านบน
+         (backend ไม่กรองยอดนี้ตาม month) จึงเป็นเลขนิ่งๆ ไว้เทียบอ้างอิงได้ตลอด -->
     <div
       v-if="!loading && divisions.length"
       class="bg-gray-50 shadow rounded-lg p-5 mb-6 flex flex-wrap items-center gap-6"
@@ -489,7 +790,7 @@ onMounted(async () => {
           <AppIcon name="printer" class="w-5 h-5" />
         </div>
         <div>
-          <div class="text-sm text-gray-500">รวมจำนวนหน้า</div>
+          <div class="text-sm text-gray-500">รวมจำนวนหน้าสุทธิ</div>
           <div class="text-2xl font-bold text-gray-700 leading-tight">
             {{ grandTotalPages.toLocaleString() }} <span class="text-base font-medium text-gray-500">หน้า</span>
           </div>
@@ -497,48 +798,13 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- แถบควบคุม -->
-    <div class="bg-gray-50 shadow rounded-lg p-4 mb-6 flex items-center gap-4 flex-wrap">
-      <div class="w-64">
-        <label class="block text-xs text-gray-500 mb-1">เดือนที่เทียบแนวโน้ม</label>
-        <MonthPicker v-model="trendMonthSelection" :options="months" :max="1" />
-      </div>
-
-      <div class="flex-1 min-w-[200px]">
-        <label class="block text-xs text-gray-500 mb-1">ค้นหา (ฝ่าย/แผนก/รุ่น/S-N)</label>
-        <input
-          v-model="search"
-          type="text"
-          placeholder="พิมพ์เพื่อค้นหา..."
-          class="border rounded p-2 w-full bg-gray-50"
-        />
-      </div>
-
-      <div class="flex gap-2">
-        <button
-          @click="expandAll"
-          type="button"
-          class="border border-gray-300 text-gray-600 px-3 py-2 rounded hover:bg-gray-50 text-sm"
-        >
-          ขยายทั้งหมด
-        </button>
-        <button
-          @click="collapseAll"
-          type="button"
-          class="border border-gray-300 text-gray-600 px-3 py-2 rounded hover:bg-gray-50 text-sm"
-        >
-          ย่อทั้งหมด
-        </button>
-      </div>
-    </div>
-
-    <!-- สรุปแผนกที่ยังไม่มีข้อมูลเดือนนี้ -->
+    <!-- สรุปแผนกที่ยังไม่มีข้อมูลในช่วงนี้ -->
     <div
       v-if="month && noDataCount > 0"
       class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 text-sm text-yellow-800 flex items-center gap-1.5"
     >
       <AppIcon name="warning" class="w-4 h-4 shrink-0" />
-      มี {{ noDataCount }} จาก {{ totalDepartmentCount }} แผนก ที่ยังไม่มีข้อมูลยอดพิมพ์ในเดือนนี้ (ทั้งเดือนนี้และเดือนก่อน)
+      มี {{ noDataCount }} จาก {{ totalDepartmentCount }} แผนก ที่ยังไม่มีข้อมูลยอดพิมพ์ในช่วงนี้ (ทั้งช่วงนี้และช่วงก่อนหน้า)
     </div>
 
     <div v-if="loading" class="text-center text-gray-500 py-10">กำลังโหลดข้อมูล...</div>
@@ -669,11 +935,11 @@ onMounted(async () => {
                     class="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-4 gap-y-0.5"
                   >
                     <span>
-                      เดือนนี้ {{ formatPages(trendDetail(department).currentPages) }} หน้า
+                      ช่วงนี้ {{ formatPages(trendDetail(department).currentPages) }} หน้า
                       ({{ formatMoney(trendDetail(department).currentCost) }} บาท)
                     </span>
                     <span>
-                      เดือนก่อน {{ formatPages(trendDetail(department).previousPages) }} หน้า
+                      ช่วงก่อนหน้า {{ formatPages(trendDetail(department).previousPages) }} หน้า
                       ({{ formatMoney(trendDetail(department).previousCost) }} บาท)
                     </span>
                     <span
@@ -742,6 +1008,209 @@ onMounted(async () => {
         </div>
       </div>
     </template>
+
+    <!-- เครื่องที่ใช้งานมาก/น้อย — ย้ายมาจากหน้า "เปรียบเทียบข้อมูลรายเดือน" พร้อม filter ชุดเดียวกัน -->
+    <div class="bg-gray-50 shadow rounded-lg p-4 mt-8">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="font-bold flex items-center gap-1.5">
+          <AppIcon name="printer" class="w-5 h-5 shrink-0" />
+          เครื่องที่ใช้งานมาก / น้อย
+        </h2>
+
+        <!-- ตัวเลือกจำนวนแถว/หน้า อยู่บนสุดคู่กับปุ่มเรียง — เห็นและปรับได้ทันทีก่อนไล่ดูตารางยาวๆ ด้านล่าง -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <div v-if="deviceUsageSorted.length" class="flex items-center gap-2 text-sm text-gray-500">
+            <span>พบ {{ deviceUsageSorted.length.toLocaleString() }} เครื่อง</span>
+            <select v-model="usagePageSize" class="border rounded px-2 py-1 text-sm bg-gray-50">
+              <option v-for="n in usagePageSizeOptions" :key="n" :value="n">{{ n }} รายการ/หน้า</option>
+            </select>
+          </div>
+
+          <button
+            @click="toggleUsageSort"
+            class="text-sm border rounded px-3 py-1.5 hover:bg-gray-100 flex items-center gap-1"
+          >
+            {{ usageSort === "desc" ? "เรียง: ใช้มากไปน้อย" : "เรียง: ใช้น้อยไปมาก" }}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="w-3.5 h-3.5"
+            >
+              <path v-if="usageSort === 'desc'" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+              <path v-else d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+            </svg>
+          </button>
+
+          <button
+            v-if="deviceUsageSorted.length"
+            @click="exportUsageExcel"
+            type="button"
+            class="text-sm border rounded px-3 py-1.5 hover:bg-gray-100 whitespace-nowrap"
+            title="ดาวน์โหลดเป็นไฟล์ Excel (.xlsx)"
+          >
+            ⬇ Export Excel
+          </button>
+        </div>
+      </div>
+
+      <p class="text-xs text-gray-500 mb-3">
+        รวมยอดพิมพ์สุทธิและค่าใช้จ่ายสุทธิของแต่ละเครื่องตลอดปีงบที่เลือกไว้ด้านบน
+      </p>
+
+      <!-- Filter เจาะจง — อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่อง เหมือนหน้าเปรียบเทียบข้อมูลรายเดือน -->
+      <div class="flex flex-wrap items-end gap-3 mb-4 pb-4 border-b">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
+          <SearchableSelect
+            v-model="usageBuildingFilter"
+            :options="usageBuildingOptions"
+            placeholder="ทุกอาคาร"
+            search-placeholder="พิมพ์ชื่ออาคาร..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">ชั้น</label>
+          <SearchableSelect
+            v-model="usageFloorFilter"
+            :options="usageFloorOptions"
+            placeholder="ทุกชั้น"
+            search-placeholder="พิมพ์ชื่อชั้น..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">ฝ่าย</label>
+          <SearchableSelect
+            v-model="usageDivisionFilter"
+            :options="usageDivisionOptions"
+            placeholder="ทุกฝ่าย"
+            search-placeholder="พิมพ์ชื่อฝ่าย..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">แผนก</label>
+          <SearchableSelect
+            v-model="usageDepartmentFilter"
+            :options="usageDepartmentOptions"
+            placeholder="ทุกแผนก"
+            search-placeholder="พิมพ์ชื่อแผนก..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">ยี่ห้อ</label>
+          <SearchableSelect
+            v-model="usageBrandFilter"
+            :options="usageBrandOptions"
+            placeholder="ทุกยี่ห้อ"
+            search-placeholder="พิมพ์ชื่อยี่ห้อ..."
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">สถานะเครื่อง</label>
+          <select v-model="usageStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
+            <option value="">ทุกสถานะ</option>
+            <option value="active">ใช้งานอยู่</option>
+            <option value="repair">ซ่อมบำรุง</option>
+            <option value="retired">ปลดระวาง</option>
+          </select>
+        </div>
+
+        <button
+          v-if="hasActiveUsageFilter"
+          @click="resetUsageFilter"
+          class="text-sm text-red-500 hover:text-gray-700 underline whitespace-nowrap"
+        >
+          ล้างตัวกรองทั้งหมด
+        </button>
+        
+      </div>
+
+      <div v-if="!deviceUsageSorted.length" class="text-center text-gray-400 py-6 text-sm">
+        ไม่มีข้อมูลเครื่องตรงกับตัวกรองที่เลือก
+      </div>
+
+      
+      <template v-else>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border-collapse min-w-max">
+            <thead>
+              <tr class="text-left text-gray-500 border-b">
+                <th class="py-2 pr-4">อันดับ</th>
+                <th class="py-2 pr-4">หมายเลขเครื่อง</th>
+                <th class="py-2 pr-4">อาคาร</th>
+                <th class="py-2 pr-4">ฝ่าย/แผนก</th>
+                <th class="py-2 pr-4 text-right">ยอดพิมพ์สุทธิ (หน้า)</th>
+                <th class="py-2 pr-4 text-right">ค่าใช้จ่ายสุทธิ (บาท)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(d, idx) in deviceUsagePaginated"
+                :key="d.id"
+                class="border-b"
+              >
+                <td class="py-2 pr-4 text-gray-400">{{ (usagePage - 1) * usagePageSize + idx + 1 }}</td>
+                <td class="py-2 pr-4 font-medium">{{ d.serial_number || "-" }}</td>
+                <td class="py-2 pr-4 text-gray-500">{{ d.buildingName || "-" }}</td>
+                <td class="py-2 pr-4 text-gray-500">
+                  {{ d.departmentName ? `${d.departmentName} (${d.divisionName})` : "ไม่ได้ผูกฝ่าย/แผนก" }}
+                </td>
+                <td class="py-2 pr-4 text-right">
+                  {{ Number(d.total_pages || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
+                </td>
+                <td class="py-2 pr-4 text-right">
+                  {{ formatMoney(d.total_cost) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination — ตัวเลือกจำนวนแถว/หน้าย้ายขึ้นไปอยู่บนสุดแล้ว เหลือแค่ปุ่มเปลี่ยนหน้าตรงนี้ -->
+        <div v-if="usageTotalPages > 1" class="flex items-center justify-center gap-2 mt-4">
+          <button
+            class="border px-3 py-1 rounded disabled:opacity-40"
+            :disabled="usagePage === 1"
+            @click="usagePage = 1"
+          >
+            « แรก
+          </button>
+          <button
+            class="border px-3 py-1 rounded disabled:opacity-40"
+            :disabled="usagePage === 1"
+            @click="usagePage--"
+          >
+            ก่อนหน้า
+          </button>
+
+          <span class="text-sm text-gray-600 px-2">หน้า {{ usagePage }} / {{ usageTotalPages }}</span>
+
+          <button
+            class="border px-3 py-1 rounded disabled:opacity-40"
+            :disabled="usagePage === usageTotalPages"
+            @click="usagePage++"
+          >
+            ถัดไป
+          </button>
+          <button
+            class="border px-3 py-1 rounded disabled:opacity-40"
+            :disabled="usagePage === usageTotalPages"
+            @click="usagePage = usageTotalPages"
+          >
+            สุดท้าย »
+          </button>
+        </div>
+      </template>
+    </div>
 
     <!-- เครื่องที่ยังไม่ได้ผูกฝ่าย/แผนก -->
     <div v-if="unassignedDevices.length" class="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg overflow-hidden">
