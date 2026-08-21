@@ -65,19 +65,21 @@ async function recordLocationHistory(conn, deviceId, loc) {
 
   if (sameAsLatest) return;
 
-  // effective_from ของช่วงเดิม (ถ้ามี) ต้องมาก่อนวันนี้เท่านั้น ถ้าแก้ไขเครื่องซ้ำในวันเดียวกัน
-  // (เช่น แก้ผิดแล้วรีบแก้ใหม่) ให้ "แทนที่" ช่วงล่าสุดแทนการเปิดช่วงใหม่ซ้อนวันเดียวกัน
-  const today = new Date().toISOString().slice(0, 10);
-
-  if (latest && latest.effective_from === today) {
-    await conn.query(
-      `UPDATE device_location_history SET
-         building_id=?, floor_id=?, location=?, division_id=?, department_id=?
-       WHERE id=?`,
-      [loc.building_id, loc.floor_id, loc.location, loc.division_id, loc.department_id, latest.id]
-    );
-    return;
-  }
+  // ยอดพิมพ์ (print_transactions / v_monthly_kpi) ละเอียดสุดแค่ระดับ "เดือน" (v.month = 'YYYY-MM')
+  // ไม่มีวันที่ ดังนั้นถ้าย้ายซ้ำภายในเดือนปฏิทินเดียวกัน ระบบจะแบ่งยอดพิมพ์ของเดือนนั้นระหว่าง
+  // ที่ตั้งเก่ากับที่ตั้งใหม่แบบละเอียด (รายวัน) ไม่ได้ — ยอดทั้งเดือนจะไปตกอยู่กับช่วงที่ "เปิดอยู่"
+  // (effective_to IS NULL) ตอนดึงรายงาน ส่วนช่วงที่ปิดไปแล้วในเดือนเดียวกันจะได้ 0 แผ่นสำหรับเดือนนั้น
+  // (ดู getHistory/getCurrentUsage: เทียบ v.month กับ DATE_FORMAT(effective_from/to,'%Y-%m') เป็น
+  // string ระดับเดือนล้วนๆ ไม่ใช่วันที่จริง จึงไม่มีทางนับซ้ำ 2 ช่วง หรือหายไปทั้งคู่)
+  //
+  // เดิมโค้ดตรงนี้ "แทนที่" (UPDATE) ช่วงล่าสุดแทนการปิด+เปิดช่วงใหม่ถ้าย้ายซ้ำในเดือนเดียวกัน
+  // เพื่อเลี่ยงปัญหายอดพิมพ์หาย/นับซ้ำ — แต่ผลข้างเคียงคือที่ตั้งเดิมก่อนย้าย (พร้อมยอดพิมพ์สะสมก่อนย้าย
+  // ถ้ามี) หายไปจากประวัติการย้ายทั้งแถว ไม่เหลือร่องรอยว่าเคยย้ายซ้ำในเดือนนั้น ซึ่งไม่ตรงกับสิ่งที่
+  // ผู้ใช้ต้องการเห็นในหน้าประวัติการย้าย — จึงเปลี่ยนมา ปิดช่วงเดิม + เปิดช่วงใหม่เสมอ ไม่ว่าจะย้าย
+  // ข้ามเดือนหรือย้ายซ้ำในเดือนเดียวกันก็ตาม ช่วงที่ปิดในเดือนเดียวกันจะโชว์ยอดพิมพ์ 0 แผ่นสำหรับเดือนนั้น
+  // (ยอดจริงของเดือนนั้นไปรวมอยู่กับช่วงถัดไปที่เปิดอยู่แทน) — frontend ต้องอธิบายเคสนี้ให้ผู้ใช้เข้าใจ
+  // ว่าไม่ใช่ "ไม่มีการพิมพ์" แต่ "ระบบนับยอดพิมพ์ละเอียดสุดแค่ระดับเดือน"
+  const today = new Date().toISOString().slice(0, 10); // "2026-08-20" — ใช้เป็นค่า effective_from/effective_to จริงตอนเปิด/ปิดช่วง
 
   if (latest) {
     await conn.query(`UPDATE device_location_history SET effective_to=? WHERE id=?`, [
@@ -448,8 +450,11 @@ exports.getHistory = async (req, res) => {
     // ยอดพิมพ์สะสม (แผ่นสุทธิ/ค่าใช้จ่าย) ต่อ "ช่วง" ที่ตั้ง/สังกัด — ไม่ใช่แค่ช่วงปัจจุบัน
     // (h.effective_to IS NULL) แบบ getCurrentUsage แต่คำนวณให้ทุกแถวในประวัติ เพื่อรองรับ
     // การย้ายบ่อยๆ แล้วยังย้อนดูยอดพิมพ์สะสมของที่ตั้งเดิมแต่ละช่วงได้
-    // ขอบเขตช่วง: v_monthly_kpi.month >= effective_from และ < effective_to (ถ้ายังเปิดอยู่ไม่จำกัดบน)
-    // ใช้ตรรกะเดียวกับ exports.getCurrentUsage เพื่อให้ตัวเลขตรงกัน
+    // ขอบเขตช่วง: เทียบระดับ "เดือน" ล้วนๆ (v_monthly_kpi.month คือ 'YYYY-MM' ไม่มีวันที่) —
+    // ต้องแปลง effective_from/effective_to เป็น 'YYYY-MM' ก่อนเทียบด้วย ห้ามเทียบกับวันที่ 1
+    // ของเดือนตรงๆ (STR_TO_DATE(...,'-01') >= effective_from) เพราะถ้า effective_from เป็นวันกลาง
+    // เดือน (เช่น ย้ายวันที่ 20) เดือนนั้นจะไม่มีทางตรงเงื่อนไขได้เลย ยอดพิมพ์เดือนที่ย้ายจะหายไปจาก
+    // ทุกช่วง — ใช้ตรรกะเดียวกับ exports.getCurrentUsage เพื่อให้ตัวเลขตรงกัน
     const [rows] = await db.query(
       `
       SELECT
@@ -461,24 +466,31 @@ exports.getHistory = async (req, res) => {
         h.location,
         divi.name AS division_name,
         dept.name AS department_name,
+        -- ช่วงที่ปิดในเดือนปฏิทินเดียวกับที่เปิด (ย้ายซ้ำในเดือนเดียวกัน) — ยอดพิมพ์ของเดือนนั้น
+        -- จะไปรวมอยู่กับช่วงถัดไปแทน (ดูคอมเมนต์ recordLocationHistory) ให้ frontend โชว์คำอธิบาย
+        -- แทน "0 แผ่น" เฉยๆ กันผู้ใช้เข้าใจผิดว่าช่วงนั้นไม่มีการพิมพ์เลย
+        (
+          h.effective_to IS NOT NULL
+          AND DATE_FORMAT(h.effective_from, '%Y-%m') = DATE_FORMAT(h.effective_to, '%Y-%m')
+        ) AS is_same_month_transition,
         COALESCE((
           SELECT SUM(v.net_pages)
           FROM v_monthly_kpi v
           WHERE v.device_id = h.device_id
-            AND STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') >= h.effective_from
+            AND v.month >= DATE_FORMAT(h.effective_from, '%Y-%m')
             AND (
               h.effective_to IS NULL
-              OR STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') < h.effective_to
+              OR v.month < DATE_FORMAT(h.effective_to, '%Y-%m')
             )
         ), 0) AS total_pages,
         COALESCE((
           SELECT SUM(v.total_cost)
           FROM v_monthly_kpi v
           WHERE v.device_id = h.device_id
-            AND STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') >= h.effective_from
+            AND v.month >= DATE_FORMAT(h.effective_from, '%Y-%m')
             AND (
               h.effective_to IS NULL
-              OR STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') < h.effective_to
+              OR v.month < DATE_FORMAT(h.effective_to, '%Y-%m')
             )
         ), 0) AS total_cost
       FROM device_location_history h
@@ -492,11 +504,13 @@ exports.getHistory = async (req, res) => {
       [req.params.id]
     );
 
-    // mysql2 คืนค่า SUM() เป็น string เมื่อมาจาก DECIMAL — แปลงเป็น number ให้ frontend ใช้ตรงๆ
+    // mysql2 คืนค่า SUM() เป็น string เมื่อมาจาก DECIMAL และคืนค่า boolean expression เป็น 0/1 —
+    // แปลงให้ frontend ใช้ตรงๆ
     const history = rows.map((row) => ({
       ...row,
       total_pages: Number(row.total_pages),
       total_cost: Number(row.total_cost),
+      is_same_month_transition: Boolean(row.is_same_month_transition),
     }));
 
     res.json({ history });
@@ -539,13 +553,15 @@ exports.getCurrentUsage = async (req, res) => {
       return res.json({ usage: null });
     }
 
+    // เทียบระดับเดือนล้วนๆ เหมือน getHistory — ห้ามเทียบ v.month กับวันที่ 1 ของเดือนตรงๆ กับ
+    // effective_from แบบวันที่จริง เพราะถ้า effective_from เป็นวันกลางเดือน เดือนนั้นจะหลุดไปเลย
     const [[usage]] = await db.query(
       `SELECT
          COALESCE(SUM(v.net_pages), 0) AS total_pages,
          COALESCE(SUM(v.total_cost), 0) AS total_cost
        FROM v_monthly_kpi v
        WHERE v.device_id = ?
-         AND STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') >= ?`,
+         AND v.month >= DATE_FORMAT(?, '%Y-%m')`,
       [req.params.id, latest.effective_from]
     );
 

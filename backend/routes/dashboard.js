@@ -766,8 +766,11 @@ router.get('/by-department', async (req, res) => {
       LEFT JOIN device_location_history h
         ON h.device_id = d.id
         AND v.month IS NOT NULL
-        AND STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') >= h.effective_from
-        AND (h.effective_to IS NULL OR STR_TO_DATE(CONCAT(v.month, '-01'), '%Y-%m-%d') <= h.effective_to)
+        -- เทียบระดับเดือนล้วนๆ (v.month คือ 'YYYY-MM') ไม่ใช่เทียบกับวันที่ 1 ของเดือนตรงๆ กับ
+        -- effective_from/effective_to แบบวันที่จริง — เพราะถ้าย้ายกลางเดือน (ไม่ใช่วันที่ 1)
+        -- เดือนนั้นจะไม่ตรงเงื่อนไขกับช่วงไหนเลย ยอดพิมพ์เดือนนั้นเลยหายไปจากรายงาน
+        AND v.month >= DATE_FORMAT(h.effective_from, '%Y-%m')
+        AND (h.effective_to IS NULL OR v.month < DATE_FORMAT(h.effective_to, '%Y-%m'))
       ORDER BY effective_department_id, d.serial_number, v.month
     `;
     const params = fiscalYear ? [fiscalYear.start_month, fiscalYear.end_month] : [];

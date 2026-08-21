@@ -144,6 +144,7 @@ const showHistory = ref(false);
 const historyLoading = ref(false);
 const historyRows = ref([]);
 const historyLoaded = ref(false);
+const moveSuccessMsg = ref(null); // ข้อความแจ้งว่าย้ายสำเร็จแล้ว + เตือนว่าประวัติด้านล่างอัปเดตแล้ว
 
 function formatHistoryDate(value) {
   if (!value) return "-";
@@ -184,6 +185,7 @@ watch(
     if (!visible) return;
 
     formError.value = null;
+    moveSuccessMsg.value = null;
     loadMasterData();
 
     showHistory.value = false;
@@ -212,11 +214,20 @@ async function submit() {
 
   saving.value = true;
   formError.value = null;
+  moveSuccessMsg.value = null;
 
   try {
     const res = await api.put(`/devices/${props.assetId}/move`, data);
     emit("saved", res.data);
-    close();
+
+    // ไม่ปิด modal ทันทีหลังย้ายสำเร็จ — รีโหลดยอดพิมพ์ที่เดิม (currentUsage จะกลายเป็น
+    // ช่วงใหม่ที่เพิ่งเปิด) และประวัติการย้ายใหม่ทันที (loadHistory ไม่เช็ค historyLoaded
+    // จึงดึงข้อมูลล่าสุดเสมอ) แล้วเปิดพาแนลประวัติให้เห็นเลยว่ายอดพิมพ์สะสมก่อนย้าย
+    // ถูกบันทึกปิดช่วงเดิมไว้ในประวัติเรียบร้อยแล้ว — เดิมโค้ดปิด modal ทันทีตรงนี้ ทำให้
+    // ผู้ใช้ไม่เห็นว่าประวัติอัปเดตจริงจนกว่าจะปิดแล้วเปิด popup ใหม่อีกครั้ง
+    await Promise.all([loadCurrentUsage(props.assetId), loadHistory(props.assetId)]);
+    showHistory.value = true;
+    moveSuccessMsg.value = "ย้ายเครื่องสำเร็จ — ประวัติการย้ายด้านล่างอัปเดตแล้ว";
   } catch (err) {
     console.error("Move asset error:", err);
     formError.value = err.response?.data?.error || "ย้ายเครื่องไม่สำเร็จ";
@@ -365,7 +376,11 @@ function close() {
                     ({{ row.building_name || "-" }}{{ row.floor_name ? " ชั้น " + row.floor_name : "" }}{{ row.location ? " " + row.location : "" }})
                   </span>
                 </div>
-                <div class="text-xs text-gray-500 mt-1">
+                <div v-if="row.is_same_month_transition" class="text-xs text-amber-600 mt-1">
+                  ย้ายซ้ำภายในเดือนเดียวกัน — ยอดพิมพ์ของเดือนนี้ถูกรวมไว้ในช่วงถัดไปแทน
+                  (ระบบนับยอดพิมพ์ได้ละเอียดสุดแค่ระดับเดือน ไม่ใช่ว่าช่วงนี้ไม่มีการพิมพ์)
+                </div>
+                <div v-else class="text-xs text-gray-500 mt-1">
                   ยอดพิมพ์สะสมช่วงนี้(หัก 20% แล้ว):
                   <span class="font-medium text-gray-700">{{ Number(row.total_pages || 0).toLocaleString("th-TH") }} แผ่น</span>
                   / <span class="font-medium text-gray-700">฿{{ formatMoney(row.total_cost) }}</span>
@@ -376,6 +391,10 @@ function close() {
         </div>
         </template>
 
+        <div v-if="moveSuccessMsg" class="mt-4 bg-green-100 text-green-700 p-3 rounded text-sm">
+          {{ moveSuccessMsg }}
+        </div>
+
         <div v-if="formError" class="mt-4 bg-red-100 text-red-700 p-3 rounded text-sm">
           {{ formError }}
         </div>
@@ -383,7 +402,7 @@ function close() {
 
       <div class="p-5 border-t flex justify-end gap-2">
         <button @click="close" :disabled="saving" class="border px-4 py-2 rounded hover:bg-gray-50">
-          ยกเลิก
+          {{ moveSuccessMsg ? "ปิด" : "ยกเลิก" }}
         </button>
         <button
           @click="submit"
