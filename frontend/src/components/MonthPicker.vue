@@ -185,8 +185,16 @@ function quickButtonClass(q) {
 }
 
 // เลือกด่วน = แทนที่ selection ทั้งหมดด้วยเดือนในกลุ่มนั้น (ไม่ merge กับที่เลือกไว้เดิม)
+// ถ้าปุ่มที่กดกำลัง active อยู่แล้ว (เดือนที่เลือกตรงกับกลุ่มนี้เป๊ะ) ให้ถือว่าเป็นการ "กดซ้ำเพื่อเอาออก"
+// เคลียร์ selection ทั้งหมดแทน ไม่ใช่เลือกกลุ่มเดิมซ้ำ
 function selectQuick(months) {
   if (!months.every((m) => props.options.includes(m))) return;
+
+  if (isQuickActive(months)) {
+    emit("update:modelValue", []);
+    return;
+  }
+
   emit("update:modelValue", [...months].sort());
 }
 

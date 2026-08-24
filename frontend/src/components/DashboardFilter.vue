@@ -95,8 +95,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="bg-gray-50 shadow rounded-lg p-4 mb-6">
-    <h2 class="font-bold mb-3">Filter Dashboard</h2>
+  <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-4 mb-6">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">
+        ตัวกรองแดชบอร์ด
+      </h2>
+    </div>
 
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
       <!-- อาคาร -->
@@ -120,7 +124,7 @@ onMounted(async () => {
 
       <button
         @click="resetFilter"
-        class="bg-red-500 hover:bg-red-600 text-white rounded px-4 py-2"
+        class="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-medium"
       >
         ล้างตัวกรอง
       </button>

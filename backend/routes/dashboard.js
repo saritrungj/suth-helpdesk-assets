@@ -936,7 +936,8 @@ router.get('/by-department', async (req, res) => {
 // GET /api/dashboard/highlights
 // ข้อมูลเสริมสำหรับหน้า Dashboard เท่านั้น (ไม่ซ้ำกับหน้าอื่น):
 //   - device_status : จำนวนเครื่องแยกตามสถานะ (ใช้งาน/ซ่อม/ปลดระวาง)
-//   - top_departments : Top 5 แผนกที่มีค่าใช้จ่ายสูงสุด (ดูรายละเอียดเต็มได้ที่หน้า "ยอดพิมพ์แยกตามฝ่าย/แผนก")
+//   - top_departments : Top 5 แผนกที่มีค่าใช้จ่ายสูงสุด/น้อยสุด (ดูรายละเอียดเต็มได้ที่หน้า "ยอดพิมพ์แยกตามฝ่าย/แผนก")
+//     ?department_order=asc -> น้อยที่สุดก่อน | ค่าอื่น/ไม่ส่ง -> มากที่สุดก่อน (default)
 //   - contracts : สรุปการใช้งานแยกตามสัญญา (จำนวนเครื่อง/หน้า/ค่าใช้จ่ายต่อสัญญา)
 // รองรับ filter เดียวกับ /stats คือ ?building_name= และ ?month=
 // ============================================================
@@ -999,9 +1000,13 @@ router.get('/highlights', async (req, res) => {
       topDeptParams.push(building_name);
     }
 
+    // ?department_order=asc -> แผนกค่าใช้จ่ายน้อยที่สุดก่อน | ค่าอื่น/ไม่ส่ง -> มากที่สุดก่อน (default)
+    // whitelist ค่าก่อนต่อ string ตรงๆ ลง SQL เพราะ ASC/DESC ใช้ผ่าน parameterized query (?) ไม่ได้
+    const departmentOrderDir = req.query.department_order === 'asc' ? 'ASC' : 'DESC';
+
     topDeptSql += `
       GROUP BY d.department_id, dept.name, divi.name
-      ORDER BY total_cost DESC
+      ORDER BY total_cost ${departmentOrderDir}
       LIMIT 5
     `;
 
