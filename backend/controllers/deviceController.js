@@ -442,6 +442,47 @@ exports.move = async (req, res) => {
 };
 
 // ============================================================
+// GET /api/devices/location-history
+// ประวัติการย้าย (อาคาร/ชั้น/ฝ่าย/แผนก) ของ "ทุกเครื่อง" พร้อมกันในครั้งเดียว
+// (ต่างจาก getHistory ด้านล่างที่ดึงของเครื่องเดียวตาม :id) — ใช้โดยหน้ารายงาน
+// เพื่อเช็คว่าเครื่องไหน "เคยย้าย" บ้าง แล้วแยกยอดพิมพ์เก่า/ใหม่ตามช่วงที่ตั้งให้
+// ไม่ join กับยอดพิมพ์ตรงนี้ (ต่างจาก getHistory) เพราะฝั่ง frontend มี v_monthly_kpi
+// ของทุกเครื่องอยู่แล้ว (จาก /dashboard/monthly-kpi) เอามาตัดแบ่งเองตามช่วงได้เลย
+// ไม่ต้องยิง query ซ้ำซ้อน
+// ============================================================
+exports.getAllLocationHistory = async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        h.id,
+        h.device_id,
+        h.building_id,
+        b.name AS building_name,
+        h.floor_id,
+        f.name AS floor_name,
+        h.location,
+        h.division_id,
+        divi.name AS division_name,
+        h.department_id,
+        dept.name AS department_name,
+        h.effective_from,
+        h.effective_to
+      FROM device_location_history h
+      LEFT JOIN building b ON h.building_id = b.id
+      LEFT JOIN floor f ON h.floor_id = f.id
+      LEFT JOIN division divi ON h.division_id = divi.id
+      LEFT JOIN department dept ON h.department_id = dept.id
+      ORDER BY h.device_id ASC, h.effective_from ASC, h.id ASC
+    `);
+
+    res.json(rows);
+  } catch (err) {
+    console.error("Error fetching all device location history:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ============================================================
 // GET /api/devices/:id/history
 // ประวัติการย้ายอาคาร/ชั้น/ฝ่าย/แผนกของเครื่องนี้ — เรียงล่าสุดก่อน
 // ============================================================

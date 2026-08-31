@@ -21,6 +21,11 @@ const devices = ref([]);
 // ยอดพิมพ์รายเดือนของแต่ละเครื่อง: device_id -> { "YYYY-MM": pages }
 const monthlyMap = ref({});
 
+// ประวัติการย้าย (อาคาร/ชั้น/ฝ่าย/แผนก) ของทุกเครื่อง — จาก /devices/location-history
+// ใช้เช็คว่าเครื่องไหน "เคยย้าย" บ้าง แล้วแยกยอดพิมพ์เก่า/ใหม่ตามช่วงที่ตั้งจริงให้ในตาราง
+// (ไม่ให้ยอดของที่ใหม่ปนกับที่เก่า) แทนที่จะเหมาทั้งปีงบเป็นของที่ตั้งปัจจุบันเครื่องเดียว
+const locationHistory = ref([]);
+
 // -------------------------------------------------------
 // Filter แบบเจาะจง — เหมือนหน้า "บันทึกยอดพิมพ์รายเดือน" (PrintTransactions)
 // -------------------------------------------------------
@@ -158,10 +163,12 @@ async function loadReport() {
   error.value = null;
 
   try {
-    const [deviceRes, monthlyRes] = await Promise.all([
+    const [deviceRes, monthlyRes, historyRes] = await Promise.all([
       api.get("/devices"),
       // ยิงขอทีเดียวทุกเดือนของปีงบนี้ (เดือนคั่นด้วย comma) แทนที่จะยิงทีละเดือน
       api.get("/dashboard/monthly-kpi", { params: { month: fyMonths.value.join(",") } }),
+      // ประวัติการย้ายของทุกเครื่อง — ใช้แยกยอดพิมพ์เก่า/ใหม่ตอนสร้าง reportRows ด้านล่าง
+      api.get("/devices/location-history"),
       loadMasterData(),
     ]);
 
@@ -175,14 +182,74 @@ async function loadReport() {
       map[row.device_id][row.month] = Number(row.pages_printed || 0);
     }
     monthlyMap.value = map;
+    locationHistory.value = historyRes.data;
   } catch (err) {
     console.error("Load report error:", err);
     error.value = "โหลดข้อมูลรายงานไม่สำเร็จ";
     devices.value = [];
     monthlyMap.value = {};
+    locationHistory.value = [];
   } finally {
     loading.value = false;
   }
+}
+
+// -------------------------------------------------------
+// จัดกลุ่มประวัติการย้าย: device_id -> [period, ...] เรียงจากช่วงเก่าสุด -> ล่าสุด
+// -------------------------------------------------------
+const devicePeriods = computed(() => {
+  const map = {};
+  for (const h of locationHistory.value) {
+    if (!map[h.device_id]) map[h.device_id] = [];
+    map[h.device_id].push(h);
+  }
+  for (const id in map) {
+    map[id].sort(
+      (a, b) => String(a.effective_from).localeCompare(String(b.effective_from)) || a.id - b.id
+    );
+  }
+  return map;
+});
+
+// ตัด DATE ที่ backend ส่งมา (mysql2 -> ISO string เช่น "2024-12-17T00:00:00.000Z") เหลือแค่ "YYYY-MM"
+function ymOf(value) {
+  if (!value) return null;
+  return String(value).split("T")[0].slice(0, 7);
+}
+
+// เดือนไหนใน "months" ที่ตกอยู่ในช่วงที่ตั้งนี้บ้าง — ตรรกะเดียวกับ backend
+// (deviceController.getHistory/getCurrentUsage) เทียบระดับเดือนล้วนๆ ไม่ใช่วันที่จริง
+function monthsInPeriod(months, period) {
+  const from = ymOf(period.effective_from);
+  const to = ymOf(period.effective_to);
+  return months.filter((m) => m >= from && (!to || m < to));
+}
+
+function formatDateShort(value) {
+  if (!value) return "-";
+  const datePart = String(value).split("T")[0];
+  const [y, m, d] = datePart.split("-");
+  const monthsTH = [
+    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.",
+    "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.",
+    "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+  ];
+  return `${Number(d)} ${monthsTH[Number(m) - 1] || m} ${Number(y) + 543}`;
+}
+
+function formatPeriodRange(period) {
+  if (!period.effective_to) return `ตั้งแต่ ${formatDateShort(period.effective_from)} (ปัจจุบัน)`;
+  return `${formatDateShort(period.effective_from)} – ${formatDateShort(period.effective_to)}`;
+}
+
+function buildingFloorLabel(r) {
+  const building = r.building_name || "-";
+  return r.floor_name ? `${building} / ${r.floor_name}` : building;
+}
+
+function divisionDepartmentLabel(r) {
+  const department = r.department_name || "-";
+  return r.division_name ? `${r.division_name} / ${department}` : department;
 }
 
 // -------------------------------------------------------
@@ -234,13 +301,58 @@ const filteredDevices = computed(() => {
 });
 
 // แถวของตาราง: ข้อมูลเครื่อง + ยอดพิมพ์รายเดือน (_monthly) + รวมเฉพาะเดือนที่เลือกแสดง (_total)
-const reportRows = computed(() =>
-  filteredDevices.value.map((d) => {
-    const monthly = monthlyMap.value[d.id] || {};
-    const total = displayMonths.value.reduce((sum, m) => sum + (monthly[m] || 0), 0);
-    return { ...d, _monthly: monthly, _total: total };
-  })
-);
+//
+// ถ้าเครื่องไหนมีการย้าย (ประวัติมากกว่า 1 ช่วงที่ตั้ง) ให้แตกเป็นหลายแถว — 1 แถวต่อ 1 ช่วงที่ตั้ง
+// แต่ละแถวเห็นเฉพาะยอดพิมพ์ของเดือนที่เครื่องอยู่ที่ตั้งนั้นจริงๆ (เดือนนอกช่วง = ไม่มียอดในแถวนั้น)
+// เพื่อไม่ให้ยอดของที่เก่ากับที่ใหม่ปนกัน ตามที่เก่า/ที่ใหม่จะเห็นแยกกันชัดเจน
+function buildDeviceRows(d) {
+  const monthly = monthlyMap.value[d.id] || {};
+  const periods = devicePeriods.value[d.id] || [];
+
+  // เครื่องที่ไม่เคยย้าย (มีประวัติแค่ช่วงเดียวหรือไม่มีเลย) — แถวเดียวเหมือนเดิม ใช้ที่ตั้งปัจจุบันของเครื่อง
+  if (periods.length <= 1) {
+    return [singleDeviceRow(d, monthly)];
+  }
+
+  const splitRows = periods
+    .map((p) => ({ p, months: monthsInPeriod(fyMonths.value, p) }))
+    // ช่วงที่ไม่มีเดือนไหนตกอยู่ในปีงบที่กำลังดูอยู่เลย (เช่นย้ายไปมาในปีงบอื่น) ไม่ต้องแสดงแถวเปล่า
+    .filter(({ months }) => months.length)
+    .map(({ p, months }) => devicePeriodRow(d, p, monthly, months));
+
+  // กันเครื่องหายจากรายงาน เผื่อกรณีทุกช่วงประวัติไม่มีเดือนไหนตกอยู่ในปีงบนี้เลย
+  return splitRows.length ? splitRows : [singleDeviceRow(d, monthly)];
+}
+
+function singleDeviceRow(d, monthly) {
+  const total = displayMonths.value.reduce((sum, m) => sum + (monthly[m] || 0), 0);
+  return { ...d, _row_key: `${d.id}`, _monthly: monthly, _total: total, _period_label: "" };
+}
+
+function devicePeriodRow(d, period, monthly, months) {
+  const monthSet = new Set(months);
+  const periodMonthly = {};
+  for (const m of months) periodMonthly[m] = monthly[m] || 0;
+  const total = displayMonths.value.reduce(
+    (sum, m) => sum + (monthSet.has(m) ? monthly[m] || 0 : 0),
+    0
+  );
+
+  return {
+    ...d,
+    _row_key: `${d.id}-h${period.id}`,
+    // ที่ตั้ง/สังกัดของ "ช่วงนี้" — ไม่ใช่ที่ตั้งปัจจุบันของเครื่อง เพื่อให้แถวที่เก่าโชว์ที่เก่าจริงๆ
+    building_name: period.building_name,
+    floor_name: period.floor_name,
+    division_name: period.division_name,
+    department_name: period.department_name,
+    _monthly: periodMonthly,
+    _total: total,
+    _period_label: formatPeriodRange(period),
+  };
+}
+
+const reportRows = computed(() => filteredDevices.value.flatMap((d) => buildDeviceRows(d)));
 
 // คอลัมน์ของ DataTable — คอลัมน์ข้อมูลเครื่อง + 1 คอลัมน์ต่อเดือนที่เลือกแสดง + คอลัมน์รวม
 const columns = computed(() => {
@@ -251,8 +363,21 @@ const columns = computed(() => {
       label: "ยี่ห้อ / รุ่น",
       value: (r) => `${r.brand_name || "-"} ${r.model || ""}`.trim(),
     },
-    { key: "building_name", label: "อาคาร" },
-    { key: "department_name", label: "แผนก" },
+    {
+      key: "building_floor",
+      label: "อาคาร / ชั้น",
+      value: (r) => buildingFloorLabel(r),
+    },
+    {
+      key: "division_department",
+      label: "ฝ่าย / แผนก",
+      value: (r) => divisionDepartmentLabel(r),
+    },
+    {
+      key: "period_label",
+      label: "ช่วงที่ตั้ง (กรณีย้ายระหว่างปีงบ)",
+      value: (r) => r._period_label || "-",
+    },
   ];
 
   const monthCols = displayMonths.value.map((m) => ({
@@ -439,7 +564,7 @@ onMounted(async () => {
           v-else
           :rows="reportRows"
           :columns="columns"
-          row-key="id"
+          row-key="_row_key"
           export-filename="report-print-by-device"
           search-placeholder="ค้นหาทุกคอลัมน์..."
           empty-text="ไม่มีข้อมูลเครื่องพิมพ์"

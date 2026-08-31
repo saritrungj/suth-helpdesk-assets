@@ -176,7 +176,9 @@ function isQuickActive(months) {
 
 function quickButtonClass(q) {
   if (!q.available) {
-    return "opacity-30 cursor-not-allowed text-gray-400 border-gray-200";
+    // ใช้ตัวแปรสีเฉพาะของ "ตัวเลือกที่กดไม่ได้" แทน text-gray-400 ตรงๆ เพื่อให้ปรับความเข้ม
+    // ในโหมดสว่างได้แยกจากโหมดมืด (ดู --month-disabled-text ใน style.css)
+    return "opacity-30 cursor-not-allowed text-[var(--month-disabled-text)] border-gray-200";
   }
   if (isQuickActive(q.months)) {
     return "bg-blue-600 text-white border-blue-600 hover:bg-blue-700";
@@ -223,14 +225,16 @@ function isDisabled(m) {
 }
 
 function cellClass(m) {
+  // ใช้ตัวแปรสีเฉพาะของ "ตัวเลือกที่กดไม่ได้" แทน text-gray-400 ตรงๆ (ทั้ง 2 จุดด้านล่าง)
+  // เพื่อให้ปรับความเข้มในโหมดสว่างได้แยกจากโหมดมืด (ดู --month-disabled-text ใน style.css)
   if (!isSelectable(m)) {
-    return "opacity-30 cursor-not-allowed text-gray-400";
+    return "opacity-30 cursor-not-allowed text-[var(--month-disabled-text)]";
   }
   if (props.modelValue.includes(m)) {
     return "bg-blue-600 text-white hover:bg-blue-700";
   }
   if (isDisabled(m)) {
-    return "opacity-40 cursor-not-allowed text-gray-400";
+    return "opacity-40 cursor-not-allowed text-[var(--month-disabled-text)]";
   }
   return "hover:bg-gray-300";
 }

@@ -13,6 +13,15 @@ router.get(
   deviceController.getAll
 );
 
+// ประวัติการย้ายของ "ทุกเครื่อง" พร้อมกัน — ใช้ในหน้ารายงานเพื่อแยกยอดพิมพ์เก่า/ใหม่
+// เมื่อเครื่องมีการย้าย ต้องวางไว้ก่อน "/:id" ไม่งั้น Express จะจับคำว่า "location-history"
+// เป็นค่า :id แทน (ทั้งคู่เป็น path แบบ 1 segment ให้ตรงกับ pattern เดียวกัน)
+router.get(
+  "/location-history",
+  authMiddleware,
+  deviceController.getAllLocationHistory
+);
+
 router.get(
   "/:id",
   authMiddleware,
