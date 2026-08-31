@@ -177,6 +177,31 @@ body {
   background: var(--neutral-400);
 }
 
+/* กล่อง input/select แบบมาตรฐานของทั้งระบบ (border + bg + focus ring เดียวกันหมด)
+   เดิมแต่ละหน้า/component copy style กันเองทีละจุด (บางที่มี focus:border-blue-400
+   transition-colors แบบหน้า Login, บางที่ไม่มีเลยเช่นช่องค้นหาใน DataTable.vue) ทำให้
+   ความรู้สึกตอนกรอกข้อมูลไม่สม่ำเสมอกันทั้งระบบ — รวมไว้ใน utility class เดียวแทน */
+.input-base {
+  width: 100%;
+  border: 1px solid var(--neutral-200);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--neutral-50);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input-base:hover {
+  border-color: var(--neutral-300);
+}
+.input-base:focus {
+  outline: none;
+  border-color: var(--brand-400);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-400) 20%, transparent);
+}
+.input-base:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* โฟกัสให้เห็นชัดตอนกด Tab ไล่ทีละ element (คนใช้คีย์บอร์ด/accessibility) */
 :focus-visible {
   outline: 2px solid var(--brand-400);

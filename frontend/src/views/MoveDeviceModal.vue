@@ -12,6 +12,8 @@
 import { ref, computed, watch } from "vue";
 import api from "../services/api";
 import SearchableSelect from "../components/SearchableSelect.vue";
+import { toastSuccess, toastError } from "../store/toast";
+import { askConfirm } from "../store/confirmDialog";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -188,22 +190,50 @@ watch(
     moveSuccessMsg.value = null;
     loadMasterData();
 
-    showHistory.value = false;
     historyLoaded.value = false;
     historyRows.value = [];
 
     if (assetId !== null && assetId !== undefined) {
       loadAsset(assetId);
       loadCurrentUsage(assetId);
+      // เปิดพาแนลประวัติให้เห็นเลยโดยไม่ต้องกด — ข้อมูลนี้มีผลต่อการตัดสินใจย้าย
+      // (เช่นเคส "ย้ายซ้ำในเดือนเดียวกัน") จึงไม่ควรซ่อนไว้เป็นค่าเริ่มต้น
+      showHistory.value = true;
+      loadHistory(assetId);
     } else {
       form.value = defaultForm();
       serialNumber.value = "";
+      showHistory.value = false;
     }
   },
   { immediate: true }
 );
 
+function nameOf(list, id) {
+  if (!id) return "-";
+  return list.find((item) => Number(item.id) === Number(id))?.name || "-";
+}
+
+// สรุปที่ตั้งใหม่แบบอ่านง่าย ใช้ในกล่องยืนยันก่อนย้ายจริง
+const newLocationSummary = computed(() => {
+  const division = nameOf(divisions.value, form.value.division_id);
+  const department = nameOf(departments.value, form.value.department_id);
+  const building = nameOf(buildings.value, form.value.building_id);
+  const floor = nameOf(floors.value, form.value.floor_id);
+  return `${division} / ${department} — ${building}${floor !== "-" ? " ชั้น " + floor : ""}${form.value.location ? " " + form.value.location : ""}`;
+});
+
 async function submit() {
+  const oldSummary = currentUsage.value
+    ? `${currentUsage.value.division_name || "ไม่ระบุฝ่าย"} / ${currentUsage.value.department_name || "ไม่ระบุแผนก"}`
+    : "ที่ตั้งปัจจุบัน";
+
+  const confirmed = await askConfirm(
+    `ย้ายจาก\n${oldSummary}\nไป\n${newLocationSummary.value}\n\nยอดพิมพ์/รายงานย้อนหลังของเครื่องนี้จะถูกแยกบันทึกตามช่วงที่ตั้ง ยืนยันการย้ายหรือไม่?`,
+    { title: "ยืนยันการย้ายเครื่อง", confirmText: "ย้ายเครื่อง", danger: false }
+  );
+  if (!confirmed) return;
+
   const data = {
     building_id: form.value.building_id ? Number(form.value.building_id) : null,
     floor_id: form.value.floor_id ? Number(form.value.floor_id) : null,
@@ -228,9 +258,12 @@ async function submit() {
     await Promise.all([loadCurrentUsage(props.assetId), loadHistory(props.assetId)]);
     showHistory.value = true;
     moveSuccessMsg.value = "ย้ายเครื่องสำเร็จ — ประวัติการย้ายด้านล่างอัปเดตแล้ว";
+    toastSuccess("ย้ายเครื่องสำเร็จ");
   } catch (err) {
     console.error("Move asset error:", err);
-    formError.value = err.response?.data?.error || "ย้ายเครื่องไม่สำเร็จ";
+    const message = err.response?.data?.error || "ย้ายเครื่องไม่สำเร็จ";
+    formError.value = message;
+    toastError(message);
   } finally {
     saving.value = false;
   }
@@ -265,6 +298,9 @@ function close() {
         <template v-else>
           <!-- ยอดพิมพ์สะสมที่ตำแหน่ง/สังกัดเดิม ก่อนย้าย -->
           <div class="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+            <p class="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1.5">
+              ① ที่ตั้งเดิม (อ่านอย่างเดียว)
+            </p>
             <div v-if="usageLoading" class="text-amber-700">กำลังโหลดยอดพิมพ์ที่เดิม...</div>
             <div v-else-if="!currentUsage" class="text-gray-500">ยังไม่มีประวัติที่ตั้งของเครื่องนี้</div>
             <div v-else>
@@ -282,6 +318,10 @@ function close() {
               </p>
             </div>
           </div>
+
+          <p class="text-xs font-semibold text-[var(--brand-text)] uppercase tracking-wide mb-2">
+            ② เลือกที่ตั้งใหม่
+          </p>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <!-- Building -->
@@ -348,7 +388,15 @@ function close() {
             @click="toggleHistory"
             class="w-full flex items-center justify-between p-3 text-left hover:bg-gray-100"
           >
-            <span class="text-sm font-medium text-gray-700">ประวัติการย้าย (อาคาร/ชั้น/ฝ่าย/แผนก)</span>
+            <span class="text-sm font-medium text-gray-700 flex items-center gap-2">
+              ประวัติการย้าย (อาคาร/ชั้น/ฝ่าย/แผนก)
+              <span
+                v-if="historyLoaded && historyRows.length"
+                class="text-xs font-semibold bg-blue-100 text-[var(--brand-text)] px-1.5 py-0.5 rounded-full"
+              >
+                {{ historyRows.length }} ครั้ง
+              </span>
+            </span>
             <span class="text-xs text-gray-400">{{ showHistory ? "ซ่อน" : "แสดง" }}</span>
           </button>
 

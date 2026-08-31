@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from "vue"
 import api from "../../services/api"
 import DataTable from "../../components/DataTable.vue"
-import { toastError } from "../../store/toast"
+import { toastError, toastSuccess } from "../../store/toast"
 import { askConfirm } from "../../store/confirmDialog"
 
 const contracts = ref([])
@@ -71,6 +71,7 @@ async function submitAdd() {
     await api.post("/contracts", form.value)
     showAddModal.value = false
     await load()
+    toastSuccess("เพิ่มสัญญาสำเร็จ")
   } catch (err) {
     console.error(err)
     formError.value = err.response?.data?.error || "เพิ่มข้อมูลไม่สำเร็จ"
@@ -120,6 +121,7 @@ async function saveContract(id) {
     await api.put(`/contracts/${id}`, editForm.value)
     editingId.value = null
     load()
+    toastSuccess("แก้ไขข้อมูลสำเร็จ")
   } catch (err) {
     console.error(err)
     toastError(err.response?.data?.error || "แก้ไขข้อมูลไม่สำเร็จ")
@@ -138,6 +140,7 @@ async function deleteContract(id) {
   try {
     await api.delete(`/contracts/${id}`)
     load()
+    toastSuccess("ลบข้อมูลสำเร็จ")
   } catch (err) {
     console.error(err)
     toastError("ลบข้อมูลไม่สำเร็จ")

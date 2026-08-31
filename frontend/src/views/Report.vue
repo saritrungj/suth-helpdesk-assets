@@ -317,19 +317,31 @@ function buildDeviceRows(d) {
   const splitRows = periods
     .map((p) => ({ p, months: monthsInPeriod(fyMonths.value, p) }))
     // ช่วงที่ไม่มีเดือนไหนตกอยู่ในปีงบที่กำลังดูอยู่เลย (เช่นย้ายไปมาในปีงบอื่น) ไม่ต้องแสดงแถวเปล่า
-    .filter(({ months }) => months.length)
-    .map(({ p, months }) => devicePeriodRow(d, p, monthly, months));
+    .filter(({ months }) => months.length);
+
+  const rows = splitRows.map(({ p, months }, i) =>
+    devicePeriodRow(d, p, monthly, months, i + 1, splitRows.length)
+  );
 
   // กันเครื่องหายจากรายงาน เผื่อกรณีทุกช่วงประวัติไม่มีเดือนไหนตกอยู่ในปีงบนี้เลย
-  return splitRows.length ? splitRows : [singleDeviceRow(d, monthly)];
+  return rows.length ? rows : [singleDeviceRow(d, monthly)];
 }
 
 function singleDeviceRow(d, monthly) {
   const total = displayMonths.value.reduce((sum, m) => sum + (monthly[m] || 0), 0);
-  return { ...d, _row_key: `${d.id}`, _monthly: monthly, _total: total, _period_label: "" };
+  return {
+    ...d,
+    _row_key: `${d.id}`,
+    _monthly: monthly,
+    _total: total,
+    _period_label: "",
+    _is_moved_group: false,
+    _period_index: 0,
+    _period_count: 1,
+  };
 }
 
-function devicePeriodRow(d, period, monthly, months) {
+function devicePeriodRow(d, period, monthly, months, periodIndex, periodCount) {
   const monthSet = new Set(months);
   const periodMonthly = {};
   for (const m of months) periodMonthly[m] = monthly[m] || 0;
@@ -349,10 +361,35 @@ function devicePeriodRow(d, period, monthly, months) {
     _monthly: periodMonthly,
     _total: total,
     _period_label: formatPeriodRange(period),
+    // ใช้ไฮไลต์กลุ่มแถวเดียวกัน (เครื่องเดียวกันที่แตกเป็นหลายแถวจากการย้าย) — เลขคู่/คี่ของ
+    // "ลำดับเครื่องที่เคยย้าย" สลับสีพื้นกัน กันสับสนว่าเป็นคนละเครื่อง โดยเฉพาะตอน sort/filter
+    _is_moved_group: true,
+    _period_index: periodIndex,
+    _period_count: periodCount,
   };
 }
 
 const reportRows = computed(() => filteredDevices.value.flatMap((d) => buildDeviceRows(d)));
+
+// แถวที่ "กางดูประวัติเต็ม" อยู่ตอนนี้ (คลิกปุ่มเล็กๆ ที่คอลัมน์ Serial/ช่วงที่ตั้งเพื่อดูได้จากตารางเลย
+// ไม่ต้องเปิด popup ย้ายเครื่องแยก) — เก็บเป็น Set ของ device id รองรับกางได้หลายเครื่องพร้อมกัน
+const expandedDeviceIds = ref(new Set());
+
+function toggleHistoryDetail(deviceId) {
+  const next = new Set(expandedDeviceIds.value);
+  if (next.has(deviceId)) next.delete(deviceId);
+  else next.add(deviceId);
+  expandedDeviceIds.value = next;
+}
+
+// ไฮไลต์พื้นหลังอ่อนๆ ให้แถวที่แตกออกมาจากเครื่องเดียวกัน (ย้ายที่ตั้งระหว่างปีงบ) กันสับสน
+// ว่าเป็นคนละเครื่อง — แถวแรกของกลุ่มมีเส้นขอบบนหนาขึ้นเล็กน้อยไว้แบ่งจากเครื่องก่อนหน้า
+function reportRowClass(row) {
+  if (!row._is_moved_group) return "";
+  return row._period_index === 1
+    ? "bg-blue-50/60 border-t-2 border-t-blue-200"
+    : "bg-blue-50/60";
+}
 
 // คอลัมน์ของ DataTable — คอลัมน์ข้อมูลเครื่อง + 1 คอลัมน์ต่อเดือนที่เลือกแสดง + คอลัมน์รวม
 const columns = computed(() => {
@@ -462,87 +499,96 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Filter เจาะจง — สถานะการกรอก/อาคาร/ชั้น/ฝ่าย/แผนก/ยี่ห้อ/สถานะเครื่อง
-           "สถานะการกรอก" ขึ้นก่อน เหมือนหน้า "บันทึกยอดพิมพ์รายเดือน" เพื่อให้เรียงตัวกรองสม่ำเสมอ
-           ระหว่างหน้าที่ใช้ชุด filter เดียวกัน -->
-      <div class="flex flex-wrap items-end gap-3 mb-4 pt-4 border-t">
+      <!-- Filter เจาะจง — จัดเป็นหมวดหมู่ "สถานะ" กับ "ที่ตั้ง/สังกัด" แยกกันชัดเจน
+           แทนที่จะเรียงยาวแถวเดียว 7 ตัวกรอง ซึ่งบนจอเล็ก/แท็บเล็ตจะพันกันดูรก -->
+      <div class="pt-4 border-t space-y-3 mb-4">
         <div>
-          <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ displayYearBE }})</label>
-          <select v-model="fillStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
-            <option value="">ทั้งหมด</option>
-            <option value="done">กรอกครบ 12 เดือน</option>
-            <option value="partial">กรอกบางส่วน</option>
-            <option value="none">ยังไม่ได้กรอกเลย</option>
-          </select>
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">สถานะ</p>
+          <div class="flex flex-wrap items-end gap-3">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">สถานะการกรอก (ปีงบ {{ displayYearBE }})</label>
+              <select v-model="fillStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
+                <option value="">ทั้งหมด</option>
+                <option value="done">กรอกครบ 12 เดือน</option>
+                <option value="partial">กรอกบางส่วน</option>
+                <option value="none">ยังไม่ได้กรอกเลย</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">สถานะเครื่อง</label>
+              <select v-model="deviceStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
+                <option value="">ทุกสถานะ</option>
+                <option value="active">ใช้งานอยู่</option>
+                <option value="repair">ซ่อมบำรุง</option>
+                <option value="retired">ปลดระวาง</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">ยี่ห้อ</label>
+              <SearchableSelect
+                v-model="brandFilter"
+                :options="brandFilterOptions"
+                placeholder="ทุกยี่ห้อ"
+                search-placeholder="พิมพ์ชื่อยี่ห้อ..."
+              />
+            </div>
+          </div>
         </div>
 
         <div>
-          <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
-          <SearchableSelect
-            v-model="buildingFilter"
-            :options="buildingFilterOptions"
-            placeholder="ทุกอาคาร"
-            search-placeholder="พิมพ์ชื่ออาคาร..."
-          />
-        </div>
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">ที่ตั้ง / สังกัด</p>
+          <div class="flex flex-wrap items-end gap-3">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">อาคาร</label>
+              <SearchableSelect
+                v-model="buildingFilter"
+                :options="buildingFilterOptions"
+                placeholder="ทุกอาคาร"
+                search-placeholder="พิมพ์ชื่ออาคาร..."
+              />
+            </div>
 
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">ชั้น</label>
-          <SearchableSelect
-            v-model="floorFilter"
-            :options="floorFilterOptions"
-            placeholder="ทุกชั้น"
-            search-placeholder="พิมพ์ชื่อชั้น..."
-          />
-        </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">ชั้น</label>
+              <SearchableSelect
+                v-model="floorFilter"
+                :options="floorFilterOptions"
+                placeholder="ทุกชั้น"
+                search-placeholder="พิมพ์ชื่อชั้น..."
+              />
+            </div>
 
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">ฝ่าย</label>
-          <SearchableSelect
-            v-model="divisionFilter"
-            :options="divisionFilterOptions"
-            placeholder="ทุกฝ่าย"
-            search-placeholder="พิมพ์ชื่อฝ่าย..."
-          />
-        </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">ฝ่าย</label>
+              <SearchableSelect
+                v-model="divisionFilter"
+                :options="divisionFilterOptions"
+                placeholder="ทุกฝ่าย"
+                search-placeholder="พิมพ์ชื่อฝ่าย..."
+              />
+            </div>
 
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">แผนก</label>
-          <SearchableSelect
-            v-model="departmentFilter"
-            :options="departmentFilterOptions"
-            placeholder="ทุกแผนก"
-            search-placeholder="พิมพ์ชื่อแผนก..."
-          />
-        </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">แผนก</label>
+              <SearchableSelect
+                v-model="departmentFilter"
+                :options="departmentFilterOptions"
+                placeholder="ทุกแผนก"
+                search-placeholder="พิมพ์ชื่อแผนก..."
+              />
+            </div>
 
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">ยี่ห้อ</label>
-          <SearchableSelect
-            v-model="brandFilter"
-            :options="brandFilterOptions"
-            placeholder="ทุกยี่ห้อ"
-            search-placeholder="พิมพ์ชื่อยี่ห้อ..."
-          />
+            <button
+              type="button"
+              @click="resetFilters"
+              class="text-sm text-red-500 hover:text-gray-700 underline whitespace-nowrap"
+            >
+              ล้างตัวกรองทั้งหมด
+            </button>
+          </div>
         </div>
-
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">สถานะเครื่อง</label>
-          <select v-model="deviceStatusFilter" class="border rounded p-2 text-sm bg-gray-50">
-            <option value="">ทุกสถานะ</option>
-            <option value="active">ใช้งานอยู่</option>
-            <option value="repair">ซ่อมบำรุง</option>
-            <option value="retired">ปลดระวาง</option>
-          </select>
-        </div>
-
-        <button
-          type="button"
-          @click="resetFilters"
-          class="text-sm text-red-500 hover:text-gray-700 underline whitespace-nowrap"
-        >
-          ล้างตัวกรองทั้งหมด
-        </button>
       </div>
 
       <div
@@ -569,15 +615,68 @@ onMounted(async () => {
           search-placeholder="ค้นหาทุกคอลัมน์..."
           empty-text="ไม่มีข้อมูลเครื่องพิมพ์"
           max-height="65vh"
+          :row-class="reportRowClass"
         >
           <template #cell-serial_number="{ row }">
-            <span class="font-medium">{{ row.serial_number }}</span>
+            <span class="inline-flex items-center gap-1.5">
+              <!-- แถวที่ 2+ ของกลุ่มเดียวกัน (ช่วงหลังการย้าย) เยื้องเข้า + ไอคอนบอกว่าเป็นช่วงต่อของแถวบน -->
+              <span v-if="row._is_moved_group && row._period_index > 1" class="text-blue-300 pl-2" title="ช่วงต่อของเครื่องเดียวกับแถวด้านบน">↳</span>
+              <span class="font-medium">{{ row.serial_number }}</span>
+              <span
+                v-if="row._is_moved_group"
+                class="text-[11px] font-medium bg-blue-100 text-[var(--brand-text)] px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                :title="`เครื่องนี้ย้ายที่ตั้งระหว่างปีงบ — แตกเป็น ${row._period_count} แถว`"
+              >
+                🔄 ย้ายแล้ว {{ row._period_index }}/{{ row._period_count }}
+              </span>
+            </span>
+          </template>
+
+          <template #cell-period_label="{ row }">
+            <span v-if="!row._is_moved_group" class="text-gray-400">-</span>
+            <div v-else class="flex items-center gap-1.5">
+              <span>{{ row._period_label }}</span>
+              <button
+                type="button"
+                class="text-[var(--brand-text)] hover:underline text-xs whitespace-nowrap shrink-0"
+                @click="toggleHistoryDetail(row.id)"
+                title="ดูประวัติการย้ายเต็มของเครื่องนี้"
+              >
+                {{ expandedDeviceIds.has(row.id) ? "ซ่อนประวัติ" : "ดูประวัติ" }}
+              </button>
+            </div>
           </template>
 
           <template #cell-total_pages="{ value }">
             <span class="font-semibold">{{ Number(value).toLocaleString() }}</span>
           </template>
         </DataTable>
+
+        <!-- ประวัติการย้ายแบบเต็ม ของเครื่องที่กด "ดูประวัติ" ไว้ — ให้ดูได้จากในหน้ารายงานเลย
+             ไม่ต้องเปิด popup ย้ายเครื่องแยกต่างหากแค่เพื่อดูว่าทำไมเครื่องถึงแตกเป็นหลายแถว -->
+        <div
+          v-for="deviceId in [...expandedDeviceIds]"
+          :key="`history-${deviceId}`"
+          class="mt-3 border rounded-lg bg-blue-50/40 p-3 text-sm"
+        >
+          <p class="font-medium text-gray-700 mb-2">
+            ประวัติการย้ายเต็ม — {{ devices.find((d) => d.id === deviceId)?.serial_number }}
+          </p>
+          <div class="space-y-1.5">
+            <div
+              v-for="period in devicePeriods[deviceId] || []"
+              :key="period.id"
+              class="flex flex-wrap items-center gap-x-2 text-gray-600"
+            >
+              <span class="text-xs text-gray-400 whitespace-nowrap">{{ formatPeriodRange(period) }}</span>
+              <span>—</span>
+              <span>{{ period.division_name || "ไม่ระบุฝ่าย" }} / {{ period.department_name || "ไม่ระบุแผนก" }}</span>
+              <span class="text-gray-400">
+                ({{ period.building_name || "-" }}{{ period.floor_name ? " ชั้น " + period.floor_name : "" }})
+              </span>
+            </div>
+          </div>
+        </div>
       </template>
     </div>
   </div>

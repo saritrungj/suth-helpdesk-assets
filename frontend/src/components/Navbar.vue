@@ -17,21 +17,27 @@
         IT
       </span>
       <h2 class="text-base font-semibold text-gray-800 truncate">
-        ระบบจัดการทรัพย์สิน IT โรงพยาบาล
+        <!-- จอเล็กมาก (< sm) ตัดเหลือชื่อย่อ กันแถวนี้ต้องแบ่งหลายบรรทัดร่วมกับปุ่ม/ตัวควบคุมฝั่งขวา -->
+        <span class="sm:hidden">ระบบทรัพย์สิน IT</span>
+        <span class="hidden sm:inline">ระบบจัดการทรัพย์สิน IT โรงพยาบาล</span>
       </h2>
     </div>
 
-    <div class="flex items-center gap-3 flex-wrap">
+    <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
 
-      <!-- ปีงบ (Global) — ทุกหน้า subscribe ค่านี้ร่วมกัน -->
-      <div class="flex items-center gap-2">
-        <label class="text-sm text-gray-500 hidden md:inline">ปีงบ</label>
+      <!-- ปีงบ (Global) — ทุกหน้า subscribe ค่านี้ร่วมกัน ค่านี้กระทบทุกหน้าที่เปิดอยู่
+           จึงทำเป็น badge เน้นสีแทน dropdown เรียบๆ ให้เห็นชัดว่ากำลังดูข้อมูลปีไหนอยู่ -->
+      <div
+        class="flex items-center gap-1.5 rounded-lg pl-2.5 pr-1 py-1 border"
+        style="background-color: color-mix(in srgb, var(--brand-500) 12%, transparent); border-color: color-mix(in srgb, var(--brand-500) 35%, transparent);"
+      >
+        <span class="text-xs font-semibold text-[var(--brand-text)] whitespace-nowrap">ปีงบ</span>
 
         <select
           v-if="fiscalYearState.list.length"
           :value="fiscalYearState.activeId ?? ''"
           @change="setActiveFiscalYear(Number($event.target.value))"
-          class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm bg-gray-100 hover:border-gray-300 transition-colors"
+          class="border-0 bg-transparent rounded-md px-1.5 py-1 text-sm font-semibold text-[var(--brand-text)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-400)] cursor-pointer"
         >
           <option
             v-for="fy in fiscalYearState.list"
@@ -42,20 +48,21 @@
           </option>
         </select>
 
-        <span v-else-if="fiscalYearState.loading" class="text-sm text-gray-400">
-          กำลังโหลดปีงบ...
+        <span v-else-if="fiscalYearState.loading" class="text-sm text-gray-400 px-1.5 py-1">
+          กำลังโหลด...
         </span>
 
         <RouterLink
           v-else
           to="/admin/fiscal-years"
-          class="text-sm text-orange-600 hover:underline flex items-center gap-1"
+          class="text-sm text-orange-600 hover:underline flex items-center gap-1 px-1.5 py-1"
           title="ยังไม่มีปีงบในระบบ กดเพื่อไปสร้างปีงบใหม่"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0">
             <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
           </svg>
-          ยังไม่มีปีงบ — กดเพื่อสร้าง
+          <span class="hidden sm:inline">ยังไม่มีปีงบ — กดเพื่อสร้าง</span>
+          <span class="sm:hidden">สร้างปีงบ</span>
         </RouterLink>
       </div>
 
@@ -71,11 +78,16 @@
         </div>
       </div>
 
+      <!-- จอเล็ก: ปุ่ม logout เหลือแค่ไอคอน กันแถวควบคุมด้านขวาล้นจนขึ้นหลายบรรทัด -->
       <button
         @click="logout"
-        class="text-sm text-red-700 border border-red-200 px-3.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+        class="text-sm text-red-700 border border-red-200 rounded-lg hover:bg-red-50 transition-colors p-2 sm:px-3.5 sm:py-1.5"
+        title="Logout"
       >
-        Logout
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 sm:hidden">
+          <path d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
+        </svg>
+        <span class="hidden sm:inline">Logout</span>
       </button>
     </div>
   </header>

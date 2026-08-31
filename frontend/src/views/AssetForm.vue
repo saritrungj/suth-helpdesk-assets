@@ -21,6 +21,7 @@
 import { ref, computed, watch } from "vue";
 import api from "../services/api";
 import SearchableSelect from "../components/SearchableSelect.vue";
+import { toastSuccess, toastError } from "../store/toast";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -262,10 +263,13 @@ async function submit() {
     }
 
     emit("saved", res.data);
+    toastSuccess(isEdit.value ? "แก้ไขข้อมูลทรัพย์สินสำเร็จ" : "เพิ่มทรัพย์สินสำเร็จ");
     close();
   } catch (err) {
     console.error("Save asset error:", err);
-    formError.value = err.response?.data?.error || "บันทึกข้อมูลไม่สำเร็จ";
+    const message = err.response?.data?.error || "บันทึกข้อมูลไม่สำเร็จ";
+    formError.value = message;
+    toastError(message);
   } finally {
     saving.value = false;
   }

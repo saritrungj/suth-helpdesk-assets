@@ -32,6 +32,9 @@ const props = defineProps({
   emptyText: { type: String, default: "ไม่พบข้อมูล" },
   showExport: { type: Boolean, default: true },
   maxHeight: { type: String, default: "" }, // เช่น "70vh" ถ้าอยากให้ header sticky ภายในกล่อง scroll ของตัวเอง
+  // ฟังก์ชัน (row) => string คืน class เพิ่มเติมให้แถวนั้นๆ — ใช้กรณีอยากไฮไลต์กลุ่มแถว
+  // (เช่น Report.vue ใช้ไฮไลต์แถวที่แตกมาจากเครื่องเดียวกันตอนย้ายที่ตั้ง)
+  rowClass: { type: Function, default: null },
 });
 
 const search = ref("");
@@ -118,6 +121,30 @@ watch(totalPages, (tp) => {
   if (currentPage.value > tp) currentPage.value = tp;
 });
 
+// หน้าที่จะโชว์เป็นปุ่มตัวเลขได้โดยตรง — เอาแค่หน้าปัจจุบัน ±2 หน้า กัน pagination ยาวเกินไปเวลาข้อมูลเยอะๆ
+// (null ในลิสต์ = จุดที่ควรโชว์ "…" แทนช่วงที่ข้ามไป)
+const pageNumbers = computed(() => {
+  const total = totalPages.value;
+  const current = currentPage.value;
+  const delta = 2;
+  const pages = [];
+
+  for (let p = 1; p <= total; p++) {
+    if (p === 1 || p === total || (p >= current - delta && p <= current + delta)) {
+      pages.push(p);
+    }
+  }
+
+  const withEllipsis = [];
+  let prev = null;
+  for (const p of pages) {
+    if (prev !== null && p - prev > 1) withEllipsis.push(null);
+    withEllipsis.push(p);
+    prev = p;
+  }
+  return withEllipsis;
+});
+
 function sortState(col) {
   if (col.sortable === false) return "none";
   if (sortKey.value !== col.key) return "none";
@@ -163,7 +190,7 @@ function exportExcel() {
         v-model="search"
         type="text"
         :placeholder="searchPlaceholder"
-        class="border rounded px-3 py-2 flex-1 min-w-[200px] bg-gray-50"
+        class="input-base flex-1 min-w-[200px]"
       />
 
       <slot name="toolbar-extra" />
@@ -188,9 +215,9 @@ function exportExcel() {
       <span v-if="search"> (จากทั้งหมด {{ rows.length.toLocaleString() }})</span>
     </div>
 
-    <!-- ตาราง -->
+    <!-- ตาราง (จอ >= sm) -->
     <div
-      class="overflow-auto border rounded-lg bg-gray-50"
+      class="hidden sm:block overflow-auto border rounded-lg bg-gray-50"
       :style="maxHeight ? { maxHeight } : {}"
     >
       <table class="w-full text-sm border-collapse min-w-max">
@@ -226,7 +253,12 @@ function exportExcel() {
             </td>
           </tr>
 
-          <tr v-for="row in paginatedRows" :key="row[rowKey]" class="hover:bg-gray-50 border-b last:border-b-0">
+          <tr
+            v-for="row in paginatedRows"
+            :key="row[rowKey]"
+            class="hover:bg-gray-50 border-b last:border-b-0"
+            :class="rowClass ? rowClass(row) : ''"
+          >
             <td
               v-for="col in columns"
               :key="col.key"
@@ -245,36 +277,87 @@ function exportExcel() {
       </table>
     </div>
 
+    <!-- Card view (จอมือถือ < sm) — ตารางที่คอลัมน์เยอะเลื่อนดูลำบากบนจอเล็ก
+         แปลงแต่ละแถวเป็นการ์ด label: value แนวตั้งแทน ใช้ cell slot เดียวกับตาราง -->
+    <div v-if="!paginatedRows.length" class="sm:hidden border rounded-lg bg-gray-50 p-10 text-center text-gray-400">
+      <slot name="empty" :search="search">
+        <span>{{ search ? `ไม่พบข้อมูลที่ตรงกับ "${search}"` : emptyText }}</span>
+      </slot>
+    </div>
+
+    <div v-else class="sm:hidden space-y-3">
+      <div
+        v-for="row in paginatedRows"
+        :key="row[rowKey]"
+        class="border rounded-lg bg-gray-50 p-3"
+        :class="rowClass ? rowClass(row) : ''"
+      >
+        <dl class="space-y-1.5">
+          <div
+            v-for="col in columns"
+            :key="col.key"
+            class="flex items-baseline justify-between gap-3 text-sm"
+          >
+            <dt class="text-gray-500 shrink-0">{{ col.label }}</dt>
+            <dd class="text-right min-w-0">
+              <slot :name="`cell-${col.key}`" :row="row" :value="cellValue(row, col)">
+                {{ cellValue(row, col) ?? "-" }}
+              </slot>
+            </dd>
+          </div>
+        </dl>
+        <div v-if="$slots.actions" class="mt-2.5 pt-2.5 border-t flex justify-end gap-2">
+          <slot name="actions" :row="row" />
+        </div>
+      </div>
+    </div>
+
     <!-- Pagination -->
-    <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 mt-4">
+    <div v-if="totalPages > 1" class="flex items-center justify-center flex-wrap gap-1.5 mt-4">
       <button
-        class="border px-3 py-1 rounded disabled:opacity-40"
+        class="border px-2.5 py-1 rounded text-sm disabled:opacity-40 hover:bg-gray-100"
         :disabled="currentPage === 1"
         @click="currentPage = 1"
+        title="หน้าแรก"
       >
         « แรก
       </button>
       <button
-        class="border px-3 py-1 rounded disabled:opacity-40"
+        class="border px-2.5 py-1 rounded text-sm disabled:opacity-40 hover:bg-gray-100"
         :disabled="currentPage === 1"
         @click="currentPage--"
+        title="ก่อนหน้า"
       >
-        ก่อนหน้า
+        ‹
       </button>
 
-      <span class="text-sm text-gray-600 px-2">หน้า {{ currentPage }} / {{ totalPages }}</span>
+      <template v-for="(p, i) in pageNumbers" :key="i">
+        <span v-if="p === null" class="px-1 text-gray-400 select-none">…</span>
+        <button
+          v-else
+          class="min-w-[2rem] px-2 py-1 rounded text-sm border"
+          :class="p === currentPage
+            ? 'bg-blue-600 border-blue-600 text-white font-semibold'
+            : 'hover:bg-gray-100'"
+          @click="currentPage = p"
+        >
+          {{ p }}
+        </button>
+      </template>
 
       <button
-        class="border px-3 py-1 rounded disabled:opacity-40"
+        class="border px-2.5 py-1 rounded text-sm disabled:opacity-40 hover:bg-gray-100"
         :disabled="currentPage === totalPages"
         @click="currentPage++"
+        title="ถัดไป"
       >
-        ถัดไป
+        ›
       </button>
       <button
-        class="border px-3 py-1 rounded disabled:opacity-40"
+        class="border px-2.5 py-1 rounded text-sm disabled:opacity-40 hover:bg-gray-100"
         :disabled="currentPage === totalPages"
         @click="currentPage = totalPages"
+        title="หน้าสุดท้าย"
       >
         สุดท้าย »
       </button>

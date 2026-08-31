@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from "vue"
 import api from "../../services/api"
 import DataTable from "../../components/DataTable.vue"
-import { toastError } from "../../store/toast"
+import { toastError, toastSuccess } from "../../store/toast"
 import { askConfirm } from "../../store/confirmDialog"
 
 const divisions = ref([])
@@ -57,6 +57,7 @@ async function submitAdd() {
     await api.post("/divisions", { name: form.value.name.trim() })
     showAddModal.value = false
     await load()
+    toastSuccess("เพิ่มฝ่ายสำเร็จ")
   } catch (err) {
     console.error(err)
     formError.value = err.response?.data?.error || "เพิ่มข้อมูลไม่สำเร็จ"
@@ -93,6 +94,7 @@ async function saveDivision(id) {
     await api.put(`/divisions/${id}`, { name: editName.value })
     editingId.value = null
     editName.value = ""
+    toastSuccess("แก้ไขข้อมูลสำเร็จ")
     load()
   } catch (err) {
     console.error(err)
@@ -106,6 +108,7 @@ async function deleteDivision(id) {
   try {
     await api.delete(`/divisions/${id}`)
     load()
+    toastSuccess("ลบข้อมูลสำเร็จ")
   } catch (err) {
     console.error(err)
     toastError("ลบข้อมูลไม่สำเร็จ")

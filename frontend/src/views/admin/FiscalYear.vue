@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from "vue"
 import api from "../../services/api"
 import DataTable from "../../components/DataTable.vue"
-import { toastError } from "../../store/toast"
+import { toastError, toastSuccess } from "../../store/toast"
 import { askConfirm } from "../../store/confirmDialog"
 import { fiscalYearState, loadFiscalYears, refreshFiscalYears } from "../../store/fiscalYear"
 
@@ -61,6 +61,7 @@ async function submitAdd() {
     await api.post("/fiscal-years", { year: form.value.year.trim() })
     showAddModal.value = false
     await refreshFiscalYears() // แทน load() เดิม — อัปเดต fiscalYearState กลาง ทุกหน้าเห็นทันที ไม่ต้อง refresh เอง
+    toastSuccess("เพิ่มปีงบประมาณสำเร็จ")
   } catch (err) {
     console.error(err)
     formError.value = err.response?.data?.error || "เพิ่มข้อมูลไม่สำเร็จ"
@@ -84,6 +85,7 @@ async function saveFiscalYear(id) {
     await api.put(`/fiscal-years/${id}`, { year: editYear.value })
     editingId.value = null
     editYear.value = ""
+    toastSuccess("แก้ไขข้อมูลสำเร็จ")
     await refreshFiscalYears()
   } catch (err) {
     console.error(err)
@@ -97,6 +99,7 @@ async function deleteFiscalYear(id) {
   try {
     await api.delete(`/fiscal-years/${id}`)
     await refreshFiscalYears()
+    toastSuccess("ลบข้อมูลสำเร็จ")
   } catch (err) {
     console.error(err)
     toastError("ลบข้อมูลไม่สำเร็จ")
