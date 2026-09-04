@@ -1,61 +1,48 @@
 # Repository Guidelines
 
-Hospital IT asset-management app: Express/MySQL API, Vue/Vite client, SQL scripts, and handoff/import docs.
+ระบบ Hospital IT asset management ประกอบด้วย Express/MySQL API, Vue/Vite client, SQL scripts และเอกสารปฏิบัติการ
 
-## Project Structure
+## เอกสารอ้างอิง
 
-- `backend/` — CommonJS Express API: endpoints in `routes/`, request logic in `controllers/`, auth checks in `middlewares/`, and shared calculations in `utils/`.
-- `frontend/` — Vue 3 SPA: screens in `src/views/`, reusable UI in `src/components/`, state in `src/store/`, HTTP access in `src/services/api.js`, navigation in `src/router/`, and static files in `public/` or `src/assets/`.
-- `database/` — `schema.sql`, migrations, and `seed_dummy_data.sql`.
-- `docs/` — handoff notes and sample import files.
+- เมื่อแก้ feature, domain rule, report calculation, role หรือ API boundary ให้อ่าน `docs/PROJECT.md`
+- เมื่อแก้ environment, schema, migration, seed, import หรือ deployment ให้อ่าน `docs/OPERATIONS.md`
+- ใช้ `README.md` เป็น landing page: ภาพรวมสั้น Quick Start และดัชนีไปยังเอกสารหลัก
 
-## Build, Test, and Development Commands
+รายละเอียดเชิงลึกหรือข้อมูลที่เปลี่ยนบ่อยต้องมี source of truth แห่งเดียว README สรุปได้แต่ต้องลิงก์ไปยังบ้านหลัก อ้างด้วยลิงก์แทนการคัดลอกซ้ำ และเก็บรายละเอียดที่อ่านตรงจาก code/config ได้ง่ายไว้ใน code/config
 
-Run each app from its own directory:
+## โครงสร้างโปรเจกต์
 
-```sh
-cd backend
-npm install
-npm run dev       # API with nodemon at http://localhost:3000
-```
+- `backend/` — CommonJS Express API; routes, controllers, middleware และ shared utilities
+- `frontend/` — Vue 3 SPA; views, components, stores, router และ API client
+- `database/` — schema สำหรับฐานข้อมูลใหม่, ordered migrations สำหรับฐานข้อมูลเดิม และ seed
+- `docs/` — ภาพรวมระบบและคู่มือปฏิบัติการ
 
-In another shell:
+ใช้ indentation 2 spaces Backend ใช้ CommonJS และ semicolon ส่วน Frontend ใช้ ES modules, Vue `<script setup>` และ Tailwind classes ตั้งชื่อ Vue component แบบ PascalCase และ JavaScript identifier แบบ camelCase โดยยึดรูปแบบไฟล์ข้างเคียง
 
-```sh
-cd frontend
-npm install
-npm run dev       # Vite client at http://localhost:5173
-npm run build     # Production bundle
-npm run preview   # Serve the built bundle locally
-```
+## Workflow
 
-Copy `.env.example` to `backend/.env`. From the repository root, run `mysql -u root -p your_database < database/schema.sql`, apply migrations in order, and use `database/seed_dummy_data.sql` for data.
+1. เริ่ม development task จาก GitHub Issue และ dedicated branch ที่เชื่อมกับ Issue เสมอ
+2. ตรวจ branch และ `git status` ก่อนแก้ไฟล์ ถ้าอยู่บน `main` ให้หยุดและแจ้งผู้ใช้
+3. อ่าน source ที่เกี่ยวข้อง วิเคราะห์ และเสนอแผนก่อนแก้
+4. ทำเฉพาะ Issue scope และรักษาการเปลี่ยนแปลงเดิมของผู้ใช้
+5. ตรวจ `git diff` และรัน checks ที่สัมพันธ์กับความเสี่ยงก่อนส่งมอบ
+6. สรุปไฟล์ที่เปลี่ยน ผลตรวจ และความเสี่ยงที่เหลือ
 
-## Coding Style & Naming Conventions
+ต้องได้รับคำสั่งชัดเจนก่อน commit, push, merge, delete branch, deploy หรือเปลี่ยน production และต้องขออนุมัติก่อนเปลี่ยน schema/migration, auth/security, secrets หรือทำ destructive operation
 
-Use two-space indentation. Backend uses CommonJS and semicolons; frontend uses ES modules, Vue `<script setup>`, and Tailwind classes. Name Vue components in PascalCase (`MonthPicker.vue`) and JavaScript variables/functions in camelCase. No formatter or linter is configured; match adjacent files.
+เมื่อผู้ใช้อนุญาตให้ commit ให้ใช้ imperative Conventional Commit subject เช่น `docs: simplify project documentation` ส่วน PR ต้องระบุ Issue ต้นทาง การเปลี่ยนแปลง checks ที่รัน ลำดับ migration เมื่อเกี่ยวข้อง และ screenshot สำหรับงาน UI
 
-## Testing Guidelines
+สำหรับ review request ให้ review เท่านั้น แก้ไฟล์เมื่อผู้ใช้ร้องขอโดยตรง
 
-No automated test framework or coverage threshold is configured; backend `npm test` is a placeholder. Run `npm run build` in `frontend` and smoke-test `GET /` plus affected authenticated API flows with the backend and seeded database. For database changes, test a fresh schema and migration path, including Thai fiscal-year boundaries. New tests should sit near the target module and use `*.test.js` or `*.spec.js`.
+## การตรวจสอบ
 
-## Commit & Pull Request Guidelines
+- เลือก checks ตาม `docs/OPERATIONS.md` ให้สัมพันธ์กับความเสี่ยงของ diff
+- Backend change ต้องตรวจ health check และ authenticated API flow ที่ได้รับผลกระทบ
+- Database change ต้องทดสอบ fresh schema และ migration path ที่เกี่ยวข้อง โดยเฉพาะขอบเขตปีงบ ต.ค.–ก.ย.
+- Automated tests ใหม่ให้อยู่ใกล้ module เป้าหมายและใช้ชื่อ `*.test.js` หรือ `*.spec.js`
 
-Recent commits include `fix: add fiscal year ranges to seed data` and generic “update latest changes”. Prefer imperative Conventional Commit subjects (`feat:`, `fix:`, `docs:`, `db:`). PRs should explain behavior/schema changes, list commands, migration order, originating GitHub Issue, and relevant UI screenshots.
+รายงานสิ่งที่ไม่ได้ทดสอบทุกครั้ง
 
-## Security & Configuration
+## ความปลอดภัย
 
-Never commit `.env`, credentials, tokens, or production data. Keep MySQL credentials and `JWT_SECRET` in environment variables, use a strong local secret, and review CSV/XLSX imports before loading. Treat migrations as ordered, reviewed changes.
-
-## Team Workflow
-
-- Two developers; AI-assisted workflow.
-- Start every development task from a GitHub Issue and dedicated branch linked to it; never edit or commit on `main`.
-- Before editing, check the branch and `git status`; on `main`, stop and notify the user.
-- Read relevant context, analyze the task, and propose a plan before editing.
-- Stay within the Issue scope; do not fix unrelated code.
-- Before committing, inspect `git diff` and run relevant tests/checks; report anything untested.
-- Do not commit, push, merge, delete branches, deploy, or change production without explicit user instruction.
-- Get approval before schema/migration, auth/security, secrets, destructive-operation, or production work.
-- Summarize changed files, test results, and remaining risks.
-- For review requests, review only; edit files only when explicitly asked.
+เก็บ MySQL credentials และ `JWT_SECRET` ใน environment variables ใช้ secret ที่แข็งแรง ตรวจ CSV/XLSX ก่อน import และถือว่า migration เป็นการเปลี่ยนแปลงแบบมีลำดับที่ต้อง review

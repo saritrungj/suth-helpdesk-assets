@@ -1,66 +1,58 @@
-# Fix: Print Usage / ค่าใช้จ่ายรายเดือน ไม่ตรงตามปีงบ
+# SUTH Helpdesk Assets
 
-## สาเหตุ (root cause)
+ระบบเว็บภายในสำหรับบริหารทรัพย์สิน IT ของโรงพยาบาล โดยเน้นทะเบียนเครื่องพิมพ์ สัญญา ยอดพิมพ์รายเดือน และค่าใช้จ่ายตามปีงบประมาณ
 
-1. **`backend/routes/expense.js`** — endpoint `GET /api/expense/:fiscal_year_id`
-   ดึงยอดพิมพ์รายเดือน (`print_transactions`) โดย filter แค่ `device_id`
-   ไม่มีการกรองช่วงเดือนตามปีงบเลย ทำให้เครื่องที่มีประวัติข้ามปีงบ (เช่น ย้าย
-   สัญญา) จะโชว์ยอดพิมพ์/ค่าใช้จ่ายของ**ทุกปีงบ**ปนกันมา ไม่ว่าจะเลือกปีงบไหน
+## ความสามารถหลัก
 
-2. **ตาราง `fiscal_year`** ไม่เคยมีคอลัมน์บอกว่าปีงบครอบคลุมเดือนไหนบ้าง —
-   ฝั่ง frontend (`frontend/src/store/fiscalYear.js`) เลย "เดา" เอาเองว่าปีงบ
-   ตรงกับปีปฏิทิน (ม.ค.–ธ.ค.) ทั้งที่ปีงบราชการไทยจริงคือ **1 ต.ค. – 30 ก.ย.**
-   (คร่อม 2 ปีปฏิทิน) ทำให้ตัวเลือกเดือนใน Dashboard / หน้าบันทึกยอดพิมพ์ผิด
-   ตั้งแต่ต้นทาง แม้ backend จะกรองถูกก็ตาม
+- จัดการทะเบียนอุปกรณ์ ตำแหน่ง หน่วยงาน สถานะ และประวัติการย้าย
+- จัดการข้อมูลอ้างอิง สัญญา และปีงบประมาณ
+- บันทึกหรือนำเข้ายอดพิมพ์รายเดือนจาก CSV/Excel
+- แสดง Dashboard ค่าใช้จ่าย รายงานตามอาคาร/หน่วยงาน และการเปรียบเทียบรายเดือน
+- ควบคุมการเข้าถึงด้วย JWT และบทบาท `admin`, `staff`, `viewer`
 
-## แนวทางแก้
+## เทคโนโลยี
 
-- เพิ่มคอลัมน์ `start_month` / `end_month` (รูปแบบ `"YYYY-MM"`) ในตาราง
-  `fiscal_year` เป็น single source of truth ของช่วงเดือน — คำนวณอัตโนมัติจาก
-  เลขปีงบ พ.ศ. ด้วยกฎ ต.ค.–ก.ย. (`backend/utils/fiscalYear.js`)
-- แก้ query ทุกจุดที่เคยดึงยอดพิมพ์ตาม "ปี" ให้กรองด้วยช่วงเดือนจริงของปีงบแทน
-- แก้ frontend ให้สร้างรายการเดือน (MonthPicker, ตารางกรอกยอดพิมพ์ 12 เดือน,
-  ตัวกรอง Dashboard) จากช่วง ต.ค.–ก.ย. จริง แทนการวนลูป ม.ค.–ธ.ค. ปีเดียว
+- Backend: Node.js, CommonJS, Express และ MySQL
+- Frontend: Vue 3, Vite, Tailwind CSS และ Chart.js
+- Database: MySQL schema, ordered migrations และข้อมูลจำลอง
 
-## ไฟล์ที่แก้/เพิ่ม
+## เริ่มต้นใช้งานสำหรับการพัฒนา
 
-**ใหม่**
-- `backend/utils/fiscalYear.js` — ฟังก์ชัน `getFiscalYearRange(beYear)` คำนวณ
-  ช่วงเดือน ต.ค.–ก.ย. จากปีงบ พ.ศ.
-- `database/migration_add_fiscal_year_range.sql` — เพิ่มคอลัมน์ `start_month`
-  / `end_month` ในตาราง `fiscal_year` + backfill ปีงบเดิมทุกแถว
+ต้องมี Node.js, npm และ MySQL ก่อนเริ่มต้น เตรียม environment และฐานข้อมูลตาม [คู่มือปฏิบัติการ](docs/OPERATIONS.md) ก่อนเปิดแอป
 
-**แก้ไข**
-- `database/schema.sql` — เพิ่มคอลัมน์ให้ schema สำหรับติดตั้งใหม่
-- `backend/routes/master-data.js` — POST/PUT `/fiscal-years` คำนวณ/บันทึก
-  `start_month`, `end_month` ให้อัตโนมัติ
-- `backend/routes/expense.js` — **จุดแก้บั๊กหลัก**: กรอง `print_transactions`
-  ด้วย `pt.month BETWEEN start_month AND end_month`
-- `backend/routes/print-transactions.js` — endpoint `/summary` และ
-  `/by-device/:deviceId` เปลี่ยนจากรับ `?year=YYYY` (แล้ว `LIKE 'YYYY-%'`)
-  เป็นรับ `?fiscal_year_id=ID` แล้วกรองด้วยช่วงเดือนจริง
-- `frontend/src/store/fiscalYear.js` — เอา `activeGregorianYear` (ที่เดือนผิด)
-  ออก แทนด้วย `activeFiscalYearRange` + `fiscalYearMonths()`
-- `frontend/src/components/MonthPicker.vue` — dropdown เดือนไล่ตามปีงบจริง
-  (ต.ค. ปีก่อนหน้า → ก.ย. ปีที่ตรงกับปีงบ)
-- `frontend/src/components/DashboardFilter.vue` — กรองเดือนที่มีข้อมูลด้วยช่วง
-  ปีงบจริงแทนการเทียบ prefix ปีเดียว
-- `frontend/src/views/PrintTransactions.vue` — หน้าบันทึกยอดพิมพ์/สรุปสถานะ
-  กรอกครบ ใช้ `fiscal_year_id` + ช่วงเดือนจริงแทนปีปฏิทิน
+เตรียมและเปิด Backend:
 
-## วิธีติดตั้ง (deploy)
+```powershell
+Copy-Item backend/.env.example backend/.env
+cd backend
+npm ci
+npm run dev
+```
 
-1. รัน migration บน DB จริงก่อน:
-   ```
-   mysql -u root -p your_database < database/migration_add_fiscal_year_range.sql
-   ```
-2. Deploy โค้ด backend (routes ที่แก้ + `utils/fiscalYear.js` ใหม่)
-3. Deploy โค้ด frontend (build ใหม่)
-4. ตรวจสอบว่าปีงบเดิมทุกตัวมี `start_month` / `end_month` ถูกต้องหลัง backfill
-   เช่น ปีงบ 2569 ควรได้ `2025-10` ถึง `2026-09`
+ตั้งค่าทุกตัวแปรตาม `backend/.env.example` ก่อนใช้งาน Backend เปิดที่ `http://localhost:3000`
 
-## วิธีนำไฟล์เหล่านี้ไปวางในโปรเจกต์
+เปิด Frontend ในอีก terminal:
 
-โครงสร้างในซิปนี้ตรงกับ path เดิมในโปรเจกต์เป๊ะ ๆ (เช่น
-`backend/routes/expense.js`) — คัดลอกทับไฟล์เดิมในโปรเจกต์ได้เลย (ยกเว้น
-ไฟล์ migration ที่ต้องรันแยกกับ DB ตามข้อ 1 ด้านบน)
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+Frontend เปิดที่ `http://localhost:5173` และเรียก API ที่ `http://localhost:3000/api`
+
+## ตรวจสอบการเปลี่ยนแปลง
+
+เลือก build, health check และ smoke test ตามส่วน [การตรวจระบบ](docs/OPERATIONS.md#การตรวจระบบ)
+
+## เอกสาร
+
+- [ภาพรวมระบบและกฎธุรกิจ](docs/PROJECT.md)
+- [การติดตั้ง ฐานข้อมูล Migration Import และการตรวจระบบ](docs/OPERATIONS.md)
+- [แนวทางการทำงานใน repository](AGENTS.md)
+
+เอกสารชุดนี้มุ่งสำหรับนักพัฒนาและ AI agent ยังไม่ใช่คู่มือสำหรับผู้ใช้งานหน้าเว็บ
+
+## ความปลอดภัย
+
+ก่อนใช้ข้อมูลจริงหรือ deploy ให้อ่าน checklist ใน [คู่มือปฏิบัติการ](docs/OPERATIONS.md#ก่อนนำขึ้น-production)
