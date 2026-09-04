@@ -2,6 +2,7 @@ const fs = require("fs");
 const XLSX = require("xlsx");
 const db = require("../db");
 const { recordLocationHistory } = require("./deviceController");
+const { normalizeMonth } = require("../utils/month");
 
 // ============================================================
 // แปลง "เดือน/ปี พ.ศ. 2 หลัก" ในหัวคอลัมน์ไฟล์มิเตอร์ (เช่น "meter 9/67",
@@ -24,9 +25,9 @@ function parseMeterMonthHeader(header) {
   // ปี พ.ศ. ในไฟล์เก็บแค่ 2 หลัก (เช่น "67" = 2567) — เดาศตวรรษ 2500 เอา
   // เพราะไฟล์นี้เป็นข้อมูลปีงบปัจจุบัน ไม่มีทางเป็นปี 2400 หรือ 2600
   const beYearFull = 2500 + Number(match[2]);
-  const ceYear = beYearFull - 543;
 
-  return `${ceYear}-${String(month).padStart(2, "0")}`;
+  // ส่งต่อให้ normalizeMonth() แปลง พ.ศ. เป็น ค.ศ. — การลบ 543 อยู่ที่ utils/month.js ที่เดียว
+  return normalizeMonth(`${beYearFull}-${month}`);
 }
 
 exports.importDevices = async (req, res) => {

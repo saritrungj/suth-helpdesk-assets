@@ -21,7 +21,18 @@ CREATE TABLE fiscal_year (
     -- คำนวณและเก็บไว้ตอนสร้าง/แก้ไขปีงบ ดู backend/utils/fiscalYear.js
     start_month CHAR(7) NOT NULL,
     end_month CHAR(7) NOT NULL,
-    status ENUM('active','inactive') DEFAULT 'active'
+    status ENUM('active','inactive') DEFAULT 'active',
+
+    -- ช่วงเดือนเก็บเป็น ค.ศ. เท่านั้น (ปี 1900-2399) ดู backend/utils/month.js
+    -- และ database/migration_normalize_month_to_ce.sql
+    CONSTRAINT chk_fiscal_year_start_month_ce CHECK (
+        start_month REGEXP '^[0-9]{4}-(0[1-9]|1[0-2])$'
+        AND CAST(SUBSTRING(start_month, 1, 4) AS UNSIGNED) BETWEEN 1900 AND 2399
+    ),
+    CONSTRAINT chk_fiscal_year_end_month_ce CHECK (
+        end_month REGEXP '^[0-9]{4}-(0[1-9]|1[0-2])$'
+        AND CAST(SUBSTRING(end_month, 1, 4) AS UNSIGNED) BETWEEN 1900 AND 2399
+    )
 );
 
 CREATE TABLE brand (
@@ -107,7 +118,15 @@ CREATE TABLE print_transactions (
     pages INT DEFAULT 0,
 
     FOREIGN KEY (device_id) REFERENCES devices(id),
-    UNIQUE KEY uq_device_month (device_id, month)
+    UNIQUE KEY uq_device_month (device_id, month),
+
+    -- เดือนเก็บเป็น ค.ศ. "YYYY-MM" เท่านั้น — รับ พ.ศ. เข้ามาได้ แต่ normalize ตั้งแต่ขาเข้า
+    -- (backend/utils/month.js) ถ้าปล่อยให้เก็บทั้ง "2568-10" และ "2025-10" ปนกัน UNIQUE KEY
+    -- ด้านบนจะกันยอดซ้ำของเดือนเดียวกันไม่ได้ และค่าใช้จ่ายจะถูกนับสองรอบ
+    CONSTRAINT chk_print_transactions_month_ce CHECK (
+        month REGEXP '^[0-9]{4}-(0[1-9]|1[0-2])$'
+        AND CAST(SUBSTRING(month, 1, 4) AS UNSIGNED) BETWEEN 1900 AND 2399
+    )
 );
 
 -- ประวัติการย้ายเครื่อง (อาคาร/ชั้น/ฝ่าย/แผนก) — ดูรายละเอียดเหตุผลที่

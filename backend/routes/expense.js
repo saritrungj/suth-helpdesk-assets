@@ -6,14 +6,8 @@ const authMiddleware = require("../middlewares/authMiddleware");
 
 // รับ query.month เป็นเดือนเดียว "YYYY-MM" หรือหลายเดือนคั่นด้วย comma "YYYY-MM,YYYY-MM"
 // (ตอนกดเลือกด่วน "ไตรมาส"/"ครึ่งปี" จาก MonthPicker ฝั่งหน้า "ค่าใช้จ่ายแยกตามสัญญา")
-// คืนเป็น array เสมอ ว่างเปล่าถ้าไม่ได้ส่งมา — แบบเดียวกับ parseMonths() ใน routes/dashboard.js
-function parseMonths(raw) {
-  if (!raw) return [];
-  return String(raw)
-    .split(",")
-    .map((m) => m.trim())
-    .filter(Boolean);
-}
+// parseMonths() แปลง พ.ศ. เป็น ค.ศ. ให้ด้วย — ดู utils/month.js
+const { parseMonths } = require("../utils/month");
 
 // ต้อง login ก่อนถึงจะดูค่าใช้จ่ายได้ (เดิมไม่มีการป้องกันเลย)
 router.use(authMiddleware);

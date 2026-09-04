@@ -5,28 +5,12 @@ const db = require("../db");
 const authMiddleware = require("../middlewares/authMiddleware");
 const staffMiddleware = require("../middlewares/staffMiddleware");
 
+// เดือนเก็บเป็น "YYYY-MM" แบบ ค.ศ. เสมอ — normalizeMonth() รับได้ทั้ง พ.ศ. และ ค.ศ.
+// แล้วแปลงเป็น ค.ศ. ให้ (รวมถึงเติม 0 หน้าเดือนหลักเดียว) ดูเหตุผลใน utils/month.js
+const { normalizeMonth } = require("../utils/month");
+
 // ต้อง login ก่อนถึงจะบันทึก/ดูยอดพิมพ์ได้ (เดิมไม่มีการป้องกันเลย)
 router.use(authMiddleware);
-
-// ============================================================
-// เดือนต้องเก็บเป็นรูปแบบ "YYYY-MM" เสมอ (เติม 0 หน้าเดือนหลักเดียว)
-// เดิมไม่มีการตรวจสอบเลย ถ้ามีการยิง API เข้ามาตรงๆ ด้วยค่าเช่น
-// "2026-7" (ไม่เติม 0) มันจะถูกมองว่าเป็นคนละเดือนกับ "2026-07"
-// ทำให้ dropdown เดือนที่หน้า "บันทึกยอดพิมพ์รายเดือน" ขึ้นซ้ำ/ผิดตำแหน่ง
-// และเวลา filter ข้อมูลด้วย month ที่ format ไม่ตรงกัน ก็จะหาไม่เจอ
-// (เดือนที่มีข้อมูลจริงกลับโชว์ว่างเปล่า)
-function normalizeMonth(value) {
-  if (typeof value !== "string") return null;
-
-  const match = value.trim().match(/^(\d{4})-(\d{1,2})$/);
-  if (!match) return null;
-
-  const [, year, monthNum] = match;
-  const m = Number(monthNum);
-  if (m < 1 || m > 12) return null;
-
-  return `${year}-${String(m).padStart(2, "0")}`;
-}
 
 // ============================================================
 // GET /api/print-transactions
@@ -48,7 +32,7 @@ router.get("/", async (req, res) => {
     if (req.query.month) {
       const month = normalizeMonth(req.query.month);
       if (!month) {
-        return res.status(400).json({ error: "รูปแบบเดือนไม่ถูกต้อง (ต้องเป็น YYYY-MM)" });
+        return res.status(400).json({ error: "รูปแบบเดือนไม่ถูกต้อง (ต้องเป็น YYYY-MM รับได้ทั้ง พ.ศ. และ ค.ศ.)" });
       }
 
       sql += " WHERE pt.month = ? ";
@@ -104,7 +88,7 @@ router.post("/", staffMiddleware, async (req, res) => {
 
     const month = normalizeMonth(rawMonth);
     if (!month) {
-      return res.status(400).json({ error: "รูปแบบเดือนไม่ถูกต้อง (ต้องเป็น YYYY-MM)" });
+      return res.status(400).json({ error: "รูปแบบเดือนไม่ถูกต้อง (ต้องเป็น YYYY-MM รับได้ทั้ง พ.ศ. และ ค.ศ.)" });
     }
 
     const pagesNum = Number(pages || 0);
@@ -143,7 +127,7 @@ router.post("/bulk", staffMiddleware, async (req, res) => {
 
   const month = normalizeMonth(rawMonth);
   if (!month) {
-    return res.status(400).json({ error: "รูปแบบเดือนไม่ถูกต้อง (ต้องเป็น YYYY-MM)" });
+    return res.status(400).json({ error: "รูปแบบเดือนไม่ถูกต้อง (ต้องเป็น YYYY-MM รับได้ทั้ง พ.ศ. และ ค.ศ.)" });
   }
 
   const connection = await db.getConnection();

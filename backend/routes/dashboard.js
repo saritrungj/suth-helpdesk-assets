@@ -9,14 +9,8 @@ router.use(authMiddleware);
 
 // รับ query.month เป็นเดือนเดียว "YYYY-MM" หรือหลายเดือนคั่นด้วย comma
 // "YYYY-MM,YYYY-MM" (ตามที่ MonthPicker หน้า Dashboard ส่งมาตอนเลือกได้หลายเดือน)
-// คืนเป็น array เสมอ ว่างเปล่าถ้าไม่ได้ส่งมา ใช้คู่กับ "col IN (?)" ผ่าน mysql2
-function parseMonths(raw) {
-  if (!raw) return [];
-  return String(raw)
-    .split(',')
-    .map((m) => m.trim())
-    .filter(Boolean);
-}
+// คืนเป็น array เสมอ ใช้คู่กับ "col IN (?)" ผ่าน mysql2 — แปลง พ.ศ. เป็น ค.ศ. ให้ด้วย
+const { parseMonths, normalizeMonth } = require('../utils/month');
 
 
 // ============================================================
@@ -589,7 +583,7 @@ router.get('/expense', async(req,res)=>{
 
 
       params.push(
-        req.query.month
+        normalizeMonth(req.query.month)
       );
 
 
