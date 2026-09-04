@@ -69,7 +69,8 @@ mysql -u root -p your_database < database/seed_dummy_data.sql
 - ทะเบียนอุปกรณ์: `POST /api/devices/import`
 - ยอดพิมพ์: `POST /api/print-transactions/import`
 - ชื่อ form field: `file`
-- CSV ตัวอย่าง: `docs/mock_import_devices.csv`
+- เทมเพลต CSV ทะเบียนอุปกรณ์: กดดาวน์โหลดในหน้านำเข้าข้อมูล ต้นฉบับอยู่ที่ `TEMPLATE_CSV` ใน `frontend/src/views/ImportDevices.vue`
+- คอลัมน์ทะเบียนอุปกรณ์: `serial_number`, `brand`, `model`, `building`, `floor`, `division`, `department`, `contract_no`, `price_override`
 
 Importer จับคู่ข้อมูลอ้างอิงจากค่าที่อ่านได้ในไฟล์และรายงานแถวที่ผิดพลาด การนำเข้ายอดมิเตอร์หา column รูปแบบ `meter M/YY`, จับคู่เครื่องด้วย Serial Number และ normalize เดือนเป็น ค.ศ. ก่อนบันทึก
 

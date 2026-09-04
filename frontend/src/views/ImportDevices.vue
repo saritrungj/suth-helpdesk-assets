@@ -159,7 +159,8 @@ const skippedCount = computed(() => result.value?.skipped?.length || 0);
 
 // เทมเพลต CSV — คอลัมน์เดียวกับที่ backend อ่าน (serial_number, brand, model, building)
 // พร้อมคอลัมน์เผื่ออนาคต (floor, division, department, contract_no, price_override)
-// และแถวตัวอย่างเดียวกับ docs/mock_import_devices.csv ที่ตกลงกันไว้กับทีม
+// ตัวแปรนี้เป็นต้นฉบับเดียวของรูปแบบไฟล์นำเข้า — docs/OPERATIONS.md ชี้มาที่นี่
+// (เดิมมีไฟล์ตัวอย่างซ้ำเก็บไว้ใน docs/ ด้วย ลบทิ้งแล้วเพื่อไม่ให้มีสองแหล่ง)
 const TEMPLATE_CSV = [
   "serial_number,brand,model,building,floor,division,department,contract_no,price_override",
   "SN-HP-001,HP,LaserJet M404dn,อาคารบริหาร,ชั้น 2,ฝ่ายบริหารงานทั่วไป,แผนกการเงินและบัญชี,CONT-67-001,",
