@@ -4,8 +4,11 @@
 
 ## เอกสารอ้างอิง
 
-- เมื่อแก้ feature, domain rule, report calculation, role หรือ API boundary ให้อ่าน `docs/PROJECT.md`
-- เมื่อแก้ environment, schema, migration, seed, import หรือ deployment ให้อ่าน `docs/OPERATIONS.md`
+- เอกสารแบ่งตาม Diátaxis เริ่มที่ `docs/README.md` ซึ่งบอกว่าจะหาอะไรที่ไหน
+- เมื่อแก้ feature, domain rule, report calculation หรือ role ให้อ่าน `docs/explanation/domain.md`
+- เมื่อแก้โครงสร้างโค้ดหรือ API boundary ให้อ่าน `docs/explanation/architecture.md`
+- เมื่อแก้ environment, schema, migration, seed หรือ import ให้อ่าน `docs/how-to/`
+- เมื่อต้องหาชื่อคอลัมน์ endpoint หรือตัวแปร ให้อ่าน `docs/reference/`
 - **ก่อนแก้ตรรกะปีงบ เดือน หรือการคิดเงิน ให้อ่าน `docs/decisions/` ก่อนเสมอ** — กฎเหล่านั้นเคยพังมาแล้วและเหตุผลอยู่ใน ADR
 - ใช้ `README.md` เป็น landing page: ภาพรวมสั้น Quick Start และดัชนีไปยังเอกสารหลัก
 - ข้อตกลงการทำงานของทีม (branch, PR, การขออนุมัติ) อยู่ใน `CONTRIBUTING.md`
@@ -70,7 +73,7 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 
 ## การตรวจสอบ
 
-- เลือก checks ตาม `docs/OPERATIONS.md` ให้สัมพันธ์กับความเสี่ยงของ diff
+- เลือก checks ตาม `docs/how-to/verify-changes.md` ให้สัมพันธ์กับความเสี่ยงของ diff
 - Backend change ต้องตรวจ health check และ authenticated API flow ที่ได้รับผลกระทบ
 - Database change ต้องทดสอบ fresh schema และ migration path ที่เกี่ยวข้อง โดยเฉพาะขอบเขตปีงบ ต.ค.–ก.ย.
 - Automated tests ใหม่ให้อยู่ใกล้ module เป้าหมายและใช้ชื่อ `*.test.js` หรือ `*.spec.js`

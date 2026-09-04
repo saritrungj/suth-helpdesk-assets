@@ -18,7 +18,7 @@
 
 ## เริ่มต้นใช้งานสำหรับการพัฒนา
 
-ต้องมี Node.js, npm และ MySQL ก่อนเริ่มต้น เตรียม environment และฐานข้อมูลตาม [คู่มือปฏิบัติการ](docs/OPERATIONS.md) ก่อนเปิดแอป
+ต้องมี Node.js, npm และ MySQL ก่อนเริ่มต้น เตรียม environment และฐานข้อมูลตาม [คู่มือตั้งระบบ](docs/how-to/set-up-development.md) ก่อนเปิดแอป
 
 ติดตั้ง dependency ครั้งเดียวที่รากของ repository — เป็น npm workspace ตัวเดียวครอบทุก package:
 
@@ -45,16 +45,18 @@ API เปิดที่ `http://localhost:3000` เว็บเปิดที
 
 ## ตรวจสอบการเปลี่ยนแปลง
 
-เลือก build, health check และ smoke test ตามส่วน [การตรวจระบบ](docs/OPERATIONS.md#การตรวจระบบ)
+เลือก build, health check และ smoke test ตาม [คู่มือตรวจการเปลี่ยนแปลง](docs/how-to/verify-changes.md)
 
 ## เอกสาร
 
-- [ภาพรวมระบบและกฎธุรกิจ](docs/PROJECT.md)
-- [การติดตั้ง ฐานข้อมูล Migration Import และการตรวจระบบ](docs/OPERATIONS.md)
-- [แนวทางการทำงานใน repository](AGENTS.md)
+- [สารบัญเอกสารทั้งหมด](docs/README.md) — แบ่งตาม Diátaxis: เข้าใจ / ทำ / เปิดหา / การตัดสินใจ
+- [กฎธุรกิจและโดเมน](docs/explanation/domain.md) — ปีงบประมาณ การคิดค่าใช้จ่าย ประวัติการย้ายเครื่อง
+- [สถาปัตยกรรม](docs/explanation/architecture.md) — โครงสร้างระบบและโค้ด
+- [บันทึกการตัดสินใจ (ADR)](docs/decisions/) — ทำไมถึงเลือกแบบนั้น
+- [แนวทางสำหรับ AI agent](AGENTS.md) และ [ข้อตกลงการทำงานของทีม](CONTRIBUTING.md)
 
 เอกสารชุดนี้มุ่งสำหรับนักพัฒนาและ AI agent ยังไม่ใช่คู่มือสำหรับผู้ใช้งานหน้าเว็บ
 
 ## ความปลอดภัย
 
-ก่อนใช้ข้อมูลจริงหรือ deploy ให้อ่าน checklist ใน [คู่มือปฏิบัติการ](docs/OPERATIONS.md#ก่อนนำขึ้น-production)
+ก่อนใช้ข้อมูลจริงหรือ deploy ให้อ่าน [checklist เตรียมขึ้น production](docs/how-to/prepare-for-production.md)
