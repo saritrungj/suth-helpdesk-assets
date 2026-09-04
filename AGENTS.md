@@ -6,7 +6,9 @@
 
 - เมื่อแก้ feature, domain rule, report calculation, role หรือ API boundary ให้อ่าน `docs/PROJECT.md`
 - เมื่อแก้ environment, schema, migration, seed, import หรือ deployment ให้อ่าน `docs/OPERATIONS.md`
+- **ก่อนแก้ตรรกะปีงบ เดือน หรือการคิดเงิน ให้อ่าน `docs/decisions/` ก่อนเสมอ** — กฎเหล่านั้นเคยพังมาแล้วและเหตุผลอยู่ใน ADR
 - ใช้ `README.md` เป็น landing page: ภาพรวมสั้น Quick Start และดัชนีไปยังเอกสารหลัก
+- ข้อตกลงการทำงานของทีม (branch, PR, การขออนุมัติ) อยู่ใน `CONTRIBUTING.md`
 
 รายละเอียดเชิงลึกหรือข้อมูลที่เปลี่ยนบ่อยต้องมี source of truth แห่งเดียว README สรุปได้แต่ต้องลิงก์ไปยังบ้านหลัก อ้างด้วยลิงก์แทนการคัดลอกซ้ำ และเก็บรายละเอียดที่อ่านตรงจาก code/config ได้ง่ายไว้ใน code/config
 
@@ -19,18 +21,30 @@
 
 ใช้ indentation 2 spaces Backend ใช้ CommonJS และ semicolon ส่วน Frontend ใช้ ES modules, Vue `<script setup>` และ Tailwind classes ตั้งชื่อ Vue component แบบ PascalCase และ JavaScript identifier แบบ camelCase โดยยึดรูปแบบไฟล์ข้างเคียง
 
+## การตั้งชื่อไฟล์และโฟลเดอร์
+
+- **ASCII เท่านั้น** ห้ามใช้อักษรไทยหรืออักขระนอก ASCII ในชื่อไฟล์ — macOS เก็บชื่อแบบ NFD ส่วน Linux/Windows ใช้ NFC ทำให้ชื่อเดียวกันกลายเป็นคนละ byte sequence และบางเครื่องมือจะ escape เป็นข้อความอ่านไม่ออก (repo นี้เคยมีไฟล์ Excel ถูก track ซ้ำสองชื่อชี้ blob เดียวกันมาแล้ว)
+- **kebab-case ตัวพิมพ์เล็ก** สำหรับไฟล์และโฟลเดอร์ทั่วไป — `meter-import-source.xlsx`, `print-usage/`
+- ยกเว้น Vue component ใช้ PascalCase (`MonthPicker.vue`) และไฟล์รากที่มีธรรมเนียมสากล ใช้ตัวพิมพ์ใหญ่ (`README.md`, `AGENTS.md`, `CHANGELOG.md`)
+- **ห้ามใช้ช่องว่างในชื่อไฟล์** และห้ามตั้งชื่อที่ต่างกันแค่ตัวพิมพ์เล็กใหญ่ เพราะ Windows/macOS จะมองเป็นไฟล์เดียวกันแล้วทับกันเงียบๆ ตอน checkout
+- ชื่อต้องบอกบทบาท ไม่ใช่สถานะ — `meter-import-source.xlsx` ไม่ใช่ `final_v2.xlsx`
+- เปลี่ยนชื่อด้วย `git mv` เสมอ เพื่อให้ git บันทึกเป็น rename และ `git log --follow` ตามประวัติต่อได้
+
 ## Workflow
 
-1. เริ่ม development task จาก GitHub Issue และ dedicated branch ที่เชื่อมกับ Issue เสมอ
-2. ตรวจ branch และ `git status` ก่อนแก้ไฟล์ ถ้าอยู่บน `main` ให้หยุดและแจ้งผู้ใช้
-3. อ่าน source ที่เกี่ยวข้อง วิเคราะห์ และเสนอแผนก่อนแก้
-4. ทำเฉพาะ Issue scope และรักษาการเปลี่ยนแปลงเดิมของผู้ใช้
-5. ตรวจ `git diff` และรัน checks ที่สัมพันธ์กับความเสี่ยงก่อนส่งมอบ
-6. สรุปไฟล์ที่เปลี่ยน ผลตรวจ และความเสี่ยงที่เหลือ
+ลำดับการทำงานเต็ม ชื่อ branch รูปแบบ commit และข้อกำหนดของ PR อยู่ใน `CONTRIBUTING.md` — ส่วนที่ต้องยึดทุกครั้ง:
+
+1. ตรวจ branch และ `git status` ก่อนแก้ไฟล์ ถ้าอยู่บน `main` ให้หยุดและแจ้งผู้ใช้
+2. อ่าน source ที่เกี่ยวข้อง วิเคราะห์ และเสนอแผนก่อนแก้
+3. ทำเฉพาะ Issue scope และรักษาการเปลี่ยนแปลงเดิมของผู้ใช้
+4. ตรวจ `git diff` และรัน checks ที่สัมพันธ์กับความเสี่ยงก่อนส่งมอบ
+5. สรุปไฟล์ที่เปลี่ยน ผลตรวจ และความเสี่ยงที่เหลือ
+
+**commit ที่ย้ายไฟล์ ห้ามเปลี่ยนพฤติกรรมไปด้วย** แยกเป็นคนละ commit เสมอ ไม่งั้น review และ bisect ไม่ได้จริง
 
 ต้องได้รับคำสั่งชัดเจนก่อน commit, push, merge, delete branch, deploy หรือเปลี่ยน production และต้องขออนุมัติก่อนเปลี่ยน schema/migration, auth/security, secrets หรือทำ destructive operation
 
-เมื่อผู้ใช้อนุญาตให้ commit ให้ใช้ imperative Conventional Commit subject เช่น `docs: simplify project documentation` ส่วน PR ต้องระบุ Issue ต้นทาง การเปลี่ยนแปลง checks ที่รัน ลำดับ migration เมื่อเกี่ยวข้อง และ screenshot สำหรับงาน UI
+การตัดสินใจที่ย้อนกลับยากต้องเขียน ADR ไว้ใน `docs/decisions/` ตอนที่ตัดสิน ไม่ใช่ตอนสรุปทีหลัง
 
 สำหรับ review request ให้ review เท่านั้น แก้ไฟล์เมื่อผู้ใช้ร้องขอโดยตรง
 

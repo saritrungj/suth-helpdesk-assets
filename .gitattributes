@@ -1,0 +1,28 @@
+# เก็บทุกไฟล์ข้อความใน repository เป็น LF เสมอ ส่วนตอน checkout ปล่อยให้ git
+# แปลงตาม core.autocrlf ของแต่ละเครื่อง — กันคำเตือน "LF will be replaced by CRLF"
+# และกัน diff ที่เต็มไปด้วยการเปลี่ยน line ending เวลาทีมทำงานข้าม Windows/Linux
+* text=auto eol=lf
+
+# ไฟล์ที่ต้องเป็น LF เสมอไม่ว่าเครื่องไหน เพราะถูกรันเป็น script หรืออ่านด้วย tool ที่ไม่รับ CRLF
+*.sh text eol=lf
+*.sql text eol=lf
+
+# ไฟล์ Windows ที่ต้องเป็น CRLF ถึงจะทำงานถูก
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary — ห้าม git แตะ line ending และห้ามพยายาม diff เป็นข้อความ
+*.xlsx binary
+*.xls  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+
+# lockfile เป็นไฟล์ที่เครื่องมือสร้าง ไม่ต้องนับเป็นภาษาในสถิติ และยุบใน diff ของ PR
+package-lock.json -diff linguist-generated=true
