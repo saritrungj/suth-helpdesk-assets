@@ -6,7 +6,19 @@ import { fiscalYearState } from "../store/fiscalYear";
 import ChevronIcon from "../components/ChevronIcon.vue";
 import AppIcon from "../components/AppIcon.vue";
 import MonthPicker from "../components/MonthPicker.vue";
-import { formatMonthTH } from "@suth/domain";
+import { formatMonthTH, fromSatang, sumSatang, toSatang } from "@suth/domain";
+
+// รวมเงินหลายรายการ — บวกในหน่วยสตางค์ที่เป็นจำนวนเต็ม ไม่บวก float ของบาท
+// ใช้ total_cost_satang ที่ API ส่งมาก่อน ถ้าไม่มีก็แปลงจาก total_cost แบบไม่ผ่านทศนิยมลอยตัว
+// ดูเหตุผลใน packages/domain/money.cjs
+function sumCost(rows) {
+  return fromSatang(
+    sumSatang(
+      (rows || []).map((r) => r.total_cost_satang ?? toSatang(r.total_cost))
+    )
+  );
+}
+
 
 const loading = ref(false);
 const error = ref(null);
@@ -148,7 +160,7 @@ function toggleDevice(id) {
 
 // รวมค่าใช้จ่ายทั้งปีงบ (รวมทุกสัญญา)
 const grandTotal = computed(() =>
-  contracts.value.reduce((sum, c) => sum + Number(c.total_cost || 0), 0)
+  sumCost(contracts.value)
 );
 
 const grandTotalPages = computed(() =>
@@ -412,7 +424,7 @@ onMounted(() => {
         </div>
         <div class="flex items-center gap-4">
           <span class="font-bold text-yellow-800">
-            {{ formatMoney(unassignedDevices.reduce((s, d) => s + Number(d.total_cost || 0), 0)) }} บาท
+            {{ formatMoney(sumCost(unassignedDevices)) }} บาท
           </span>
           <ChevronIcon :open="showUnassigned" class="text-yellow-700" />
         </div>

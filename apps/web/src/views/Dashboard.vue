@@ -363,6 +363,19 @@ import BuildingCostChart from "../components/BuildingCostChart.vue";
 import CostChart from "../components/CostChart.vue";
 import DashboardFilter from "../components/DashboardFilter.vue";
 import SkeletonBlock from "../components/SkeletonBlock.vue";
+import { fromSatang, sumSatang, toSatang } from "@suth/domain";
+
+// รวมเงินหลายรายการ — บวกในหน่วยสตางค์ที่เป็นจำนวนเต็ม ไม่บวก float ของบาท
+// ใช้ total_cost_satang ที่ API ส่งมาก่อน ถ้าไม่มีก็แปลงจาก total_cost แบบไม่ผ่านทศนิยมลอยตัว
+// ดูเหตุผลใน packages/domain/money.cjs
+function sumCost(rows) {
+  return fromSatang(
+    sumSatang(
+      (rows || []).map((r) => r.total_cost_satang ?? toSatang(r.total_cost))
+    )
+  );
+}
+
 
 // =====================
 // State
@@ -465,7 +478,7 @@ const deviceStatusMeta = {
 
 // ค่าใช้จ่ายสุทธิรวมทุกสัญญา — รวมจาก highlights.contracts ที่โหลดมาแล้ว ไม่ต้องยิง API เพิ่ม
 const netCostTotal = computed(() =>
-  highlights.value.contracts.reduce((sum, c) => sum + Number(c.total_cost || 0), 0)
+  sumCost(highlights.value.contracts)
 );
 
 // ความกว้าง (%) ของแถบในการ์ด "แผนกที่ค่าใช้จ่ายสุทธิสูงสุด/น้อยสุด" เทียบกับค่าที่มากที่สุดในลิสต์

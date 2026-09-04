@@ -10,7 +10,13 @@ router.use(authMiddleware);
 // รับ query.month เป็นเดือนเดียว "YYYY-MM" หรือหลายเดือนคั่นด้วย comma
 // "YYYY-MM,YYYY-MM" (ตามที่ MonthPicker หน้า Dashboard ส่งมาตอนเลือกได้หลายเดือน)
 // คืนเป็น array เสมอ ใช้คู่กับ "col IN (?)" ผ่าน mysql2 — แปลง พ.ศ. เป็น ค.ศ. ให้ด้วย
-const { parseMonths, normalizeMonth } = require('@suth/domain');
+const {
+  parseMonths,
+  normalizeMonth,
+  toSatang,
+  fromSatang,
+  sumSatang,
+} = require('@suth/domain');
 
 
 // ============================================================
@@ -799,13 +805,17 @@ router.get('/by-department', async (req, res) => {
           month: row.month,
           net_pages: row.net_pages,
           total_cost: row.total_cost,
+          // SQL คืน DECIMAL มาเป็น string ที่เป๊ะอยู่แล้ว แปลงเป็นจำนวนเต็มสตางค์ทันที
+          // เพื่อให้ทุกการบวกต่อจากนี้เป็นจำนวนเต็ม ไม่ใช่ float — ดู packages/domain/money.cjs
+          total_cost_satang: toSatang(row.total_cost),
         });
       }
     }
 
     for (const device of deviceMap.values()) {
       device.total_pages = device.monthly.reduce((sum, r) => sum + Number(r.net_pages || 0), 0);
-      device.total_cost = device.monthly.reduce((sum, r) => sum + Number(r.total_cost || 0), 0);
+      device.total_cost_satang = sumSatang(device.monthly.map((r) => r.total_cost_satang));
+      device.total_cost = fromSatang(device.total_cost_satang);
       // true ถ้าเครื่องนี้ (serial เดียวกัน) ไปโผล่มากกว่า 1 แผนกในรายงานนี้ เพราะย้ายแผนกระหว่างช่วงเวลาที่ดู
       device.moved_during_period = (deviceDeptCount.get(device.id) || 1) > 1;
 
@@ -817,8 +827,10 @@ router.get('/by-department', async (req, res) => {
 
         device.current_month_pages = currentRows.reduce((s, r) => s + Number(r.net_pages || 0), 0);
         device.previous_month_pages = previousRows.reduce((s, r) => s + Number(r.net_pages || 0), 0);
-        device.current_month_cost = currentRows.reduce((s, r) => s + Number(r.total_cost || 0), 0);
-        device.previous_month_cost = previousRows.reduce((s, r) => s + Number(r.total_cost || 0), 0);
+        device.current_month_cost_satang = sumSatang(currentRows.map((r) => r.total_cost_satang));
+        device.previous_month_cost_satang = sumSatang(previousRows.map((r) => r.total_cost_satang));
+        device.current_month_cost = fromSatang(device.current_month_cost_satang);
+        device.previous_month_cost = fromSatang(device.previous_month_cost_satang);
         device.has_current_data = currentRows.length > 0;
         device.has_previous_data = previousRows.length > 0;
       }
@@ -842,13 +854,16 @@ router.get('/by-department', async (req, res) => {
     // สรุปยอดรวม + แนวโน้มระดับแผนก
     for (const department of departmentMap.values()) {
       department.total_pages = department.devices.reduce((sum, d) => sum + d.total_pages, 0);
-      department.total_cost = department.devices.reduce((sum, d) => sum + d.total_cost, 0);
+      department.total_cost_satang = sumSatang(department.devices.map((d) => d.total_cost_satang));
+      department.total_cost = fromSatang(department.total_cost_satang);
 
       if (currentMonths.length) {
         department.current_month_pages = department.devices.reduce((sum, d) => sum + (d.current_month_pages || 0), 0);
         department.previous_month_pages = department.devices.reduce((sum, d) => sum + (d.previous_month_pages || 0), 0);
-        department.current_month_cost = department.devices.reduce((sum, d) => sum + (d.current_month_cost || 0), 0);
-        department.previous_month_cost = department.devices.reduce((sum, d) => sum + (d.previous_month_cost || 0), 0);
+        department.current_month_cost_satang = sumSatang(department.devices.map((d) => d.current_month_cost_satang));
+        department.previous_month_cost_satang = sumSatang(department.devices.map((d) => d.previous_month_cost_satang));
+        department.current_month_cost = fromSatang(department.current_month_cost_satang);
+        department.previous_month_cost = fromSatang(department.previous_month_cost_satang);
 
         const hasCurrentData = department.devices.some((d) => d.has_current_data);
         const hasPreviousData = department.devices.some((d) => d.has_previous_data);
@@ -907,7 +922,8 @@ router.get('/by-department', async (req, res) => {
     // รวมยอดระดับฝ่าย + เรียงจากมากไปน้อยตามค่าใช้จ่าย (แผนก/ฝ่ายที่ใช้เยอะสุดขึ้นก่อน)
     for (const division of divisionList) {
       division.total_pages = division.departments.reduce((sum, d) => sum + d.total_pages, 0);
-      division.total_cost = division.departments.reduce((sum, d) => sum + d.total_cost, 0);
+      division.total_cost_satang = sumSatang(division.departments.map((d) => d.total_cost_satang));
+      division.total_cost = fromSatang(division.total_cost_satang);
       division.departments.sort((a, b) => b.total_cost - a.total_cost);
     }
 

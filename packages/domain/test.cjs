@@ -16,6 +16,12 @@ const {
   formatMonthTH,
   formatDateTH,
   fiscalYearLabel,
+  toSatang,
+  fromSatang,
+  billablePages,
+  costSatang,
+  effectivePriceSatang,
+  sumSatang,
 } = require("./index.cjs");
 
 let passed = 0;
@@ -146,6 +152,76 @@ test("formatDateTH แสดงวันที่เป็นไทย", () => {
 test("fiscalYearLabel อ่านเลขปีงบจากเดือนสิ้นสุด", () => {
   assert.equal(fiscalYearLabel(getFiscalYearRange(2569)), "2569");
   assert.equal(fiscalYearLabel(null), "-");
+});
+
+// ------------------------------------------------------------------
+// การคิดเงิน — ต้องเป๊ะระดับสตางค์ ห้ามคลาด
+// ------------------------------------------------------------------
+
+test("toSatang แปลงราคาจาก string ของ DECIMAL ได้เป๊ะ", () => {
+  assert.equal(toSatang("0.45"), 45);
+  assert.equal(toSatang("0.40"), 40);
+  assert.equal(toSatang("1.50"), 150);
+  assert.equal(toSatang("12.34"), 1234);
+  assert.equal(toSatang(0.35), 35);
+});
+
+test("toSatang ปัดครึ่งขึ้นเมื่อทศนิยมเกินสองตำแหน่ง", () => {
+  assert.equal(toSatang("0.455"), 46);
+  assert.equal(toSatang("0.454"), 45);
+});
+
+test("toSatang รับค่าว่างได้โดยไม่ระเบิด", () => {
+  for (const empty of [null, undefined, "", "abc"]) {
+    assert.equal(toSatang(empty), 0);
+  }
+});
+
+test("หน้าสุทธิคือ 80% ของหน้าดิบ และมีเศษได้", () => {
+  assert.equal(billablePages(3360), 2688);
+  assert.equal(billablePages(1057), 845.6);
+  assert.equal(billablePages(0), 0);
+});
+
+test("ค่าใช้จ่ายคำนวณเป็นจำนวนเต็มสตางค์ ไม่มีเศษลอยตัว", () => {
+  // float เดิมให้ 1209.6000000000001
+  assert.equal(costSatang(3360, "0.45"), 120960);
+  assert.equal(fromSatang(costSatang(3360, "0.45")), 1209.6);
+});
+
+test("ค่าใช้จ่ายถูกต้องเมื่อหน้าสุทธิมีเศษ", () => {
+  // 1057 x 0.8 x 0.40 = 845.6 x 0.40 = 338.24
+  assert.equal(costSatang(1057, "0.40"), 33824);
+  assert.equal(fromSatang(costSatang(1057, "0.40")), 338.24);
+});
+
+test("ไม่มีหน้าหรือไม่มีราคา ค่าใช้จ่ายต้องเป็นศูนย์", () => {
+  assert.equal(costSatang(0, "0.45"), 0);
+  assert.equal(costSatang(1000, null), 0);
+  assert.equal(costSatang(1000, ""), 0);
+});
+
+test("ราคาเฉพาะเครื่องมีผลเหนือราคาตามสัญญา", () => {
+  assert.equal(effectivePriceSatang("0.30", "0.45"), 30);
+  assert.equal(effectivePriceSatang(null, "0.45"), 45);
+  assert.equal(effectivePriceSatang("", "0.45"), 45);
+  assert.equal(effectivePriceSatang(null, null), 0);
+});
+
+test("รวมเงินหลายรายการต้องไม่คลาดสะสม", () => {
+  const one = costSatang(3360, "0.45");
+  const total = sumSatang(Array(114).fill(one));
+  assert.equal(total, 120960 * 114);
+  assert.equal(fromSatang(total), 137894.4);
+
+  // ยืนยันว่านี่คือสิ่งที่การบวก float ทำไม่ได้
+  let asFloat = 0;
+  for (let i = 0; i < 114; i++) asFloat += 1209.6;
+  assert.notEqual(asFloat, 137894.4, "ถ้าข้อนี้ผ่านแปลว่า float ไม่คลาดแล้ว ลบเทสนี้ได้");
+});
+
+test("คำนวณเกินช่วงที่แม่นยำต้อง throw ไม่ใช่คืนค่าเพี้ยนเงียบๆ", () => {
+  assert.throws(() => costSatang(Number.MAX_SAFE_INTEGER, "9999999.99"));
 });
 
 // ------------------------------------------------------------------

@@ -17,7 +17,19 @@ import MonthPicker from "../components/MonthPicker.vue";
 import SearchableSelect from "../components/SearchableSelect.vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useChartTheme } from "../composables/useChartTheme";
-import { formatMonthTH } from "@suth/domain";
+import { formatMonthTH, fromSatang, sumSatang, toSatang } from "@suth/domain";
+
+// รวมเงินหลายรายการ — บวกในหน่วยสตางค์ที่เป็นจำนวนเต็ม ไม่บวก float ของบาท
+// ใช้ total_cost_satang ที่ API ส่งมาก่อน ถ้าไม่มีก็แปลงจาก total_cost แบบไม่ผ่านทศนิยมลอยตัว
+// ดูเหตุผลใน packages/domain/money.cjs
+function sumCost(rows) {
+  return fromSatang(
+    sumSatang(
+      (rows || []).map((r) => r.total_cost_satang ?? toSatang(r.total_cost))
+    )
+  );
+}
+
 
 const { baseChartOptions } = useChartTheme();
 
@@ -217,7 +229,7 @@ function aggregate(month) {
 
   const totalPages = rows.reduce((s, r) => s + Number(r.pages_printed || 0), 0);
   const netPages = rows.reduce((s, r) => s + Number(r.net_pages || 0), 0);
-  const totalCost = rows.reduce((s, r) => s + Number(r.total_cost || 0), 0);
+  const totalCost = sumCost(rows);
   const activeDevices = new Set(rows.map((r) => r.device_id)).size;
   const costPerPage = totalPages > 0 ? totalCost / totalPages : 0;
 

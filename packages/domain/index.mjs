@@ -22,6 +22,17 @@ export const {
   formatMonthTH,
   formatDateTH,
   fiscalYearLabel,
+  BILLABLE_NUMERATOR,
+  BILLABLE_DENOMINATOR,
+  SATANG_PER_BAHT,
+  toSatang,
+  fromSatang,
+  billablePages,
+  costSatang,
+  costSatangAt,
+  effectivePriceSatang,
+  sumSatang,
+  formatBaht,
 } = domain;
 
 export default domain;

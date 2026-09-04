@@ -7,7 +7,13 @@ const authMiddleware = require("../auth/require-auth");
 // รับ query.month เป็นเดือนเดียว "YYYY-MM" หรือหลายเดือนคั่นด้วย comma "YYYY-MM,YYYY-MM"
 // (ตอนกดเลือกด่วน "ไตรมาส"/"ครึ่งปี" จาก MonthPicker ฝั่งหน้า "ค่าใช้จ่ายแยกตามสัญญา")
 // parseMonths() แปลง พ.ศ. เป็น ค.ศ. ให้ด้วย — ดู @suth/domain
-const { parseMonths } = require("@suth/domain");
+const {
+    parseMonths,
+    costSatangAt,
+    effectivePriceSatang,
+    fromSatang,
+    sumSatang,
+} = require("@suth/domain");
 
 // ต้อง login ก่อนถึงจะดูค่าใช้จ่ายได้ (เดิมไม่มีการป้องกันเลย)
 router.use(authMiddleware);
@@ -35,21 +41,29 @@ router.get("/unassigned-devices", async (req, res) => {
             const [transactions] = await db.query(`
                 SELECT
                     pt.month,
-                    pt.pages,
-                    (pt.pages * 0.8 * COALESCE(?, 0)) AS cost
+                    pt.pages
                 FROM print_transactions pt
                 WHERE pt.device_id = ?
                 ORDER BY pt.month
             `,
-            [device.price_override, device.id]);
+            [device.id]);
 
-            device.monthly = transactions;
-            device.total_cost = transactions.reduce((sum, item) => sum + Number(item.cost), 0);
+            // คิดเงินเป็นจำนวนเต็มสตางค์ใน JS ไม่คิดใน SQL — ดู packages/domain/money.cjs
+            // เครื่องกลุ่มนี้ไม่มีสัญญา จึงมีได้แค่ราคาเฉพาะเครื่อง
+            const priceSatang = effectivePriceSatang(device.price_override, null);
+
+            device.monthly = transactions.map((row) => {
+                const satang = costSatangAt(row.pages, priceSatang);
+                return { ...row, cost_satang: satang, cost: fromSatang(satang) };
+            });
+
+            device.total_cost_satang = sumSatang(device.monthly.map((m) => m.cost_satang));
+            device.total_cost = fromSatang(device.total_cost_satang);
         }
 
-        const total_cost = devices.reduce((sum, d) => sum + d.total_cost, 0);
+        const total_cost_satang = sumSatang(devices.map((d) => d.total_cost_satang));
 
-        res.json({ devices, total_cost });
+        res.json({ devices, total_cost_satang, total_cost: fromSatang(total_cost_satang) });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
@@ -153,9 +167,7 @@ router.get("/:fiscal_year_id", async (req, res) => {
                     SELECT
 
                         pt.month,
-                        pt.pages,
-
-                        (pt.pages * 0.8 * COALESCE(?, ?, 0)) AS cost
+                        pt.pages
 
                     FROM print_transactions pt
 
@@ -166,8 +178,6 @@ router.get("/:fiscal_year_id", async (req, res) => {
                 `;
 
                 const transactionParams = [
-                    device.price_override,
-                    contract.price_per_page,
                     device.id,
                     start_month,
                     end_month
@@ -187,16 +197,23 @@ router.get("/:fiscal_year_id", async (req, res) => {
 
 
 
-                device.monthly = transactions;
+                // คิดเงินเป็นจำนวนเต็มสตางค์ใน JS ไม่คิดใน SQL — ดู packages/domain/money.cjs
+                const priceSatang = effectivePriceSatang(
+                    device.price_override,
+                    contract.price_per_page
+                );
+
+                device.monthly = transactions.map((row) => {
+                    const satang = costSatangAt(row.pages, priceSatang);
+                    return { ...row, cost_satang: satang, cost: fromSatang(satang) };
+                });
 
 
-                // รวมค่าใช้จ่ายเครื่อง
-                device.total_cost =
-                    transactions.reduce(
-                        (sum,item)=>
-                        sum + Number(item.cost),
-                        0
-                    );
+                // รวมค่าใช้จ่ายเครื่อง — บวกในหน่วยสตางค์ ไม่บวก float ของบาท
+                device.total_cost_satang = sumSatang(
+                    device.monthly.map((m) => m.cost_satang)
+                );
+                device.total_cost = fromSatang(device.total_cost_satang);
 
 
             }
@@ -206,13 +223,11 @@ router.get("/:fiscal_year_id", async (req, res) => {
 
 
 
-            // รวมค่าใช้จ่ายสัญญา
-            contract.total_cost =
-                devices.reduce(
-                    (sum,d)=>
-                    sum + d.total_cost,
-                    0
-                );
+            // รวมค่าใช้จ่ายสัญญา — บวกในหน่วยสตางค์ ไม่บวก float ของบาท
+            contract.total_cost_satang = sumSatang(
+                devices.map((d) => d.total_cost_satang)
+            );
+            contract.total_cost = fromSatang(contract.total_cost_satang);
 
 
         }

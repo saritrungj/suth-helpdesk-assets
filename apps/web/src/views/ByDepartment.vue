@@ -20,7 +20,19 @@ import MonthPicker from "../components/MonthPicker.vue";
 import SearchableSelect from "../components/SearchableSelect.vue";
 import { useChartTheme } from "../composables/useChartTheme";
 import { fiscalYearState, activeFiscalYear } from "../store/fiscalYear";
-import { formatMonthTH } from "@suth/domain";
+import { formatMonthTH, fromSatang, sumSatang, toSatang } from "@suth/domain";
+
+// รวมเงินหลายรายการ — บวกในหน่วยสตางค์ที่เป็นจำนวนเต็ม ไม่บวก float ของบาท
+// ใช้ total_cost_satang ที่ API ส่งมาก่อน ถ้าไม่มีก็แปลงจาก total_cost แบบไม่ผ่านทศนิยมลอยตัว
+// ดูเหตุผลใน packages/domain/money.cjs
+function sumCost(rows) {
+  return fromSatang(
+    sumSatang(
+      (rows || []).map((r) => r.total_cost_satang ?? toSatang(r.total_cost))
+    )
+  );
+}
+
 
 const { baseChartOptions } = useChartTheme();
 
@@ -301,7 +313,7 @@ const totalDepartmentCount = computed(() =>
 );
 
 const grandTotalCost = computed(() =>
-  divisions.value.reduce((sum, d) => sum + Number(d.total_cost || 0), 0)
+  sumCost(divisions.value)
 );
 
 const grandTotalPages = computed(() =>
@@ -373,14 +385,21 @@ const chartEntities = computed(() => {
 
 // รวมยอดรายเดือน (ทั้งค่าใช้จ่ายและจำนวนหน้า) จาก device.monthly ของทุกเครื่องในรายการนั้น
 function buildMonthlySeries(devices) {
+  // สะสมค่าใช้จ่ายในหน่วยสตางค์ก่อน แล้วค่อยแปลงเป็นบาทตอนท้าย
+  // ไม่งั้นการบวก float ข้ามหลายเครื่องหลายเดือนจะคลาดสะสมจนกราฟไม่ตรงกับตาราง
   const byMonth = {};
   for (const device of devices) {
     for (const m of device.monthly || []) {
-      if (!byMonth[m.month]) byMonth[m.month] = { cost: 0, pages: 0 };
-      byMonth[m.month].cost += Number(m.total_cost || 0);
+      if (!byMonth[m.month]) byMonth[m.month] = { costSatang: 0, pages: 0 };
+      byMonth[m.month].costSatang += m.total_cost_satang ?? toSatang(m.total_cost);
       byMonth[m.month].pages += Number(m.net_pages || 0);
     }
   }
+
+  for (const entry of Object.values(byMonth)) {
+    entry.cost = fromSatang(entry.costSatang);
+  }
+
   return byMonth;
 }
 
@@ -1220,7 +1239,7 @@ onMounted(async () => {
         </div>
         <div class="flex items-center gap-4">
           <span class="font-bold text-yellow-800">
-            {{ formatMoney(unassignedDevices.reduce((s, d) => s + Number(d.total_cost || 0), 0)) }} บาท
+            {{ formatMoney(sumCost(unassignedDevices)) }} บาท
           </span>
           <ChevronIcon :open="showUnassigned" class="text-yellow-700" />
         </div>

@@ -17,7 +17,8 @@
     "index.mjs",
     "month.cjs",
     "fiscal-year.cjs",
-    "format.cjs"
+    "format.cjs",
+    "money.cjs"
   ],
   "scripts": {
     "test": "node test.cjs"
