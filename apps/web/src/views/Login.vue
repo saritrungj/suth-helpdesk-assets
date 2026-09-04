@@ -2,9 +2,13 @@
   <div class="min-h-screen flex items-center justify-center px-4" style="background-color: var(--body-bg);">
     <div class="bg-gray-50 p-8 rounded-2xl shadow-xl shadow-black/5 border border-gray-200 w-full max-w-sm">
       <div class="flex flex-col items-center text-center mb-6">
-        <span class="w-12 h-12 rounded-2xl bg-blue-700 text-white flex items-center justify-center font-bold mb-3">
-          IT
-        </span>
+        <img
+          src="/logo-suth.png"
+          width="480"
+          height="198"
+          alt="โรงพยาบาลมหาวิทยาลัยเทคโนโลยีสุรนารี"
+          class="w-48 h-auto rounded-2xl bg-white p-3 mb-4 shadow-sm ring-1 ring-black/5"
+        />
         <h2 class="text-lg font-semibold text-gray-800">ระบบจัดการทรัพย์สิน IT</h2>
         <p class="text-sm text-gray-400 mt-0.5">เข้าสู่ระบบเพื่อดำเนินการต่อ</p>
       </div>

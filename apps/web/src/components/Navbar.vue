@@ -13,9 +13,13 @@
         </svg>
       </button>
 
-      <span class="hidden sm:flex w-9 h-9 rounded-xl bg-blue-600 text-white items-center justify-center font-bold text-sm shrink-0">
-        IT
-      </span>
+      <img
+        src="/logo-suth.png"
+        width="480"
+        height="198"
+        alt="โรงพยาบาลมหาวิทยาลัยเทคโนโลยีสุรนารี"
+        class="hidden sm:block h-9 w-auto rounded-xl bg-white px-1.5 py-1 ring-1 ring-black/5 shrink-0"
+      />
       <h2 class="text-base font-semibold text-gray-800 truncate">
         <!-- จอเล็กมาก (< sm) ตัดเหลือชื่อย่อ กันแถวนี้ต้องแบ่งหลายบรรทัดร่วมกับปุ่ม/ตัวควบคุมฝั่งขวา -->
         <span class="sm:hidden">ระบบทรัพย์สิน IT</span>

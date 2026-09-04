@@ -14,14 +14,18 @@
     :class="uiState.mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'"
   >
 
-    <!-- โลโก้ / ชื่อระบบ -->
-    <div class="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-gray-200">
-      <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-bold text-sm tracking-wide shrink-0 shadow-sm ring-1 ring-blue-900/10">
-        IT
-      </span>
+    <!-- โลโก้ / ชื่อระบบ — โลโก้เป็นภาพพื้นขาว จึงวางบนแผ่น bg-white เสมอ
+         (bg-white ไม่ถูกพลิกสีตามโหมด เหมือน bg-gray-*) เพื่อให้ขอบภาพกลืนกับแผ่นรองทั้งสองโหมด -->
+    <div class="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-gray-200">
       <div class="leading-tight min-w-0 flex-1">
-        <p class="font-semibold text-gray-800 truncate">IT Asset</p>
-        <p class="text-sm text-gray-400 truncate">ระบบทรัพย์สินโรงพยาบาล</p>
+        <img
+          src="/logo-suth.png"
+          width="480"
+          height="198"
+          alt="โรงพยาบาลมหาวิทยาลัยเทคโนโลยีสุรนารี"
+          class="w-full max-w-[168px] h-auto rounded-xl bg-white p-2 shadow-sm ring-1 ring-black/5"
+        />
+        <p class="text-sm text-gray-400 truncate mt-2">ระบบทรัพย์สินโรงพยาบาล</p>
       </div>
 
       <!-- ปุ่มปิด — เฉพาะจอมือถือ/แท็บเล็ต -->
