@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
 
-const db = require("../db");
-const authMiddleware = require("../middlewares/authMiddleware");
-const staffMiddleware = require("../middlewares/staffMiddleware");
+const db = require("../shared/db");
+const authMiddleware = require("../auth/require-auth");
+const staffMiddleware = require("../auth/require-staff");
 
 // เดือนเก็บเป็น "YYYY-MM" แบบ ค.ศ. เสมอ — normalizeMonth() รับได้ทั้ง พ.ศ. และ ค.ศ.
 // แล้วแปลงเป็น ค.ศ. ให้ (รวมถึงเติม 0 หน้าเดือนหลักเดียว) ดูเหตุผลใน @suth/domain

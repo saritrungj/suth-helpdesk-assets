@@ -1,4 +1,4 @@
-const db = require("../db");
+const db = require("../shared/db");
 const { z } = require("zod");
 
 // ============================================================

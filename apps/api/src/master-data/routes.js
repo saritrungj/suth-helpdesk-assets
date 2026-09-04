@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
-const authMiddleware = require('../middlewares/authMiddleware');
-const adminMiddleware = require('../middlewares/adminMiddleware');
+const db = require('../shared/db');
+const authMiddleware = require('../auth/require-auth');
+const adminMiddleware = require('../auth/require-admin');
 
 // ต้อง login ก่อนถึงจะเรียก master data ได้ (เดิมไม่มีการป้องกันเลย)
 router.use(authMiddleware);

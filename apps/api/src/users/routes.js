@@ -1,9 +1,9 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const router = express.Router();
-const db = require('../db');
-const authMiddleware = require('../middlewares/authMiddleware');
-const adminMiddleware = require('../middlewares/adminMiddleware');
+const db = require('../shared/db');
+const authMiddleware = require('../auth/require-auth');
+const adminMiddleware = require('../auth/require-admin');
 
 // ============================================================
 // User Management API — เฉพาะ admin เท่านั้นที่เข้าหน้านี้ได้ทั้งหมด

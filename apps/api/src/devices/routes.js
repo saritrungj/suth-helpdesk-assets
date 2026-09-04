@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
 
-const authMiddleware = require("../middlewares/authMiddleware");
-const adminMiddleware = require("../middlewares/adminMiddleware");
+const authMiddleware = require("../auth/require-auth");
+const adminMiddleware = require("../auth/require-admin");
 
-const deviceController = require("../controllers/deviceController");
+const deviceController = require("./controller");
 
 // ทุกคนที่ Login แล้วดูได้
 router.get(

@@ -1,7 +1,7 @@
 const fs = require("fs");
 const XLSX = require("xlsx");
-const db = require("../db");
-const { recordLocationHistory } = require("./deviceController");
+const db = require("../shared/db");
+const { recordLocationHistory } = require("../devices/controller");
 const { normalizeMonth } = require("@suth/domain");
 
 // ============================================================

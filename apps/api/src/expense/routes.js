@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
 
-const db = require("../db");
-const authMiddleware = require("../middlewares/authMiddleware");
+const db = require("../shared/db");
+const authMiddleware = require("../auth/require-auth");
 
 // รับ query.month เป็นเดือนเดียว "YYYY-MM" หรือหลายเดือนคั่นด้วย comma "YYYY-MM,YYYY-MM"
 // (ตอนกดเลือกด่วน "ไตรมาส"/"ครึ่งปี" จาก MonthPicker ฝั่งหน้า "ค่าใช้จ่ายแยกตามสัญญา")

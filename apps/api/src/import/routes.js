@@ -2,9 +2,9 @@ const express = require("express");
 const multer = require("multer");
 const router = express.Router();
 
-const authMiddleware = require("../middlewares/authMiddleware");
-const adminMiddleware = require("../middlewares/adminMiddleware");
-const importController = require("../controllers/importController");
+const authMiddleware = require("../auth/require-auth");
+const adminMiddleware = require("../auth/require-admin");
+const importController = require("./controller");
 
 // จำกัดขนาดไฟล์ (5MB) และรับเฉพาะไฟล์ Excel/CSV กัน disk เต็ม/อัปโหลดไฟล์แปลกปลอม
 const ALLOWED_MIME_TYPES = [

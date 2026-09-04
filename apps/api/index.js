@@ -38,33 +38,33 @@ app.use(express.json());
 // ======================
 
 const masterDataRoutes =
-  require("./routes/master-data");
+  require("./src/master-data/routes");
 
 const devicesRoutes =
-  require("./routes/devices");
+  require("./src/devices/routes");
 
 const contractsRoutes =
-  require("./routes/contracts");
+  require("./src/contracts/routes");
 
 const printTransactionsRoutes =
-  require("./routes/print-transactions");
+  require("./src/print-usage/routes");
 
 const dashboardRoutes =
-  require("./routes/dashboard");
+  require("./src/dashboard/routes");
 
 const authRoutes =
-  require("./routes/auth");
+  require("./src/auth/routes");
 
 const importRoutes =
-  require("./routes/importRoutes");
+  require("./src/import/routes");
 
 const usersRoutes =
-  require("./routes/users");
+  require("./src/users/routes");
 
 
 // ⭐ เพิ่มบรรทัดนี้
 const expenseRoutes =
-  require("./routes/expense");
+  require("./src/expense/routes");
 
 
 

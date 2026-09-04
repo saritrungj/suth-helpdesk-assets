@@ -14,11 +14,30 @@
 
 ## โครงสร้างโปรเจกต์
 
-- `apps/api/` — CommonJS Express API; โค้ดแบ่งตามความสามารถใน `src/`
+npm workspace เดียว ติดตั้งด้วย `npm install` ที่รากครั้งเดียว
+
+- `apps/api/` — CommonJS Express API; `index.js` เป็น entry ที่ mount route เท่านั้น โค้ดจริงอยู่ใน `src/` แบ่งตามความสามารถ
 - `apps/web/` — Vue 3 SPA; views, components, stores, router และ API client
-- `packages/domain/` — กฎธุรกิจที่ทั้งสองฝั่งใช้ร่วมกัน (ปีงบ เดือน) ห้ามเขียนซ้ำที่อื่น
+- `packages/domain/` — กฎธุรกิจที่ทั้งสองฝั่งใช้ร่วมกัน (ปีงบ เดือน การแสดงผลภาษาไทย) **ห้ามเขียนซ้ำที่อื่น**
 - `database/` — schema สำหรับฐานข้อมูลใหม่, ordered migrations สำหรับฐานข้อมูลเดิม และ seed
-- `docs/` — ภาพรวมระบบและคู่มือปฏิบัติการ
+- `docs/` — ภาพรวมระบบ คู่มือปฏิบัติการ และ ADR
+
+โฟลเดอร์ใน `apps/api/src/` ตั้งชื่อตามสิ่งที่ระบบทำ ไม่ใช่ตามชนิดของไฟล์ — โค้ดของหนึ่งความสามารถอยู่ด้วยกันหมด
+
+| โฟลเดอร์ | รับผิดชอบ |
+|---|---|
+| `auth/` | ล็อกอิน และ middleware `require-auth` / `require-admin` / `require-staff` ที่ feature อื่นเรียกใช้ |
+| `devices/` | ทะเบียนเครื่องและประวัติการย้าย |
+| `print-usage/` | ยอดพิมพ์รายเดือน |
+| `expense/` | ค่าใช้จ่ายตามสัญญา |
+| `dashboard/` | รายงานรวมและ KPI |
+| `contracts/` | สัญญาและราคาต่อหน้า |
+| `master-data/` | ข้อมูลอ้างอิง (ยี่ห้อ อาคาร ชั้น ฝ่าย แผนก ปีงบ) |
+| `users/` | จัดการผู้ใช้ |
+| `import/` | นำเข้าไฟล์ Excel/CSV ทั้งทะเบียนเครื่องและยอดมิเตอร์ |
+| `shared/` | เฉพาะของที่ทุก feature ใช้จริง ตอนนี้มีแค่ `db.js` |
+
+เพิ่มความสามารถใหม่ = เพิ่มโฟลเดอร์ใหม่ใน `src/` แล้ว mount ที่ `index.js` ห้ามเพิ่มโฟลเดอร์แบบ `routes/` หรือ `controllers/` กลับมาอีก ถ้าโค้ดถูกใช้แค่ feature เดียว ให้อยู่ในโฟลเดอร์ของ feature นั้น อย่ายัดเข้า `shared/`
 
 ใช้ indentation 2 spaces Backend ใช้ CommonJS และ semicolon ส่วน Frontend ใช้ ES modules, Vue `<script setup>` และ Tailwind classes ตั้งชื่อ Vue component แบบ PascalCase และ JavaScript identifier แบบ camelCase โดยยึดรูปแบบไฟล์ข้างเคียง
 
