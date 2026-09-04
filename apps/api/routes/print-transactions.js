@@ -6,8 +6,8 @@ const authMiddleware = require("../middlewares/authMiddleware");
 const staffMiddleware = require("../middlewares/staffMiddleware");
 
 // เดือนเก็บเป็น "YYYY-MM" แบบ ค.ศ. เสมอ — normalizeMonth() รับได้ทั้ง พ.ศ. และ ค.ศ.
-// แล้วแปลงเป็น ค.ศ. ให้ (รวมถึงเติม 0 หน้าเดือนหลักเดียว) ดูเหตุผลใน utils/month.js
-const { normalizeMonth } = require("../utils/month");
+// แล้วแปลงเป็น ค.ศ. ให้ (รวมถึงเติม 0 หน้าเดือนหลักเดียว) ดูเหตุผลใน @suth/domain
+const { normalizeMonth } = require("@suth/domain");
 
 // ต้อง login ก่อนถึงจะบันทึก/ดูยอดพิมพ์ได้ (เดิมไม่มีการป้องกันเลย)
 router.use(authMiddleware);

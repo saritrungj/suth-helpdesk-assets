@@ -10,7 +10,7 @@ router.use(authMiddleware);
 // รับ query.month เป็นเดือนเดียว "YYYY-MM" หรือหลายเดือนคั่นด้วย comma
 // "YYYY-MM,YYYY-MM" (ตามที่ MonthPicker หน้า Dashboard ส่งมาตอนเลือกได้หลายเดือน)
 // คืนเป็น array เสมอ ใช้คู่กับ "col IN (?)" ผ่าน mysql2 — แปลง พ.ศ. เป็น ค.ศ. ให้ด้วย
-const { parseMonths, normalizeMonth } = require('../utils/month');
+const { parseMonths, normalizeMonth } = require('@suth/domain');
 
 
 // ============================================================

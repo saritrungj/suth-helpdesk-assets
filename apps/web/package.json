@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@suth/domain": "*",
     "@tailwindcss/vite": "^4.3.1",
     "axios": "^1.18.1",
     "chart.js": "^4.5.1",

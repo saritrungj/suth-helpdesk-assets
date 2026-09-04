@@ -11,6 +11,7 @@ import {
   fiscalYearMonths,
   loadFiscalYears,
 } from "../store/fiscalYear";
+import { formatMonthTH, formatDateTH } from "@suth/domain";
 
 const loading = ref(false);
 const error = ref(null);
@@ -142,14 +143,7 @@ const displayMonths = computed(() =>
 );
 
 function formatMonthShort(value) {
-  if (!value) return "";
-  const monthsTH = [
-    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.",
-    "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.",
-    "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-  ];
-  const [y, m] = value.split("-");
-  return `${monthsTH[Number(m) - 1]} ${String(Number(y) + 543).slice(-2)}`;
+  return value ? formatMonthTH(value, { shortYear: true }) : "";
 }
 
 async function loadReport() {
@@ -226,15 +220,7 @@ function monthsInPeriod(months, period) {
 }
 
 function formatDateShort(value) {
-  if (!value) return "-";
-  const datePart = String(value).split("T")[0];
-  const [y, m, d] = datePart.split("-");
-  const monthsTH = [
-    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.",
-    "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.",
-    "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-  ];
-  return `${Number(d)} ${monthsTH[Number(m) - 1] || m} ${Number(y) + 543}`;
+  return value ? formatDateTH(String(value).split("T")[0]) : "-";
 }
 
 function formatPeriodRange(period) {

@@ -179,7 +179,7 @@ registerChildLookup('floor', '/floors', 'building_id');
 registerChildLookup('department', '/departments', 'division_id');
 
 // fiscal_year uses "year" column instead of "name"
-const { getFiscalYearRange } = require('../utils/fiscalYear');
+const { getFiscalYearRange } = require('@suth/domain');
 
 router.get('/fiscal-years', async (req, res) => {
   try {

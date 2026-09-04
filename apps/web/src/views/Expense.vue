@@ -6,6 +6,7 @@ import { fiscalYearState } from "../store/fiscalYear";
 import ChevronIcon from "../components/ChevronIcon.vue";
 import AppIcon from "../components/AppIcon.vue";
 import MonthPicker from "../components/MonthPicker.vue";
+import { formatMonthTH } from "@suth/domain";
 
 const loading = ref(false);
 const error = ref(null);
@@ -91,16 +92,7 @@ function formatMoney(value) {
 function formatMonth(value) {
   if (!value || typeof value !== "string") return value;
 
-  const monthsTH = [
-    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
-    "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม",
-    "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-  ];
-
-  const [year, m] = value.split("-");
-  const monthName = monthsTH[Number(m) - 1] || value;
-
-  return `${monthName} ${Number(year) + 543}`;
+  return formatMonthTH(value, { long: true });
 }
 
 // เครื่องที่ยังไม่ได้ผูกสัญญา — ไม่ขึ้นกับปีงบ เพราะไม่มีสัญญาที่จะบอกปีงบได้

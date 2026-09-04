@@ -5,14 +5,14 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon index.js"
   },
   "type": "commonjs",
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@suth/domain": "*",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "csv-parser": "^3.2.1",

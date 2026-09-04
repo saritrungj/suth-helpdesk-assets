@@ -16,6 +16,7 @@ import {
 
 import api from "../services/api";
 import { useChartTheme } from "../composables/useChartTheme";
+import { formatMonthTH } from "@suth/domain";
 
 const { baseChartOptions } = useChartTheme();
 
@@ -197,15 +198,7 @@ async function loadMonthly(){
 
 
 
-    const monthsTH = [
-      "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.",
-      "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.",
-      "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-    ];
-    const formatMonthLabel = (value) => {
-      const [y, m] = value.split("-");
-      return `${monthsTH[Number(m) - 1]} ${Number(y) + 543}`;
-    };
+    const formatMonthLabel = (value) => formatMonthTH(value);
 
     chartData.value = {
 

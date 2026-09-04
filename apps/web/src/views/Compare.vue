@@ -17,6 +17,7 @@ import MonthPicker from "../components/MonthPicker.vue";
 import SearchableSelect from "../components/SearchableSelect.vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useChartTheme } from "../composables/useChartTheme";
+import { formatMonthTH } from "@suth/domain";
 
 const { baseChartOptions } = useChartTheme();
 
@@ -145,14 +146,7 @@ function resetFilter() {
 }
 
 function formatMonth(value) {
-  if (!value) return "";
-  const monthsTH = [
-    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
-    "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม",
-    "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-  ];
-  const [y, m] = value.split("-");
-  return `${monthsTH[Number(m) - 1]} ${Number(y) + 543}`;
+  return value ? formatMonthTH(value, { long: true }) : "";
 }
 
 // -------------------------------------------------------

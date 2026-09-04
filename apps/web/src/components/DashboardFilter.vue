@@ -4,6 +4,7 @@ import api from "../services/api";
 import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
 import SearchableSelect from "./SearchableSelect.vue";
 import MonthPicker from "./MonthPicker.vue";
+import { fiscalYearLabel } from "@suth/domain";
 
 const emit = defineEmits(["filter"]);
 
@@ -117,7 +118,7 @@ onMounted(async () => {
       <!-- เดือน (ปีอ้างอิงจากปีงบที่เลือกที่ Navbar) -->
       <div>
         <label class="block text-xs text-gray-500 mb-1">
-          เดือน (ปีงบ {{ range ? Number(range.endMonth.split("-")[0]) + 543 : "-" }})
+          เดือน (ปีงบ {{ fiscalYearLabel(range) }})
         </label>
         <MonthPicker v-model="monthSelection" :options="months" />
       </div>

@@ -99,7 +99,13 @@ npm run build
 - รายงานย้อนหลังของเครื่องที่ย้ายสถานที่หรือหน่วยงาน
 - Fresh schema และ migration path ที่เปลี่ยน
 
-Backend `npm test` ยังเป็น placeholder ให้รายงานข้อจำกัดนี้เมื่อไม่ได้ทดสอบด้วยวิธีอื่น
+Automated test:
+
+```powershell
+npm test
+```
+
+ตอนนี้ครอบคลุมเฉพาะ `packages/domain` (ปีงบ เดือน พ.ศ./ค.ศ. และการแสดงผล) ส่วน `apps/api` และ `apps/web` ยังไม่มี automated test ให้รายงานข้อจำกัดนี้ทุกครั้งที่ไม่ได้ทดสอบด้วยวิธีอื่น
 
 ## ก่อนนำขึ้น Production
 

@@ -6,6 +6,7 @@ import SearchableSelect from "../components/SearchableSelect.vue";
 import DataTable from "../components/DataTable.vue";
 import AppIcon from "../components/AppIcon.vue";
 import { authState } from "../store/auth";
+import { formatMonthTH, fiscalYearLabel } from "@suth/domain";
 
 // viewer = สิทธิ์ดูอย่างเดียว กรอก/แก้ไขยอดพิมพ์ไม่ได้ (backend บังคับด้วย staffMiddleware อยู่แล้ว
 // ส่วนนี้แค่ซ่อน/ปิดการกรอกฝั่ง UI ไม่ให้พยายามกรอกแล้วเจอ error กลับมา)
@@ -44,15 +45,7 @@ const brands = ref([]);
 // ปีงบราชการไทยคือ ต.ค.-ก.ย. (คร่อม 2 ปีปฏิทิน) — เดิมที่นี่สมมติผิดว่าตรงกับปีปฏิทินเดียวกันเป๊ะ
 const fiscalYearId = computed(() => fiscalYearState.activeId);
 const range = computed(() => activeFiscalYearRange.value);
-const displayYearBE = computed(() =>
-  range.value ? Number(range.value.endMonth.split("-")[0]) + 543 : "-"
-);
-
-const monthsTH = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
-  "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม",
-  "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-];
+const displayYearBE = computed(() => fiscalYearLabel(range.value));
 
 const statusMeta = {
   active: { label: "ใช้งานอยู่", class: "bg-green-100 text-green-700" },
@@ -222,9 +215,7 @@ function fillInfo(deviceId) {
 }
 
 function formatMonth(month) {
-  if (!month) return "-";
-  const [year, monthNumber] = month.split("-").map(Number);
-  return `${monthsTH[monthNumber - 1]} ${year + 543}`;
+  return month ? formatMonthTH(month, { long: true }) : "-";
 }
 
 function selectedMonthPages(deviceId) {
@@ -304,16 +295,13 @@ const modalError = ref(null);
 const modalMonths = ref([]);
 
 function buildMonthRows(fiscalRange) {
-  return fiscalYearMonths(fiscalRange).map((month) => {
-    const [year, monthNum] = month.split("-").map(Number);
-    // ต่อท้ายปี พ.ศ. ให้เดือนด้วยเสมอ เพราะปีงบราชการไทยคร่อม 2 ปีปฏิทิน (ต.ค.-ธ.ค. ของปีก่อนหน้า
-    // + ม.ค.-ก.ย. ของปีถัดไป) แค่ชื่อเดือนเฉยๆ จะกำกวมว่าเป็นเดือนของปีไหน (เช่น "ธันวาคม" ปีไหนแน่)
-    return {
-      month,
-      label: `${monthsTH[monthNum - 1]} ${year + 543}`,
-      pages: null,
-    };
-  });
+  // ต่อท้ายปี พ.ศ. ให้เดือนด้วยเสมอ เพราะปีงบราชการไทยคร่อม 2 ปีปฏิทิน (ต.ค.-ธ.ค. ของปีก่อนหน้า
+  // + ม.ค.-ก.ย. ของปีถัดไป) แค่ชื่อเดือนเฉยๆ จะกำกวมว่าเป็นเดือนของปีไหน (เช่น "ธันวาคม" ปีไหนแน่)
+  return fiscalYearMonths(fiscalRange).map((month) => ({
+    month,
+    label: formatMonthTH(month, { long: true }),
+    pages: null,
+  }));
 }
 
 async function openModal(device) {

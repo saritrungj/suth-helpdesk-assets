@@ -104,6 +104,7 @@ import ChevronIcon from "./ChevronIcon.vue";
 import AppIcon from "./AppIcon.vue";
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
+import { formatMonthTH, fiscalYearLabel } from "@suth/domain";
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] }, // array ของ "YYYY-MM"
@@ -116,18 +117,11 @@ const emit = defineEmits(["update:modelValue"]);
 const open = ref(false);
 const rootEl = ref(null);
 
-const monthsTH = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
-  "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม",
-  "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-];
 
 // ช่วงเดือนอ้างอิงมาจากปีงบ (global, เลือกที่ Navbar) เสมอ — ตัวเลือกเดือนที่นี่จึงเหลือแค่ "เดือน" อย่างเดียว
 // ปีงบราชการไทยคือ ต.ค.-ก.ย. (คร่อม 2 ปีปฏิทิน) จึงต้องไล่จาก fiscalYearMonths() แทนการวนลูป ม.ค.-ธ.ค. ปีเดียว
 const range = computed(() => activeFiscalYearRange.value);
-const displayYearBE = computed(() =>
-  range.value ? Number(range.value.endMonth.split("-")[0]) + 543 : "-"
-);
+const displayYearBE = computed(() => fiscalYearLabel(range.value));
 
 // ตัวเลือกเดือนที่แสดงจริง เรียงตามลำดับปีงบ (ต.ค. ปีก่อนหน้า ... ก.ย. ปีที่ตรงกับปีงบ)
 const fiscalMonthOptions = computed(() =>
@@ -201,9 +195,7 @@ function selectQuick(months) {
 }
 
 function formatMonth(value) {
-  if (!value) return "";
-  const [y, m] = value.split("-");
-  return `${monthsTH[Number(m) - 1]} ${Number(y) + 543}`;
+  return value ? formatMonthTH(value) : "";
 }
 
 const summaryLabel = computed(() => {

@@ -1,6 +1,7 @@
 import { reactive, computed, watch } from "vue";
 import api from "../services/api";
 import router from "../router";
+import { fiscalYearMonths } from "@suth/domain";
 
 // state ปีงบกลาง ที่ทุกหน้า/ทุก component subscribe ร่วมกัน
 // ห้ามสร้าง fiscalYearId ซ้ำเป็น local state ในหน้าอื่นอีก ให้ import ตัวนี้ไปใช้แทน
@@ -18,7 +19,7 @@ export const activeFiscalYear = computed(
 // ช่วงเดือนจริงของปีงบที่ active อยู่ตอนนี้ (ปีงบราชการไทย = 1 ต.ค. - 30 ก.ย. เสมอ คร่อม 2 ปีปฏิทิน)
 // เดิมที่นี่คำนวณเองแบบผิดๆ ว่าปีงบเริ่ม ม.ค. ตรงกับปี ค.ศ. เดียวกันเป๊ะ (แค่ -543 จาก พ.ศ.)
 // ทำให้เดือนที่โชว์ให้เลือก/ใช้ query ผิดจากปีงบจริง ตอนนี้อ่าน start_month/end_month ที่
-// backend คำนวณเก็บไว้ให้แล้วตอนสร้าง/แก้ไขปีงบ (ดู backend/utils/fiscalYear.js) แทน
+// backend คำนวณเก็บไว้ให้แล้วตอนสร้าง/แก้ไขปีงบ (ดู @suth/domain) แทน
 // null = ยังไม่มีปีงบ active ให้ component ที่ใช้ค่านี้เช็คเองก่อนสร้างเดือน
 export const activeFiscalYearRange = computed(() => {
   const fy = activeFiscalYear.value;
@@ -27,25 +28,9 @@ export const activeFiscalYearRange = computed(() => {
 });
 
 // สร้างรายชื่อเดือน "YYYY-MM" เรียงจาก start_month ถึง end_month ของปีงบ (12 เดือน ต.ค.-ก.ย.)
-export function fiscalYearMonths(range) {
-  if (!range) return [];
-
-  const [startY, startM] = range.startMonth.split("-").map(Number);
-  const months = [];
-  let y = startY;
-  let m = startM;
-
-  for (let i = 0; i < 12; i++) {
-    months.push(`${y}-${String(m).padStart(2, "0")}`);
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
-    }
-  }
-
-  return months;
-}
+// ตัวจริงอยู่ที่ @suth/domain เพราะฝั่ง API ต้องได้ลำดับเดือนชุดเดียวกัน — re-export ต่อไว้
+// เพื่อไม่ให้หน้าที่ import จาก store นี้อยู่เดิมต้องแก้
+export { fiscalYearMonths };
 
 let loaded = false;
 let loadingPromise = null;

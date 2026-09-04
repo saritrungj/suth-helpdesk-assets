@@ -14,6 +14,7 @@ import api from "../services/api";
 import SearchableSelect from "../components/SearchableSelect.vue";
 import { toastSuccess, toastError } from "../store/toast";
 import { askConfirm } from "../store/confirmDialog";
+import { formatDateTH } from "@suth/domain";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -152,13 +153,7 @@ function formatHistoryDate(value) {
   if (!value) return "-";
   // mysql2 คืนคอลัมน์ DATE เป็น Date object พอผ่าน res.json() จะกลายเป็น ISO string
   // แบบ "2024-12-17T00:00:00.000Z" (ไม่ใช่ "2024-12-17" เปล่าๆ) — ตัดส่วนเวลาทิ้งก่อนเสมอ
-  const datePart = String(value).split("T")[0];
-  const [y, m, d] = datePart.split("-");
-  const monthsTH = [
-    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-    "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-  ];
-  return `${Number(d)} ${monthsTH[Number(m) - 1] || m} ${Number(y) + 543}`;
+  return formatDateTH(String(value).split("T")[0]);
 }
 
 async function loadHistory(id) {

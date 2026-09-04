@@ -2,7 +2,7 @@ const fs = require("fs");
 const XLSX = require("xlsx");
 const db = require("../db");
 const { recordLocationHistory } = require("./deviceController");
-const { normalizeMonth } = require("../utils/month");
+const { normalizeMonth } = require("@suth/domain");
 
 // ============================================================
 // แปลง "เดือน/ปี พ.ศ. 2 หลัก" ในหัวคอลัมน์ไฟล์มิเตอร์ (เช่น "meter 9/67",
@@ -10,7 +10,7 @@ const { normalizeMonth } = require("../utils/month");
 //
 // ⚠️ ห้ามใช้ "ลำดับคอลัมน์" (column position) มาเดาว่าเป็นเดือนไหนของปีงบ
 // เพราะไฟล์ Excel เดิมเรียงคอลัมน์เดือนเริ่มจาก "กันยายน" (เดือนก่อนปีงบใหม่)
-// ไม่ได้เริ่มจาก "ตุลาคม" แบบปีงบราชการไทยที่ระบบใช้ (ดู backend/utils/fiscalYear.js)
+// ไม่ได้เริ่มจาก "ตุลาคม" แบบปีงบราชการไทยที่ระบบใช้ (ดู @suth/domain)
 // ถ้า map ตามตำแหน่งคอลัมน์ตรงๆ ยอดของเดือนกันยาจะไปตกที่เดือนตุลาแทน (เพี้ยนทั้งแถว)
 // จึงต้อง "อ่านชื่อเดือน/ปีจากหัวคอลัมน์" ทุกครั้ง แล้วคำนวณเป็นเดือนปฏิทินจริงเสมอ
 // เมื่อเดือนจริงถูกต้องแล้ว การ query ด้วยช่วงปีงบ (start_month/end_month) ฝั่ง
@@ -26,7 +26,7 @@ function parseMeterMonthHeader(header) {
   // เพราะไฟล์นี้เป็นข้อมูลปีงบปัจจุบัน ไม่มีทางเป็นปี 2400 หรือ 2600
   const beYearFull = 2500 + Number(match[2]);
 
-  // ส่งต่อให้ normalizeMonth() แปลง พ.ศ. เป็น ค.ศ. — การลบ 543 อยู่ที่ utils/month.js ที่เดียว
+  // ส่งต่อให้ normalizeMonth() แปลง พ.ศ. เป็น ค.ศ. — การลบ 543 อยู่ที่ @suth/domain ที่เดียว
   return normalizeMonth(`${beYearFull}-${month}`);
 }
 

@@ -20,6 +20,7 @@ import MonthPicker from "../components/MonthPicker.vue";
 import SearchableSelect from "../components/SearchableSelect.vue";
 import { useChartTheme } from "../composables/useChartTheme";
 import { fiscalYearState, activeFiscalYear } from "../store/fiscalYear";
+import { formatMonthTH } from "@suth/domain";
 
 const { baseChartOptions } = useChartTheme();
 
@@ -69,14 +70,7 @@ function formatPages(value) {
 }
 
 function formatMonth(value) {
-  if (!value) return "";
-  const monthsTH = [
-    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.",
-    "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.",
-    "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-  ];
-  const [y, m] = value.split("-");
-  return `${monthsTH[Number(m) - 1]} ${Number(y) + 543}`;
+  return value ? formatMonthTH(value) : "";
 }
 
 async function loadMonths() {
