@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "@suth/api",
   "version": "1.0.0",
   "description": "Hospital IT Asset Management - Backend API",
   "main": "index.js",

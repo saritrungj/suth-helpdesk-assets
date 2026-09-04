@@ -14,8 +14,9 @@
 
 ## โครงสร้างโปรเจกต์
 
-- `backend/` — CommonJS Express API; routes, controllers, middleware และ shared utilities
-- `frontend/` — Vue 3 SPA; views, components, stores, router และ API client
+- `apps/api/` — CommonJS Express API; โค้ดแบ่งตามความสามารถใน `src/`
+- `apps/web/` — Vue 3 SPA; views, components, stores, router และ API client
+- `packages/domain/` — กฎธุรกิจที่ทั้งสองฝั่งใช้ร่วมกัน (ปีงบ เดือน) ห้ามเขียนซ้ำที่อื่น
 - `database/` — schema สำหรับฐานข้อมูลใหม่, ordered migrations สำหรับฐานข้อมูลเดิม และ seed
 - `docs/` — ภาพรวมระบบและคู่มือปฏิบัติการ
 

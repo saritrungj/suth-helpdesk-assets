@@ -10,9 +10,9 @@
 
 ## Environment
 
-ใช้ `backend/.env.example` เป็น source of truth ของรายชื่อตัวแปร คัดลอกเป็น `backend/.env` แล้วกำหนดค่าทุกตัวก่อนเปิด Backend
+ใช้ `apps/api/.env.example` เป็น source of truth ของรายชื่อตัวแปร คัดลอกเป็น `apps/api/.env` แล้วกำหนดค่าทุกตัวก่อนเปิด Backend
 
-ห้าม commit `backend/.env` และห้ามใช้ `JWT_SECRET` ตัวอย่างในระบบจริง
+ห้าม commit `apps/api/.env` และห้ามใช้ `JWT_SECRET` ตัวอย่างในระบบจริง
 
 ติดตั้ง dependencies และเปิด Backend/Frontend ตาม [Quick Start](../README.md#เริ่มต้นใช้งานสำหรับการพัฒนา)
 
@@ -69,7 +69,7 @@ mysql -u root -p your_database < database/seed_dummy_data.sql
 - ทะเบียนอุปกรณ์: `POST /api/devices/import`
 - ยอดพิมพ์: `POST /api/print-transactions/import`
 - ชื่อ form field: `file`
-- เทมเพลต CSV ทะเบียนอุปกรณ์: กดดาวน์โหลดในหน้านำเข้าข้อมูล ต้นฉบับอยู่ที่ `TEMPLATE_CSV` ใน `frontend/src/views/ImportDevices.vue`
+- เทมเพลต CSV ทะเบียนอุปกรณ์: กดดาวน์โหลดในหน้านำเข้าข้อมูล ต้นฉบับอยู่ที่ `TEMPLATE_CSV` ใน `apps/web/src/views/ImportDevices.vue`
 - คอลัมน์ทะเบียนอุปกรณ์: `serial_number`, `brand`, `model`, `building`, `floor`, `division`, `department`, `contract_no`, `price_override`
 
 Importer จับคู่ข้อมูลอ้างอิงจากค่าที่อ่านได้ในไฟล์และรายงานแถวที่ผิดพลาด การนำเข้ายอดมิเตอร์หา column รูปแบบ `meter M/YY`, จับคู่เครื่องด้วย Serial Number และ normalize เดือนเป็น ค.ศ. ก่อนบันทึก
@@ -87,7 +87,6 @@ GET http://localhost:3000/
 Frontend production build:
 
 ```powershell
-cd frontend
 npm run build
 ```
 

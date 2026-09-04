@@ -1,0 +1,33 @@
+# dependency — workspace เดียว hoist ไว้ที่รากเป็นหลัก แต่ npm ยังวางบางตัวไว้ในแต่ละ package ได้
+node_modules/
+
+# ความลับ — ห้าม commit เด็ดขาด ดูตัวอย่างค่าที่ apps/api/.env.example
+.env
+.env.*
+!.env.example
+
+# ผลลัพธ์ที่ build ได้ใหม่เสมอ
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# ไฟล์ที่ผู้ใช้อัปโหลดเข้ามาตอน import — เป็นข้อมูลจริง ไม่ใช่ซอร์สโค้ด
+apps/api/uploads/
+
+# log
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# เครื่องมือและ editor
+.DS_Store
+Thumbs.db
+*.local
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# script ชั่วคราวสำหรับสร้าง bcrypt hash — มีรหัสผ่านอยู่ในนั้น
+hash.js

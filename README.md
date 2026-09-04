@@ -20,26 +20,28 @@
 
 ต้องมี Node.js, npm และ MySQL ก่อนเริ่มต้น เตรียม environment และฐานข้อมูลตาม [คู่มือปฏิบัติการ](docs/OPERATIONS.md) ก่อนเปิดแอป
 
-เตรียมและเปิด Backend:
+ติดตั้ง dependency ครั้งเดียวที่รากของ repository — เป็น npm workspace ตัวเดียวครอบทุก package:
 
 ```powershell
-Copy-Item backend/.env.example backend/.env
-cd backend
-npm ci
-npm run dev
+Copy-Item apps/api/.env.example apps/api/.env
+npm install
 ```
 
-ตั้งค่าทุกตัวแปรตาม `backend/.env.example` ก่อนใช้งาน Backend เปิดที่ `http://localhost:3000`
+ตั้งค่าทุกตัวแปรตาม `apps/api/.env.example` ให้ครบก่อนเปิด API
 
-เปิด Frontend ในอีก terminal:
+เปิด API:
 
 ```powershell
-cd frontend
-npm ci
-npm run dev
+npm run dev:api
 ```
 
-Frontend เปิดที่ `http://localhost:5173` และเรียก API ที่ `http://localhost:3000/api`
+เปิดเว็บในอีก terminal:
+
+```powershell
+npm run dev:web
+```
+
+API เปิดที่ `http://localhost:3000` เว็บเปิดที่ `http://localhost:5173` และเรียก API ที่ `http://localhost:3000/api`
 
 ## ตรวจสอบการเปลี่ยนแปลง
 

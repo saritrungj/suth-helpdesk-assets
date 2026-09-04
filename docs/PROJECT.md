@@ -39,9 +39,9 @@ Express API (:3000)
 MySQL
 ```
 
-- Frontend route และ navigation อยู่ใน `frontend/src/router/`
-- HTTP client กลางอยู่ใน `frontend/src/services/api.js`
-- Backend entry point อยู่ที่ `backend/index.js`
+- Frontend route และ navigation อยู่ใน `apps/web/src/router/`
+- HTTP client กลางอยู่ใน `apps/web/src/services/api.js`
+- Backend entry point อยู่ที่ `apps/api/index.js`
 - Route รับ request และ controller ดูแล logic ที่ซับซ้อนกว่า
 - `database/schema.sql` เป็น source of truth ของฐานข้อมูลใหม่
 
@@ -62,8 +62,8 @@ MySQL
 
 - ปีงบราชการไทยเริ่มเดือนตุลาคมและสิ้นสุดเดือนกันยายน
 - `fiscal_year.year` แสดงเป็น พ.ศ. แต่ `start_month`, `end_month` และ `print_transactions.month` เก็บเป็น ค.ศ. รูปแบบ `YYYY-MM`
-- ระบบรับค่าเดือนทั้ง พ.ศ. และ ค.ศ. ที่ขาเข้า แล้ว normalize เป็น ค.ศ. ผ่าน `backend/utils/month.js`
-- การแปลงปีงบเป็นช่วงเดือนมี source of truth ที่ `backend/utils/fiscalYear.js`
+- ระบบรับค่าเดือนทั้ง พ.ศ. และ ค.ศ. ที่ขาเข้า แล้ว normalize เป็น ค.ศ. ผ่าน `packages/domain/month.js`
+- การแปลงปีงบเป็นช่วงเดือนมี source of truth ที่ `packages/domain/fiscal-year.js`
 
 ### ยอดพิมพ์และค่าใช้จ่าย
 

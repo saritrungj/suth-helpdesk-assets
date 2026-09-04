@@ -1,0 +1,22 @@
+{
+  "name": "suth-helpdesk-assets",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ระบบจัดการทรัพย์สิน IT โรงพยาบาล — API, เว็บ และกฎธุรกิจที่ใช้ร่วมกัน",
+  "license": "ISC",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace @suth/api",
+    "dev:web": "npm run dev --workspace @suth/web",
+    "start": "npm run start --workspace @suth/api",
+    "build": "npm run build --workspace @suth/web",
+    "preview": "npm run preview --workspace @suth/web",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
