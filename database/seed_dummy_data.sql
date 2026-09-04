@@ -167,7 +167,6 @@ ALTER TABLE contracts AUTO_INCREMENT = 3;
 ALTER TABLE devices AUTO_INCREMENT = 6;
 ALTER TABLE print_transactions AUTO_INCREMENT = 15;
 
-=======
 
 -- ==============================================================================
 -- ประวัติการย้าย (device_location_history) — ตั้งต้นช่วง "ปัจจุบัน" ให้เครื่องที่ seed มา
