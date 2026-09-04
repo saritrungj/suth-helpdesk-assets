@@ -8,6 +8,14 @@ export default defineConfig({
     tailwindcss(),
   ],
 
+  test: {
+    // เทสของ store ไม่ต้องใช้ DOM — ใช้ environment node ให้รันเร็ว
+    // ถ้าจะเทส component ค่อยตั้ง environment: "jsdom" เฉพาะไฟล์นั้นด้วย
+    // // @vitest-environment jsdom ที่หัวไฟล์
+    environment: 'node',
+    include: ['src/**/*.test.js'],
+  },
+
   optimizeDeps: {
     // @suth/domain เป็น CommonJS (ต้นฉบับต้อง require ได้จาก apps/api ที่เป็น CommonJS
     // ดู ADR-0004) ปกติ Vite จะข้าม dependency ที่เป็น workspace link ไม่ pre-bundle ให้

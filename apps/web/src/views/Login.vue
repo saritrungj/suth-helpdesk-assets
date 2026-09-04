@@ -83,7 +83,7 @@ const login = async () => {
       }
     );
 
-    setAuth(res.data.user, res.data.token);
+    setAuth(res.data.user);
 
     // ถ้ามาจากหน้าที่ session หมดอายุ (มี redirect query จาก api.js) ให้กลับไปหน้าเดิม
     router.push(route.query.redirect || "/");

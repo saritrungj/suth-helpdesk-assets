@@ -106,12 +106,19 @@ export function setActiveFiscalYear(id) {
 }
 
 // ถ้า query เปลี่ยนจากทางอื่น (เช่น กด back/forward, หรือ paste link ที่มี ?fy=) ให้ sync state ตาม
-watch(
-  () => router.currentRoute.value.query.fy,
-  (fy) => {
-    const id = Number(fy);
-    if (id && id !== fiscalYearState.activeId) {
-      fiscalYearState.activeId = id;
+//
+// ต้องเรียกจาก main.js หลังจากที่ router ถูกสร้างเสร็จแล้ว ห้ามตั้ง watch ตอน module evaluate
+// เพราะไฟล์นี้กับ router/index.js import กันเป็นวง (router -> Dashboard.vue -> ไฟล์นี้ -> router)
+// getter ของ watch จะทำงานทันทีที่สร้าง ถ้าตอนนั้น router/index.js ยังประกาศ const router ไม่เสร็จ
+// จะได้ ReferenceError: Cannot access 'router' before initialization แล้วแอปไม่ mount ทั้งหน้า
+export function startFiscalYearRouterSync() {
+  watch(
+    () => router.currentRoute.value.query.fy,
+    (fy) => {
+      const id = Number(fy);
+      if (id && id !== fiscalYearState.activeId) {
+        fiscalYearState.activeId = id;
+      }
     }
-  }
-);
+  );
+}

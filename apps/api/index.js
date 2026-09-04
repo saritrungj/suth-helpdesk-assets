@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
 const app = express();
@@ -35,6 +36,9 @@ app.use(cors({
   ],
   credentials: true
 }));
+
+// อ่าน cookie ที่เก็บ token ของ session (ดู src/auth/session-cookie.js)
+app.use(cookieParser());
 
 app.use(express.json());
 

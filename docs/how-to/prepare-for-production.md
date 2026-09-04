@@ -7,6 +7,9 @@ checklist ก่อนให้ระบบรับข้อมูลจริ�
 - [ ] ตั้ง `JWT_SECRET` และ MySQL credentials ผ่าน environment ที่ปลอดภัย ไม่ใช่ค่าตัวอย่าง
 - [ ] เปลี่ยนหรือลบบัญชี prototype ที่มากับ `schema.sql`
 - [ ] ตรวจว่า `.env` ไม่ได้ถูก commit
+- [ ] ตั้ง `NODE_ENV=production` เพื่อบังคับให้ cookie session เป็น `secure` (ส่งผ่าน HTTPS เท่านั้น)
+- [ ] ถ้าเว็บกับ API อยู่คนละโดเมน ตั้ง `COOKIE_SAMESITE=none` และต้องเสิร์ฟผ่าน HTTPS
+- [ ] แจ้งผู้ใช้ว่าหลัง deploy รอบนี้ทุกคนต้องล็อกอินใหม่หนึ่งครั้ง (เปลี่ยนวิธีเก็บ session)
 
 ## การตั้งค่า
 

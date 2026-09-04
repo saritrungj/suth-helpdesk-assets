@@ -8,7 +8,15 @@
 npm test
 ```
 
-ตอนนี้ครอบคลุมเฉพาะ `packages/domain` — ปีงบ เดือน พ.ศ./ค.ศ. และการแสดงผลภาษาไทย ส่วน `apps/api` และ `apps/web` ยังไม่มี automated test
+รันเทสของทุก workspace
+
+| workspace | ครอบคลุม | ตัวรัน |
+|---|---|---|
+| `packages/domain` | ปีงบ เดือน พ.ศ./ค.ศ. การแสดงผลไทย และการคิดเงินเป็นสตางค์ | `node:test` |
+| `apps/api` | การอ่าน token จาก cookie/header, requireAuth และค่าความปลอดภัยของ cookie | `node:test` |
+| `apps/web` | store ของ session — กู้ session, logout และการไม่เก็บ token ไว้ที่ไหน | `vitest` |
+
+ยังไม่มีเทสระดับ route ที่ต่อฐานข้อมูลจริง และยังไม่มีเทส component
 
 ## Build ฝั่งเว็บ
 

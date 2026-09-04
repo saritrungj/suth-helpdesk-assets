@@ -13,21 +13,13 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+
+  // ให้เบราว์เซอร์แนบ cookie ของ session ไปกับทุก request
+  // เดิมเว็บอ่าน token จาก localStorage มาแนบเป็น header เอง ซึ่งแปลว่า JavaScript
+  // ทุกตัวในหน้าอ่าน token ได้ ตอนนี้ token อยู่ใน cookie แบบ httpOnly ที่อ่านไม่ได้
+  // และ CORS ฝั่ง API ตั้ง credentials: true ไว้แล้ว
+  withCredentials: true,
 });
-
-// แนบ Token อัตโนมัติทุก Request
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
 
 // ถ้า Token หมดอายุหรือไม่ได้รับอนุญาต ให้ Logout
 // กัน race condition กรณีมีหลาย request ยิง 401 พร้อมกัน จะได้ toast + redirect แค่ครั้งเดียว
@@ -36,7 +28,9 @@ let isHandlingSessionExpiry = false;
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // บาง request ตั้งใจเรียกทั้งที่อาจยังไม่ได้ล็อกอิน (เช็ค session ตอนเปิดหน้า, logout)
+    // 401 ของพวกนี้เป็นเรื่องปกติ ไม่ใช่ session หมดอายุ จึงไม่ต้องเด้งหรือขึ้น toast
+    if (error.response?.status === 401 && !error.config?.skipAuthRedirect) {
       clearAuth();
 
       if (window.location.pathname !== "/login" && !isHandlingSessionExpiry) {

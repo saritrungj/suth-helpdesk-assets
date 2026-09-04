@@ -96,16 +96,17 @@
 <script setup>
 import { onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { authState, clearAuth } from "../store/auth";
+import { authState } from "../store/auth";
+import { logout as endSession } from "../store/session";
 import { fiscalYearState, loadFiscalYears, setActiveFiscalYear, resetFiscalYearState } from "../store/fiscalYear";
 import { openMobileSidebar } from "../store/ui";
 import ThemeSwitcher from "./ThemeSwitcher.vue";
 
 const router = useRouter();
 
-// clearAuth() ต้องทำก่อน router.push() เสมอ เพราะ router guard (router/index.js)
-// เช็ค token ใน localStorage ตรงๆ ก่อนอนุญาตให้เข้าหน้า /login — ถ้ายังมี token อยู่
-// จะโดนเด้งกลับ /dashboard ทันที
+// endSession() ต้องทำก่อน router.push() เสมอ เพราะ router guard (router/index.js)
+// เช็ค authState.user ก่อนอนุญาตให้เข้าหน้า /login — ถ้ายังมี user อยู่จะโดนเด้งกลับ
+// /dashboard ทันที เส้นนี้ยังสั่งให้เซิร์ฟเวอร์ลบ cookie session ทิ้งด้วย
 //
 // แต่ resetFiscalYearState() ต้องรอ "หลัง" จากที่เปลี่ยนหน้าไป /login สำเร็จแล้ว (Dashboard
 // unmount ไปแล้ว) เพราะเดิมเรียกก่อนหน้านี้ ทำให้หน้า Dashboard ที่ยังไม่ทัน unmount เห็นปีงบ
@@ -113,7 +114,7 @@ const router = useRouter();
 // ไปแล้วตั้งแต่ clearAuth() ข้างบน เลยได้ 401 เต็มไปหมด พร้อม toast "เซสชันหมดอายุ" ที่ข้อความ
 // ผิด (นี่คือ logout ตั้งใจ ไม่ใช่ session หมดอายุ)
 const logout = async () => {
-  clearAuth();
+  await endSession();
   await router.push("/login");
   resetFiscalYearState();
 };

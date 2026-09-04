@@ -2,7 +2,17 @@
 
 prefix และความรับผิดชอบ — รายละเอียด endpoint, payload และ response ให้อ่านจาก `apps/api/src/<feature>/routes.js` โดยตรง เพื่อไม่ให้เอกสารกลายเป็นสำเนาของโค้ดที่ล้าสมัย
 
-ทุกเส้นยกเว้น `/api/auth/login` ต้องมี `Authorization: Bearer <token>`
+การยืนยันตัวตนใช้ **cookie แบบ httpOnly** (`suth_session`) ที่ `POST /api/auth/login` ตั้งให้ เบราว์เซอร์แนบไปเองทุก request — เว็บอ่าน token เองไม่ได้ ดู [ADR-0006](../decisions/0006-session-cookie-instead-of-localstorage.md)
+
+สำหรับ script หรือ curl ที่ไม่มีที่เก็บ cookie ยังส่ง `Authorization: Bearer <token>` ได้เหมือนเดิม
+
+| Endpoint | ต้องล็อกอิน | หน้าที่ |
+|---|---|---|
+| `POST /api/auth/login` | ไม่ | ตรวจรหัสผ่าน ตั้ง cookie แล้วคืนข้อมูลผู้ใช้ (ไม่คืน token) |
+| `GET /api/auth/me` | ใช่ | บอกว่าตอนนี้เป็นใคร — เว็บเรียกตอนเปิดหน้าเพราะอ่าน cookie เองไม่ได้ |
+| `POST /api/auth/logout` | ไม่ | ลบ cookie ทิ้ง เรียกได้แม้ token หมดอายุแล้ว |
+
+เส้นอื่นทั้งหมดต้องล็อกอิน
 
 | Prefix | หน้าที่ | โค้ด |
 |---|---|---|

@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 
+import { authState } from "../store/auth";
+
 import Login from "../views/Login.vue";
 import Dashboard from "../views/Dashboard.vue";
 import AssetList from "../views/AssetList.vue";
@@ -239,21 +241,17 @@ const router = createRouter({
 router.beforeEach((to) => {
 
 
-  const token =
-    localStorage.getItem("token");
-
-
-  const user =
-    JSON.parse(
-      localStorage.getItem("user") || "{}"
-    );
+  // เดิมอ่าน token/user จาก localStorage ตรงๆ ตอนนี้ token อยู่ใน cookie แบบ httpOnly
+  // ที่เว็บอ่านไม่ได้ จึงใช้ผลของ GET /auth/me ที่ main.js ถามไว้ก่อน mount แทน
+  const isLoggedIn = Boolean(authState.user);
+  const user = authState.user || {};
 
 
 
   // ไม่ login
   if (
     to.path !== "/login" &&
-    !token
+    !isLoggedIn
   ) {
 
     return {
@@ -268,7 +266,7 @@ router.beforeEach((to) => {
   // Login แล้ว ไม่ควรกลับ login
   if (
     to.path === "/login" &&
-    token
+    isLoggedIn
   ) {
 
     return {

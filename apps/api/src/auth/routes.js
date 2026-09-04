@@ -3,6 +3,8 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
 const db = require("../shared/db");
+const requireAuth = require("./require-auth");
+const { SESSION_COOKIE, sessionCookieOptions } = require("./session-cookie");
 
 const router = express.Router();
 
@@ -72,14 +74,17 @@ router.post("/login", loginLimiter, async (req, res) => {
             }
         );
 
+        // เก็บ token ใน cookie แบบ httpOnly แทนการส่งกลับไปให้เว็บเก็บใน localStorage
+        // JavaScript ในหน้าอ่านค่านี้ไม่ได้ ดูเหตุผลใน ./session-cookie.js
+        res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
+
         return res.json({
             message: "Login success",
             user: {
                 id: user.id,
                 username: user.username,
                 role: user.role
-            },
-            token: token
+            }
         });
 
     } catch (error) {
@@ -93,6 +98,36 @@ router.post("/login", loginLimiter, async (req, res) => {
 
     }
 
+});
+
+
+// ============================================================
+// GET /api/auth/me — ใครกำลังใช้งานอยู่
+//
+// จำเป็นเพราะ token อยู่ใน cookie แบบ httpOnly เว็บจึงอ่านเองไม่ได้
+// ตอนเปิดหน้าใหม่หรือรีเฟรช เว็บต้องถามเส้นนี้ว่ายังล็อกอินอยู่ไหมและเป็นใคร
+// ============================================================
+router.get("/me", requireAuth, (req, res) => {
+    return res.json({
+        user: {
+            id: req.user.id,
+            username: req.user.username,
+            role: req.user.role
+        }
+    });
+});
+
+
+// ============================================================
+// POST /api/auth/logout — ลบ cookie ทิ้ง
+//
+// ไม่ต้องมี token ที่ใช้ได้ก็เรียกได้ เพราะจุดประสงค์คือทำให้ session หายไป
+// ถ้าบังคับให้ต้องมี token ที่ยังไม่หมดอายุ คนที่ token หมดอายุแล้วจะ logout ไม่ได้
+// และ cookie จะค้างอยู่ในเบราว์เซอร์
+// ============================================================
+router.post("/logout", (req, res) => {
+    res.clearCookie(SESSION_COOKIE, sessionCookieOptions({ maxAge: undefined }));
+    return res.json({ message: "Logged out" });
 });
 
 

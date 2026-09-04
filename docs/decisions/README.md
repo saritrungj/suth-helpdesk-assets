@@ -25,4 +25,5 @@
 | [0002](0002-store-months-in-common-era.md) | เก็บเดือนเป็น ค.ศ. รับเข้าได้ทั้ง พ.ศ. และ ค.ศ. | Accepted |
 | [0003](0003-sheetjs-from-vendor-registry.md) | ติดตั้ง SheetJS จาก registry ของผู้พัฒนา ไม่ใช่ npm | Accepted |
 | [0004](0004-workspace-and-feature-folders.md) | จัด repository เป็น workspace และแบ่งโค้ดตามความสามารถ | Accepted |
-| [0005](0005-database-engine.md) | เลือก database engine สำหรับระบบที่เขียนใหม่ | Proposed |
+| [0005](0005-database-engine.md) | เลือก database engine สำหรับระบบที่เขียนใหม่ — PostgreSQL | Accepted |
+| [0006](0006-session-cookie-instead-of-localstorage.md) | เก็บ token ของ session ใน cookie แบบ httpOnly | Accepted |
