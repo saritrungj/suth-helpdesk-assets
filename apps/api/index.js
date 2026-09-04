@@ -13,8 +13,15 @@ const PORT = process.env.PORT || 3000;
 
 app.use(helmet());
 
+// origin ที่อนุญาตมาจาก environment ไม่ใช่ค่าคงที่ในโค้ด — คั่นหลายค่าด้วย comma ได้
+// เดิม hardcode เป็น localhost:5173 ทำให้ deploy จริงแล้วเว็บเรียก API ไม่ได้
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin: ALLOWED_ORIGINS,
   methods: [
     "GET",
     "POST",

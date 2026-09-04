@@ -1,8 +1,10 @@
 # ตัวแปร environment
 
-source of truth คือ `apps/api/.env.example` ตารางนี้อธิบายความหมาย ถ้าสองที่ไม่ตรงกันให้เชื่อไฟล์
+source of truth คือ `apps/api/.env.example` และ `apps/web/.env.example` ตารางนี้อธิบายความหมาย ถ้าสองที่ไม่ตรงกันให้เชื่อไฟล์
 
-ไฟล์อยู่ที่ `apps/api/.env` และอยู่ใน `.gitignore` แล้ว **ห้าม commit**
+ไฟล์จริงอยู่ที่ `apps/api/.env` และ `apps/web/.env` ทั้งคู่อยู่ใน `.gitignore` แล้ว **ห้าม commit**
+
+## ฝั่ง API (`apps/api/.env`)
 
 | ตัวแปร | จำเป็น | ความหมาย |
 |---|---|---|
@@ -12,9 +14,17 @@ source of truth คือ `apps/api/.env.example` ตารางนี้อธ
 | `DB_NAME` | ใช่ | ชื่อฐานข้อมูล |
 | `JWT_SECRET` | ใช่ | กุญแจเซ็น JWT — ต้องเป็นค่าสุ่มที่ยาวและไม่ซ้ำใคร |
 | `PORT` | ไม่ | พอร์ตของ API ค่าเริ่มต้น `3000` |
+| `CORS_ORIGIN` | ไม่ | origin ของเว็บที่อนุญาตให้เรียก API คั่นหลายค่าด้วย comma ค่าเริ่มต้น `http://localhost:5173` |
+
+## ฝั่งเว็บ (`apps/web/.env`)
+
+| ตัวแปร | จำเป็น | ความหมาย |
+|---|---|---|
+| `VITE_API_BASE_URL` | ไม่ | ที่อยู่ API ที่เว็บเรียก ต้องลงท้ายด้วย `/api` ค่าเริ่มต้น `http://localhost:3000/api` |
 
 ## ข้อควรระวัง
 
 - `JWT_SECRET` ที่อ่อนหรือใช้ค่าตัวอย่าง = ใครก็ปลอม token เข้าระบบได้ ต้องเปลี่ยนก่อนขึ้น production เสมอ
 - token มีอายุ 8 ชั่วโมงและ **revoke ก่อนหมดอายุไม่ได้** การเปลี่ยน `JWT_SECRET` จะทำให้ทุก token ที่ออกไปแล้วใช้ไม่ได้ทันที
-- ค่าฝั่งเว็บ เช่น API base URL ยังไม่ได้เป็น environment configuration — ดู [เตรียมขึ้น production](../how-to/prepare-for-production.md)
+- `VITE_API_BASE_URL` ถูก **ฝังตอน build** ไม่ใช่อ่านตอนรัน เปลี่ยนค่าแล้วต้อง `npm run build` ใหม่เสมอ
+- `CORS_ORIGIN` ต้องตรงกับที่อยู่จริงของเว็บ ไม่งั้นเบราว์เซอร์จะบล็อกทุก request โดยที่ API เองไม่เห็น error

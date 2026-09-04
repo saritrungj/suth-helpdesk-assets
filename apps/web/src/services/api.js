@@ -3,8 +3,13 @@ import router from "../router";
 import { toastInfo } from "../store/toast";
 import { clearAuth } from "../store/auth";
 
+// ที่อยู่ของ API มาจาก environment ไม่ใช่ค่าคงที่ในโค้ด — เดิม hardcode เป็น localhost
+// ทำให้ build ที่ได้ใช้ได้เฉพาะบนเครื่องพัฒนา deploy จริงไม่ได้จนกว่าจะแก้โค้ด
+// ตั้งค่าที่ apps/web/.env (ดู .env.example) ค่าเริ่มต้นคือเครื่องพัฒนา
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+
 const api = axios.create({
-  baseURL: "http://localhost:3000/api",
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },

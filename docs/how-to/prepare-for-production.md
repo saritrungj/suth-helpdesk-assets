@@ -10,8 +10,8 @@ checklist ก่อนให้ระบบรับข้อมูลจริ�
 
 ## การตั้งค่า
 
-- [ ] ทำให้ API base URL ฝั่งเว็บเป็น environment configuration ไม่ใช่ค่าคงที่ใน `apps/web/src/services/api.js`
-- [ ] ทำให้ CORS origin ฝั่ง API เป็น environment configuration ไม่ใช่ `localhost` ที่ hardcode ไว้
+- [ ] ตั้ง `VITE_API_BASE_URL` ใน `apps/web/.env` ให้เป็นที่อยู่จริงของ API **แล้ว build ใหม่** (ค่านี้ฝังตอน build)
+- [ ] ตั้ง `CORS_ORIGIN` ใน `apps/api/.env` ให้เป็นที่อยู่จริงของเว็บ คั่นหลายค่าด้วย comma ได้
 - [ ] ถ้าเครื่อง production ออกอินเทอร์เน็ตไม่ได้ ต้องเตรียม tarball ของ SheetJS ไว้ในเครือข่ายก่อน ดู [ADR-0003](../decisions/0003-sheetjs-from-vendor-registry.md)
 
 ## ฐานข้อมูล
