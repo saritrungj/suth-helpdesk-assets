@@ -270,10 +270,12 @@ ON d.brand_id = br.id;
 -- ==============================================================================
 
 -- backend/routes/auth.js ใช้ bcrypt.compare(password, user.password) ตอน login
--- เดิม schema นี้ insert รหัสผ่านเป็น plaintext ('admin123' / 'user123')
--- ทำให้ bcrypt.compare เทียบไม่ตรงและ login ไม่ผ่านทุกครั้ง (แม้กรอกรหัสถูก)
--- ด้านล่างนี้แก้เป็นค่า hash จาก bcrypt (saltRounds = 10 ตาม backend/hash.js)
--- ของรหัสผ่านเดิมแทน (admin/admin123, user1/user123)
+-- เดิม schema นี้ insert รหัสผ่านเป็น plaintext ทำให้ bcrypt.compare เทียบไม่ตรง
+-- และ login ไม่ผ่านทุกครั้ง (แม้กรอกรหัสถูก) ด้านล่างนี้จึงเก็บเป็นค่า hash จาก bcrypt
+-- (saltRounds = 10) แทน
+--
+-- รหัสผ่านจริงไม่เก็บไว้ใน repo — ขอจากผู้ดูแลระบบ
+-- ติดตั้งใหม่ควรสร้างบัญชีเองแล้วตั้งรหัสใหม่ อย่าใช้ hash ตัวอย่างด้านล่างบนระบบจริง
 INSERT IGNORE INTO users (username,password,role)
 VALUES
 ('admin','$2b$10$yRofvUyNetzokkLKJAcqw.qRPIFUEdvi7eoqTkeSM4IQRKhZ7WsyC','admin'),
