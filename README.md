@@ -13,7 +13,7 @@
 ## เทคโนโลยี
 
 - Backend: Node.js, CommonJS, Express และ MySQL
-- Frontend: Vue 3, Vite, Tailwind CSS และ Chart.js
+- Frontend: Vue 3, Vite, Tailwind CSS, TanStack Query และ Chart.js (ดู [ADR-0009](docs/decisions/0009-tanstack-query-as-the-data-layer.md))
 - Database: MySQL schema, ordered migrations และข้อมูลจำลอง
 
 ## เริ่มต้นใช้งานสำหรับการพัฒนา
