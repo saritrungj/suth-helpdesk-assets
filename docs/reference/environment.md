@@ -18,6 +18,19 @@ source of truth คือ `apps/api/.env.example` และ `apps/web/.env.examp
 | `COOKIE_SAMESITE` | ไม่ | `lax` (ค่าเริ่มต้น) เมื่อเว็บกับ API อยู่โดเมนเดียวกัน · `none` เมื่ออยู่คนละโดเมน ซึ่งบังคับให้ cookie ต้อง secure |
 | `NODE_ENV` | ไม่ | ตั้งเป็น `production` บนเครื่องจริง เพื่อบังคับให้ cookie session เป็น `secure` |
 
+## ฝั่งเซิร์ฟเวอร์ MCP (`apps/mcp`)
+
+ตั้งในไฟล์ตั้งค่าของผู้ช่วย AI **ไม่ใช่ในไฟล์ที่อยู่ใน repository** — ดู [วิธีต่อ](../how-to/connect-mcp.md)
+
+| ตัวแปร | จำเป็น | ความหมาย |
+|---|---|---|
+| `SUTH_API_URL` | ไม่ | ที่อยู่ API ต้องลงท้ายด้วย `/api` ค่าเริ่มต้น `http://localhost:3000/api` |
+| `SUTH_API_USERNAME` | ใช่* | บัญชีสำหรับเครื่องมือ — **ควรเป็นบัญชีแยกที่มีสิทธิ์ `viewer`** |
+| `SUTH_API_PASSWORD` | ใช่* | รหัสผ่านของบัญชีนั้น |
+| `SUTH_API_TOKEN` | ไม่ | token ที่ออกไว้ล่วงหน้า ใช้แทนชื่อ/รหัสผ่านได้ แต่หมดอายุใน 8 ชั่วโมงและไม่ต่ออายุเอง |
+
+\* ต้องมีอย่างใดอย่างหนึ่ง: คู่ชื่อ/รหัสผ่าน หรือ `SUTH_API_TOKEN`
+
 ## ฝั่งเว็บ (`apps/web/.env`)
 
 | ตัวแปร | จำเป็น | ความหมาย |
@@ -32,3 +45,4 @@ source of truth คือ `apps/api/.env.example` และ `apps/web/.env.examp
 - `CORS_ORIGIN` ต้องระบุ origin ที่แน่นอน ใช้ `*` ไม่ได้ เพราะ cookie ต้องมากับ `credentials: true`
 - `VITE_API_BASE_URL` ถูก **ฝังตอน build** ไม่ใช่อ่านตอนรัน เปลี่ยนค่าแล้วต้อง `npm run build` ใหม่เสมอ
 - `CORS_ORIGIN` ต้องตรงกับที่อยู่จริงของเว็บ ไม่งั้นเบราว์เซอร์จะบล็อกทุก request โดยที่ API เองไม่เห็น error
+- รหัสผ่านของบัญชีที่ใช้กับเซิร์ฟเวอร์ MCP ต้องไม่อยู่ในไฟล์ใดๆ ใน repository — ไฟล์ตั้งค่าของผู้ช่วย AI อยู่นอก repository อยู่แล้ว ให้เก็บไว้ที่นั่น
