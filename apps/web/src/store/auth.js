@@ -1,6 +1,6 @@
 import { reactive } from "vue";
 
-// reactive state เดียวที่ทุก component (Sidebar, Navbar, Login) ใช้ร่วมกัน
+// reactive state เดียวที่ทุก component (แถบเมนู, แถบบน, หน้าล็อกอิน) ใช้ร่วมกัน
 //
 // ไม่มี token อยู่ที่นี่และไม่มีใน localStorage อีกแล้ว — token อยู่ใน cookie แบบ httpOnly
 // ที่ JavaScript อ่านไม่ได้ (ดู apps/api/src/auth/session-cookie.js) เว็บรู้แค่ว่า

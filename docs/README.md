@@ -15,6 +15,9 @@
 
 - [กฎธุรกิจและโดเมน](explanation/domain.md) — ปีงบประมาณ การคิดค่าใช้จ่าย ประวัติการย้ายเครื่อง และบทบาทผู้ใช้
 - [สถาปัตยกรรม](explanation/architecture.md) — โครงสร้างระบบ โครงสร้างโค้ด และเหตุผลที่จัดแบบนี้
+- [Design system ของหน้าเว็บ](explanation/design-system.md) — สามชั้น token/ui/app ประกอบกันเป็นหน้าตาของระบบยังไง (ดู [ADR-0008](decisions/0008-design-system-tokens-and-ui-kit.md))
+- [กระดานอ้างอิงงานออกแบบ](explanation/design-references.md) — ดูงานของใคร เพราะอะไร และเอามาใช้จริงที่ไฟล์ไหน
+- [แหล่งอ้างอิงภายนอก](explanation/research-sources.md) — มาตรฐานและบทความที่อ้างอิงตอนออกแบบรอบล่าสุด และไปโผล่ที่ไหนในโค้ด
 
 ## how-to — เพื่อทำงานให้เสร็จ
 
@@ -35,6 +38,7 @@
 - [ขอบเขต API](reference/api.md) — prefix และความรับผิดชอบ
 - [ตัวแปร environment](reference/environment.md)
 - [รูปแบบไฟล์นำเข้า](reference/import-format.md)
+- [ระบบกับ WCAG 2.2 ระดับ AA](reference/accessibility.md) — ขอบเขตของเทส ผลที่ตรวจแล้ว และสิ่งที่ยังไม่ได้ตรวจ
 
 ## decisions — บันทึกการตัดสินใจ
 

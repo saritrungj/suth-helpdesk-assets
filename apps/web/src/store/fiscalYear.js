@@ -82,7 +82,7 @@ export async function loadFiscalYears() {
 }
 
 // บังคับโหลดใหม่เสมอ ไม่สนใจ loaded flag — ใช้ตอนมีการ add/edit/delete ปีงบจากหน้า Admin
-// เพื่อให้ dropdown ปีงบที่ Navbar (และทุกหน้าที่ subscribe fiscalYearState) เห็นข้อมูลล่าสุดทันที
+// เพื่อให้ตัวเลือกปีงบบนแถบบน (และทุกหน้าที่ subscribe fiscalYearState) เห็นข้อมูลล่าสุดทันที
 // โดยไม่ต้อง refresh หน้าเว็บเอง
 export async function refreshFiscalYears() {
   if (loadingPromise) return loadingPromise;

@@ -8,7 +8,7 @@ import { reactive } from "vue";
  *   toastSuccess("บันทึกสำเร็จ");
  *   toastError("บันทึกไม่สำเร็จ");
  *
- * ตัว UI จริงอยู่ที่ components/ToastContainer.vue ซึ่ง mount ไว้ครั้งเดียวใน App.vue
+ * ตัว UI จริงอยู่ที่ ui/UiToaster.vue ซึ่ง mount ไว้ครั้งเดียวใน App.vue
  * แล้วรับสถานะจาก toastState.items — หน้าไหนก็เรียกฟังก์ชันพวกนี้ได้เลยไม่ต้อง import component
  */
 

@@ -1,29 +1,48 @@
 <script setup>
-
-import { ref, onMounted, computed, watch } from "vue";
+/**
+ * AssetList — ทะเบียนเครื่องพิมพ์ทั้งหมด
+ *
+ * เป็นหน้าที่มีตัวกรองเยอะที่สุดในระบบ (ยี่ห้อ อาคาร ชั้น ฝ่าย แผนก ปีงบ สถานะ)
+ * เดิมวางเรียงเป็นแถวยาวเต็มความกว้างเหนือตาราง ทำให้เกิดปัญหาสองข้อ
+ *
+ *   - ตารางถูกดันตกจอ ต้องเลื่อนลงทุกครั้งที่เปิดหน้าถึงจะเห็นข้อมูล
+ *   - มองไม่ออกว่าตอนนี้กรองอะไรอยู่บ้าง ต้องกวาดตาอ่านทุกช่องทีละช่อง
+ *     ผลคือคนเห็นตารางว่างแล้วคิดว่าไม่มีข้อมูล ทั้งที่ลืมตัวกรองค้างไว้
+ *
+ * ตอนนี้ตัวกรองพับเก็บได้ และมี "ชิป" แสดงเงื่อนไขที่กำลังใช้อยู่เสมอแม้พับแล้ว
+ * กดกากบาทบนชิปเพื่อเอาเงื่อนไขนั้นออกทีละอันได้ทันที
+ *
+ * ตัวเลือกชั้นและแผนกผูกกับอาคารและฝ่ายที่เลือกไว้ (cascading) เพื่อไม่ให้เลือก
+ * ชั้นที่ไม่มีอยู่ในอาคารนั้นแล้วได้ตารางว่างโดยไม่รู้สาเหตุ
+ */
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import { CirclePlus, FileSpreadsheet, Move, Pencil, Trash2 } from "lucide-vue-next";
 import api from "../services/api";
 import { authState } from "../store/auth";
-import DataTable from "../components/DataTable.vue";
+import { askConfirm } from "../store/confirmDialog";
+import { toastError, toastSuccess } from "../store/toast";
+import { formatBahtValue, formatCount } from "../lib/format";
 import AssetForm from "./AssetForm.vue";
 import MoveDeviceModal from "./MoveDeviceModal.vue";
-import SearchableSelect from "../components/SearchableSelect.vue";
-import { toastSuccess, toastError } from "../store/toast";
-import { askConfirm } from "../store/confirmDialog";
-
+import {
+  UiAlert,
+  UiBadge,
+  UiButton,
+  UiCombobox,
+  UiDataTable,
+  UiField,
+  UiFilterBar,
+  UiPageHeader,
+  UiSegmented,
+  UiTooltip,
+} from "../ui";
 
 const isAdmin = computed(() => authState.user?.role === "admin");
 
-
 const assets = ref([]);
-
-const search = ref(""); // ตัวกรองเฉพาะทาง (dropdown) — ยังทำเอง แยกจากช่องค้นหาทั่วไปใน DataTable
-const selectedFiscalYear = ref("");
-const selectedBrand = ref("");
-const selectedBuilding = ref("");
-const selectedFloor = ref("");
-const selectedDivision = ref("");
-const selectedDepartment = ref("");
-const selectedStatus = ref("");
+const loading = ref(true);
+const loadError = ref("");
 
 const fiscalYears = ref([]);
 const brands = ref([]);
@@ -32,90 +51,247 @@ const floors = ref([]);
 const divisions = ref([]);
 const departments = ref([]);
 
-const loading = ref(true);
-const error = ref(null);
 
-
-// -------------------------------------------------------
-// -------------------------------------------------------
-// Modal แก้ไขทรัพย์สิน — ปุ่ม "แก้ไข" เปิด Popup แทนการเปลี่ยนหน้า (ข้อ 6)
-// การ "เพิ่ม" ทรัพย์สินย้ายไปอยู่หน้าเดียวกับ Admin master data อื่นๆ แล้ว (ดู /admin/add-asset)
-// -------------------------------------------------------
-const showFormModal = ref(false);
-const editingAssetId = ref(null);
-
-function openEditModal(id) {
-  editingAssetId.value = id;
-  showFormModal.value = true;
+/**
+ * ค่าเริ่มต้นของตัวกรอง — ประกาศไว้ที่เดียวแล้วใช้ทั้งตอนเริ่มและตอนล้าง
+ * เดิมเขียนรายการช่องซ้ำสองที่ แล้วเพิ่มช่องใหม่โดยลืมแก้ตัวที่สอง ทำให้ปุ่ม
+ * "ล้างตัวกรอง" ล้างไม่ครบและผู้ใช้เห็นรายการที่ยังถูกกรองอยู่โดยไม่มีป้ายบอก
+ */
+function emptyFilters() {
+  return {
+    brand: "",
+    building: "",
+    floor: "",
+    division: "",
+    department: "",
+    fiscalYear: "",
+    status: "",
+    // "ยังไม่ผูกสัญญา" — เครื่องกลุ่มนี้คิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาเฉพาะเครื่อง
+    // ยอดพิมพ์ของมันจึงหายไปจากงบเงียบๆ แดชบอร์ดเตือนเรื่องนี้แล้วลิงก์มาที่นี่
+    unassigned: "",
+  };
 }
 
-function onAssetSaved() {
-  loadAssets(); // refresh ตารางหลัง submit สำเร็จ (ไม่ต้อง reload ทั้งหน้า)
-}
+const filters = ref(emptyFilters());
 
-// Modal ย้ายเครื่อง — แยกออกจากปุ่ม "แก้ไข" (จัดการเฉพาะอาคาร/ชั้น/ตำแหน่ง/ฝ่าย/แผนก)
-const showMoveModal = ref(false);
-const movingAssetId = ref(null);
-
-function openMoveModal(id) {
-  movingAssetId.value = id;
-  showMoveModal.value = true;
-}
-
-
-// สถานะเครื่อง — label + สี badge
-const statusMeta = {
-  active: { label: "ใช้งานอยู่", class: "bg-green-100 text-green-700" },
-  repair: { label: "ซ่อมบำรุง", class: "bg-yellow-100 text-yellow-700" },
-  retired: { label: "ปลดระวาง", class: "bg-gray-200 text-gray-600" },
+const STATUS_META = {
+  active: { label: "ใช้งานอยู่", tone: "ok" },
+  repair: { label: "ซ่อมบำรุง", tone: "warn" },
+  retired: { label: "ปลดระวาง", tone: "neutral" },
 };
 
-function statusLabel(status) {
-  return statusMeta[status]?.label || status || "-";
+const STATUS_OPTIONS = [
+  { value: "", label: "ทั้งหมด" },
+  { value: "active", label: "ใช้งานอยู่" },
+  { value: "repair", label: "ซ่อมบำรุง" },
+  { value: "retired", label: "ปลดระวาง" },
+];
+
+const CONTRACT_OPTIONS = [
+  { value: "", label: "ทั้งหมด" },
+  { value: "1", label: "ยังไม่ผูกสัญญา" },
+];
+
+/* --------------------------------------------------------------------------
+   ตัวเลือกของตัวกรอง
+   -------------------------------------------------------------------------- */
+const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.name }));
+
+const brandOptions = computed(() => toOptions(brands.value));
+const buildingOptions = computed(() => toOptions(buildings.value));
+const divisionOptions = computed(() => toOptions(divisions.value));
+
+const fiscalYearOptions = computed(() =>
+  fiscalYears.value.map((f) => ({ value: String(f.year), label: `ปีงบ ${Number(f.year)}` }))
+);
+
+/** ชั้นที่เลือกได้ = เฉพาะชั้นในอาคารที่เลือกไว้ และตัดชื่อซ้ำออก */
+const floorOptions = computed(() => {
+  const building = buildings.value.find((b) => b.name === filters.value.building);
+  const source = building
+    ? floors.value.filter((f) => Number(f.building_id) === Number(building.id))
+    : floors.value;
+
+  const seen = new Set();
+  return source
+    .filter((f) => !seen.has(f.name) && seen.add(f.name))
+    .map((f) => ({ value: f.name, label: f.name }));
+});
+
+const departmentOptions = computed(() => {
+  const division = divisions.value.find((d) => d.name === filters.value.division);
+  const source = division
+    ? departments.value.filter((d) => Number(d.division_id) === Number(division.id))
+    : departments.value;
+  return toOptions(source);
+});
+
+/* --------------------------------------------------------------------------
+   ชิปสรุปเงื่อนไขที่ใช้อยู่ — เห็นได้ตลอดแม้พับแผงตัวกรองแล้ว
+   -------------------------------------------------------------------------- */
+const FILTER_LABELS = {
+  brand: "ยี่ห้อ",
+  building: "อาคาร",
+  floor: "ชั้น",
+  division: "ฝ่าย",
+  department: "แผนก",
+  fiscalYear: "ปีงบ",
+  status: "สถานะ",
+  unassigned: "สัญญา",
+};
+
+const activeFilters = computed(() =>
+  Object.entries(filters.value)
+    .filter(([, value]) => value !== "")
+    .map(([key, value]) => ({
+      key,
+      label: FILTER_LABELS[key],
+      value:
+        key === "status"
+          ? (STATUS_META[value]?.label ?? value)
+          : key === "unassigned"
+            ? "ยังไม่ผูกสัญญา"
+            : value,
+    }))
+);
+
+/**
+ * ป้ายที่ส่งให้ UiFilterBar
+ *
+ * ตัดสถานะเครื่องกับสัญญาออก เพราะสองอันนั้นเป็นปุ่มแบบแบ่งช่องที่อยู่ในสายตา
+ * ตลอดอยู่แล้ว — การมีป้ายซ้ำอีกทำให้มีสองที่ที่เอาตัวกรองเดียวกันออกได้
+ * ซึ่งชวนสับสนมากกว่าช่วย (หน้าบันทึกยอดพิมพ์ตัดช่องเลือกเดือนออกด้วยเหตุผลเดียวกัน)
+ */
+const CHIP_HIDDEN_KEYS = new Set(["status", "unassigned"]);
+
+const filterChips = computed(() =>
+  activeFilters.value
+    .filter((chip) => !CHIP_HIDDEN_KEYS.has(chip.key))
+    .map((chip) => ({ key: chip.key, label: `${chip.label}: ${chip.value}` }))
+);
+
+function clearFilter(key) {
+  filters.value[key] = "";
 }
 
-function statusClass(status) {
-  return statusMeta[status]?.class || "bg-gray-100 text-gray-600";
+function resetFilters() {
+  filters.value = emptyFilters();
 }
 
+// เปลี่ยนอาคาร/ฝ่ายแล้ว ชั้น/แผนกที่เลือกไว้อาจไม่อยู่ในตัวเลือกใหม่ ล้างทิ้ง
+watch(() => filters.value.building, () => (filters.value.floor = ""));
+watch(() => filters.value.division, () => (filters.value.department = ""));
 
-// ราคาต่อแผ่นที่ใช้จริง — price_override ทับสัญญาถ้ามีการตั้งไว้เฉพาะเครื่อง
+/* --------------------------------------------------------------------------
+   ข้อมูล
+   -------------------------------------------------------------------------- */
+const filteredAssets = computed(() =>
+  assets.value.filter(
+    (a) =>
+      (!filters.value.brand || a.brand_name === filters.value.brand) &&
+      (!filters.value.building || a.building_name === filters.value.building) &&
+      (!filters.value.floor || a.floor_name === filters.value.floor) &&
+      (!filters.value.division || a.division_name === filters.value.division) &&
+      (!filters.value.department || a.department_name === filters.value.department) &&
+      (!filters.value.fiscalYear || String(a.fiscal_year) === filters.value.fiscalYear) &&
+      (!filters.value.status || a.status === filters.value.status) &&
+      (!filters.value.unassigned || !a.contract_no)
+  )
+);
+
+/* --------------------------------------------------------------------------
+   ลิงก์เข้าหน้านี้แบบเจาะจงตัวกรอง
+
+   แถบ "สิ่งที่ต้องจัดการ" บนหน้าแรกลิงก์มาที่นี่พร้อมตัวกรองที่เกี่ยวข้อง —
+   คำเตือนที่พาไปหน้าเปล่าแล้วให้ผู้ใช้ไล่หาเองว่ารายการไหนคือรายการที่เตือน
+   คือคำเตือนที่ไม่มีใครกดครั้งที่สอง
+
+   อ่านค่าครั้งเดียวตอนเปิดหน้า ไม่ผูกสองทางกับ URL เพราะการเขียน query กลับทุกครั้ง
+   ที่ผู้ใช้ขยับตัวกรอง จะทำให้ปุ่มย้อนกลับของเบราว์เซอร์กลายเป็น "ย้อนตัวกรองทีละขั้น"
+   ซึ่งไม่ใช่สิ่งที่คนคาดหวังจากปุ่มนั้น
+   -------------------------------------------------------------------------- */
+const route = useRoute();
+
+onMounted(() => {
+  if (route.query.status && STATUS_META[route.query.status]) {
+    filters.value.status = route.query.status;
+  }
+
+  if (route.query.unassigned) {
+    filters.value.unassigned = "1";
+  }
+
+  /**
+   * เปิดหน้าต่างแก้ไข/ย้าย ตามที่หน้ารายละเอียดเครื่องส่งมา
+   *
+   * หน้ารายละเอียด (`/assets/:id`) ไม่มีฟอร์มของตัวเอง แต่ลิงก์กลับมาที่นี่พร้อม
+   * `?edit=` หรือ `?move=` แทน — ฟอร์มกับ dialog ย้ายเครื่องมีที่อยู่ที่เดียว
+   * ไม่ต้องดูแลสองชุดที่ค่อยๆ เพี้ยนออกจากกัน
+   *
+   * เช็คสิทธิ์ก่อนเปิดเสมอ ไม่ใช่เพราะกันคนแก้ (API เป็นคนบังคับสิทธิ์จริง) แต่
+   * เพราะการเปิดฟอร์มให้คนที่กดบันทึกแล้วจะโดนปฏิเสธ คือการเสียเวลาเปล่าของเขา
+   */
+  if (isAdmin.value) {
+    const editId = Number(route.query.edit);
+    const moveId = Number(route.query.move);
+
+    if (Number.isInteger(editId) && editId > 0) openEdit(editId);
+    else if (Number.isInteger(moveId) && moveId > 0) openMove(moveId);
+  }
+});
+
+/** ราคาที่ใช้จริง — ราคาเฉพาะเครื่องมีศักดิ์สูงกว่าราคาตามสัญญา */
 function effectivePrice(asset) {
   const price = asset.price_override ?? asset.price_per_page;
   return price === null || price === undefined ? null : Number(price);
 }
 
-function formatMoney(value) {
-  if (value === null || value === undefined) return "-";
-  return Number(value).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
+const columns = [
+  { key: "serial_number", label: "Serial", width: "11rem" },
+  {
+    key: "brand_name",
+    label: "ยี่ห้อ / รุ่น",
+    value: (a) => `${a.brand_name || ""} ${a.model || ""}`.trim(),
+  },
+  { key: "building_name", label: "อาคาร" },
+  { key: "floor_name", label: "ชั้น" },
+  { key: "location", label: "ตำแหน่งที่ตั้ง" },
+  { key: "division_name", label: "ฝ่าย", hidden: true },
+  { key: "department_name", label: "แผนก" },
+  { key: "contract_no", label: "สัญญา" },
+  {
+    key: "effective_price",
+    label: "ราคา/แผ่น",
+    align: "right",
+    value: (a) => effectivePrice(a),
+    csv: (a) => effectivePrice(a) ?? "",
+  },
+  {
+    key: "status",
+    label: "สถานะ",
+    align: "center",
+    value: (a) => STATUS_META[a.status]?.label ?? a.status,
+  },
+];
 
-
-// ==========================
-// Load Assets
-// ==========================
 async function loadAssets() {
   loading.value = true;
-  error.value = null;
+  loadError.value = "";
 
   try {
     const res = await api.get("/devices");
-    assets.value = res.data;
+    assets.value = res.data ?? [];
   } catch (err) {
     console.error("Load assets error:", err);
-    error.value = "โหลดข้อมูล Asset ไม่สำเร็จ";
+    loadError.value = "โหลดทะเบียนทรัพย์สินไม่สำเร็จ";
   } finally {
     loading.value = false;
   }
 }
 
-
 async function loadFilterData() {
   try {
-    const [fiscalYearRes, brandRes, buildingRes, floorRes, divisionRes, departmentRes] = await Promise.all([
+    const [fy, brand, building, floor, division, department] = await Promise.all([
       api.get("/fiscal-years"),
       api.get("/brands"),
       api.get("/buildings"),
@@ -124,357 +300,268 @@ async function loadFilterData() {
       api.get("/departments"),
     ]);
 
-    fiscalYears.value = fiscalYearRes.data;
-    brands.value = brandRes.data;
-    buildings.value = buildingRes.data;
-    floors.value = floorRes.data;
-    divisions.value = divisionRes.data;
-    departments.value = departmentRes.data;
+    fiscalYears.value = fy.data ?? [];
+    brands.value = brand.data ?? [];
+    buildings.value = building.data ?? [];
+    floors.value = floor.data ?? [];
+    divisions.value = division.data ?? [];
+    departments.value = department.data ?? [];
   } catch (err) {
-    console.error("Load filter error:", err);
+    console.error("Load filter data error:", err);
   }
 }
 
+/* --------------------------------------------------------------------------
+   การกระทำกับหนึ่งเครื่อง (admin เท่านั้น — API บังคับสิทธิ์อยู่แล้ว
+   ที่นี่แค่ไม่แสดงปุ่มที่กดไปก็ทำไม่ได้)
+   -------------------------------------------------------------------------- */
+const formOpen = ref(false);
+const moveOpen = ref(false);
+const activeAssetId = ref(null);
 
-// ==========================
-// Cascading filter options (เลือกอาคาร/ฝ่ายจากรายการ ค่าจึงตรงเป๊ะเสมอ ไม่ต้องเดา)
-// ==========================
-const filteredFloorOptions = computed(() => {
-  if (!selectedBuilding.value) return floors.value;
-  const bld = buildings.value.find((b) => b.name === selectedBuilding.value);
-  if (!bld) return floors.value;
-  return floors.value.filter((f) => Number(f.building_id) === Number(bld.id));
-});
-
-const filteredDepartmentOptions = computed(() => {
-  if (!selectedDivision.value) return departments.value;
-  const div = divisions.value.find((d) => d.name === selectedDivision.value);
-  if (!div) return departments.value;
-  return departments.value.filter((d) => Number(d.division_id) === Number(div.id));
-});
-
-// ตัวเลือกสำหรับ SearchableSelect ของแต่ละ filter
-const fiscalYearOptions = computed(() => fiscalYears.value.map((f) => ({ value: f.year, label: `ปีงบ ${f.year}` })));
-const brandOptions = computed(() => brands.value.map((b) => ({ value: b.name, label: b.name })));
-const buildingOptions = computed(() => buildings.value.map((b) => ({ value: b.name, label: b.name })));
-const floorOptions = computed(() => {
-  const seen = new Set();
-  const options = [];
-  for (const f of filteredFloorOptions.value) {
-    if (seen.has(f.name)) continue;
-    seen.add(f.name);
-    options.push({ value: f.name, label: f.name });
-  }
-  return options;
-});
-const divisionOptions = computed(() => divisions.value.map((d) => ({ value: d.name, label: d.name })));
-const departmentOptions = computed(() => filteredDepartmentOptions.value.map((d) => ({ value: d.name, label: d.name })));
-
-// เลือกอาคาร/ฝ่ายใหม่ → ค่าชั้น/แผนกที่เคยเลือกไว้อาจไม่ตรงกับตัวเลือกใหม่แล้ว รีเซ็ตทิ้งให้เลือกใหม่
-watch(selectedBuilding, () => {
-  selectedFloor.value = "";
-});
-
-watch(selectedDivision, () => {
-  selectedDepartment.value = "";
-});
-
-// ล้างตัวกรองเฉพาะทาง (dropdown) ทั้งหมดกลับเป็นค่าเริ่มต้นในคลิกเดียว — เหมือนหน้า Report
-function resetFilters() {
-  search.value = "";
-  selectedFiscalYear.value = "";
-  selectedBrand.value = "";
-  selectedBuilding.value = "";
-  selectedFloor.value = "";
-  selectedDivision.value = "";
-  selectedDepartment.value = "";
-  selectedStatus.value = "";
+function openEdit(id) {
+  activeAssetId.value = id;
+  formOpen.value = true;
 }
 
-
-// ==========================
-// Filter (เฉพาะทาง — dropdown) — DataTable จะรับผิดชอบ search ทั่วไป/sort/pagination/export ต่อ
-// ==========================
-const filteredAssets = computed(() => {
-  const keyword = search.value.toLowerCase();
-
-  return assets.value.filter((a) => {
-    const matchSearch =
-      !keyword ||
-      a.serial_number?.toLowerCase().includes(keyword) ||
-      a.model?.toLowerCase().includes(keyword) ||
-      a.brand_name?.toLowerCase().includes(keyword) ||
-      a.location?.toLowerCase().includes(keyword) ||
-      a.contract_no?.toLowerCase().includes(keyword);
-
-    const matchFiscalYear = !selectedFiscalYear.value || String(a.fiscal_year) === String(selectedFiscalYear.value);
-
-    const matchBrand = !selectedBrand.value || a.brand_name === selectedBrand.value;
-
-    const matchBuilding = !selectedBuilding.value || a.building_name === selectedBuilding.value;
-
-    const matchFloor = !selectedFloor.value || a.floor_name === selectedFloor.value;
-
-    const matchDivision = !selectedDivision.value || a.division_name === selectedDivision.value;
-
-    const matchDepartment = !selectedDepartment.value || a.department_name === selectedDepartment.value;
-
-    const matchStatus = !selectedStatus.value || a.status === selectedStatus.value;
-
-    return matchSearch && matchFiscalYear && matchBrand && matchBuilding && matchFloor && matchDivision && matchDepartment && matchStatus;
-  });
-});
-
-
-// ==========================
-// คอลัมน์ของ DataTable
-// ==========================
-const columns = computed(() => [
-  { key: "serial_number", label: "Serial" },
-  { key: "brand_name", label: "Brand / Model", value: (a) => `${a.brand_name || "-"} ${a.model || ""}` },
-  { key: "building_name", label: "อาคาร" },
-  { key: "floor_name", label: "ชั้น" },
-  { key: "location", label: "ตำแหน่งเครื่อง" },
-  { key: "division_name", label: "ฝ่าย" },
-  { key: "department_name", label: "แผนก" },
-  { key: "contract_no", label: "สัญญา" },
-  {
-    key: "effective_price",
-    label: "ราคา/แผ่น (บาท)",
-    align: "right",
-    value: (a) => effectivePrice(a),
-    csv: (a) => effectivePrice(a) ?? "",
-  },
-  { key: "status", label: "สถานะ", align: "center", value: (a) => statusLabel(a.status), csv: (a) => statusLabel(a.status) },
-]);
-
-
-// ==========================
-// Edit / Delete (admin เท่านั้น — backend บังคับอยู่แล้ว ฝั่ง UI ก็ซ่อนไม่ให้กดของที่ทำไม่ได้)
-// ==========================
-function editAsset(id) {
-  openEditModal(id);
+function openMove(id) {
+  activeAssetId.value = id;
+  moveOpen.value = true;
 }
 
-async function deleteAsset(id) {
-  if (!(await askConfirm("ต้องการลบรายการนี้หรือไม่?"))) return;
+async function remove(asset) {
+  const confirmed = await askConfirm(
+    `เครื่อง Serial “${asset.serial_number}” จะถูกลบออกจากทะเบียน ยอดพิมพ์ที่เคยบันทึกไว้จะไม่ถูกนำมาคิดในรายงานอีก`,
+    { title: "ลบเครื่องนี้ออกจากทะเบียน", confirmText: "ลบเครื่องนี้", danger: true }
+  );
+  if (!confirmed) return;
 
   try {
-    await api.delete(`/devices/${id}`);
-    toastSuccess("ลบข้อมูลสำเร็จ");
-    loadAssets();
+    await api.delete(`/devices/${asset.id}`);
+    toastSuccess("ลบเครื่องออกจากทะเบียนเรียบร้อย");
+    await loadAssets();
   } catch (err) {
     console.error(err);
-    toastError(err.response?.data?.error || "ลบข้อมูลไม่สำเร็จ");
+    toastError(err.response?.data?.error || "ลบไม่สำเร็จ — อาจมียอดพิมพ์ที่อ้างถึงเครื่องนี้อยู่");
   }
 }
-
 
 onMounted(async () => {
   await loadAssets();
   await loadFilterData();
 });
-
 </script>
 
-
 <template>
-
-<div class="p-6">
-
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-2xl font-bold">ทรัพย์สิน (เครื่องพิมพ์ / เครื่องถ่ายเอกสาร)</h1>
-  </div>
-
-  <div v-if="error" class="bg-red-100 text-red-700 p-3 rounded mb-4">
-    {{ error }}
-  </div>
-
-  <!-- Filter เฉพาะทาง (dropdown) — ยังอยู่เหนือ DataTable เหมือนเดิม -->
-  <div class="flex flex-wrap gap-3 mb-4">
-
-    <input
-      v-model="search"
-      placeholder="ค้นหา Serial / Model / Brand / เลขที่สัญญา (แบบเฉพาะเจาะจง)"
-      class="border p-2 rounded w-72 bg-gray-50"
-    />
-
-    <SearchableSelect
-      v-model="selectedBrand"
-      :options="brandOptions"
-      placeholder="ทุก Brand"
-      search-placeholder="พิมพ์/เลือก Brand"
-    />
-
-    <SearchableSelect
-      v-model="selectedBuilding"
-      :options="buildingOptions"
-      placeholder="ทุกอาคาร"
-      search-placeholder="พิมพ์/เลือกอาคาร"
-    />
-
-    <SearchableSelect
-      v-model="selectedFloor"
-      :options="floorOptions"
-      placeholder="ทุกชั้น"
-      search-placeholder="พิมพ์/เลือกชั้น"
-    />
-
-    <SearchableSelect
-      v-model="selectedDivision"
-      :options="divisionOptions"
-      placeholder="ทุกฝ่าย"
-      search-placeholder="พิมพ์/เลือกฝ่าย"
-    />
-
-    <SearchableSelect
-      v-model="selectedDepartment"
-      :options="departmentOptions"
-      placeholder="ทุกแผนก"
-      search-placeholder="พิมพ์/เลือกแผนก"
-    />
-
-    <SearchableSelect
-      v-model="selectedFiscalYear"
-      :options="fiscalYearOptions"
-      placeholder="ทุกปีงบ"
-      search-placeholder="พิมพ์/เลือกปีงบ"
-    />
-
-    <select v-model="selectedStatus" class="border p-2 rounded bg-gray-50">
-      <option value="">ทุกสถานะ</option>
-      <option value="active">ใช้งานอยู่</option>
-      <option value="repair">ซ่อมบำรุง</option>
-      <option value="retired">ปลดระวาง</option>
-    </select>
-
-    <button
-      type="button"
-      @click="resetFilters"
-      class="text-sm text-red-500 hover:text-gray-700 underline whitespace-nowrap"
+  <div>
+    <UiPageHeader
+      eyebrow="ทรัพย์สิน"
+      title="ทะเบียนเครื่องพิมพ์"
+      description="เครื่องพิมพ์และเครื่องถ่ายเอกสารทั้งหมดที่อยู่ในความดูแล พร้อมที่ตั้งและสัญญาที่ผูกอยู่"
     >
-      ล้างตัวกรองทั้งหมด
-    </button>
+      <template #meta>
+        <p class="text-xs text-ink-mute mt-2">
+          <span class="numeral font-semibold text-ink-soft">{{ formatCount(filteredAssets.length) }}</span>
+          เครื่องที่ตรงกับเงื่อนไข
+          <span v-if="filteredAssets.length !== assets.length" class="text-ink-mute">
+            (จากทั้งหมด {{ formatCount(assets.length) }})
+          </span>
+        </p>
+      </template>
 
-    <RouterLink
-      v-if="isAdmin"
-      to="/admin/add-asset"
-      title="เพิ่มอุปกรณ์"
-      class="inline-flex items-center justify-center bg-blue-600 text-white w-10 h-10 rounded-full text-xl leading-none hover:bg-blue-700 ml-auto shrink-0"
+      <template #actions>
+        <UiButton v-if="isAdmin" to="/admin/add-asset" variant="primary">
+          <template #icon><CirclePlus :size="16" /></template>
+          เพิ่มเครื่อง
+        </UiButton>
+      </template>
+    </UiPageHeader>
+
+    <UiAlert v-if="loadError" tone="danger" class="mb-4">
+      {{ loadError }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="loadAssets">ลองใหม่</UiButton>
+      </template>
+    </UiAlert>
+
+    <!-- ตัวกรอง — ใช้ UiFilterBar ตัวเดียวกับหน้าบันทึกยอดพิมพ์
+         เดิมหน้านี้เขียนแผงพับกับชิปขึ้นเองแยกต่างหาก ทำให้สองหน้าที่ทำงาน
+         เหมือนกันหน้าตาไม่เหมือนกัน และเวลาแก้พฤติกรรมต้องแก้สองที่ -->
+    <UiFilterBar :chips="filterChips" @remove="clearFilter" @clear="resetFilters">
+      <template #primary>
+        <UiField label="สถานะเครื่อง">
+          <UiSegmented v-model="filters.status" :options="STATUS_OPTIONS" size="sm" label="กรองตามสถานะเครื่อง" />
+        </UiField>
+
+        <!--
+          เครื่องที่ยังไม่ผูกสัญญาคิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาเฉพาะเครื่อง —
+          ยอดพิมพ์ของมันหายไปจากงบเงียบๆ จึงต้องมีทางกรองดูได้โดยตรง ไม่ใช่ต้อง
+          ไล่กวาดสายตาหาช่องสัญญาที่ว่างในตารางเป็นร้อยแถว
+        -->
+        <UiField label="สัญญา">
+          <UiSegmented
+            v-model="filters.unassigned"
+            :options="CONTRACT_OPTIONS"
+            size="sm"
+            label="กรองตามการผูกสัญญา"
+          />
+        </UiField>
+      </template>
+
+      <UiField label="ยี่ห้อ">
+        <UiCombobox v-model="filters.brand" :options="brandOptions" placeholder="ทุกยี่ห้อ" any-label="ทุกยี่ห้อ" />
+      </UiField>
+
+      <UiField label="อาคาร">
+        <UiCombobox v-model="filters.building" :options="buildingOptions" placeholder="ทุกอาคาร" any-label="ทุกอาคาร" />
+      </UiField>
+
+      <UiField label="ชั้น">
+        <UiCombobox v-model="filters.floor" :options="floorOptions" placeholder="ทุกชั้น" any-label="ทุกชั้น" />
+      </UiField>
+
+      <UiField label="ฝ่าย">
+        <UiCombobox v-model="filters.division" :options="divisionOptions" placeholder="ทุกฝ่าย" any-label="ทุกฝ่าย" />
+      </UiField>
+
+      <UiField label="แผนก">
+        <UiCombobox
+          v-model="filters.department"
+          :options="departmentOptions"
+          placeholder="ทุกแผนก"
+          any-label="ทุกแผนก"
+        />
+      </UiField>
+
+      <UiField label="ปีงบประมาณ">
+        <UiCombobox
+          v-model="filters.fiscalYear"
+          :options="fiscalYearOptions"
+          placeholder="ทุกปีงบ"
+          any-label="ทุกปีงบ"
+        />
+      </UiField>
+    </UiFilterBar>
+
+    <UiDataTable
+      :rows="filteredAssets"
+      :columns="columns"
+      :loading="loading"
+      row-key="id"
+      export-filename="assets"
+      search-placeholder="ค้นหา Serial, รุ่น, ตำแหน่ง…"
+      empty-text="ยังไม่มีเครื่องในทะเบียน"
+      empty-hint="เพิ่มทีละเครื่อง หรือนำเข้าทั้งหมดจากไฟล์ Excel ในครั้งเดียว"
+      max-height="70vh"
+      sticky-first
     >
-      +
-    </RouterLink>
+      <!-- Serial เป็นลิงก์ไปหน้ารายละเอียดของเครื่องนั้น
+           เดิมแถวหนึ่งแถวไม่มีทางกดเข้าไปดูอะไรได้เลย ข้อมูลทั้งหมดของเครื่อง
+           จึงต้องยัดอยู่ในแถวที่กว้างเกินจอ — ตอนนี้ตารางเก็บเฉพาะสิ่งที่ใช้
+           "หา" เครื่อง ส่วนสิ่งที่ใช้ "เข้าใจ" เครื่องอยู่ในหน้ารายละเอียด
 
-  </div>
-
-
-  <div v-if="loading" class="text-gray-500 py-6">กำลังโหลดข้อมูล...</div>
-
-  <!-- ตารางเดิม -> DataTable (มี sort/ค้นหาทั่วไป/pagination/export CSV/sticky header ในตัว) -->
-  <DataTable
-    v-else
-    :rows="filteredAssets"
-    :columns="columns"
-    row-key="id"
-    export-filename="assets"
-    search-placeholder="ค้นหาทุกคอลัมน์..."
-    empty-text="ไม่พบข้อมูลที่ตรงกับตัวกรอง"
-    max-height="65vh"
-  >
-    <template #cell-brand_name="{ row }">
-      <div>{{ row.brand_name || "-" }}</div>
-      <div class="text-gray-500">{{ row.model || "-" }}</div>
-    </template>
-
-    <template #cell-contract_no="{ row }">
-      <div>{{ row.contract_no || "-" }}</div>
-      <div v-if="row.fiscal_year" class="text-gray-500">ปีงบ {{ Number(row.fiscal_year) }}</div>
-    </template>
-
-    <template #cell-effective_price="{ row }">
-      {{ formatMoney(effectivePrice(row)) }}
-      <span v-if="row.price_override !== null && row.price_override !== undefined" class="text-xs text-[var(--brand-text)] block">
-        (ราคาเฉพาะเครื่อง)
-      </span>
-    </template>
-
-    <template #cell-status="{ row }">
-      <span class="px-2 py-1 rounded text-xs font-medium" :class="statusClass(row.status)">
-        {{ statusLabel(row.status) }}
-      </span>
-    </template>
-
-    <template #empty="{ search: searchTerm }">
-      <div v-if="searchTerm">ไม่พบข้อมูลที่ตรงกับ "{{ searchTerm }}"</div>
-      <div v-else class="flex flex-col items-center gap-3">
-        <span>ยังไม่มีอุปกรณ์ในระบบ</span>
+           ทำเป็นลิงก์จริง ไม่ใช่ทั้งแถวที่กดได้ เพราะแถวนี้มีปุ่มแก้ไข/ย้าย/ลบ
+           อยู่ด้วย การทำทั้งแถวให้กดได้จะทำให้กดพลาดไปหน้าอื่นตอนเล็งปุ่ม -->
+      <!-- inline-flex + min-h-6: ข้อ 2.5.8 บังคับพื้นที่กด 24x24 ส่วนตัวอักษร
+           บรรทัดเดียวสูงแค่ 17px และลิงก์นี้ไม่เข้าข้อยกเว้น "อยู่ในประโยค"
+           เพราะมันอยู่เดี่ยวๆ ในช่องตาราง ไม่ได้แทรกอยู่ในข้อความ -->
+      <template #cell-serial_number="{ row }">
         <RouterLink
-          v-if="isAdmin"
-          to="/admin/add-asset?tab=import"
-          class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+          :to="`/assets/${row.id}`"
+          class="inline-flex items-center min-h-6 font-mono text-sm text-ink hover:text-brand-ink hover:underline underline-offset-2 rounded-xs"
         >
-          นำเข้าอุปกรณ์จากไฟล์ CSV/Excel
+          {{ row.serial_number || "—" }}
         </RouterLink>
-      </div>
-    </template>
+        <span v-if="row.asset_code" class="block text-2xs text-ink-mute font-mono">
+          {{ row.asset_code }}
+        </span>
+      </template>
 
-    <template v-if="isAdmin" #actions="{ row }">
-      <button
-        @click="editAsset(row.id)"
-        title="แก้ไข"
-        class="bg-yellow-500 hover:bg-yellow-600 text-white p-1.5 rounded mr-2"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-          <path d="M15 5l4 4" />
-        </svg>
-      </button>
+      <template #cell-brand_name="{ row }">
+        <span class="text-ink-soft">{{ row.brand_name || "—" }}</span>
+        <span class="block text-2xs text-ink-mute">{{ row.model || "" }}</span>
+      </template>
 
-      <button
-        @click="openMoveModal(row.id)"
-        title="ย้ายเครื่อง"
-        class="bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded mr-2"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2v20" />
-          <path d="m15 19-3 3-3-3" />
-          <path d="m19 9 3 3-3 3" />
-          <path d="M2 12h20" />
-          <path d="m5 9-3 3 3 3" />
-          <path d="m9 5 3-3 3 3" />
-        </svg>
-      </button>
+      <template #cell-contract_no="{ row }">
+        <span>{{ row.contract_no || "—" }}</span>
+        <span v-if="row.fiscal_year" class="block text-2xs text-ink-mute numeral">
+          ปีงบ {{ Number(row.fiscal_year) }}
+        </span>
+      </template>
 
-      <button
-        @click="deleteAsset(row.id)"
-        title="ลบ"
-        class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 6h18" />
-          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-          <path d="M10 11v6" />
-          <path d="M14 11v6" />
-        </svg>
-      </button>
-    </template>
-  </DataTable>
+      <template #cell-effective_price="{ row }">
+        <span>{{ effectivePrice(row) === null ? "—" : formatBahtValue(effectivePrice(row)) }}</span>
+        <UiTooltip
+          v-if="row.price_override !== null && row.price_override !== undefined"
+          content="เครื่องนี้ตั้งราคาต่อแผ่นเฉพาะตัว ไม่ได้ใช้ราคาตามสัญญา"
+        >
+          <span class="block text-2xs text-accent-ink cursor-help">ราคาเฉพาะเครื่อง</span>
+        </UiTooltip>
+      </template>
 
-  <!-- Modal เพิ่ม/แก้ไขทรัพย์สิน -->
-  <AssetForm
-    v-model="showFormModal"
-    :asset-id="editingAssetId"
-    @saved="onAssetSaved"
-  />
+      <template #cell-status="{ row }">
+        <UiBadge :tone="STATUS_META[row.status]?.tone ?? 'neutral'" dot>
+          {{ STATUS_META[row.status]?.label ?? row.status }}
+        </UiBadge>
+      </template>
 
-  <!-- Modal ย้ายเครื่อง (แยกจากแก้ไขทรัพย์สินทั่วไป) -->
-  <MoveDeviceModal
-    v-model="showMoveModal"
-    :asset-id="movingAssetId"
-    @saved="onAssetSaved"
-  />
+      <template #empty="{ search }">
+        <div class="py-12 text-center">
+          <template v-if="search || activeFilters.length">
+            <p class="text-md font-semibold text-ink">ไม่มีเครื่องที่ตรงกับเงื่อนไข</p>
+            <p class="text-sm text-ink-mute mt-1">ลองเอาตัวกรองบางอันออก แล้วดูใหม่อีกครั้ง</p>
+            <UiButton v-if="activeFilters.length" size="sm" variant="secondary" class="mt-4" @click="resetFilters">
+              ล้างตัวกรองทั้งหมด
+            </UiButton>
+          </template>
 
-</div>
+          <template v-else>
+            <p class="text-md font-semibold text-ink">ยังไม่มีเครื่องในทะเบียน</p>
+            <p class="text-sm text-ink-mute mt-1">
+              เริ่มจากนำเข้าไฟล์ Excel ที่มีอยู่แล้ว จะเร็วกว่าพิมพ์ทีละเครื่องมาก
+            </p>
+            <UiButton
+              v-if="isAdmin"
+              variant="primary"
+              size="sm"
+              class="mt-4"
+              :to="{ path: '/admin/add-asset', query: { tab: 'import' } }"
+            >
+              <template #icon><FileSpreadsheet :size="15" /></template>
+              นำเข้าจากไฟล์ CSV / Excel
+            </UiButton>
+          </template>
+        </div>
+      </template>
 
+      <template v-if="isAdmin" #actions="{ row }">
+        <UiTooltip content="แก้ไขข้อมูลเครื่อง">
+          <UiButton size="sm" variant="ghost" icon-only :label="`แก้ไข ${row.serial_number}`" @click="openEdit(row.id)">
+            <Pencil :size="15" />
+          </UiButton>
+        </UiTooltip>
+
+        <UiTooltip content="ย้ายที่ตั้งหรือเปลี่ยนแผนก">
+          <UiButton size="sm" variant="ghost" icon-only :label="`ย้าย ${row.serial_number}`" @click="openMove(row.id)">
+            <Move :size="15" />
+          </UiButton>
+        </UiTooltip>
+
+        <UiTooltip content="ลบออกจากทะเบียน">
+          <UiButton
+            size="sm"
+            variant="danger-ghost"
+            icon-only
+            :label="`ลบ ${row.serial_number}`"
+            @click="remove(row)"
+          >
+            <Trash2 :size="15" />
+          </UiButton>
+        </UiTooltip>
+      </template>
+    </UiDataTable>
+
+    <AssetForm v-model="formOpen" :asset-id="activeAssetId" @saved="loadAssets" />
+    <MoveDeviceModal v-model="moveOpen" :asset-id="activeAssetId" @saved="loadAssets" />
+  </div>
 </template>

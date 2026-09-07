@@ -44,7 +44,9 @@ middleware ตรวจสิทธิ์อยู่ใต้ `auth/` เพร
 
 - route และ navigation อยู่ใน `apps/web/src/router/`
 - HTTP client กลางอยู่ที่ `apps/web/src/services/api.js` — จุดเดียวที่แนบ token และดัก 401
+- ชั้นดึงข้อมูลกลางอยู่ที่ `apps/web/src/api/queries.js` ผ่าน TanStack Query — เฉพาะข้อมูลอ่านที่ใช้ซ้ำข้ามหน้า การเขียนยังยิง `services/api.js` ตรงๆ ดู [ADR-0009](../decisions/0009-tanstack-query-as-the-data-layer.md)
 - state ที่ใช้ร่วมหลายหน้าอยู่ใน `apps/web/src/store/` เขียนด้วย reactive ของ Vue ตรงๆ ยังไม่มี state manager
+- หน้าตาของระบบแยกออกมาเป็นชั้นของตัวเอง (`design/` token, `ui/` component กลาง, `app/` เปลือกของแอป) แล้วบังคับให้ทุกหน้าจอ (`views/`, `components/`) เรียกผ่านชั้นนั้นเท่านั้น ห้ามเขียนคลาสสีของ Tailwind ตรงๆ — ดู [Design system ของหน้าเว็บ](design-system.md) และ [ADR-0008](../decisions/0008-design-system-tokens-and-ui-kit.md)
 
 ## ฐานข้อมูล
 

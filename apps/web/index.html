@@ -4,28 +4,58 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="SUTH Helpdesk Assets — ระบบดูแลทรัพย์สินและงานพิมพ์ของโรงพยาบาลมหาวิทยาลัยเทคโนโลยีสุรนารี: ทะเบียนเครื่องพิมพ์ ยอดพิมพ์รายเดือน สัญญา และค่าใช้จ่ายตามปีงบประมาณ"
+    />
 
+    <!--
+      ฟอนต์ Anuphan (ไทย+ละติน, variable 300–700) เป็นฟอนต์หลักของทั้งระบบ
+      IBM Plex Mono ใช้เฉพาะรหัสทรัพย์สิน/serial ที่ต้องอ่านทีละตัวอักษร
+
+      preconnect ทั้งสองโดเมนเพราะ Google Fonts เสิร์ฟ CSS จาก googleapis.com
+      แต่ไฟล์ฟอนต์จริงอยู่ที่ gstatic.com — ไม่ประกาศไว้จะเสีย DNS+TLS สองรอบ
+    -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300..700&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
 
-    <title>ระบบจัดการทรัพย์สิน IT โรงพยาบาล</title>
+    <title>SUTH Helpdesk Assets · โรงพยาบาล มทส.</title>
 
     <script>
-      // ตั้งค่า data-mode (สว่าง/มืด) ให้ตรงกับที่ผู้ใช้เคยเลือกไว้ ก่อนที่ CSS จะ paint หน้าจอ
-      // ป้องกันการกระพริบเป็นโหมดเริ่มต้นแวบเดียวตอนโหลดหน้า (FOUC ของโหมดสี)
+      // ตั้งค่าโหมดสีและความหนาแน่นก่อน CSS จะ paint หน้าจอครั้งแรก
+      // ถ้าปล่อยให้ JavaScript ของแอปตั้งทีหลัง ผู้ใช้จะเห็นหน้าจอกระพริบเป็น
+      // โหมดเริ่มต้นแวบหนึ่งก่อนสลับไปโหมดที่เลือกไว้ (FOUC ของโหมดสี)
+      //
+      // ค่าที่เก็บมีสามแบบ: "light" | "dark" | "system"
+      // "system" หมายถึงตามการตั้งค่าของเครื่อง ซึ่งเป็นค่าเริ่มต้นของผู้ใช้ใหม่
       (function () {
+        var root = document.documentElement;
+
+        function resolve(pref) {
+          if (pref === "light" || pref === "dark") return pref;
+          return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+
         try {
-          var saved = localStorage.getItem("suth-ui-mode");
-          document.documentElement.setAttribute(
-            "data-mode",
-            saved === "light" || saved === "dark" ? saved : "dark"
+          var pref = localStorage.getItem("suth-ui-mode") || "system";
+          root.setAttribute("data-mode-pref", pref);
+          root.setAttribute("data-mode", resolve(pref));
+
+          var density = localStorage.getItem("suth-ui-density");
+          root.setAttribute(
+            "data-density",
+            density === "compact" || density === "relaxed" ? density : "default"
           );
-        } catch (e) {}
+        } catch (e) {
+          root.setAttribute("data-mode", resolve("system"));
+          root.setAttribute("data-density", "default");
+        }
       })();
     </script>
   </head>

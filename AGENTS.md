@@ -20,7 +20,7 @@
 npm workspace เดียว ติดตั้งด้วย `npm install` ที่รากครั้งเดียว
 
 - `apps/api/` — CommonJS Express API; `index.js` เป็น entry ที่ mount route เท่านั้น โค้ดจริงอยู่ใน `src/` แบ่งตามความสามารถ
-- `apps/web/` — Vue 3 SPA; views, components, stores, router และ API client
+- `apps/web/` — Vue 3 SPA แบ่งเป็นชั้นตาม [ADR-0008](docs/decisions/0008-design-system-tokens-and-ui-kit.md) — views/components เฉพาะธุรกิจเรียกผ่าน `ui/`/`design/` เท่านั้น ไม่เขียนหน้าตาเอง
 - `apps/mcp/` — เซิร์ฟเวอร์ MCP แบบ **อ่านอย่างเดียว** เรียกผ่าน HTTP API เดิม ไม่ต่อฐานข้อมูลตรง (ดู [ADR-0011](docs/decisions/0011-read-only-mcp-server.md))
 - `packages/domain/` — กฎธุรกิจที่ทั้งสองฝั่งใช้ร่วมกัน (ปีงบ เดือน การแสดงผลภาษาไทย) **ห้ามเขียนซ้ำที่อื่น**
 - `database/` — schema สำหรับฐานข้อมูลใหม่, ordered migrations สำหรับฐานข้อมูลเดิม และ seed
@@ -57,6 +57,19 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 เหตุผลที่เป็นกฎ ไม่ใช่คำแนะนำ: ข้อความ error ของ MySQL เคยหลุดออกไปถึงเบราว์เซอร์ทั้งชื่อตารางและชื่อคอลัมน์ และรูปแบบคำตอบที่ต่างกันสามแบบทำให้ฝั่งเว็บต้องเดาว่าจะอ่านช่องไหน
 
 **ข้อจำกัดของ `apps/mcp/` ห้ามผ่อน** — ห้ามเพิ่มเครื่องมือที่เขียนข้อมูลเด็ดขาด ข้อมูลขาเข้าของเครื่องมือ MCP มาจากโมเดลภาษา ไม่ใช่จากผู้ใช้โดยตรง ถ้าจำเป็นต้องเปลี่ยนจริงๆ ต้องแก้ [ADR-0011](docs/decisions/0011-read-only-mcp-server.md) พร้อมเหตุผลก่อน — มีเทสบังคับข้อนี้ไว้แล้วใน `apps/mcp/test/tools.test.js`
+
+โฟลเดอร์ใน `apps/web/src/` ก็ตั้งชื่อตามบทบาท ไม่ใช่ตามชนิดของไฟล์ เช่นเดียวกับฝั่ง API
+
+| โฟลเดอร์ | บทบาท | กฎ |
+|---|---|---|
+| `design/` | token สี ตัวอักษร ระยะ เงา และจังหวะการเคลื่อนไหว — สามระดับ primitive → semantic → utility | CSS ล้วน ห้ามมี JavaScript |
+| `ui/` | component พื้นฐานที่ไม่รู้จักเรื่องธุรกิจ (ปุ่ม, ตาราง, หน้าต่างซ้อน, ช่องเลือก) | ห้ามมีคำว่าเครื่องพิมพ์/ปีงบ/แผนก และห้ามเรียก API |
+| `app/` | เปลือกของแอป — แถบเมนู แถบบน ช่องค้นหาคำสั่ง | รู้เรื่องเส้นทางและสิทธิ์ได้ |
+| `api/` | ชั้นดึงข้อมูลกลางผ่าน TanStack Query (`queries.js`) | ดู [ADR-0009](docs/decisions/0009-tanstack-query-as-the-data-layer.md) — เฉพาะข้อมูลอ่านซ้ำข้ามหน้า การเขียนยังยิง axios ตรง |
+| `lib/` | ฟังก์ชันช่วยทั่วไปที่ไม่ผูกกับ component ไหน (จัดรูปแบบตัวเลข, แปล error ของ API) | ห้ามเรียก API ตรง |
+| `views/`, `components/` | หน้าจอและชิ้นส่วนเฉพาะธุรกิจ | เรียกใช้ `ui/`/`design/` เท่านั้น |
+
+**ห้ามเขียนคลาสสีของ Tailwind ตรงๆ ในหน้าจอ** (`bg-gray-50`, `text-blue-600`) — ใช้ชื่อเชิงหน้าที่แทนเสมอ (`bg-surface`, `text-brand-ink`) ถ้าไม่มีชื่อที่ต้องการแปลว่าต้องเพิ่ม semantic token ใหม่ใน `design/tokens.css` ไม่ใช่หยิบสีดิบมาใช้ (ดู [ADR-0008](docs/decisions/0008-design-system-tokens-and-ui-kit.md))
 
 ใช้ indentation 2 spaces Backend ใช้ CommonJS และ semicolon ส่วน Frontend ใช้ ES modules, Vue `<script setup>` และ Tailwind classes ตั้งชื่อ Vue component แบบ PascalCase และ JavaScript identifier แบบ camelCase โดยยึดรูปแบบไฟล์ข้างเคียง
 

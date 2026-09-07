@@ -1,680 +1,602 @@
-<template>
-  <div>
-
-    <!-- ============================================================
-         Header — eyebrow label + title ใหญ่ + subtitle สั้นๆ
-         ปรับสไตล์ตาม template ภาพรวมข้อมูล (การ์ดเล็ก / ป้ายอักษรพิมพ์เล็ก / ตัวเลขไฮไลต์)
-         ============================================================ -->
-    <div class="mb-6">
-      <p class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">
-        Data Overview{{ activeFiscalYear?.year ? ` · ปีงบประมาณ ${activeFiscalYear.year}` : "" }}
-      </p>
-      <h1 class="text-3xl font-bold mt-1">ภาพรวมข้อมูลเครื่องพิมพ์และค่าใช้จ่าย</h1>
-      <p class="text-sm text-gray-500 mt-1">
-        ค้นหาและตรวจสอบข้อมูลเครื่องพิมพ์ ค่าใช้จ่าย และแผนกที่ใช้งานทั้งหมด
-      </p>
-    </div>
-
-    <DashboardFilter @filter="handleFilter" />
-
-    <!-- ============================================================
-         KPI Cards — sticky ใต้ Navbar เสมอ (เห็นตัวเลขหลักตลอดเวลาที่เลื่อนดูกราฟด้านล่าง)
-         ตอนโหลดใหม่ (เปลี่ยน filter) จะโชว์ skeleton แทนค่าเดิม/0 เพื่อไม่ให้ตัวเลขกระโดด
-         ============================================================ -->
-    <div class="sticky top-16 z-10 -mx-6 px-6 py-3 bg-[var(--body-bg)]/90 backdrop-blur">
-      <div v-if="statsError" class="bg-red-100 text-red-700 p-3 rounded-lg mb-3 text-sm flex items-center justify-between gap-3">
-        <span>{{ statsError }}</span>
-        <button type="button" class="underline shrink-0" @click="loadDashboard">ลองใหม่</button>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-
-        <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-4 hover:shadow-lg transition">
-          <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">อุปกรณ์ทั้งหมด</h2>
-          <SkeletonBlock v-if="loading" width="4rem" height="1.75rem" class="mt-1" />
-          <p v-else class="text-2xl font-bold text-[var(--brand-text)] mt-1">
-            {{ Number(stats.total_devices || 0).toLocaleString() }}
-          </p>
-        </div>
-
-        <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-4 hover:shadow-lg transition">
-          <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">สัญญาทั้งหมด</h2>
-          <SkeletonBlock v-if="loading" width="4rem" height="1.75rem" class="mt-1" />
-          <p v-else class="text-2xl font-bold text-green-600 mt-1">
-            {{ Number(stats.total_contracts || 0).toLocaleString() }}
-          </p>
-        </div>
-
-        <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-4 hover:shadow-lg transition">
-          <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">รายการพิมพ์</h2>
-          <SkeletonBlock v-if="loading" width="4rem" height="1.75rem" class="mt-1" />
-          <p v-else class="text-2xl font-bold text-purple-600 mt-1">
-            {{ Number(stats.total_transactions || 0).toLocaleString() }}
-          </p>
-        </div>
-
-        <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-4 hover:shadow-lg transition">
-          <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">จำนวนหน้าที่พิมพ์</h2>
-          <SkeletonBlock v-if="loading" width="4rem" height="1.75rem" class="mt-1" />
-          <p v-else class="text-2xl font-bold text-red-600 mt-1">
-            {{ Number(stats.total_pages || 0).toLocaleString() }}
-          </p>
-        </div>
-
-      </div>
-
-      <!-- ตัวเลขไฮไลต์ค่าใช้จ่ายสุทธิรวม — รวมจากตาราง "สรุปการใช้งานตามสัญญา"
-           สไตล์เดียวกับการ์ดตัวเลขไฮไลต์ตัวใหญ่ใน template อ้างอิง -->
-      <div class="mt-4 bg-gray-50 shadow rounded-xl border border-gray-100/60 p-4">
-        <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">
-          ค่าใช้จ่ายสุทธิรวมทุกสัญญา (หัก 20%)
-        </h2>
-        <SkeletonBlock v-if="highlightsLoading" width="10rem" height="2.25rem" class="mt-1" />
-        <p v-else class="text-3xl font-bold text-red-600 mt-1">
-          {{ formatMoney(netCostTotal) }} <span class="text-base font-normal text-gray-400">บาท</span>
-        </p>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         Top departments — ranked bar list (สไตล์เดียวกับ "TOP PROVINCES")
-         สลับมาก/น้อยได้ด้วยปุ่มเดียว
-         ============================================================ -->
-    <div class="mt-6 bg-gray-50 shadow rounded-xl border border-gray-100/60 p-6">
-      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <div>
-          <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">Top Departments</h2>
-          <p class="text-lg font-bold mt-0.5">
-            แผนกที่ค่าใช้จ่ายสุทธิ{{ topDepartmentsOrder === "desc" ? "สูงสุด" : "น้อยสุด" }} (หัก 20%)
-          </p>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <button
-            type="button"
-            @click="toggleTopDepartmentsOrder"
-            class="text-sm border rounded px-3 py-1.5 hover:bg-gray-100 flex items-center gap-1"
-          >
-            {{ topDepartmentsOrder === "desc" ? "มากที่สุด" : "น้อยที่สุด" }}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="w-3.5 h-3.5"
-            >
-              <path v-if="topDepartmentsOrder === 'desc'" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-              <path v-else d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-            </svg>
-          </button>
-
-          <RouterLink to="/by-department" class="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap">
-            ดูทั้งหมด →
-          </RouterLink>
-        </div>
-      </div>
-
-      <div v-if="highlightsError" class="text-sm text-red-600">{{ highlightsError }}</div>
-
-      <div v-else-if="highlightsLoading" class="space-y-3">
-        <SkeletonBlock v-for="n in 5" :key="n" height="2.5rem" />
-      </div>
-
-      <div v-else-if="highlights.top_departments.length === 0" class="text-gray-400 text-sm">
-        ไม่มีข้อมูลในช่วงที่เลือก
-      </div>
-
-      <div v-else class="space-y-4">
-        <div
-          v-for="(d, idx) in highlights.top_departments"
-          :key="d.department_id ?? d.department_name"
-          class="flex items-center gap-3"
-        >
-          <span class="w-7 shrink-0 text-xs font-semibold text-gray-400 text-right">
-            {{ String(idx + 1).padStart(2, "0") }}
-          </span>
-
-          <div class="flex-1 min-w-0">
-            <div class="flex items-baseline justify-between gap-2">
-              <p class="text-sm font-medium truncate">
-                {{ d.department_name || "ไม่ระบุแผนก" }}
-                <span class="text-gray-400 font-normal">{{ d.division_name ? `· ${d.division_name}` : "" }}</span>
-              </p>
-              <p class="text-sm font-semibold shrink-0">
-                {{ formatMoney(d.total_cost) }} <span class="text-xs text-gray-400 font-normal">บาท</span>
-              </p>
-            </div>
-            <div class="mt-1.5 h-2 rounded-full bg-gray-200/70 overflow-hidden">
-              <div
-                class="h-full rounded-full bg-[var(--brand-500)]"
-                :style="{ width: deptBarWidth(d.total_cost) + '%' }"
-              ></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         3 คอลัมน์ล่าง — เครื่องที่ปริ้นมาก/น้อย, สัญญา, สถานะเครื่องพิมพ์
-         สไตล์เดียวกับ "TOP DISTRICTS / TOP AGENCIES / SCORE DISTRIBUTION"
-         ============================================================ -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-
-      <!-- เครื่องที่ปริ้นมากสุด/น้อยสุด -->
-      <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-6">
-        <div class="flex items-center justify-between mb-4 gap-2">
-          <div>
-            <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">Top Devices</h2>
-            <p class="text-base font-bold mt-0.5">
-              เครื่องที่ปริ้น{{ topDevicesOrder === "desc" ? "มากที่สุด" : "น้อยที่สุด" }}
-            </p>
-          </div>
-          <button
-            type="button"
-            @click="toggleTopDevicesOrder"
-            class="text-xs border rounded px-2 py-1 hover:bg-gray-100 flex items-center gap-1 shrink-0"
-          >
-            {{ topDevicesOrder === "desc" ? "มาก" : "น้อย" }}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="w-3 h-3"
-            >
-              <path v-if="topDevicesOrder === 'desc'" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-              <path v-else d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-            </svg>
-          </button>
-        </div>
-
-        <div v-if="highlightsError" class="text-sm text-red-600">{{ highlightsError }}</div>
-        <div v-else-if="highlightsLoading" class="space-y-2">
-          <SkeletonBlock v-for="n in 5" :key="n" height="2.25rem" />
-        </div>
-        <div v-else-if="highlights.top_devices.length === 0" class="text-gray-400 text-sm">
-          ไม่มีข้อมูลในช่วงที่เลือก
-        </div>
-        <ul v-else class="divide-y divide-gray-200/60">
-          <li v-for="(d, idx) in highlights.top_devices" :key="d.device_id" class="py-2.5 flex items-center gap-3">
-            <span class="w-6 h-6 shrink-0 rounded-full bg-[var(--brand-100)] text-[var(--brand-700)] text-xs font-semibold flex items-center justify-center">
-              {{ idx + 1 }}
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium truncate">{{ d.serial_number || "-" }}</p>
-              <p class="text-xs text-gray-500 truncate">{{ d.department_name || "ไม่ระบุแผนก" }}</p>
-            </div>
-            <span class="text-sm font-semibold shrink-0">
-              {{ Number(d.total_pages || 0).toLocaleString() }} <span class="text-xs text-gray-400 font-normal">หน้า</span>
-            </span>
-          </li>
-        </ul>
-        <RouterLink to="/by-department" class="text-xs text-gray-500 hover:text-gray-700 underline block mt-3">
-          ดูทั้งหมด →
-        </RouterLink>
-      </div>
-
-      <!-- สรุปการใช้งานตามสัญญา -->
-      <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-6">
-        <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">Top Contracts</h2>
-        <p class="text-base font-bold mt-0.5 mb-4">สรุปการใช้งานตามสัญญา</p>
-
-        <div v-if="highlightsError" class="text-sm text-red-600">{{ highlightsError }}</div>
-        <div v-else-if="highlightsLoading" class="space-y-2">
-          <SkeletonBlock v-for="n in 3" :key="n" height="2.25rem" />
-        </div>
-        <div v-else-if="highlights.contracts.length === 0" class="text-gray-400 text-sm">
-          ยังไม่มีสัญญาในระบบ
-        </div>
-        <ul v-else class="divide-y divide-gray-200/60">
-          <li v-for="(c, idx) in highlights.contracts" :key="c.id" class="py-2.5 flex items-center gap-3">
-            <span class="w-6 h-6 shrink-0 rounded-full bg-[var(--brand-100)] text-[var(--brand-700)] text-xs font-semibold flex items-center justify-center">
-              {{ idx + 1 }}
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium truncate">{{ c.contract_no }}</p>
-              <p class="text-xs text-gray-500 truncate">
-                ปีงบ {{ c.fiscal_year ? Number(c.fiscal_year) : "-" }} · {{ Number(c.device_count).toLocaleString() }} เครื่อง
-              </p>
-            </div>
-            <span class="text-sm font-semibold shrink-0">
-              {{ formatMoney(c.total_cost) }} <span class="text-xs text-gray-400 font-normal">บาท</span>
-            </span>
-          </li>
-        </ul>
-        <RouterLink to="/expense" class="text-xs text-gray-500 hover:text-gray-700 underline block mt-3">
-          ดูทั้งหมด →
-        </RouterLink>
-      </div>
-
-      <!-- สถานะเครื่องพิมพ์ — bar chart แบบเดียวกับ "SCORE DISTRIBUTION" -->
-      <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-6">
-        <h2 class="text-[11px] font-semibold tracking-widest text-gray-400 uppercase">Device Status</h2>
-        <p class="text-base font-bold mt-0.5 mb-4">สถานะเครื่องพิมพ์</p>
-
-        <div v-if="highlightsError" class="text-sm text-red-600 flex items-center justify-between gap-3">
-          <span>{{ highlightsError }}</span>
-          <button type="button" class="underline shrink-0" @click="loadHighlights">ลองใหม่</button>
-        </div>
-
-        <div v-else-if="highlightsLoading" class="h-40 flex items-end gap-3">
-          <SkeletonBlock v-for="n in 3" :key="n" width="100%" height="6rem" />
-        </div>
-
-        <div v-else class="h-40 flex items-end gap-4 px-2">
-          <div
-            v-for="s in highlights.device_status"
-            :key="s.status"
-            class="flex-1 flex flex-col items-center justify-end h-full"
-          >
-            <span class="text-xs font-semibold mb-1" :class="deviceStatusMeta[s.status]?.barTextClass">
-              {{ Number(s.count).toLocaleString() }}
-            </span>
-            <div
-              class="w-full rounded-t-md transition-all"
-              :class="deviceStatusMeta[s.status]?.barClass"
-              :style="{ height: statusBarHeight(s.count) + '%' }"
-            ></div>
-            <span class="text-xs text-gray-500 mt-2 text-center">
-              {{ deviceStatusMeta[s.status]?.label || s.status }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ============================================================
-         กราฟ — แยกเป็น 2 แท็บ (การใช้งาน / ค่าใช้จ่าย) แทนวางต่อกันยาว 4 กราฟรวด
-         เพราะคนดู dashboard นี้ปกติสนใจอย่างใดอย่างหนึ่งตามช่วงเวลา (ปิดงบ vs ดูแลระบบ)
-         ============================================================ -->
-    <div class="mt-8">
-      <div class="flex gap-1 border-b border-gray-200 mb-6" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="chartTab === 'usage'"
-          class="px-4 py-2.5 text-sm font-medium rounded-t-lg -mb-px border-b-2 transition-colors"
-          :class="chartTab === 'usage'
-            ? 'border-blue-600 text-[var(--brand-text)]'
-            : 'border-transparent text-gray-500 hover:text-gray-700'"
-          @click="chartTab = 'usage'"
-        >
-          การใช้งาน
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="chartTab === 'cost'"
-          class="px-4 py-2.5 text-sm font-medium rounded-t-lg -mb-px border-b-2 transition-colors"
-          :class="chartTab === 'cost'
-            ? 'border-blue-600 text-[var(--brand-text)]'
-            : 'border-transparent text-gray-500 hover:text-gray-700'"
-          @click="chartTab = 'cost'"
-        >
-          ค่าใช้จ่าย
-        </button>
-      </div>
-
-      <div v-if="chartTab === 'usage'">
-        <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-6">
-          <h2 class="text-xl font-bold mb-4">ยอดพิมพ์รายเดือน</h2>
-          <MonthlyChart :filter="dashboardFilter" />
-        </div>
-
-        <div class="mt-6 bg-gray-50 shadow rounded-xl border border-gray-100/60 p-6">
-          <h2 class="text-xl font-bold mb-4">จำนวนหน้าพิมพ์รายอาคาร</h2>
-          <BuildingChart :filter="dashboardFilter" />
-        </div>
-      </div>
-
-      <div v-else>
-        <div class="bg-gray-50 shadow rounded-xl border border-gray-100/60 p-6">
-          <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายสุทธิรายเดือน (หัก 20%)</h2>
-          <CostChart :filter="dashboardFilter" />
-        </div>
-
-        <div class="mt-6 bg-gray-50 shadow rounded-xl border border-gray-100/60 p-6">
-          <h2 class="text-xl font-bold mb-4">ค่าใช้จ่ายสุทธิรายอาคาร (หัก 20%)</h2>
-          <BuildingCostChart :filter="dashboardFilter" />
-        </div>
-      </div>
-    </div>
-
-  </div>
-</template>
-
 <script setup>
-import { ref, computed, onMounted, h } from "vue";
-import { RouterLink } from "vue-router";
+/**
+ * Dashboard — หน้าแรกหลังเข้าระบบ
+ *
+ * ลำดับของข้อมูลบนหน้านี้เรียงตาม "คำถามที่คนเปิดหน้านี้ถามจริง" ไล่จากกว้างไปแคบ
+ *
+ *   1. มีอะไรที่ฉันต้องทำไหม                                   -> แถบสิ่งที่ต้องจัดการ
+ *   2. ตอนนี้เราจ่ายไปเท่าไหร่แล้ว และมีเครื่องอยู่กี่เครื่อง   -> การ์ดตัวเลขสรุป
+ *   3. ยอดขึ้นหรือลงจากช่วงก่อน                                -> กราฟแนวโน้ม
+ *   4. ใครใช้เยอะ                                              -> อันดับแผนก/อาคาร/เครื่อง
+ *
+ * ข้อ 1 เคยไม่มีอยู่บนหน้านี้เลย และเป็นคำถามที่คนถามก่อนคำถามอื่นทั้งหมด — ถ้า
+ * ไม่มีอะไรค้าง เขาปิดหน้าไปทำงานอื่น ถ้ามี เขาต้องรู้ทันทีว่าคืออะไรและกดตรงไหน
+ * แดชบอร์ดเดิมตอบได้แค่ "ตัวเลขตอนนี้เป็นเท่าไหร่" ซึ่งเป็นคำถามอันดับสอง
+ *
+ * ตัวเลขค่าใช้จ่ายบนหน้านี้เป็น "ค่าใช้จ่ายสุทธิ" ที่หัก 20% แล้วตามเงื่อนไขสัญญา
+ * และเขียนกำกับไว้ทุกจุดที่แสดง เพราะเลขนี้ถูกเอาไปเทียบกับใบแจ้งหนี้จริง
+ * ถ้าไม่บอกว่าหักแล้วจะกลายเป็นการรายงานผิด
+ */
+import { computed, onMounted, ref } from "vue";
+import {
+  ArrowUpRight,
+  Boxes,
+  FileText,
+  Printer,
+  ReceiptText,
+  RefreshCw,
+  Wallet,
+} from "lucide-vue-next";
+import { formatMonthTH, fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
-import { activeFiscalYear } from "../store/fiscalYear";
-
-import MonthlyChart from "../components/MonthlyChart.vue";
-import BuildingChart from "../components/BuildingChart.vue";
-import BuildingCostChart from "../components/BuildingCostChart.vue";
-import CostChart from "../components/CostChart.vue";
+import { errorMessage } from "../lib/api-error";
+import { useOverview } from "../api/queries";
+import { activeFiscalYear, activeFiscalYearRange } from "../store/fiscalYear";
+import { formatBahtValue, formatCount, percentOf } from "../lib/format";
+import BuildingBreakdownChart from "../components/BuildingBreakdownChart.vue";
+import AttentionPanel from "../components/AttentionPanel.vue";
+import DashboardHero from "../components/DashboardHero.vue";
 import DashboardFilter from "../components/DashboardFilter.vue";
-import SkeletonBlock from "../components/SkeletonBlock.vue";
-import { fromSatang, sumSatang, toSatang } from "@suth/domain";
+import UsageTrendChart from "../components/UsageTrendChart.vue";
+import {
+  UiAlert,
+  UiBadge,
+  UiButton,
+  UiCard,
+  UiEmpty,
+  UiMeter,
+  UiSegmented,
+  UiSkeleton,
+  UiStat,
+} from "../ui";
 
-// รวมเงินหลายรายการ — บวกในหน่วยสตางค์ที่เป็นจำนวนเต็ม ไม่บวก float ของบาท
-// ใช้ total_cost_satang ที่ API ส่งมาก่อน ถ้าไม่มีก็แปลงจาก total_cost แบบไม่ผ่านทศนิยมลอยตัว
-// ดูเหตุผลใน packages/domain/money.cjs
-function sumCost(rows) {
-  return fromSatang(
-    sumSatang(
-      (rows || []).map((r) => r.total_cost_satang ?? toSatang(r.total_cost))
-    )
-  );
-}
-
-
-// =====================
-// State
-// =====================
-
-const loading = ref(true);
-const statsError = ref(null);
-
-const stats = ref({
-  total_devices: 0,
-  total_contracts: 0,
-  total_transactions: 0,
-  total_pages: 0,
-});
+/* --------------------------------------------------------------------------
+   สถานะ
+   -------------------------------------------------------------------------- */
+const filter = ref({ building_name: "", month: "" });
 
 const highlightsLoading = ref(true);
-const highlightsError = ref(null);
+const highlightsError = ref("");
+const highlights = ref({ device_status: [], top_departments: [], top_devices: [], contracts: [] });
 
-const highlights = ref({
-  device_status: [],
-  top_departments: [],
-  top_devices: [],
-  contracts: [],
-});
+const departmentOrder = ref("desc");
+const deviceOrder = ref("desc");
+const chartMetric = ref("pages");
 
-// สลับอันดับเครื่อง "มากที่สุด" (desc, ค่าเริ่มต้น) / "น้อยที่สุด" (asc)
-const topDevicesOrder = ref("desc"); // "desc" | "asc"
+const ORDER_OPTIONS = [
+  { value: "desc", label: "มากสุด" },
+  { value: "asc", label: "น้อยสุด" },
+];
 
-// สลับอันดับแผนก "มากที่สุด" (desc, ค่าเริ่มต้น) / "น้อยที่สุด" (asc)
-const topDepartmentsOrder = ref("desc"); // "desc" | "asc"
-
-// ไอคอนเล็กๆ กำกับสถานะ ไม่ให้พึ่งสีอย่างเดียว (ช่วยผู้ใช้ตาบอดสี/พื้นหลังคอนทราสต์ต่ำ)
-const CheckCircleIcon = () =>
-  h(
-    "svg",
-    { viewBox: "0 0 20 20", fill: "currentColor", xmlns: "http://www.w3.org/2000/svg" },
-    [
-      h("path", {
-        "fill-rule": "evenodd",
-        "clip-rule": "evenodd",
-        d: "M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z",
-      }),
-    ]
-  );
-
-const WrenchIcon = () =>
-  h(
-    "svg",
-    { viewBox: "0 0 20 20", fill: "currentColor", xmlns: "http://www.w3.org/2000/svg" },
-    [
-      h("path", {
-        d: "M14.5 2.134a1 1 0 011 0l3 1.732a1 1 0 01.5.866V8a1 1 0 01-.5.866l-3 1.732a1 1 0 01-1 0L13 9.856v1.288a2.75 2.75 0 01-.804 1.945l-6.708 6.708a2.625 2.625 0 11-3.712-3.712l6.708-6.708A2.75 2.75 0 0110.427 8.5h1.288L10.5 6.634a1 1 0 010-1.732l3-1.732a1 1 0 011-1.036z",
-      }),
-    ]
-  );
-
-const ArchiveBoxIcon = () =>
-  h(
-    "svg",
-    { viewBox: "0 0 20 20", fill: "currentColor", xmlns: "http://www.w3.org/2000/svg" },
-    [
-      h("path", {
-        d: "M2 3a1 1 0 00-1 1v1a1 1 0 001 1h16a1 1 0 001-1V4a1 1 0 00-1-1H2z",
-      }),
-      h("path", {
-        "fill-rule": "evenodd",
-        "clip-rule": "evenodd",
-        d: "M2 7.5h16l-.811 7.71a2 2 0 01-1.99 1.79H4.8a2 2 0 01-1.99-1.79L2 7.5zM7 11a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z",
-      }),
-    ]
-  );
-
-const deviceStatusMeta = {
-  active: {
-    label: "ใช้งานอยู่",
-    chipClass: "status-chip--success",
-    icon: CheckCircleIcon,
-    barClass: "status-bar--success",
-    barTextClass: "status-bar__text--success",
-  },
-  repair: {
-    label: "ซ่อมบำรุง",
-    chipClass: "status-chip--warning",
-    icon: WrenchIcon,
-    barClass: "status-bar--warning",
-    barTextClass: "status-bar__text--warning",
-  },
-  retired: {
-    label: "ปลดระวาง",
-    chipClass: "status-chip--neutral",
-    icon: ArchiveBoxIcon,
-    barClass: "status-bar--neutral",
-    barTextClass: "status-bar__text--neutral",
-  },
+/** สถานะของเครื่อง — ป้ายภาษาไทยและโทนสี กำหนดรวมไว้ที่เดียวเพื่อให้ทุกหน้าตรงกัน */
+const STATUS_META = {
+  active: { label: "ใช้งานอยู่", tone: "ok", bar: "bg-ok" },
+  repair: { label: "ซ่อมบำรุง", tone: "warn", bar: "bg-warn" },
+  retired: { label: "ปลดระวาง", tone: "neutral", bar: "bg-ink-faint" },
 };
 
-// =====================
-// Derived / computed สำหรับการ์ดสไตล์ template (ranked bar list / highlight number / distribution bar chart)
-// =====================
+/* --------------------------------------------------------------------------
+   ค่าที่คำนวณจากข้อมูลที่โหลดมาแล้ว — ไม่ยิง API เพิ่ม
+   -------------------------------------------------------------------------- */
 
-// ค่าใช้จ่ายสุทธิรวมทุกสัญญา — รวมจาก highlights.contracts ที่โหลดมาแล้ว ไม่ต้องยิง API เพิ่ม
-const netCostTotal = computed(() =>
-  sumCost(highlights.value.contracts)
+/** รวมเงินในหน่วยสตางค์ที่เป็นจำนวนเต็ม ไม่บวกทศนิยมลอยตัวของบาท (ดู packages/domain/money.cjs) */
+function sumCost(rows) {
+  return fromSatang(sumSatang((rows ?? []).map((r) => r.total_cost_satang ?? toSatang(r.total_cost))));
+}
+
+const netCostTotal = computed(() => sumCost(highlights.value.contracts));
+
+const topDepartmentMax = computed(() =>
+  Math.max(1, ...highlights.value.top_departments.map((d) => Number(d.total_cost || 0)))
 );
 
-// ความกว้าง (%) ของแถบในการ์ด "แผนกที่ค่าใช้จ่ายสุทธิสูงสุด/น้อยสุด" เทียบกับค่าที่มากที่สุดในลิสต์
-// ป้องกันหารด้วย 0 ตอนไม่มีข้อมูล/ทุกแผนกค่าใช้จ่ายเป็น 0
-function deptBarWidth(cost) {
-  const max = Math.max(1, ...highlights.value.top_departments.map((d) => Number(d.total_cost || 0)));
-  return Math.max(2, (Number(cost || 0) / max) * 100);
-}
+const totalDeviceStatus = computed(() =>
+  highlights.value.device_status.reduce((sum, s) => sum + Number(s.count || 0), 0)
+);
 
-// ความสูง (%) ของแท่งกราฟในการ์ด "สถานะเครื่องพิมพ์" เทียบกับสถานะที่มีจำนวนเครื่องมากที่สุด
-function statusBarHeight(count) {
-  const max = Math.max(1, ...highlights.value.device_status.map((s) => Number(s.count || 0)));
-  return Math.max(4, (Number(count || 0) / max) * 100);
-}
+const topDeviceMax = computed(() =>
+  Math.max(1, ...highlights.value.top_devices.map((d) => Number(d.total_pages || 0)))
+);
 
-const dashboardFilter = ref({
-  building_name: "",
-  month: "",
+const loading = computed(() => overviewLoading.value || highlightsLoading.value);
+
+/**
+ * ภาพรวมทั้งหน้าในคำขอเดียว
+ *
+ * เดิมหน้านี้ยิงสองคำขอแยกกัน (/dashboard/stats และ /dashboard/monthly-kpi)
+ * แล้วเอามาประกอบเอง ตอนนี้ /dashboard/overview ตอบทุกอย่างในครั้งเดียว รวมถึง
+ * "รายการที่ต้องลงมือทำ" ที่ของเดิมไม่มีทางคำนวณได้จากฝั่งเบราว์เซอร์เลย
+ * (ต้องรู้ว่าเดือนไหนกรอกครบ ต้องรู้ว่าเครื่องไหนไม่มีราคา — ข้อมูลคนละก้อนกัน)
+ */
+const overviewParams = computed(() => ({
+  fiscal_year_id: activeFiscalYear.value?.id || undefined,
+  building_name: filter.value.building_name || undefined,
+  month: filter.value.month || undefined,
+}));
+
+const {
+  data: overview,
+  isPending: overviewLoading,
+  isError: overviewIsError,
+  error: overviewError,
+  refetch: refetchOverview,
+} = useOverview(overviewParams);
+
+const totals = computed(() => overview.value?.totals ?? {});
+const comparison = computed(() => overview.value?.comparison ?? null);
+const attention = computed(() => overview.value?.attention ?? []);
+const coverage = computed(() => overview.value?.coverage ?? null);
+
+/**
+ * เส้นแนวโน้มจิ๋วบนการ์ดตัวเลข
+ *
+ * ใช้ชุดข้อมูลก้อนเดียวกับที่การ์ดอื่นในหน้าใช้ จึงไม่มีคำขอเพิ่มแม้แต่คำขอเดียว
+ * หน้าที่ของมันคือบอกว่าตัวเลขนี้กำลังขึ้นหรือลง ซึ่งเป็นบริบทที่ตัวเลขเดี่ยวๆ
+ * ไม่มีทางบอกได้ — ตั้งใจไม่มีแกนและไม่มีตัวเลขกำกับ ค่าจริงอยู่ในกราฟใหญ่แล้ว
+ *
+ * ดึงทั้งปีงบเสมอ ไม่ใช่แค่ช่วงที่กรอง เพราะเส้นแนวโน้มที่มีจุดเดียว (ตอนเลือก
+ * เดือนเดียว) ไม่ได้บอกอะไรเลย
+ */
+/**
+ * บอกว่า "เทียบกับช่วงไหน" ด้วยเดือนจริง ไม่ใช่คำว่า "ช่วงก่อนหน้า" ที่คลุมเครือ
+ * ผู้ใช้ต้องรู้ว่าตัวเลข -12% ที่เห็นนั้นเทียบกับอะไร ถึงจะเชื่อมันได้
+ */
+const comparisonHint = computed(() => {
+  const months = comparison.value?.previous_months;
+  if (!months?.length) return "รวมทุกเครื่องในช่วงที่เลือก";
+
+  const first = formatMonthTH(months[0]);
+  const last = formatMonthTH(months[months.length - 1]);
+  return months.length === 1 ? `เทียบกับ ${first}` : `เทียบกับ ${first} – ${last}`;
 });
 
-const chartTab = ref("usage"); // "usage" | "cost"
+/**
+ * โทนสีของการ์ด "ความครบถ้วนของข้อมูล"
+ *
+ * นี่เป็นการวัดเทียบเพดานจริง (ควรกรอกครบทุกเดือนที่ผ่านไปแล้ว) ไม่ใช่การเทียบ
+ * สัดส่วนระหว่างรายการ จึงใช้สีบอกสถานะได้อย่างถูกต้อง — ต่างจากแถบเทียบแผนก
+ * ด้านล่างที่ห้ามใช้สีสถานะ เพราะการเป็นแผนกที่ใช้เยอะที่สุดไม่ใช่ "ความผิดพลาด"
+ *
+ * ⚠️ วัดจาก **เดือน** ไม่ใช่จาก reporting_active_devices/active_devices ซึ่งนับ
+ * "เครื่องที่เคยมียอดอย่างน้อยหนึ่งเดือน" — เคยใช้ค่านั้นแล้วการ์ดขึ้นเขียวว่า
+ * "18/18" ทั้งที่ยังกรอกไม่ครบ 5 เดือน
+ */
+const dataCompletenessTone = computed(() => {
+  const elapsed = Number(coverage.value?.elapsed_months || 0);
+  const complete = Number(coverage.value?.complete_months || 0);
+  if (!elapsed) return "ink";
+  if (complete >= elapsed) return "ok";
+  return complete >= elapsed * 0.8 ? "warn" : "danger";
+});
 
-function formatMoney(value) {
-  return Number(value || 0).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+const trend = computed(() => {
+  const series = overview.value?.series ?? [];
+  return {
+    pages: series.map((row) => row.net_pages),
+    cost: series.map((row) => row.total_cost),
+  };
+});
+
+/* --------------------------------------------------------------------------
+   โหลดข้อมูล
+   -------------------------------------------------------------------------- */
+function params(extra = {}) {
+  return {
+    building_name: filter.value.building_name || undefined,
+    month: filter.value.month || undefined,
+    ...extra,
+  };
 }
-
-// =====================
-// Load KPI
-// =====================
-
-async function loadDashboard() {
-  loading.value = true;
-  statsError.value = null;
-
-  try {
-    const params = {};
-
-    if (dashboardFilter.value.building_name) {
-      params.building_name = dashboardFilter.value.building_name;
-    }
-
-    if (dashboardFilter.value.month) {
-      params.month = dashboardFilter.value.month;
-    }
-
-    const res = await api.get("/dashboard/stats", { params });
-
-    stats.value = {
-      ...res.data,
-      total_pages: Number(res.data.total_pages || 0),
-    };
-  } catch (err) {
-    console.error("Dashboard error:", err);
-    statsError.value = "ไม่สามารถโหลดข้อมูล KPI ได้";
-  } finally {
-    loading.value = false;
-  }
-}
-
-// =====================
-// Load Highlights (device status / top departments / contracts)
-// =====================
 
 async function loadHighlights() {
   highlightsLoading.value = true;
-  highlightsError.value = null;
+  highlightsError.value = "";
 
   try {
-    const params = {};
-
-    if (dashboardFilter.value.building_name) {
-      params.building_name = dashboardFilter.value.building_name;
-    }
-
-    if (dashboardFilter.value.month) {
-      params.month = dashboardFilter.value.month;
-    }
-
-    params.device_order = topDevicesOrder.value;
-    params.department_order = topDepartmentsOrder.value;
-
-    const res = await api.get("/dashboard/highlights", { params });
+    const res = await api.get("/dashboard/highlights", {
+      params: params({ device_order: deviceOrder.value, department_order: departmentOrder.value }),
+    });
 
     highlights.value = {
-      device_status: res.data.device_status || [],
-      top_departments: res.data.top_departments || [],
-      top_devices: res.data.top_devices || [],
-      contracts: res.data.contracts || [],
+      device_status: res.data.device_status ?? [],
+      top_departments: res.data.top_departments ?? [],
+      top_devices: res.data.top_devices ?? [],
+      contracts: res.data.contracts ?? [],
     };
   } catch (err) {
-    console.error("Highlights error:", err);
-    highlightsError.value = "ไม่สามารถโหลดข้อมูลสรุปได้";
+    console.error("Dashboard highlights error:", err);
+    highlightsError.value = "โหลดข้อมูลสรุปเชิงลึกไม่สำเร็จ";
   } finally {
     highlightsLoading.value = false;
   }
 }
 
-// สลับปุ่ม "มากที่สุด" / "น้อยที่สุด" ของตารางเครื่องปริ้นมาก/น้อย — โหลดใหม่แค่ highlights
-// (ไม่ต้องโหลด stats card ซ้ำ เพราะ KPI ด้านบนไม่เกี่ยวกับลำดับมาก/น้อยของตารางนี้)
-function toggleTopDevicesOrder() {
-  topDevicesOrder.value = topDevicesOrder.value === "desc" ? "asc" : "desc";
+function reload() {
+  refetchOverview();
   loadHighlights();
 }
 
-// สลับปุ่ม "มากที่สุด" / "น้อยที่สุด" ของการ์ดแผนกค่าใช้จ่ายสุทธิ — โหลดใหม่แค่ highlights
-function toggleTopDepartmentsOrder() {
-  topDepartmentsOrder.value = topDepartmentsOrder.value === "desc" ? "asc" : "desc";
-  loadHighlights();
+/** ตัวกรองเปลี่ยนจริงเท่านั้นถึงยิงใหม่ — component ลูก emit ตอน mount ด้วย */
+function onFilter(next) {
+  if (filter.value.building_name === next.building_name && filter.value.month === next.month) return;
+  filter.value = { ...next };
+  reload();
 }
 
-// =====================
-// Filter Event
-// =====================
-
-function handleFilter(filter) {
-  if (
-    dashboardFilter.value.building_name === filter.building_name &&
-    dashboardFilter.value.month === filter.month
-  ) {
-    return;
-  }
-
-  dashboardFilter.value = { ...filter };
-
-  loadDashboard();
-  loadHighlights();
-}
-
-onMounted(() => {
-  loadDashboard();
-  loadHighlights();
-});
+onMounted(loadHighlights);
 </script>
 
-<style scoped>
-/*
-  สีสถานะเครื่องพิมพ์ (ใช้งานอยู่/ซ่อมบำรุง/ปลดระวาง)
-  ใช้ CSS variable ของตัวเอง (--status-*) แทนการเรียก Tailwind bg-green-50/bg-yellow-50
-  ตรงๆ เพราะสเกลสี green/yellow ของ Tailwind ในโปรเจกต์นี้ยังไม่ได้ถูก remap ตามโหมด
-  มืด/สว่างเหมือน gray/red/blue (ดู style.css) — ถ้าใช้ bg-green-50 ตรงๆ การ์ดจะกลายเป็น
-  แผ่นพื้นเขียวอ่อนจ้าโผล่ขึ้นมาท่ามกลางการ์ดโทนมืดอื่นๆ ตอนเปิดโหมดมืด
-*/
-.status-chip--success {
-  background-color: var(--status-success-bg);
-}
-.status-chip--success .status-chip__value {
-  color: var(--status-success-text);
-}
+<template>
+  <div>
+    <DashboardHero
+      :fiscal-year="activeFiscalYear"
+      :range="activeFiscalYearRange"
+      :coverage="coverage"
+      :loading="overviewLoading"
+    />
 
-.status-chip--warning {
-  background-color: var(--status-warning-bg);
-}
-.status-chip--warning .status-chip__value {
-  color: var(--status-warning-text);
-}
+    <!--
+      อยู่เหนือทุกอย่างเพราะเป็นคำถามแรกที่คนเปิดหน้านี้ถาม และอยู่เหนือแถวตัวกรอง
+      เพราะ "งานที่ค้าง" ไม่ควรถูกซ่อนด้วยตัวกรองที่ผู้ใช้เผลอตั้งไว้จากครั้งก่อน
+    -->
+    <AttentionPanel :items="attention" :loading="overviewLoading" class="mb-5" />
 
-.status-chip--neutral {
-  /* เดิมใช้ --neutral-100 เหมือนพื้นหลังการ์ดทั่วไป ทำให้ "ปลดระวาง" กลืนหายไป
-     เปลี่ยนเป็น --neutral-200 (เข้มขึ้นหนึ่งขั้น) ให้ยังแยกออกจากพื้นหลังได้ */
-  background-color: var(--neutral-200);
-}
-.status-chip--neutral .status-chip__value {
-  color: var(--neutral-600);
-}
+    <!-- ปุ่มรีเฟรชอยู่ติดแถบตัวกรอง เพราะสิ่งที่มันโหลดใหม่คือข้อมูล "ของตัวกรอง
+         ชุดที่ตั้งอยู่ตอนนี้" ไม่ใช่ทั้งหน้าแบบไม่มีเงื่อนไข -->
+    <div class="flex items-start gap-3">
+      <DashboardFilter v-model:metric="chartMetric" class="flex-1 min-w-0" @filter="onFilter" />
 
-.status-chip__value {
-  display: block;
-}
+      <UiButton
+        variant="secondary"
+        icon-only
+        label="โหลดข้อมูลใหม่"
+        :loading="loading"
+        class="mt-px shrink-0"
+        @click="reload"
+      >
+        <template #icon><RefreshCw :size="15" /></template>
+      </UiButton>
+    </div>
 
-/*
-  แท่งกราฟในการ์ด "สถานะเครื่องพิมพ์" (สไตล์เดียวกับ SCORE DISTRIBUTION ใน template อ้างอิง)
-  ใช้ CSS variable ชุดเดียวกับ status-chip ด้านบน เพื่อให้สีสถานะตรงกันทั้งหน้า
-*/
-.status-bar--success {
-  background-color: var(--status-success-text);
-  opacity: 0.85;
-}
-.status-bar__text--success {
-  color: var(--status-success-text);
-}
+    <UiAlert v-if="overviewIsError" tone="danger" class="mb-4">
+      {{ errorMessage(overviewError, "โหลดภาพรวมไม่สำเร็จ") }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="refetchOverview">ลองใหม่</UiButton>
+      </template>
+    </UiAlert>
 
-.status-bar--warning {
-  background-color: var(--status-warning-text);
-  opacity: 0.85;
-}
-.status-bar__text--warning {
-  color: var(--status-warning-text);
-}
+    <!-- ตัวเลขสรุป — ค่าใช้จ่ายสุทธิเป็นใบที่เน้น เพราะเป็นตัวเลขที่ผู้บริหารถามถึงก่อนเสมอ -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+      <UiStat
+        label="ค่าใช้จ่ายสุทธิรวม"
+        unit="บาท"
+        hint="ทุกสัญญา หลังหักส่วนลด 20%"
+        tone="brand"
+        emphasis
+        :loading="overviewLoading"
+        :trend="trend.cost"
+        :delta="comparison?.cost_change_percent ?? null"
+        delta-inverse
+      >
+        {{ formatBahtValue(totals.total_cost) }}
+        <template #icon><Wallet :size="16" class="text-brand-ink opacity-70" /></template>
+      </UiStat>
 
-.status-bar--neutral {
-  background-color: var(--neutral-400);
-}
-.status-bar__text--neutral {
-  color: var(--neutral-500);
-}
-</style>
+      <UiStat
+        label="จำนวนหน้าที่พิมพ์"
+        unit="หน้า"
+        :hint="comparisonHint"
+        tone="ink"
+        :loading="overviewLoading"
+        :trend="trend.pages"
+        :delta="comparison?.pages_change_percent ?? null"
+        delta-inverse
+      >
+        {{ formatCount(totals.total_pages) }}
+        <template #icon><Printer :size="16" class="text-ink-faint" /></template>
+      </UiStat>
+
+      <UiStat
+        label="อุปกรณ์ในทะเบียน"
+        unit="เครื่อง"
+        :hint="`ใช้งานอยู่ ${formatCount(totals.active_devices)} เครื่อง`"
+        tone="ink"
+        :loading="overviewLoading"
+      >
+        {{ formatCount(totals.total_devices) }}
+        <template #icon><Boxes :size="16" class="text-ink-faint" /></template>
+      </UiStat>
+
+      <!--
+        เดิมการ์ดใบนี้แสดง "จำนวนรายการที่บันทึกไว้" ซึ่งเป็นจำนวนแถวในฐานข้อมูล —
+        เป็นตัวเลขที่ไม่ตอบคำถามอะไรของใครเลย เปลี่ยนเป็นความครบถ้วนของข้อมูลแทน
+        ซึ่งบอกได้ทันทีว่าตัวเลขทั้งหน้านี้เชื่อถือได้แค่ไหน
+      -->
+      <UiStat
+        label="ความครบถ้วนของข้อมูล"
+        unit="เดือน"
+        :hint="`กรอกยอดพิมพ์ครบทุกเครื่องแล้ว จาก ${formatCount(coverage?.elapsed_months)} เดือนที่ผ่านไปในปีงบนี้`"
+        :tone="dataCompletenessTone"
+        :loading="overviewLoading"
+      >
+        {{ formatCount(coverage?.complete_months) }}
+        <template #icon><FileText :size="16" class="text-ink-faint" /></template>
+      </UiStat>
+    </div>
+
+    <!-- แนวโน้มรายเดือน + สถานะเครื่อง -->
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
+      <UiCard
+        class="xl:col-span-2"
+        eyebrow="แนวโน้มตลอดปีงบ"
+        :title="chartMetric === 'cost' ? 'ค่าใช้จ่ายรายเดือน' : 'ยอดพิมพ์รายเดือน'"
+      >
+        <UsageTrendChart :filter="filter" :metric="chartMetric" height="19rem" />
+      </UiCard>
+
+      <UiCard eyebrow="ทะเบียนอุปกรณ์" title="สถานะเครื่องพิมพ์">
+        <div v-if="highlightsLoading" class="flex flex-col gap-3">
+          <UiSkeleton height="0.75rem" />
+          <UiSkeleton v-for="n in 3" :key="n" height="2.5rem" />
+        </div>
+
+        <div v-else-if="!totalDeviceStatus">
+          <UiEmpty title="ยังไม่มีเครื่องในทะเบียน" compact />
+        </div>
+
+        <div v-else class="flex flex-col gap-4">
+          <!-- แถบสัดส่วนรวม — เห็นภาพรวมทั้งกองในบรรทัดเดียวก่อนอ่านรายตัว -->
+          <div class="flex h-2.5 gap-0.5 rounded-full overflow-hidden bg-surface-3" aria-hidden="true">
+            <div
+              v-for="status in highlights.device_status"
+              :key="status.status"
+              class="h-full transition-[width] duration-500 ease-out-quart"
+              :class="STATUS_META[status.status]?.bar ?? 'bg-ink-faint'"
+              :style="{ width: `${percentOf(status.count, totalDeviceStatus)}%` }"
+            ></div>
+          </div>
+
+          <ul class="flex flex-col gap-3 list-none">
+            <li
+              v-for="status in highlights.device_status"
+              :key="status.status"
+              class="flex items-center justify-between gap-3"
+            >
+              <span class="flex items-center gap-2 min-w-0">
+                <span
+                  class="w-2.5 h-2.5 rounded-full shrink-0"
+                  :class="STATUS_META[status.status]?.bar ?? 'bg-ink-faint'"
+                  aria-hidden="true"
+                ></span>
+                <span class="text-sm text-ink-soft truncate">
+                  {{ STATUS_META[status.status]?.label ?? status.status }}
+                </span>
+              </span>
+
+              <span class="flex items-baseline gap-1.5 shrink-0">
+                <span class="text-md font-semibold text-ink numeral">
+                  {{ formatCount(status.count) }}
+                </span>
+                <span class="text-2xs text-ink-mute numeral">
+                  {{ percentOf(status.count, totalDeviceStatus).toFixed(0) }}%
+                </span>
+              </span>
+            </li>
+          </ul>
+
+          <UiButton to="/assets" variant="secondary" size="sm" block>
+            เปิดทะเบียนทรัพย์สิน
+            <template #trailing><ArrowUpRight :size="14" /></template>
+          </UiButton>
+        </div>
+      </UiCard>
+    </div>
+
+    <UiAlert v-if="highlightsError" tone="danger" class="mb-4">
+      {{ highlightsError }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="loadHighlights">ลองใหม่</UiButton>
+      </template>
+    </UiAlert>
+
+    <!-- อันดับแผนก + รายอาคาร -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
+      <UiCard
+        eyebrow="ค่าใช้จ่ายสุทธิ (หัก 20%)"
+        :title="departmentOrder === 'desc' ? 'แผนกที่ใช้งบสูงสุด' : 'แผนกที่ใช้งบน้อยสุด'"
+      >
+        <template #actions>
+          <UiSegmented
+            v-model="departmentOrder"
+            :options="ORDER_OPTIONS"
+            size="sm"
+            label="เรียงลำดับแผนก"
+            @update:model-value="loadHighlights"
+          />
+        </template>
+
+        <div v-if="highlightsLoading" class="flex flex-col gap-4">
+          <UiSkeleton v-for="n in 5" :key="n" height="2.25rem" />
+        </div>
+
+        <UiEmpty
+          v-else-if="!highlights.top_departments.length"
+          title="ไม่มีข้อมูลในช่วงที่เลือก"
+          description="ลองขยายช่วงเดือน หรือเลือกทุกอาคาร"
+          variant="search"
+          compact
+        />
+
+        <ol v-else class="flex flex-col gap-3.5 list-none">
+          <li
+            v-for="(dept, index) in highlights.top_departments"
+            :key="dept.department_id ?? dept.department_name"
+            class="flex items-start gap-3"
+          >
+            <span class="w-5 shrink-0 pt-0.5 text-2xs font-semibold text-ink-mute numeral text-right">
+              {{ index + 1 }}
+            </span>
+
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline justify-between gap-3">
+                <p class="text-sm text-ink-soft truncate">
+                  {{ dept.department_name || "ไม่ระบุแผนก" }}
+                  <span v-if="dept.division_name" class="text-ink-mute">· {{ dept.division_name }}</span>
+                </p>
+                <p class="text-sm font-semibold text-ink numeral shrink-0">
+                  {{ formatBahtValue(dept.total_cost) }}
+                </p>
+              </div>
+
+              <!-- แถบนี้เทียบสัดส่วนระหว่างแผนก ไม่ใช่การใช้งบเทียบเพดาน
+                   จึงใช้สีเดียวตลอด — สีแดงตรงนี้จะสื่อผิดว่าแผนกอันดับหนึ่งใช้เกิน -->
+              <UiMeter
+                :value="Number(dept.total_cost || 0)"
+                :max="topDepartmentMax"
+                size="sm"
+                tone="brand"
+                hide-value
+                class="mt-1.5"
+                :label="`สัดส่วนของ ${dept.department_name || 'แผนก'}`"
+              />
+            </div>
+          </li>
+        </ol>
+
+        <template #footer>
+          <UiButton to="/expense" variant="ghost" size="sm">
+            ดูรายละเอียดทุกแผนก
+            <template #trailing><ArrowUpRight :size="14" /></template>
+          </UiButton>
+        </template>
+      </UiCard>
+
+      <UiCard
+        eyebrow="เปรียบเทียบรายอาคาร"
+        :title="chartMetric === 'cost' ? 'ค่าใช้จ่ายสุทธิรายอาคาร' : 'ยอดพิมพ์รายอาคาร'"
+      >
+        <BuildingBreakdownChart :filter="filter" :metric="chartMetric" height="21rem" />
+      </UiCard>
+    </div>
+
+    <!-- เครื่องที่ใช้งานหนัก + สัญญา -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <UiCard
+        eyebrow="รายเครื่อง"
+        :title="deviceOrder === 'desc' ? 'เครื่องที่พิมพ์มากที่สุด' : 'เครื่องที่พิมพ์น้อยที่สุด'"
+      >
+        <template #actions>
+          <UiSegmented
+            v-model="deviceOrder"
+            :options="ORDER_OPTIONS"
+            size="sm"
+            label="เรียงลำดับเครื่อง"
+            @update:model-value="loadHighlights"
+          />
+        </template>
+
+        <div v-if="highlightsLoading" class="flex flex-col gap-2">
+          <UiSkeleton v-for="n in 5" :key="n" height="2.5rem" />
+        </div>
+
+        <UiEmpty
+          v-else-if="!highlights.top_devices.length"
+          title="ไม่มีข้อมูลการพิมพ์ในช่วงที่เลือก"
+          variant="search"
+          compact
+        />
+
+        <ol v-else class="flex flex-col list-none divide-y divide-line-soft">
+          <li
+            v-for="(device, index) in highlights.top_devices"
+            :key="device.device_id"
+            class="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
+          >
+            <span
+              class="grid place-items-center shrink-0 w-6 h-6 rounded-md bg-brand-soft text-brand-ink text-2xs font-semibold numeral"
+            >
+              {{ index + 1 }}
+            </span>
+
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-ink-soft font-mono truncate">
+                {{ device.serial_number || device.asset_code || "—" }}
+              </p>
+              <p class="text-2xs text-ink-mute truncate">
+                {{ device.department_name || "ไม่ระบุแผนก" }}
+              </p>
+            </div>
+
+            <div class="shrink-0 text-right">
+              <p class="text-sm font-semibold text-ink numeral">
+                {{ formatCount(device.total_pages) }}
+                <span class="text-2xs font-normal text-ink-mute">หน้า</span>
+              </p>
+              <div class="w-16 h-1 mt-1 rounded-full bg-surface-3 overflow-hidden ml-auto">
+                <div
+                  class="h-full rounded-full bg-brand"
+                  :style="{ width: `${percentOf(device.total_pages, topDeviceMax)}%` }"
+                  aria-hidden="true"
+                ></div>
+              </div>
+            </div>
+          </li>
+        </ol>
+      </UiCard>
+
+      <UiCard eyebrow="สัญญาเช่า" title="ค่าใช้จ่ายแยกตามสัญญา">
+        <div v-if="highlightsLoading" class="flex flex-col gap-2">
+          <UiSkeleton v-for="n in 3" :key="n" height="2.75rem" />
+        </div>
+
+        <UiEmpty
+          v-else-if="!highlights.contracts.length"
+          title="ยังไม่มีสัญญาในระบบ"
+          description="สร้างสัญญาก่อนเพื่อให้ระบบคิดค่าใช้จ่ายต่อแผ่นได้"
+          compact
+        >
+          <template #actions>
+            <UiButton to="/admin/contracts" variant="primary" size="sm">ไปสร้างสัญญา</UiButton>
+          </template>
+        </UiEmpty>
+
+        <ul v-else class="flex flex-col list-none divide-y divide-line-soft">
+          <li
+            v-for="contract in highlights.contracts"
+            :key="contract.id"
+            class="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
+          >
+            <span
+              class="grid place-items-center shrink-0 w-8 h-8 rounded-lg bg-surface-3 text-ink-mute"
+              aria-hidden="true"
+            >
+              <ReceiptText :size="15" />
+            </span>
+
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-ink-soft truncate">{{ contract.contract_no }}</p>
+              <p class="flex items-center gap-1.5 text-2xs text-ink-mute">
+                <UiBadge v-if="contract.fiscal_year" size="sm" tone="neutral">
+                  ปีงบ {{ Number(contract.fiscal_year) }}
+                </UiBadge>
+                <span class="numeral">{{ formatCount(contract.device_count) }} เครื่อง</span>
+              </p>
+            </div>
+
+            <p class="shrink-0 text-sm font-semibold text-ink numeral">
+              {{ formatBahtValue(contract.total_cost) }}
+              <span class="text-2xs font-normal text-ink-mute">บาท</span>
+            </p>
+          </li>
+        </ul>
+
+        <template #footer>
+          <UiButton to="/expense" variant="ghost" size="sm">
+            ดูรายละเอียดค่าใช้จ่าย
+            <template #trailing><ArrowUpRight :size="14" /></template>
+          </UiButton>
+        </template>
+      </UiCard>
+    </div>
+  </div>
+</template>

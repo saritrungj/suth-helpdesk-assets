@@ -13,10 +13,10 @@ npm test
 | workspace | ครอบคลุม | ตัวรัน |
 |---|---|---|
 | `packages/domain` | ปีงบ เดือน พ.ศ./ค.ศ. การแสดงผลไทย และการคิดเงินเป็นสตางค์ | `node:test` |
-| `apps/api` | การอ่าน token จาก cookie/header, requireAuth และค่าความปลอดภัยของ cookie | `node:test` |
-| `apps/web` | store ของ session — กู้ session, logout และการไม่เก็บ token ไว้ที่ไหน | `vitest` |
+| `apps/api` | requireAuth, ความปลอดภัยของ cookie, Problem Details, validate ที่ปากทาง และ shared helpers | `node:test` |
+| `apps/web` | store ของ session, ชั้นดึงข้อมูล TanStack Query และรายการเมนู | `vitest` |
 
-ยังไม่มีเทสระดับ route ที่ต่อฐานข้อมูลจริง และยังไม่มีเทส component
+ยังไม่มีเทสระดับ route ของ `apps/api` ที่ต่อฐานข้อมูลจริง และยังไม่มีเทส component ของ Vue (มีเทส E2E ผ่านเบราว์เซอร์จริงแทน ดูหัวข้อถัดไป)
 
 ## Build ฝั่งเว็บ
 
@@ -27,22 +27,36 @@ npm run build
 ## Health check ฝั่ง API
 
 ```text
-GET http://localhost:3000/
+GET http://localhost:3000/api/health
 ```
 
-ต้องได้ JSON กลับมา และ log ต้องบอกว่าต่อ MySQL สำเร็จ
+ต้องได้ `200` พร้อม JSON กลับมา — ถ้าต่อฐานข้อมูลไม่ได้จะตอบ `503` แทน (ดู [ADR-0010](../decisions/0010-problem-details-and-api-conventions.md))
+
+## E2E ฝั่งเว็บ (Playwright)
+
+```powershell
+npm run test:e2e --workspace @suth/web
+```
+
+ตรวจเส้นทางการทำงานจริงบนเบราว์เซอร์ — กรอกข้อมูลแล้วบันทึก, คำเตือนออกจากหน้าทั้งที่ยังไม่บันทึก, การวางตัวเลขจากตารางคำนวณ, คีย์บอร์ดและ contrast ตามเกณฑ์ WCAG AA ทั้งสองธีม (`apps/web/e2e/wcag.spec.js`, `login-wcag.spec.js`)
+
+ต้องมีทั้ง API (พอร์ต 3000) และเว็บ (5173) รันอยู่พร้อมฐานข้อมูลจริงก่อน — ถ้าต่อไม่ได้เทสจะ **ข้ามทั้งชุด** ไม่ใช่ล้มเหลว เทสกลุ่มที่เขียนข้อมูลลงฐาน (เช่น `month-entry.spec.js`) คืนค่าเดิมกลับเองทุกครั้งในขั้นตอนสุดท้าย (ดู `apps/web/e2e/fixtures.js`)
+
+ถ้าแก้สี ธีม หรือ layout ของหน้าที่มีอยู่แล้ว ถ่ายภาพหน้าจอไว้เทียบก่อน/หลังด้วย `npm run test:e2e:shots --workspace @suth/web` (ภาพออกที่ `apps/web/e2e/screens/` — ไม่ commit เพราะสร้างใหม่ได้ทุกครั้ง ดู `.gitignore`)
 
 ## Smoke test ตามสิ่งที่แก้
 
 | ถ้าแก้… | ต้องตรวจ |
 |---|---|
 | auth หรือสิทธิ์ | ล็อกอิน และทุก role ที่ได้รับผลกระทบ รวมถึงเรียก API โดยไม่มี token ต้องได้ 401 |
-| API ใดๆ | เส้นที่แก้ ทั้งอ่านและเขียน |
+| API ใดๆ | เส้นที่แก้ ทั้งอ่านและเขียน และรูปแบบ error ต้องเป็น Problem Details |
 | ตรรกะปีงบหรือเดือน | ขอบปีงบ ก.ย. → ต.ค. และบันทึกเดือนทั้งแบบ พ.ศ. และ ค.ศ. แล้วตรวจว่าฐานข้อมูลเก็บเป็น ค.ศ. |
 | การคิดเงิน | ยอดสุทธิหลังหัก 20% และลำดับราคา `price_override` → `contracts` → `0` |
 | รายงานย้อนหลัง | เครื่องที่เคยย้ายสถานที่หรือหน่วยงาน ยอดเดือนเก่าต้องอยู่กับหน่วยงานเดิม |
 | schema หรือ migration | ติดตั้งใหม่จาก `schema.sql` และ migration path ที่เปลี่ยน |
 | importer | แถวที่สำเร็จ แถวที่ถูกปฏิเสธ และการนำเข้าซ้ำ |
+| หน้าเว็บที่ดึงข้อมูลอ้างอิงซ้ำ (อาคาร, แผนก, ฝ่าย, ยี่ห้อ, สัญญา) | เปิดหน้าที่เกี่ยวข้องสลับกันแล้วดูใน DevTools Network ว่าไม่ยิงซ้ำภายใน `staleTime` ของ [ADR-0009](../decisions/0009-tanstack-query-as-the-data-layer.md) |
+| UI, สี, หรือ component ใน `apps/web/src/ui` | รัน E2E ด้านบน ทั้งสองธีม (สว่าง/มืด) และตรวจ contrast ผ่านเกณฑ์ AA |
 
 ## ก่อนเปิด PR
 

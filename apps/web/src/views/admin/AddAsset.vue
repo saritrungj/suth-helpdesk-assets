@@ -1,45 +1,91 @@
 <script setup>
 /**
- * AddAsset.vue — หน้า "เพิ่มทรัพย์สิน" ฝั่ง Admin (/admin/add-asset)
- * เปิด popup AssetForm.vue ค้างไว้ตลอดตั้งแต่เข้าหน้า (โหมดเพิ่มใหม่ assetId = null)
- * ซึ่งใน popup มีแท็บ "เพิ่มทีละรายการ" / "นำเข้าไฟล์ (CSV/Excel)" ให้เลือกในตัวอยู่แล้ว
- * แล้วพา user กลับไปหน้า "ทรัพย์สิน" (/assets) เมื่อบันทึกสำเร็จ หรือกดยกเลิก/ปิด popup
+ * AddAsset — หน้าเพิ่มเครื่องเข้าทะเบียน (/admin/add-asset)
  *
- * รองรับ query ?tab=import เพื่อเปิด popup มาที่แท็บนำเข้าไฟล์ตรงๆ
- * (ไว้ให้ลิงก์เก่า /admin/import-devices ที่ redirect มาที่นี่ ยังพาผู้ใช้ไปถูกแท็บ)
+ * เดิมหน้านี้ทำได้อย่างเดียวคือเปิดหน้าต่างซ้อนค้างไว้ตั้งแต่เข้าหน้า ซึ่งมีปัญหา
+ * สองข้อ: ปุ่มย้อนกลับของเบราว์เซอร์ไม่ทำงานตามที่คาด (ปิดหน้าต่างแล้วเด้งไป
+ * หน้าอื่น) และฟอร์มยาวๆ ถูกบีบอยู่ในกล่องที่ต้องเลื่อนในตัวเอง
+ *
+ * ตอนนี้เป็นหน้าจริงที่มีสองแท็บ ผูกกับ query string เพื่อให้บุ๊กมาร์กและลิงก์เก่า
+ * /admin/import-devices ที่ redirect มาพร้อม ?tab=import เปิดมาถูกที่
+ *
+ *   เพิ่มทีละเครื่อง  — สำหรับเครื่องที่เพิ่งซื้อเข้ามาใหม่ทีละตัว
+ *   นำเข้าจากไฟล์    — สำหรับตอนตั้งต้นระบบ หรือรับมอบเครื่องล็อตใหญ่
  */
-import { ref, watch } from "vue";
-import { useRouter, useRoute } from "vue-router";
-import AssetForm from "../AssetForm.vue";
+import { computed, ref, useTemplateRef } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { FileSpreadsheet, Plus } from "lucide-vue-next";
+import DeviceFormFields from "../../components/DeviceFormFields.vue";
+import DeviceImportPanel from "../../components/DeviceImportPanel.vue";
+import { UiButton, UiCard, UiPageHeader, UiTabs } from "../../ui";
 
 const router = useRouter();
 const route = useRoute();
 
-const showFormModal = ref(true);
-const initialTab = route.query.tab === "import" ? "import" : "single";
+const TABS = [
+  { value: "single", label: "เพิ่มทีละเครื่อง", icon: Plus },
+  { value: "import", label: "นำเข้าจากไฟล์", icon: FileSpreadsheet },
+];
 
-function onAssetSaved() {
-  router.push("/assets");
-}
-
-// ปิด popup (กดยกเลิก / กดพื้นหลัง / กดปิดหลังนำเข้าไฟล์) → กลับไปหน้ารายการทรัพย์สิน
-watch(showFormModal, (visible) => {
-  if (!visible) router.push("/assets");
+const tab = computed({
+  get: () => (route.query.tab === "import" ? "import" : "single"),
+  // replace ไม่ push เพื่อไม่ให้การสลับแท็บไปกองอยู่ในประวัติของเบราว์เซอร์
+  // จนกดย้อนกลับหลายครั้งกว่าจะออกจากหน้านี้ได้
+  set: (value) => router.replace({ query: { ...route.query, tab: value } }),
 });
+
+const fields = useTemplateRef("fields");
+const saving = ref(false);
+
+async function save(goBack) {
+  saving.value = true;
+  const ok = await fields.value?.submit();
+  saving.value = false;
+
+  if (!ok) return;
+
+  if (goBack) router.push("/assets");
+  else fields.value?.reset(); // บันทึกแล้วอยู่ต่อ — ล้างฟอร์มให้กรอกเครื่องถัดไปได้เลย
+}
 </script>
 
 <template>
   <div>
-    <h1 class="text-xl font-bold mb-4">เพิ่มทรัพย์สิน</h1>
-    <p class="text-sm text-gray-500 mb-4">
-      เพิ่มทรัพย์สินทีละรายการผ่านฟอร์ม หรือนำเข้าหลายรายการพร้อมกันจากไฟล์ CSV/Excel
-    </p>
+    <UiPageHeader
+      eyebrow="ผู้ดูแลระบบ · อุปกรณ์"
+      title="เพิ่มเครื่องเข้าทะเบียน"
+      description="กรอกทีละเครื่องสำหรับของที่เพิ่งรับเข้ามา หรือนำเข้าทั้งล็อตจากไฟล์ที่มีอยู่แล้ว"
+    >
+      <template #actions>
+        <UiButton to="/assets" variant="secondary">กลับไปหน้าทะเบียน</UiButton>
+      </template>
+    </UiPageHeader>
 
-    <AssetForm
-      v-model="showFormModal"
-      :asset-id="null"
-      :initial-tab="initialTab"
-      @saved="onAssetSaved"
-    />
+    <UiTabs v-model="tab" :tabs="TABS" label="วิธีเพิ่มเครื่อง">
+      <template #single>
+        <UiCard>
+          <DeviceFormFields ref="fields" :asset-id="null" />
+
+          <template #footer>
+            <div class="flex flex-wrap justify-end gap-2">
+              <!-- "บันทึกแล้วเพิ่มต่อ" มีไว้สำหรับตอนรับเครื่องเข้ามาหลายตัวพร้อมกัน
+                   ไม่ต้องกลับไปกดปุ่มเพิ่มใหม่ทุกครั้ง -->
+              <UiButton variant="secondary" :loading="saving" @click="save(false)">
+                บันทึกแล้วเพิ่มเครื่องถัดไป
+              </UiButton>
+              <UiButton variant="primary" :loading="saving" @click="save(true)">
+                บันทึกและกลับไปหน้าทะเบียน
+              </UiButton>
+            </div>
+          </template>
+        </UiCard>
+      </template>
+
+      <template #import>
+        <UiCard>
+          <DeviceImportPanel />
+        </UiCard>
+      </template>
+    </UiTabs>
   </div>
 </template>
