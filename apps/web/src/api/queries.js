@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/vue-query";
 import { computed, unref } from "vue";
 import api from "../services/api";
+import { takeRevalidationHeaders } from "./http-cache";
 
 /**
  * queries.js — ชั้นดึงข้อมูลของทั้งเว็บ
@@ -63,7 +64,11 @@ export const keys = {
   monthPages: (month) => ["print-transactions", "month", month || null],
 };
 
-const get = (url, params) => api.get(url, { params }).then((res) => res.data ?? []);
+// ส่ง header บังคับ revalidate เฉพาะคำขอแรกหลังจากที่เพิ่งเขียนข้อมูลชนิดนั้น —
+// ไม่งั้นแคชของเบราว์เซอร์ (max-age=60) จะคืนของเก่าให้ทั้งที่เพิ่งล้าง TanStack ไป
+// ดูเหตุผลเต็มใน ./http-cache.js
+const get = (url, params) =>
+  api.get(url, { params, headers: takeRevalidationHeaders(url) }).then((res) => res.data ?? []);
 
 /** ข้อมูลอ้างอิงที่แทบไม่เปลี่ยน — ถือไว้นาน รีเฟรชเบื้องหลังเงียบๆ */
 const REFERENCE = { staleTime: 30 * MINUTE, gcTime: 60 * MINUTE };

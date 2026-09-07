@@ -19,6 +19,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { CirclePlus, FileSpreadsheet, Move, Pencil, Trash2 } from "lucide-vue-next";
 import api from "../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
+import { invalidateAfterWrite } from "../api/invalidate";
 import { authState } from "../store/auth";
 import { askConfirm } from "../store/confirmDialog";
 import { toastError, toastSuccess } from "../store/toast";
@@ -212,6 +214,8 @@ const filteredAssets = computed(() =>
    -------------------------------------------------------------------------- */
 const route = useRoute();
 
+const queryClient = useQueryClient();
+
 onMounted(() => {
   if (route.query.status && STATUS_META[route.query.status]) {
     filters.value.status = route.query.status;
@@ -339,7 +343,7 @@ async function remove(asset) {
   try {
     await api.delete(`/devices/${asset.id}`);
     toastSuccess("ลบเครื่องออกจากทะเบียนเรียบร้อย");
-    await loadAssets();
+    await Promise.all([loadAssets(), invalidateAfterWrite(queryClient, "device")]);
   } catch (err) {
     console.error(err);
     toastError(err.response?.data?.error || "ลบไม่สำเร็จ — อาจมียอดพิมพ์ที่อ้างถึงเครื่องนี้อยู่");

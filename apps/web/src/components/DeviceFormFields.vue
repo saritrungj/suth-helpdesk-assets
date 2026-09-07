@@ -17,6 +17,8 @@
  */
 import { computed, ref, watch } from "vue";
 import api from "../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
+import { invalidateAfterWrite } from "../api/invalidate";
 import { toastError, toastSuccess } from "../store/toast";
 import { UiAlert, UiCombobox, UiField, UiInput, UiSegmented, UiSkeleton } from "../ui";
 
@@ -26,6 +28,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["saved", "dirty"]);
+
+const queryClient = useQueryClient();
 
 const isEdit = computed(() => props.assetId !== null && props.assetId !== undefined);
 
@@ -236,6 +240,9 @@ async function submit() {
       res = await api.post("/devices", { ...core, ...placement });
       toastSuccess("เพิ่มเครื่องเข้าทะเบียนเรียบร้อย");
     }
+
+    // ทะเบียนเครื่อง แดชบอร์ด และความครบถ้วนรายเดือนใช้ข้อมูลชุดนี้ทั้งหมด
+    await invalidateAfterWrite(queryClient, "device");
 
     emit("saved", res.data);
     return true;

@@ -49,8 +49,26 @@ const emptyQuery = () => ({
 });
 
 vi.mock("../api/queries", () => ({
+  // `keys` ถูกใช้โดย api/invalidate.js ซึ่งหน้านี้เรียกหลังบันทึกสำเร็จ —
+  // ต้องคืนของจริงมาด้วย ไม่ใช่แค่ hook สองตัว
+  keys: {
+    buildings: () => ["buildings"],
+    floors: () => ["floors"],
+    divisions: () => ["divisions"],
+    departments: () => ["departments"],
+    brands: () => ["brands"],
+    contracts: () => ["contracts"],
+    devices: () => ["devices"],
+  },
   useCoverage: () => ({ data: ref(null), refetch: vi.fn() }),
   useMonthPages: () => emptyQuery(),
+}));
+
+// หน้านี้เรียก useQueryClient() ซึ่งต้องมี provider — ให้ของปลอมที่จำการเรียกได้
+const invalidateQueries = vi.fn(async () => {});
+
+vi.mock("@tanstack/vue-query", () => ({
+  useQueryClient: () => ({ invalidateQueries }),
 }));
 
 const { mount } = await import("@vue/test-utils");

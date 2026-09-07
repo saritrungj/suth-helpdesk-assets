@@ -22,6 +22,8 @@ import { useRoute } from "vue-router";
 import { CircleCheck, ClipboardList, ClipboardPaste, Pencil, Search, Undo2 } from "lucide-vue-next";
 import { fiscalYearLabel, formatMonthTH } from "@suth/domain";
 import api from "../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
+import { invalidateAfterWrite } from "../api/invalidate";
 import { authState } from "../store/auth";
 import {
   activeFiscalYearRange,
@@ -64,6 +66,8 @@ import {
  * ผู้ใช้ไล่หาเองว่าเดือนไหนที่ยังขาด ซึ่งเป็นข้อมูลที่หน้าแรกรู้อยู่แล้ว
  */
 const route = useRoute();
+
+const queryClient = useQueryClient();
 
 /** viewer ดูได้อย่างเดียว — API บังคับด้วย staffMiddleware อยู่แล้ว ที่นี่แค่ไม่แสดงปุ่มที่กดไม่ได้ */
 const canEdit = computed(() => authState.user?.role !== "viewer");
@@ -765,9 +769,7 @@ async function save() {
     });
 
     toastSuccess(`บันทึกยอดพิมพ์ของ ${dialogDevice.value.serial_number} เรียบร้อย`);
-    await loadSummary();
-    if (filters.value.month) await monthPagesQuery.refetch();
-    refetchCoverage();
+    await Promise.all([loadSummary(), invalidateAfterWrite(queryClient, "usage")]);
     dialogOpen.value = false;
   } catch (err) {
     console.error("Save print transactions error:", err);

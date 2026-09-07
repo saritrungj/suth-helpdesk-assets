@@ -28,6 +28,8 @@ import { onBeforeRouteLeave } from "vue-router";
 import { Save, Undo2, TriangleAlert } from "lucide-vue-next";
 import { formatMonthTH, MAX_PAGES_PER_MONTH } from "@suth/domain";
 import api from "../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
+import { invalidateAfterWrite } from "../api/invalidate";
 import { errorMessage } from "../lib/api-error";
 import { askConfirm } from "../store/confirmDialog";
 import { toastError, toastSuccess } from "../store/toast";
@@ -54,6 +56,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["saved", "update:month", "update:dirty"]);
+
+const queryClient = useQueryClient();
 
 /**
  * ค่าที่ผู้ใช้แก้ค้างไว้ — เก็บเฉพาะที่ "ต่างจากของเดิม" เท่านั้น
@@ -214,6 +218,9 @@ async function save() {
     const res = await api.post("/print-transactions/bulk", { month: props.month, items });
 
     toastSuccess(res.data.message || "บันทึกยอดพิมพ์เรียบร้อย");
+
+    // ยอดพิมพ์เป็นฐานของทุกบาทในรายงาน — แดชบอร์ดต้องไม่ค้างตัวเลขเก่า
+    await invalidateAfterWrite(queryClient, "usage");
 
     /**
      * ⚠️ ล้างเฉพาะรายการที่ "ส่งไปแล้ว **และ** ยังไม่ถูกแก้เพิ่มระหว่างรอ"
