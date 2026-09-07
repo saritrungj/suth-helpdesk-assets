@@ -182,18 +182,6 @@ const monthListQuery = z
   .optional()
   .transform((value) => parseMonths(value));
 
-/**
- * การแบ่งหน้าแบบ offset
- *
- * ตั้งเพดาน per_page ไว้ที่ 200 ตามคำแนะนำของ Zalando REST guidelines — ปล่อยให้
- * ผู้เรียกขอเท่าไหร่ก็ได้เท่ากับเปิดช่องให้ดึงทั้งตารางในคำขอเดียวโดยไม่ตั้งใจ
- * ไม่ส่ง per_page มาเลย = ไม่แบ่งหน้า (คงพฤติกรรมเดิมของ endpoint ที่มีอยู่ก่อน)
- */
-const pagination = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  per_page: z.coerce.number().int().min(1).max(200).optional(),
-});
-
 module.exports = {
   validate,
   blankToNull,
@@ -205,5 +193,4 @@ module.exports = {
   optionalMoney,
   monthString,
   monthListQuery,
-  pagination,
 };

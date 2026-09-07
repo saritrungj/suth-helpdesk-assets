@@ -22,7 +22,7 @@
 | สิ่งที่นำมาใช้ | แหล่ง | อยู่ที่ |
 |---|---|---|
 | รูปแบบข้อผิดพลาดมาตรฐาน `application/problem+json` | [RFC 9457](https://datatracker.ietf.org/doc/html/rfc9457) | `src/shared/http-error.js`, [ADR-0010](../decisions/0010-problem-details-and-api-conventions.md) |
-| เพดานจำนวนรายการต่อหน้า และการบังคับให้ collection มีตัวกรอง | [Zalando RESTful API Guidelines](https://opensource.zalando.com/restful-api-guidelines/) | `src/shared/validate.js` (`pagination`), `src/devices/controller.js` |
+| เพดานจำนวนรายการต่อหน้าเมื่อขอแบ่งหน้า (ไม่ส่ง `per_page` ยังดึงทั้งหมดได้) | [Zalando RESTful API Guidelines](https://opensource.zalando.com/restful-api-guidelines/) | `apps/api/src/devices/controller.js` (`listQuery`) |
 | error handler ตัวเดียวคู่กับคลาส error ของตัวเอง | [Node.js Best Practices](https://github.com/goldbergyoni/nodebestpractices) | `index.js`, `src/shared/http-error.js` |
 | ตรวจข้อมูลขาเข้าที่ปากทางก่อน handler เห็น | เดียวกัน | `src/shared/validate.js` |
 | ถือ `unhandledRejection` / `uncaughtException` เป็นเรื่องร้ายแรงและปิดโปรแกรม | เดียวกัน | `index.js` |
