@@ -21,6 +21,7 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 
 - `apps/api/` — CommonJS Express API; `index.js` เป็น entry ที่ mount route เท่านั้น โค้ดจริงอยู่ใน `src/` แบ่งตามความสามารถ
 - `apps/web/` — Vue 3 SPA; views, components, stores, router และ API client
+- `apps/mcp/` — เซิร์ฟเวอร์ MCP แบบ **อ่านอย่างเดียว** เรียกผ่าน HTTP API เดิม ไม่ต่อฐานข้อมูลตรง (ดู [ADR-0011](docs/decisions/0011-read-only-mcp-server.md))
 - `packages/domain/` — กฎธุรกิจที่ทั้งสองฝั่งใช้ร่วมกัน (ปีงบ เดือน การแสดงผลภาษาไทย) **ห้ามเขียนซ้ำที่อื่น**
 - `database/` — schema สำหรับฐานข้อมูลใหม่, ordered migrations สำหรับฐานข้อมูลเดิม และ seed
 - `docs/` — ภาพรวมระบบ คู่มือปฏิบัติการ และ ADR
@@ -54,6 +55,8 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 | ตั้ง `Cache-Control` ผ่าน `shared/cache.js` | ปล่อยว่างไว้ |
 
 เหตุผลที่เป็นกฎ ไม่ใช่คำแนะนำ: ข้อความ error ของ MySQL เคยหลุดออกไปถึงเบราว์เซอร์ทั้งชื่อตารางและชื่อคอลัมน์ และรูปแบบคำตอบที่ต่างกันสามแบบทำให้ฝั่งเว็บต้องเดาว่าจะอ่านช่องไหน
+
+**ข้อจำกัดของ `apps/mcp/` ห้ามผ่อน** — ห้ามเพิ่มเครื่องมือที่เขียนข้อมูลเด็ดขาด ข้อมูลขาเข้าของเครื่องมือ MCP มาจากโมเดลภาษา ไม่ใช่จากผู้ใช้โดยตรง ถ้าจำเป็นต้องเปลี่ยนจริงๆ ต้องแก้ [ADR-0011](docs/decisions/0011-read-only-mcp-server.md) พร้อมเหตุผลก่อน — มีเทสบังคับข้อนี้ไว้แล้วใน `apps/mcp/test/tools.test.js`
 
 ใช้ indentation 2 spaces Backend ใช้ CommonJS และ semicolon ส่วน Frontend ใช้ ES modules, Vue `<script setup>` และ Tailwind classes ตั้งชื่อ Vue component แบบ PascalCase และ JavaScript identifier แบบ camelCase โดยยึดรูปแบบไฟล์ข้างเคียง
 
@@ -96,3 +99,17 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 ## ความปลอดภัย
 
 เก็บ MySQL credentials และ `JWT_SECRET` ใน environment variables ใช้ secret ที่แข็งแรง ตรวจ CSV/XLSX ก่อน import และถือว่า migration เป็นการเปลี่ยนแปลงแบบมีลำดับที่ต้อง review
+
+## Agent skills
+
+### Issue tracker
+
+Issue ของ repo นี้อยู่ใน GitHub Issues (`saritrungj/suth-helpdesk-assets`) ใช้ `gh` CLI ดู `docs/agents/issue-tracker.md`
+
+### Triage labels
+
+ใช้ชุดคำมาตรฐาน 5 บทบาท (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) ตรงตัวกับชื่อ label จริงบน GitHub ดู `docs/agents/triage-labels.md`
+
+### Domain docs
+
+Single-context — ADR อยู่ที่ `docs/decisions/` (ไม่ใช่ `docs/adr/`) ยังไม่มี `CONTEXT.md` ดู `docs/agents/domain.md`
