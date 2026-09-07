@@ -8,13 +8,15 @@
 - จัดการข้อมูลอ้างอิง สัญญา และปีงบประมาณ
 - บันทึกหรือนำเข้ายอดพิมพ์รายเดือนจาก CSV/Excel
 - แสดง Dashboard ค่าใช้จ่าย รายงานตามอาคาร/หน่วยงาน และการเปรียบเทียบรายเดือน
+- ถามข้อมูลเป็นภาษาพูดผ่านผู้ช่วย AI ด้วยเซิร์ฟเวอร์ MCP แบบอ่านอย่างเดียว ([วิธีต่อ](docs/how-to/connect-mcp.md))
 - ควบคุมการเข้าถึงด้วย JWT และบทบาท `admin`, `staff`, `viewer`
 
 ## เทคโนโลยี
 
-- Backend: Node.js, CommonJS, Express และ MySQL
+- Backend: Node.js, CommonJS, Express และ MySQL — ข้อผิดพลาดตามมาตรฐาน Problem Details (RFC 9457) และตรวจข้อมูลขาเข้าด้วย zod ทุกเส้นทาง (ดู [ADR-0010](docs/decisions/0010-problem-details-and-api-conventions.md))
 - Frontend: Vue 3, Vite, Tailwind CSS, TanStack Query และ Chart.js (ดู [ADR-0009](docs/decisions/0009-tanstack-query-as-the-data-layer.md))
 - Database: MySQL schema, ordered migrations และข้อมูลจำลอง
+- ผู้ช่วย AI: เซิร์ฟเวอร์ MCP แบบ stdio อ่านอย่างเดียว (ดู [ADR-0011](docs/decisions/0011-read-only-mcp-server.md))
 
 ## เริ่มต้นใช้งานสำหรับการพัฒนา
 
@@ -42,6 +44,14 @@ npm run dev:web
 ```
 
 API เปิดที่ `http://localhost:3000` เว็บเปิดที่ `http://localhost:5173` และเรียก API ที่ `http://localhost:3000/api`
+
+ตรวจว่า API พร้อมใช้งานจริง (ตรวจการเชื่อมต่อฐานข้อมูลด้วย):
+
+```powershell
+curl http://localhost:3000/api/health
+```
+
+ต่อฐานข้อมูลไม่ได้ API จะ **ไม่เปิดเลย** พร้อมบอกเหตุผลใน terminal — ตั้งใจให้ล้มแบบเห็นชัดตั้งแต่ตอนบูต ดีกว่าเปิดขึ้นมาแล้วทุกคำขอพังทีละอันโดยไม่มีใครสังเกต
 
 ## ตรวจสอบการเปลี่ยนแปลง
 

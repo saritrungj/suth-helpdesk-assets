@@ -1,0 +1,22 @@
+{
+  "name": "@suth/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "เซิร์ฟเวอร์ MCP แบบอ่านอย่างเดียว ให้ผู้ช่วย AI ถามข้อมูลทรัพย์สินและค่าใช้จ่ายเป็นภาษาไทยได้",
+  "license": "ISC",
+  "type": "module",
+  "main": "./index.js",
+  "bin": {
+    "suth-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "@suth/domain": "*",
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  }
+}

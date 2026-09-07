@@ -21,6 +21,7 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 
 - `apps/api/` — CommonJS Express API; `index.js` เป็น entry ที่ mount route เท่านั้น โค้ดจริงอยู่ใน `src/` แบ่งตามความสามารถ
 - `apps/web/` — Vue 3 SPA; views, components, stores, router และ API client
+- `apps/mcp/` — เซิร์ฟเวอร์ MCP แบบ **อ่านอย่างเดียว** เรียกผ่าน HTTP API เดิม ไม่ต่อฐานข้อมูลตรง (ดู [ADR-0011](docs/decisions/0011-read-only-mcp-server.md))
 - `packages/domain/` — กฎธุรกิจที่ทั้งสองฝั่งใช้ร่วมกัน (ปีงบ เดือน การแสดงผลภาษาไทย) **ห้ามเขียนซ้ำที่อื่น**
 - `database/` — schema สำหรับฐานข้อมูลใหม่, ordered migrations สำหรับฐานข้อมูลเดิม และ seed
 - `docs/` — ภาพรวมระบบ คู่มือปฏิบัติการ และ ADR
@@ -38,9 +39,24 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 | `master-data/` | ข้อมูลอ้างอิง (ยี่ห้อ อาคาร ชั้น ฝ่าย แผนก ปีงบ) |
 | `users/` | จัดการผู้ใช้ |
 | `import/` | นำเข้าไฟล์ Excel/CSV ทั้งทะเบียนเครื่องและยอดมิเตอร์ |
-| `shared/` | เฉพาะของที่ทุก feature ใช้จริง ตอนนี้มีแค่ `db.js` |
+| `health/` | ตรวจว่าระบบพร้อมรับงาน — เส้นทางเดียวที่ไม่ต้องล็อกอิน |
+| `shared/` | เฉพาะของที่ทุก feature ใช้จริง — การเชื่อมฐานข้อมูล ข้อผิดพลาด การตรวจข้อมูล ล็อก และแคช |
 
 เพิ่มความสามารถใหม่ = เพิ่มโฟลเดอร์ใหม่ใน `src/` แล้ว mount ที่ `index.js` ห้ามเพิ่มโฟลเดอร์แบบ `routes/` หรือ `controllers/` กลับมาอีก ถ้าโค้ดถูกใช้แค่ feature เดียว ให้อยู่ในโฟลเดอร์ของ feature นั้น อย่ายัดเข้า `shared/`
+
+**ทุกเส้นทางของ API ต้องใช้ชั้นพื้นฐานใน `src/shared/`** (ดู [ADR-0010](docs/decisions/0010-problem-details-and-api-conventions.md))
+
+| ต้องทำ | ห้ามทำ |
+|---|---|
+| ห่อ handler ที่เป็น async ด้วย `asyncHandler` | เขียน `try/catch` แล้ว `res.status(500).json({ error: err.message })` เอง |
+| โยน `ApiError` (`notFound()`, `badRequest()`, …) | เรียก `res.status(4xx).json()` เองในเส้นทาง |
+| ตรวจข้อมูลขาเข้าด้วย `validate({ body, query, params })` | เช็คด้วย `if (!x) return ...` ทีละบรรทัด |
+| ใช้ `db.withTransaction()` | เขียน `getConnection` / `beginTransaction` / `rollback` / `release` เอง |
+| ตั้ง `Cache-Control` ผ่าน `shared/cache.js` | ปล่อยว่างไว้ |
+
+เหตุผลที่เป็นกฎ ไม่ใช่คำแนะนำ: ข้อความ error ของ MySQL เคยหลุดออกไปถึงเบราว์เซอร์ทั้งชื่อตารางและชื่อคอลัมน์ และรูปแบบคำตอบที่ต่างกันสามแบบทำให้ฝั่งเว็บต้องเดาว่าจะอ่านช่องไหน
+
+**ข้อจำกัดของ `apps/mcp/` ห้ามผ่อน** — ห้ามเพิ่มเครื่องมือที่เขียนข้อมูลเด็ดขาด ข้อมูลขาเข้าของเครื่องมือ MCP มาจากโมเดลภาษา ไม่ใช่จากผู้ใช้โดยตรง ถ้าจำเป็นต้องเปลี่ยนจริงๆ ต้องแก้ [ADR-0011](docs/decisions/0011-read-only-mcp-server.md) พร้อมเหตุผลก่อน — มีเทสบังคับข้อนี้ไว้แล้วใน `apps/mcp/test/tools.test.js`
 
 ใช้ indentation 2 spaces Backend ใช้ CommonJS และ semicolon ส่วน Frontend ใช้ ES modules, Vue `<script setup>` และ Tailwind classes ตั้งชื่อ Vue component แบบ PascalCase และ JavaScript identifier แบบ camelCase โดยยึดรูปแบบไฟล์ข้างเคียง
 
@@ -83,3 +99,17 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 ## ความปลอดภัย
 
 เก็บ MySQL credentials และ `JWT_SECRET` ใน environment variables ใช้ secret ที่แข็งแรง ตรวจ CSV/XLSX ก่อน import และถือว่า migration เป็นการเปลี่ยนแปลงแบบมีลำดับที่ต้อง review
+
+## Agent skills
+
+### Issue tracker
+
+Issue ของ repo นี้อยู่ใน GitHub Issues (`saritrungj/suth-helpdesk-assets`) ใช้ `gh` CLI ดู `docs/agents/issue-tracker.md`
+
+### Triage labels
+
+ใช้ชุดคำมาตรฐาน 5 บทบาท (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) ตรงตัวกับชื่อ label จริงบน GitHub ดู `docs/agents/triage-labels.md`
+
+### Domain docs
+
+Single-context — ADR อยู่ที่ `docs/decisions/` (ไม่ใช่ `docs/adr/`) ยังไม่มี `CONTEXT.md` ดู `docs/agents/domain.md`

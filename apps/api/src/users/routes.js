@@ -1,152 +1,174 @@
-const express = require('express');
-const bcrypt = require('bcrypt');
+// apps/api/src/users/routes.js
+//
+// จัดการบัญชีผู้ใช้ — ผู้ดูแลระบบเท่านั้นทั้งไฟล์
+//
+// กฎที่บังคับไว้ที่นี่และห้ามย้ายไปฝั่งเว็บ (เพราะฝั่งเว็บถูกข้ามได้ด้วย curl)
+//
+//   - ไม่ส่ง hash ของรหัสผ่านกลับออกไปไม่ว่ากรณีใด
+//   - ต้องเหลือ admin อย่างน้อยหนึ่งคนในระบบเสมอ — ทั้งตอนลดสิทธิ์ตัวเองและตอนลบ
+//     คนอื่น ถ้าไม่กันไว้ ระบบจะเข้าไม่ได้ถาวรและต้องแก้ด้วยการเข้าฐานข้อมูลตรงๆ
+//   - ลบบัญชีตัวเองไม่ได้
+//
+// ความยาวรหัสผ่านขั้นต่ำอยู่ใน packages/domain/constraints.cjs ที่เดียว เพื่อให้
+// ข้อความเตือนฝั่งเว็บกับกฎจริงฝั่ง API ไม่มีทางไม่ตรงกัน
+
+const express = require("express");
+const bcrypt = require("bcrypt");
+const { z } = require("zod");
+
 const router = express.Router();
-const db = require('../shared/db');
-const authMiddleware = require('../auth/require-auth');
-const adminMiddleware = require('../auth/require-admin');
+const db = require("../shared/db");
+const asyncHandler = require("../shared/async-handler");
+const requireAuth = require("../auth/require-auth");
+const requireAdmin = require("../auth/require-admin");
+const { validate, idParam, requiredText } = require("../shared/validate");
+const { notFound, badRequest } = require("../shared/http-error");
+const { noStore } = require("../shared/cache");
+const { USER_ROLES, PASSWORD_MIN_LENGTH } = require("@suth/domain");
 
-// ============================================================
-// User Management API — เฉพาะ admin เท่านั้นที่เข้าหน้านี้ได้ทั้งหมด
-// (ต่างจาก master-data.js ที่ GET เปิดให้ user ทุก role อ่านได้)
-// ============================================================
-router.use(authMiddleware);
-router.use(adminMiddleware);
+router.use(requireAuth);
+router.use(requireAdmin);
 
-const VALID_ROLES = ['admin', 'staff', 'viewer'];
+/** ไม่ส่ง password (hash) กลับไปให้ฝั่งเว็บไม่ว่ากรณีใดๆ */
+const SAFE_FIELDS = "id, username, role, created_at";
 
-// ไม่ส่ง password (hash) กลับไปให้ frontend ไม่ว่ากรณีใดๆ
-const SAFE_FIELDS = 'id, username, role, created_at';
+const BCRYPT_ROUNDS = 10;
 
-// GET all
-router.get('/', async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      `SELECT ${SAFE_FIELDS} FROM users ORDER BY id`
-    );
+const passwordField = z
+  .string()
+  .min(PASSWORD_MIN_LENGTH, `รหัสผ่านต้องมีอย่างน้อย ${PASSWORD_MIN_LENGTH} ตัวอักษร`)
+  .max(72, "รหัสผ่านยาวเกินไป");
+
+const roleField = z.enum(USER_ROLES, {
+  error: `สิทธิ์ต้องเป็นหนึ่งใน ${USER_ROLES.join(", ")}`,
+});
+
+const createBody = z.object({
+  username: requiredText("ชื่อผู้ใช้", 50),
+  password: passwordField,
+  role: roleField,
+});
+
+// แก้ไข: รหัสผ่านจะกรอกหรือไม่ก็ได้ — ไม่กรอก = ไม่เปลี่ยนรหัสเดิม
+// ค่าว่างต้องถือว่า "ไม่เปลี่ยน" ไม่ใช่ "ตั้งรหัสเป็นค่าว่าง"
+const updateBody = z.object({
+  username: requiredText("ชื่อผู้ใช้", 50),
+  role: roleField,
+  password: z.union([passwordField, z.literal(""), z.null(), z.undefined()]).transform((v) => v || null),
+});
+
+/**
+ * ยังมี admin คนอื่นเหลืออยู่ในระบบหรือไม่ ถ้าไม่นับคนนี้
+ *
+ * ใช้ทั้งตอนลดสิทธิ์และตอนลบ — สองเส้นทางนี้เคยเขียน query เดียวกันคนละที่
+ * @param {number} excludeId
+ * @returns {Promise<boolean>}
+ */
+async function hasAnotherAdmin(excludeId) {
+  const [[row]] = await db.query(
+    "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND id != ?",
+    [excludeId]
+  );
+  return row.count > 0;
+}
+
+// GET /api/users
+router.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const [rows] = await db.query(`SELECT ${SAFE_FIELDS} FROM users ORDER BY role, username`);
+    // ข้อมูลบัญชีห้ามถูกเก็บไว้ในเบราว์เซอร์บนเครื่องที่ใช้ร่วมกันหลายคน
+    noStore(res);
     res.json(rows);
-  } catch (err) {
-    console.error('Error fetching users:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+  })
+);
 
-// POST — create
-router.post('/', async (req, res) => {
-  try {
+// POST /api/users
+router.post(
+  "/",
+  validate({ body: createBody }),
+  asyncHandler(async (req, res) => {
     const { username, password, role } = req.body;
 
-    if (!username || !username.trim()) {
-      return res.status(400).json({ error: 'username is required' });
-    }
-    if (!password || password.length < 6) {
-      return res.status(400).json({ error: 'password ต้องมีอย่างน้อย 6 ตัวอักษร' });
-    }
-    if (!VALID_ROLES.includes(role)) {
-      return res.status(400).json({ error: `role ต้องเป็นหนึ่งใน ${VALID_ROLES.join(', ')}` });
-    }
+    const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-    const hash = await bcrypt.hash(password, 10);
-
-    const [result] = await db.query(
-      'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-      [username.trim(), hash, role]
-    );
-
-    res.status(201).json({
-      id: result.insertId,
-      username: username.trim(),
+    const [result] = await db.query("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", [
+      username,
+      hash,
       role,
-    });
-  } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: `Username "${req.body.username}" มีอยู่ในระบบแล้ว` });
-    }
-    console.error('Error creating user:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+    ]);
 
-// PUT — update (username / role เสมอ, password แก้เฉพาะตอนกรอกมาเท่านั้น)
-router.put('/:id', async (req, res) => {
-  try {
-    const { username, password, role } = req.body;
-    const targetId = parseInt(req.params.id);
+    noStore(res);
+    res.status(201).json({ id: result.insertId, username, role });
+  })
+);
 
-    if (!username || !username.trim()) {
-      return res.status(400).json({ error: 'username is required' });
-    }
-    if (!VALID_ROLES.includes(role)) {
-      return res.status(400).json({ error: `role ต้องเป็นหนึ่งใน ${VALID_ROLES.join(', ')}` });
+// PUT /api/users/:id
+router.put(
+  "/:id",
+  validate({ params: idParam, body: updateBody }),
+  asyncHandler(async (req, res) => {
+    const { username, role, password } = req.body;
+    const targetId = req.params.id;
+
+    // กันไม่ให้ผู้ดูแลลดสิทธิ์ตัวเองจนไม่เหลือ admin คนสุดท้าย
+    if (req.user.id === targetId && role !== "admin" && !(await hasAnotherAdmin(targetId))) {
+      throw badRequest("ต้องมีผู้ดูแลระบบเหลืออยู่อย่างน้อย 1 คน", {
+        code: "last_admin",
+        detail: "ตั้งบัญชีอื่นเป็นผู้ดูแลระบบก่อน แล้วจึงเปลี่ยนสิทธิ์ของบัญชีนี้ได้",
+      });
     }
 
-    // กันไม่ให้ admin ลดสิทธิ์ตัวเองจนไม่เหลือ admin คนสุดท้ายในระบบ
-    if (req.user.id === targetId && role !== 'admin') {
-      const [[{ adminCount }]] = await db.query(
-        `SELECT COUNT(*) AS adminCount FROM users WHERE role = 'admin' AND id != ?`,
-        [targetId]
-      );
-      if (adminCount === 0) {
-        return res.status(400).json({ error: 'ต้องมี admin เหลืออยู่ในระบบอย่างน้อย 1 คน' });
-      }
-    }
+    // สร้าง SQL ตามช่องที่มีค่าจริง แทนการเขียน UPDATE สองชุดที่ต่างกันแค่คอลัมน์เดียว
+    const assignments = ["username = ?", "role = ?"];
+    const values = [username, role];
 
     if (password) {
-      if (password.length < 6) {
-        return res.status(400).json({ error: 'password ต้องมีอย่างน้อย 6 ตัวอักษร' });
-      }
-      const hash = await bcrypt.hash(password, 10);
-      const [result] = await db.query(
-        'UPDATE users SET username = ?, role = ?, password = ? WHERE id = ?',
-        [username.trim(), role, hash, targetId]
-      );
-      if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
-    } else {
-      const [result] = await db.query(
-        'UPDATE users SET username = ?, role = ? WHERE id = ?',
-        [username.trim(), role, targetId]
-      );
-      if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
+      assignments.push("password = ?");
+      values.push(await bcrypt.hash(password, BCRYPT_ROUNDS));
     }
 
-    res.json({ id: targetId, username: username.trim(), role });
-  } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: `Username "${req.body.username}" มีอยู่ในระบบแล้ว` });
-    }
-    console.error('Error updating user:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+    const [result] = await db.query(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`, [
+      ...values,
+      targetId,
+    ]);
 
-// DELETE — กันลบตัวเอง และกันลบ admin คนสุดท้าย
-router.delete('/:id', async (req, res) => {
-  try {
-    const targetId = parseInt(req.params.id);
+    if (!result.affectedRows) throw notFound("ไม่พบบัญชีผู้ใช้ที่ต้องการแก้ไข");
+
+    noStore(res);
+    res.json({ id: targetId, username, role });
+  })
+);
+
+// DELETE /api/users/:id
+router.delete(
+  "/:id",
+  validate({ params: idParam }),
+  asyncHandler(async (req, res) => {
+    const targetId = req.params.id;
 
     if (req.user.id === targetId) {
-      return res.status(400).json({ error: 'ไม่สามารถลบบัญชีของตัวเองได้' });
+      throw badRequest("ลบบัญชีของตัวเองไม่ได้", {
+        code: "cannot_delete_self",
+        detail: "ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบบัญชีนี้แทน",
+      });
     }
 
-    const [[target]] = await db.query('SELECT role FROM users WHERE id = ?', [targetId]);
-    if (!target) return res.status(404).json({ error: 'Not found' });
+    const [[target]] = await db.query("SELECT role FROM users WHERE id = ?", [targetId]);
+    if (!target) throw notFound("ไม่พบบัญชีผู้ใช้ที่ต้องการลบ");
 
-    if (target.role === 'admin') {
-      const [[{ adminCount }]] = await db.query(
-        `SELECT COUNT(*) AS adminCount FROM users WHERE role = 'admin' AND id != ?`,
-        [targetId]
-      );
-      if (adminCount === 0) {
-        return res.status(400).json({ error: 'ต้องมี admin เหลืออยู่ในระบบอย่างน้อย 1 คน' });
-      }
+    if (target.role === "admin" && !(await hasAnotherAdmin(targetId))) {
+      throw badRequest("ต้องมีผู้ดูแลระบบเหลืออยู่อย่างน้อย 1 คน", {
+        code: "last_admin",
+        detail: "ตั้งบัญชีอื่นเป็นผู้ดูแลระบบก่อน แล้วจึงลบบัญชีนี้ได้",
+      });
     }
 
-    const [result] = await db.query('DELETE FROM users WHERE id = ?', [targetId]);
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
-    res.json({ message: 'Deleted successfully' });
-  } catch (err) {
-    console.error('Error deleting user:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+    await db.query("DELETE FROM users WHERE id = ?", [targetId]);
+
+    noStore(res);
+    res.json({ message: "ลบบัญชีผู้ใช้เรียบร้อยแล้ว" });
+  })
+);
 
 module.exports = router;

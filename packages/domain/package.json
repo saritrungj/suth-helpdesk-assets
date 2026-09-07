@@ -18,7 +18,8 @@
     "month.cjs",
     "fiscal-year.cjs",
     "format.cjs",
-    "money.cjs"
+    "money.cjs",
+    "constraints.cjs"
   ],
   "scripts": {
     "test": "node test.cjs"
