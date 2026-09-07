@@ -14,7 +14,7 @@
 ## เทคโนโลยี
 
 - Backend: Node.js, CommonJS, Express และ MySQL — ข้อผิดพลาดตามมาตรฐาน Problem Details (RFC 9457) และตรวจข้อมูลขาเข้าด้วย zod ทุกเส้นทาง (ดู [ADR-0010](docs/decisions/0010-problem-details-and-api-conventions.md))
-- Frontend: Vue 3, Vite, Tailwind CSS และ Chart.js
+- Frontend: Vue 3, Vite, Tailwind CSS, TanStack Query และ Chart.js (ดู [ADR-0009](docs/decisions/0009-tanstack-query-as-the-data-layer.md))
 - Database: MySQL schema, ordered migrations และข้อมูลจำลอง
 - ผู้ช่วย AI: เซิร์ฟเวอร์ MCP แบบ stdio อ่านอย่างเดียว (ดู [ADR-0011](docs/decisions/0011-read-only-mcp-server.md))
 

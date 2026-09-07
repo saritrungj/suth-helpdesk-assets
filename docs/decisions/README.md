@@ -29,5 +29,6 @@
 | [0005](0005-database-engine.md) | เลือก database engine สำหรับระบบที่เขียนใหม่ — PostgreSQL | Deferred |
 | [0006](0006-session-cookie-instead-of-localstorage.md) | เก็บ token ของ session ใน cookie แบบ httpOnly | Accepted |
 | [0007](0007-improve-in-place-instead-of-rewriting.md) | ปรับปรุงระบบเดิมต่อ ไม่เขียนใหม่ | Accepted |
+| [0009](0009-tanstack-query-as-the-data-layer.md) | ใช้ TanStack Query เป็นชั้นดึงข้อมูลของฝั่งเว็บ | Accepted |
 | [0010](0010-problem-details-and-api-conventions.md) | ข้อผิดพลาดแบบ Problem Details และข้อตกลงร่วมของ API | Accepted |
 | [0011](0011-read-only-mcp-server.md) | เซิร์ฟเวอร์ MCP แบบอ่านอย่างเดียว | Accepted |
