@@ -17,9 +17,9 @@ const { unauthorized } = require("../shared/http-error");
  * ลำดับ: cookie ก่อน แล้วค่อย Authorization header
  *
  * เว็บใช้ cookie แบบ httpOnly (ADR-0006) ส่วน header ยังรับอยู่สำหรับเครื่องมือ
- * ที่ไม่ใช่เบราว์เซอร์ — สคริปต์ การทดสอบ และเซิร์ฟเวอร์ MCP ใน apps/mcp ซึ่ง
- * ไม่มีที่เก็บ cookie การรับ header ไม่ได้เพิ่มความเสี่ยง XSS เพราะความเสี่ยงจริง
- * อยู่ที่ "เว็บเก็บ token ไว้ที่ไหน" ไม่ใช่ที่ API ยอมรับ header
+ * ที่ไม่ใช่เบราว์เซอร์ — สคริปต์และการทดสอบ ซึ่งไม่มีที่เก็บ cookie การรับ header
+ * ไม่ได้เพิ่มความเสี่ยง XSS เพราะความเสี่ยงจริงอยู่ที่ "เว็บเก็บ token ไว้ที่ไหน"
+ * ไม่ใช่ที่ API ยอมรับ header
  *
  * @param {import("express").Request} req
  * @returns {string|null}

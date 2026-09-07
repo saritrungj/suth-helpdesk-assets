@@ -26,7 +26,6 @@
 - [ตั้งระบบสำหรับพัฒนา](how-to/set-up-development.md)
 - [รัน migration กับฐานข้อมูลเดิม](how-to/run-migrations.md)
 - [นำเข้าไฟล์ Excel/CSV](how-to/import-files.md)
-- [ต่อผู้ช่วย AI เข้ากับระบบผ่าน MCP](how-to/connect-mcp.md)
 - [ตรวจการเปลี่ยนแปลงก่อนส่งมอบ](how-to/verify-changes.md)
 - [เตรียมขึ้น production](how-to/prepare-for-production.md)
 

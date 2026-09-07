@@ -33,8 +33,6 @@ export { default as UiSelect } from "./UiSelect.vue";
 export { default as UiSkeleton } from "./UiSkeleton.vue";
 export { default as UiSpinner } from "./UiSpinner.vue";
 export { default as UiStat } from "./UiStat.vue";
-export { default as UiSwitch } from "./UiSwitch.vue";
 export { default as UiTabs } from "./UiTabs.vue";
-export { default as UiTextarea } from "./UiTextarea.vue";
 export { default as UiToaster } from "./UiToaster.vue";
 export { default as UiTooltip } from "./UiTooltip.vue";
