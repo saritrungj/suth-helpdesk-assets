@@ -1,8 +1,51 @@
 const fs = require("fs");
 const XLSX = require("xlsx");
 const db = require("../shared/db");
+const asyncHandler = require("../shared/async-handler");
+const { badRequest, conflict } = require("../shared/http-error");
 const { recordLocationHistory } = require("../devices/controller");
 const { normalizeMonth } = require("@suth/domain");
+
+// ============================================================
+// ตัวช่วยที่ทั้งสอง handler ใช้ร่วมกัน
+// ============================================================
+
+/**
+ * ลบไฟล์ที่อัปโหลดเข้ามาชั่วคราว — ต้องเรียกใน finally เสมอ
+ *
+ * เดิมการลบถูกเขียนซ้ำสามที่ (ทางสำเร็จหนึ่ง ทาง catch อีกสอง) ซึ่งแปลว่าเส้นทาง
+ * ที่ไม่ได้ผ่านสามจุดนั้นจะทิ้งไฟล์ค้างไว้ใน uploads/ ตลอดไป
+ *
+ * การลบเองก็พังได้ (ไฟล์ถูกลบไปแล้ว สิทธิ์ไม่พอ) — ห้ามให้ error ตอนเก็บกวาด
+ * ไปทับ error ตัวจริงที่กำลังจะถูกโยนออกไป
+ */
+function removeUploadedFile(file) {
+  if (!file || !file.path) return;
+
+  try {
+    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+  } catch (err) {
+    console.error("IMPORT TEMP FILE CLEANUP ERROR:", err);
+  }
+}
+
+/**
+ * แปลง error ของฐานข้อมูลที่มีความหมายเฉพาะกับการนำเข้า ให้เป็น ApiError
+ *
+ * `fromDatabaseError` กลางแปลง ER_DUP_ENTRY เป็น "มีข้อมูลนี้อยู่ในระบบแล้ว"
+ * ซึ่งถูกต้องแต่ไม่ช่วยคนที่กำลังนำเข้าไฟล์ 300 แถว — ที่นี่บอกได้ว่าให้ไปดู
+ * เลขซีเรียลที่ซ้ำ error อื่นปล่อยผ่านไปให้ handler กลางจัดการตามปกติ
+ */
+function asImportError(err) {
+  if (err && err.code === "ER_DUP_ENTRY") {
+    return conflict("มีเลขซีเรียลในไฟล์ซ้ำกับที่มีอยู่แล้วในระบบ", {
+      code: "duplicate_serial",
+      detail: "กรุณาตรวจสอบและลบแถวที่ซ้ำออกก่อนนำเข้าใหม่",
+    });
+  }
+
+  return err;
+}
 
 // ============================================================
 // แปลง "เดือน/ปี พ.ศ. 2 หลัก" ในหัวคอลัมน์ไฟล์มิเตอร์ (เช่น "meter 9/67",
@@ -30,17 +73,13 @@ function parseMeterMonthHeader(header) {
   return normalizeMonth(`${beYearFull}-${month}`);
 }
 
-exports.importDevices = async (req, res) => {
-
-    let conn;
+exports.importDevices = asyncHandler(async (req, res) => {
 
     try {
 
-        if (!req.file) {
-            return res.status(400).json({
-                error: "กรุณาอัปโหลดไฟล์ Excel"
-            });
-        }
+        // routes.js ดักกรณีไม่แนบไฟล์ไว้แล้ว ที่นี่กันไว้อีกชั้นเผื่อมีคนต่อ handler
+        // นี้เข้า route ใหม่โดยลืม handleUpload
+        if (!req.file) throw badRequest("กรุณาเลือกไฟล์ที่ต้องการนำเข้า", { code: "no_file" });
 
 
         // อ่าน Excel
@@ -243,8 +282,7 @@ exports.importDevices = async (req, res) => {
         // และหน้ารายงานที่อ้างอิงปีงบ/ช่วงเวลาของ device_location_history จะไม่เห็นเครื่องกลุ่มนี้
         if (insertData.length > 0) {
 
-            conn = await db.getConnection();
-            await conn.beginTransaction();
+            await db.withTransaction(async (conn) => {
 
             for (const d of insertData) {
                 const [result] = await conn.query(
@@ -289,14 +327,9 @@ exports.importDevices = async (req, res) => {
                 });
             }
 
-            await conn.commit();
+            });
 
         }
-
-
-
-        // ลบไฟล์ชั่วคราว
-        fs.unlinkSync(req.file.path);
 
 
 
@@ -315,40 +348,14 @@ exports.importDevices = async (req, res) => {
 
 
     } catch (err) {
-
-
-        console.error("IMPORT ERROR:", err);
-
-        if (conn) {
-            try { await conn.rollback(); } catch (rollbackErr) { console.error("IMPORT ROLLBACK ERROR:", rollbackErr); }
-        }
-
-        if (
-            req.file &&
-            fs.existsSync(req.file.path)
-        ) {
-            fs.unlinkSync(req.file.path);
-        }
-
-
-        // ซ้ำเลขซีเรียล — ให้ error อ่านง่ายเหมือนตอนเพิ่มทีละรายการ (ER_DUP_ENTRY)
-        if (err.code === "ER_DUP_ENTRY") {
-            return res.status(409).json({
-                error: "มีเลขซีเรียลในไฟล์ซ้ำกับที่มีอยู่แล้วในระบบ กรุณาตรวจสอบและลบแถวที่ซ้ำออกก่อนนำเข้าใหม่",
-            });
-        }
-
-        res.status(500).json({
-
-            error: err.message
-
-        });
-
+        // ไม่ตอบ error เอง — โยนต่อให้ handler กลางแปลงเป็น Problem Details
+        // ตาม ADR-0010 ข้อความดิบของ MySQL จึงไม่มีทางหลุดออกไปถึงเบราว์เซอร์
+        throw asImportError(err);
     } finally {
-        if (conn) conn.release();
+        removeUploadedFile(req.file);
     }
 
-};
+});
 
 
 // ============================================================
@@ -360,15 +367,13 @@ exports.importDevices = async (req, res) => {
 // จึงอ่านเป็น array ของแถวดิบก่อน (header: 1) แล้วค่อยหาแถวหัวตารางเองจาก
 // เซลล์ที่ขึ้นต้นด้วย "SN" แทนที่จะ hardcode เลขแถว เผื่อไฟล์ในอนาคตขยับแถว
 // ============================================================
-exports.importPrintTransactions = async (req, res) => {
+exports.importPrintTransactions = asyncHandler(async (req, res) => {
 
     try {
 
-        if (!req.file) {
-            return res.status(400).json({
-                error: "กรุณาอัปโหลดไฟล์ Excel"
-            });
-        }
+        // routes.js ดักกรณีไม่แนบไฟล์ไว้แล้ว ที่นี่กันไว้อีกชั้นเผื่อมีคนต่อ handler
+        // นี้เข้า route ใหม่โดยลืม handleUpload
+        if (!req.file) throw badRequest("กรุณาเลือกไฟล์ที่ต้องการนำเข้า", { code: "no_file" });
 
         const workbook = XLSX.readFile(req.file.path);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -385,8 +390,9 @@ exports.importPrintTransactions = async (req, res) => {
         );
 
         if (headerRowIndex === -1) {
-            return res.status(400).json({
-                error: "ไม่พบแถวหัวตาราง (หาคอลัมน์ SN. ไม่เจอ) — ไฟล์นี้อาจไม่ใช่รูปแบบที่รองรับ"
+            throw badRequest("ไม่พบแถวหัวตารางในไฟล์", {
+                code: "header_row_not_found",
+                detail: "หาคอลัมน์ \"SN.\" ไม่เจอ ไฟล์นี้อาจไม่ใช่รูปแบบที่รองรับ — ดูตัวอย่างที่ docs/reference/import-format.md",
             });
         }
 
@@ -405,8 +411,9 @@ exports.importPrintTransactions = async (req, res) => {
         });
 
         if (!meterColumns.length) {
-            return res.status(400).json({
-                error: "ไม่พบคอลัมน์มิเตอร์รายเดือน (เช่น \"meter 9/67\") ในไฟล์นี้"
+            throw badRequest("ไม่พบคอลัมน์มิเตอร์รายเดือนในไฟล์", {
+                code: "meter_columns_not_found",
+                detail: "หัวคอลัมน์ต้องอยู่ในรูป \"meter M/YY\" เช่น \"meter 9/67\"",
             });
         }
 
@@ -457,8 +464,6 @@ exports.importPrintTransactions = async (req, res) => {
             );
         }
 
-        fs.unlinkSync(req.file.path);
-
         res.json({
             message: "Import ยอดพิมพ์รายเดือนสำเร็จ",
             months_found: [...new Set(meterColumns.map((m) => m.month))].sort(),
@@ -467,17 +472,10 @@ exports.importPrintTransactions = async (req, res) => {
         });
 
     } catch (err) {
-
-        console.error("IMPORT PRINT TRANSACTIONS ERROR:", err);
-
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-
-        res.status(500).json({
-            error: err.message
-        });
-
+        // โยนต่อให้ handler กลาง — ดูเหตุผลที่ importDevices
+        throw asImportError(err);
+    } finally {
+        removeUploadedFile(req.file);
     }
 
-};
+});
