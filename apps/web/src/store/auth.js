@@ -1,4 +1,5 @@
 import { reactive } from "vue";
+import { resetQueryCacheForNewIdentity } from "../api/query-client";
 
 // reactive state เดียวที่ทุก component (แถบเมนู, แถบบน, หน้าล็อกอิน) ใช้ร่วมกัน
 //
@@ -16,12 +17,40 @@ export const authState = reactive({
   ready: false,
 });
 
+/**
+ * "ตัวตน" ที่ใช้ตัดสินว่าต้องล้าง cache ไหม — id คู่กับบทบาท
+ *
+ * บทบาทอยู่ในนี้ด้วยเพราะสิทธิ์อ่านผูกกับบทบาท ไม่ใช่กับตัวคน การถูกลดสิทธิ์
+ * ระหว่างที่เปิดแอปค้างไว้จึงต้องล้างของที่ดึงมาตอนยังมีสิทธิ์มากกว่าทิ้ง
+ */
+function identityOf(user) {
+  return user ? `${user.id}:${user.role}` : null;
+}
+
+/**
+ * ⚠️ ทั้ง setAuth และ clearAuth ต้องล้าง query cache เมื่อตัวตนเปลี่ยน
+ *
+ * cache มีอายุเท่ากับ SPA ไม่ใช่เท่ากับ session และ query key ไม่ได้ผูกกับผู้ใช้
+ * ถ้าไม่ล้าง การล็อกอินด้วยบัญชีอื่นบนเครื่องเดียวกันจะอ่านของบัญชีก่อนหน้าต่อได้
+ * โดยยังไม่ถาม API ใหม่ (ดู api/query-client.js และ issue #29)
+ *
+ * ตัดสินจาก "ตัวตนเปลี่ยนจริงไหม" ไม่ใช่ล้างทุกครั้งที่ถูกเรียก — ไม่งั้นการ
+ * ยืนยัน session ตอนรีเฟรชหน้าจะล้างของที่เพิ่งโหลดมาแล้วยิงใหม่ทั้งแอปทุกครั้ง
+ */
 export function setAuth(user) {
+  const changed = identityOf(user) !== identityOf(authState.user);
+
   authState.user = user;
   authState.ready = true;
+
+  if (changed) resetQueryCacheForNewIdentity();
 }
 
 export function clearAuth() {
+  const changed = authState.user !== null;
+
   authState.user = null;
   authState.ready = true;
+
+  if (changed) resetQueryCacheForNewIdentity();
 }

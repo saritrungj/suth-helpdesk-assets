@@ -69,6 +69,14 @@ const invalidateQueries = vi.fn(async () => {});
 
 vi.mock("@tanstack/vue-query", () => ({
   useQueryClient: () => ({ invalidateQueries }),
+  // store/auth.js -> api/query-client.js สร้าง QueryClient จริงตอน import
+  // ให้ตัวปลอมที่มีเฉพาะเมธอดที่ถูกเรียกตอนเปลี่ยนบัญชี
+  QueryClient: class {
+    clear() {}
+    cancelQueries() {
+      return Promise.resolve();
+    }
+  },
 }));
 
 const { mount } = await import("@vue/test-utils");
