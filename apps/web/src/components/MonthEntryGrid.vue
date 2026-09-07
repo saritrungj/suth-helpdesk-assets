@@ -65,6 +65,23 @@ const queryClient = useQueryClient();
  */
 const draft = ref(new Map());
 const saving = ref(false);
+
+/**
+ * ค่าที่ "ส่งไปแล้วแต่ยังไม่รู้ผล" — key = device id, value = ค่าที่ส่ง
+ *
+ * ## ทำไมต้องมี
+ *
+ * ช่องกรอกยังพิมพ์ได้ระหว่างที่คำขอบันทึกเดินทางอยู่ ถ้าเทียบสิ่งที่พิมพ์กับ
+ * `props.saved` เพียงอย่างเดียว จะเทียบกับค่าที่ล้าสมัยไปแล้ว ลำดับที่พังคือ
+ *
+ *   บันทึกไว้ 100 → พิมพ์ 200 แล้วกดบันทึก → ระหว่างรอพิมพ์กลับเป็น 100
+ *   → เทียบกับ props.saved (ยังเป็น 100) แล้วถอด draft ทิ้ง
+ *   → API บันทึก 200 สำเร็จ → รีเฟรชเห็น 200 โดยไม่เหลือร่องรอยว่าผู้ใช้
+ *     เปลี่ยนใจกลับไป 100
+ *
+ * ความตั้งใจล่าสุดหายเงียบ ไม่มีแถบบันทึกค้างให้เห็นด้วยซ้ำ (issue #26)
+ */
+const inFlight = ref(new Map());
 const saveError = ref("");
 const saveBar = ref(null);
 
@@ -88,6 +105,17 @@ function savedValue(deviceId) {
   return value === undefined || value === null ? null : Number(value);
 }
 
+/**
+ * ค่าที่ใช้เป็น "ของเดิม" ในการตัดสินว่าสิ่งที่พิมพ์นับเป็นการแก้ไหม
+ *
+ * ถ้ามีคำขอค้างอยู่ ของเดิมคือ **ค่าที่กำลังจะถูกบันทึก** ไม่ใช่ค่าที่บันทึกไว้
+ * ก่อนหน้า เพราะอีกไม่กี่วินาทีค่านั้นจะกลายเป็นของจริง
+ */
+function baselineValue(deviceId) {
+  if (inFlight.value.has(deviceId)) return inFlight.value.get(deviceId);
+  return savedValue(deviceId);
+}
+
 /** ค่าที่ควรแสดงในช่องกรอก — ของที่แก้ค้างไว้ชนะของที่บันทึกไว้ */
 function displayValue(deviceId) {
   if (draft.value.has(deviceId)) {
@@ -108,7 +136,7 @@ function onInput(deviceId, raw) {
   const text = String(raw ?? "").trim();
 
   if (text === "") {
-    if (savedValue(deviceId) === null) draft.value.delete(deviceId);
+    if (baselineValue(deviceId) === null) draft.value.delete(deviceId);
     else draft.value.set(deviceId, null);
     draft.value = new Map(draft.value);
     return;
@@ -118,7 +146,7 @@ function onInput(deviceId, raw) {
   if (!Number.isFinite(value) || value < 0) return;
 
   const rounded = Math.round(value);
-  if (rounded === savedValue(deviceId)) draft.value.delete(deviceId);
+  if (rounded === baselineValue(deviceId)) draft.value.delete(deviceId);
   else draft.value.set(deviceId, rounded);
 
   draft.value = new Map(draft.value);
@@ -213,6 +241,10 @@ async function save() {
   // ถ่ายภาพสิ่งที่กำลังจะส่ง ณ วินาทีนี้ไว้ก่อน — ผู้ใช้ยังพิมพ์ต่อได้ระหว่างรอ
   const sending = new Map(draft.value);
 
+  // ตั้งเป็น baseline ทันที เพื่อให้สิ่งที่ผู้ใช้พิมพ์ระหว่างรอถูกเทียบกับค่าที่
+  // กำลังจะถูกบันทึก ไม่ใช่ค่าเก่าที่อีกเดี๋ยวก็ไม่จริงแล้ว
+  inFlight.value = new Map(sending);
+
   try {
     const items = [...sending].map(([device_id, pages]) => ({ device_id, pages }));
     const res = await api.post("/print-transactions/bulk", { month: props.month, items });
@@ -245,8 +277,17 @@ async function save() {
     // การล้างทิ้งเพราะเน็ตสะดุดคือการทำให้เขาต้องทำงานใหม่ทั้งหมด
     saveError.value = errorMessage(err, "บันทึกไม่สำเร็จ กรุณาลองใหม่");
     toastError(saveError.value);
+
+    // บันทึกไม่สำเร็จ ค่าที่ส่งไปจึงไม่เคยกลายเป็นของจริง — คืนกลับเป็นของค้าง
+    // ถ้าผู้ใช้ยังไม่ได้พิมพ์ทับไปแล้ว
+    const restored = new Map(draft.value);
+    for (const [deviceId, sentValue] of sending) {
+      if (!restored.has(deviceId)) restored.set(deviceId, sentValue);
+    }
+    draft.value = restored;
   } finally {
     saving.value = false;
+    inFlight.value = new Map();
   }
 }
 
