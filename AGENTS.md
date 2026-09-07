@@ -83,3 +83,17 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 ## ความปลอดภัย
 
 เก็บ MySQL credentials และ `JWT_SECRET` ใน environment variables ใช้ secret ที่แข็งแรง ตรวจ CSV/XLSX ก่อน import และถือว่า migration เป็นการเปลี่ยนแปลงแบบมีลำดับที่ต้อง review
+
+## Agent skills
+
+### Issue tracker
+
+Issue ของ repo นี้อยู่ใน GitHub Issues (`saritrungj/suth-helpdesk-assets`) ใช้ `gh` CLI ดู `docs/agents/issue-tracker.md`
+
+### Triage labels
+
+ใช้ชุดคำมาตรฐาน 5 บทบาท (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) ตรงตัวกับชื่อ label จริงบน GitHub ดู `docs/agents/triage-labels.md`
+
+### Domain docs
+
+Single-context — ADR อยู่ที่ `docs/decisions/` (ไม่ใช่ `docs/adr/`) ยังไม่มี `CONTEXT.md` ดู `docs/agents/domain.md`
