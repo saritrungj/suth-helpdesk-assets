@@ -29,3 +29,4 @@
 | [0005](0005-database-engine.md) | เลือก database engine สำหรับระบบที่เขียนใหม่ — PostgreSQL | Deferred |
 | [0006](0006-session-cookie-instead-of-localstorage.md) | เก็บ token ของ session ใน cookie แบบ httpOnly | Accepted |
 | [0007](0007-improve-in-place-instead-of-rewriting.md) | ปรับปรุงระบบเดิมต่อ ไม่เขียนใหม่ | Accepted |
+| [0011](0011-read-only-mcp-server.md) | เซิร์ฟเวอร์ MCP แบบอ่านอย่างเดียว | Accepted |

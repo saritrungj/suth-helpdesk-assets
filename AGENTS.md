@@ -21,6 +21,7 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 
 - `apps/api/` — CommonJS Express API; `index.js` เป็น entry ที่ mount route เท่านั้น โค้ดจริงอยู่ใน `src/` แบ่งตามความสามารถ
 - `apps/web/` — Vue 3 SPA; views, components, stores, router และ API client
+- `apps/mcp/` — เซิร์ฟเวอร์ MCP แบบ **อ่านอย่างเดียว** เรียกผ่าน HTTP API เดิม ไม่ต่อฐานข้อมูลตรง (ดู [ADR-0011](docs/decisions/0011-read-only-mcp-server.md))
 - `packages/domain/` — กฎธุรกิจที่ทั้งสองฝั่งใช้ร่วมกัน (ปีงบ เดือน การแสดงผลภาษาไทย) **ห้ามเขียนซ้ำที่อื่น**
 - `database/` — schema สำหรับฐานข้อมูลใหม่, ordered migrations สำหรับฐานข้อมูลเดิม และ seed
 - `docs/` — ภาพรวมระบบ คู่มือปฏิบัติการ และ ADR
@@ -41,6 +42,8 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 | `shared/` | เฉพาะของที่ทุก feature ใช้จริง ตอนนี้มีแค่ `db.js` |
 
 เพิ่มความสามารถใหม่ = เพิ่มโฟลเดอร์ใหม่ใน `src/` แล้ว mount ที่ `index.js` ห้ามเพิ่มโฟลเดอร์แบบ `routes/` หรือ `controllers/` กลับมาอีก ถ้าโค้ดถูกใช้แค่ feature เดียว ให้อยู่ในโฟลเดอร์ของ feature นั้น อย่ายัดเข้า `shared/`
+
+**ข้อจำกัดของ `apps/mcp/` ห้ามผ่อน** — ห้ามเพิ่มเครื่องมือที่เขียนข้อมูลเด็ดขาด ข้อมูลขาเข้าของเครื่องมือ MCP มาจากโมเดลภาษา ไม่ใช่จากผู้ใช้โดยตรง ถ้าจำเป็นต้องเปลี่ยนจริงๆ ต้องแก้ [ADR-0011](docs/decisions/0011-read-only-mcp-server.md) พร้อมเหตุผลก่อน — มีเทสบังคับข้อนี้ไว้แล้วใน `apps/mcp/test/tools.test.js`
 
 ใช้ indentation 2 spaces Backend ใช้ CommonJS และ semicolon ส่วน Frontend ใช้ ES modules, Vue `<script setup>` และ Tailwind classes ตั้งชื่อ Vue component แบบ PascalCase และ JavaScript identifier แบบ camelCase โดยยึดรูปแบบไฟล์ข้างเคียง
 
