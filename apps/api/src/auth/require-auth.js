@@ -1,15 +1,25 @@
+// apps/api/src/auth/require-auth.js
+//
+// ด่านแรก: คำขอนี้มาจากใคร
+//
+// ส่ง error ต่อไปที่ next() แทนการตอบกลับเอง เพื่อให้ทุกคำตอบที่เป็นข้อผิดพลาด
+// ในระบบมีรูปแบบเดียวกัน (RFC 9457) ที่ error handler กลางใน index.js — เดิม
+// middleware ตัวนี้ตอบ { message, error } ส่วน route อื่นตอบ { error } เฉยๆ
+// ฝั่งเว็บจึงต้องเขียนโค้ดอ่านข้อความ error สองแบบ
+
 const jwt = require("jsonwebtoken");
 const { SESSION_COOKIE } = require("./session-cookie");
+const { unauthorized } = require("../shared/http-error");
 
 /**
- * อ่าน token จาก request
+ * อ่าน token จากคำขอ
  *
  * ลำดับ: cookie ก่อน แล้วค่อย Authorization header
  *
- * เว็บใช้ cookie แบบ httpOnly (ดู ./session-cookie.js) ส่วน header ยังรับอยู่สำหรับ
- * เครื่องมือที่ไม่ใช่เบราว์เซอร์ — script, curl, การทดสอบ — ซึ่งไม่มีที่เก็บ cookie
- * และไม่ได้เพิ่มความเสี่ยง XSS เพราะความเสี่ยงจริงอยู่ที่ "เว็บเก็บ token ไว้ที่ไหน"
- * ไม่ใช่ที่ API ยอมรับ header
+ * เว็บใช้ cookie แบบ httpOnly (ADR-0006) ส่วน header ยังรับอยู่สำหรับเครื่องมือ
+ * ที่ไม่ใช่เบราว์เซอร์ — สคริปต์ การทดสอบ และเซิร์ฟเวอร์ MCP ใน apps/mcp ซึ่ง
+ * ไม่มีที่เก็บ cookie การรับ header ไม่ได้เพิ่มความเสี่ยง XSS เพราะความเสี่ยงจริง
+ * อยู่ที่ "เว็บเก็บ token ไว้ที่ไหน" ไม่ใช่ที่ API ยอมรับ header
  *
  * @param {import("express").Request} req
  * @returns {string|null}
@@ -31,24 +41,28 @@ module.exports = (req, res, next) => {
   const token = readToken(req);
 
   if (!token) {
-    return res.status(401).json({
-      message: "No token provided",
-      error: "No token provided",
-    });
+    return next(
+      unauthorized("กรุณาเข้าสู่ระบบก่อนใช้งาน", {
+        code: "no_token",
+        detail: "ไม่พบข้อมูลการเข้าสู่ระบบในคำขอนี้",
+      })
+    );
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    req.user = decoded;
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch (err) {
-    console.error("JWT verification failed:", err.message);
+    // แยกเหตุผลออกจากกันเพราะฝั่งเว็บทำสองอย่างต่างกัน — token หมดอายุคือเรื่อง
+    // ปกติของคนที่เปิดหน้าทิ้งไว้ข้ามวัน ควรพากลับไปล็อกอินเงียบๆ ส่วน token ที่
+    // ผิดรูปหรือเซ็นด้วยกุญแจอื่นคือสัญญาณของการปลอมแปลง ควรถูกบันทึกไว้
+    const expired = err.name === "TokenExpiredError";
 
-    return res.status(401).json({
-      message: "Invalid token",
-      error: err.message,
-    });
+    next(
+      unauthorized(expired ? "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่" : "ข้อมูลการเข้าสู่ระบบไม่ถูกต้อง", {
+        code: expired ? "token_expired" : "invalid_token",
+      })
+    );
   }
 };
 

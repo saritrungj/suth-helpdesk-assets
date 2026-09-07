@@ -33,6 +33,15 @@ export const {
   effectivePriceSatang,
   sumSatang,
   formatBaht,
+  USER_ROLES,
+  USER_ROLE_LABELS,
+  DEVICE_STATUSES,
+  DEVICE_STATUS_LABELS,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_MAX_LENGTH,
+  MAX_LENGTH,
+  MAX_PAGES_PER_MONTH,
+  MAX_PAGE_SIZE,
 } = domain;
 
 export default domain;

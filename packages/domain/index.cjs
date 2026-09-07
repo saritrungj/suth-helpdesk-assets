@@ -10,10 +10,12 @@ const month = require("./month.cjs");
 const fiscalYear = require("./fiscal-year.cjs");
 const format = require("./format.cjs");
 const money = require("./money.cjs");
+const constraints = require("./constraints.cjs");
 
 module.exports = {
   ...month,
   ...fiscalYear,
   ...format,
   ...money,
+  ...constraints,
 };

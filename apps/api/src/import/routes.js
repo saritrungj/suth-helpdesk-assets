@@ -5,6 +5,7 @@ const router = express.Router();
 const authMiddleware = require("../auth/require-auth");
 const adminMiddleware = require("../auth/require-admin");
 const importController = require("./controller");
+const { badRequest } = require("../shared/http-error");
 
 // จำกัดขนาดไฟล์ (5MB) และรับเฉพาะไฟล์ Excel/CSV กัน disk เต็ม/อัปโหลดไฟล์แปลกปลอม
 const ALLOWED_MIME_TYPES = [
@@ -36,19 +37,30 @@ const upload = multer({
   },
 });
 
-// ดัก error จาก multer (ไฟล์ใหญ่เกิน/นามสกุลไม่ตรง) ให้ตอบกลับเป็น JSON ที่อ่านง่าย
-// แทนที่จะปล่อยให้หลุดไป error handler กลาง ๆ
+// ดัก error จาก multer (ไฟล์ใหญ่เกิน / นามสกุลไม่ตรง) แล้วส่งต่อเป็น ApiError
+// เพื่อให้ออกไปในรูปแบบเดียวกับข้อผิดพลาดอื่นทั้งระบบ (RFC 9457) — เดิมตอบเป็น
+// { error } ซึ่งเป็นรูปแบบที่สามของระบบนี้ ทำให้ฝั่งเว็บต้องเดาว่าจะอ่านช่องไหน
 function handleUpload(req, res, next) {
   upload.single("file")(req, res, (err) => {
-    if (err instanceof multer.MulterError) {
-      if (err.code === "LIMIT_FILE_SIZE") {
-        return res.status(400).json({ error: "ไฟล์มีขนาดใหญ่เกิน 5MB" });
-      }
-      return res.status(400).json({ error: err.message });
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      return next(
+        badRequest("ไฟล์มีขนาดใหญ่เกิน 5MB", {
+          code: "file_too_large",
+          detail: "แบ่งไฟล์เป็นหลายไฟล์ หรือลบคอลัมน์/แผ่นงานที่ไม่เกี่ยวข้องออกก่อนนำเข้า",
+        })
+      );
     }
+
     if (err) {
-      return res.status(400).json({ error: err.message });
+      return next(badRequest(err.message, { code: "upload_rejected" }));
     }
+
+    // ไม่ได้แนบไฟล์มาเลย — ต้องดักที่นี่ ไม่งั้น controller จะพังตอนอ่าน req.file.path
+    // แล้วผู้ใช้จะเห็น 500 แทนที่จะเห็นว่าลืมเลือกไฟล์
+    if (!req.file) {
+      return next(badRequest("กรุณาเลือกไฟล์ที่ต้องการนำเข้า", { code: "no_file" }));
+    }
+
     next();
   });
 }

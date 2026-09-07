@@ -12,7 +12,7 @@
 
 ## เทคโนโลยี
 
-- Backend: Node.js, CommonJS, Express และ MySQL
+- Backend: Node.js, CommonJS, Express และ MySQL — ข้อผิดพลาดตามมาตรฐาน Problem Details (RFC 9457) และตรวจข้อมูลขาเข้าด้วย zod ทุกเส้นทาง (ดู [ADR-0010](docs/decisions/0010-problem-details-and-api-conventions.md))
 - Frontend: Vue 3, Vite, Tailwind CSS และ Chart.js
 - Database: MySQL schema, ordered migrations และข้อมูลจำลอง
 
@@ -42,6 +42,14 @@ npm run dev:web
 ```
 
 API เปิดที่ `http://localhost:3000` เว็บเปิดที่ `http://localhost:5173` และเรียก API ที่ `http://localhost:3000/api`
+
+ตรวจว่า API พร้อมใช้งานจริง (ตรวจการเชื่อมต่อฐานข้อมูลด้วย):
+
+```powershell
+curl http://localhost:3000/api/health
+```
+
+ต่อฐานข้อมูลไม่ได้ API จะ **ไม่เปิดเลย** พร้อมบอกเหตุผลใน terminal — ตั้งใจให้ล้มแบบเห็นชัดตั้งแต่ตอนบูต ดีกว่าเปิดขึ้นมาแล้วทุกคำขอพังทีละอันโดยไม่มีใครสังเกต
 
 ## ตรวจสอบการเปลี่ยนแปลง
 

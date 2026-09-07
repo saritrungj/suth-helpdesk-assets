@@ -38,9 +38,22 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 | `master-data/` | ข้อมูลอ้างอิง (ยี่ห้อ อาคาร ชั้น ฝ่าย แผนก ปีงบ) |
 | `users/` | จัดการผู้ใช้ |
 | `import/` | นำเข้าไฟล์ Excel/CSV ทั้งทะเบียนเครื่องและยอดมิเตอร์ |
-| `shared/` | เฉพาะของที่ทุก feature ใช้จริง ตอนนี้มีแค่ `db.js` |
+| `health/` | ตรวจว่าระบบพร้อมรับงาน — เส้นทางเดียวที่ไม่ต้องล็อกอิน |
+| `shared/` | เฉพาะของที่ทุก feature ใช้จริง — การเชื่อมฐานข้อมูล ข้อผิดพลาด การตรวจข้อมูล ล็อก และแคช |
 
 เพิ่มความสามารถใหม่ = เพิ่มโฟลเดอร์ใหม่ใน `src/` แล้ว mount ที่ `index.js` ห้ามเพิ่มโฟลเดอร์แบบ `routes/` หรือ `controllers/` กลับมาอีก ถ้าโค้ดถูกใช้แค่ feature เดียว ให้อยู่ในโฟลเดอร์ของ feature นั้น อย่ายัดเข้า `shared/`
+
+**ทุกเส้นทางของ API ต้องใช้ชั้นพื้นฐานใน `src/shared/`** (ดู [ADR-0010](docs/decisions/0010-problem-details-and-api-conventions.md))
+
+| ต้องทำ | ห้ามทำ |
+|---|---|
+| ห่อ handler ที่เป็น async ด้วย `asyncHandler` | เขียน `try/catch` แล้ว `res.status(500).json({ error: err.message })` เอง |
+| โยน `ApiError` (`notFound()`, `badRequest()`, …) | เรียก `res.status(4xx).json()` เองในเส้นทาง |
+| ตรวจข้อมูลขาเข้าด้วย `validate({ body, query, params })` | เช็คด้วย `if (!x) return ...` ทีละบรรทัด |
+| ใช้ `db.withTransaction()` | เขียน `getConnection` / `beginTransaction` / `rollback` / `release` เอง |
+| ตั้ง `Cache-Control` ผ่าน `shared/cache.js` | ปล่อยว่างไว้ |
+
+เหตุผลที่เป็นกฎ ไม่ใช่คำแนะนำ: ข้อความ error ของ MySQL เคยหลุดออกไปถึงเบราว์เซอร์ทั้งชื่อตารางและชื่อคอลัมน์ และรูปแบบคำตอบที่ต่างกันสามแบบทำให้ฝั่งเว็บต้องเดาว่าจะอ่านช่องไหน
 
 ใช้ indentation 2 spaces Backend ใช้ CommonJS และ semicolon ส่วน Frontend ใช้ ES modules, Vue `<script setup>` และ Tailwind classes ตั้งชื่อ Vue component แบบ PascalCase และ JavaScript identifier แบบ camelCase โดยยึดรูปแบบไฟล์ข้างเคียง
 
