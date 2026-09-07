@@ -7,7 +7,7 @@ import { reactive } from "vue";
  *   import { askConfirm } from "@/store/confirmDialog";
  *   if (!(await askConfirm("ต้องการลบรายการนี้ใช่หรือไม่?"))) return;
  *
- * ตัว UI จริงอยู่ที่ components/ConfirmDialog.vue ซึ่ง mount ไว้ครั้งเดียวใน App.vue
+ * ตัว UI จริงอยู่ที่ ui/UiConfirm.vue ซึ่ง mount ไว้ครั้งเดียวใน App.vue
  */
 
 export const confirmState = reactive({

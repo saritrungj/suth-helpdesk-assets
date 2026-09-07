@@ -1,22 +1,55 @@
 import { reactive } from "vue";
 
 /**
- * ui.js — สถานะ UI ทั่วไปที่ใช้ร่วมกันหลาย component (ไม่ผูกกับ auth/theme)
- * ตอนนี้ใช้เก็บสถานะเปิด/ปิด sidebar บนจอมือถือ/แท็บเล็ต (< md)
- * บนจอ desktop sidebar จะแสดงอยู่แล้วเสมอ ไม่ใช้ state นี้
+ * ui.js — สถานะของเปลือกแอป (แถบเมนู, ช่องค้นหาคำสั่ง) ที่หลาย component ใช้ร่วมกัน
+ *
+ * แยกจาก store/theme.js เพราะอันนั้นเป็น "ความชอบด้านการแสดงผล" ที่มีผลกับทุกหน้า
+ * ส่วนอันนี้เป็น "สถานะการเปิด-ปิดของชิ้นส่วนบนหน้าจอ" ซึ่งเปลี่ยนไปมาตลอดการใช้งาน
+ *
+ * การพับแถบเมนูถูกจำไว้ข้ามเซสชัน เพราะคนที่ทำงานกับตารางกว้างๆ ทั้งวันจะพับไว้
+ * ตลอด แล้วต้องมาพับใหม่ทุกครั้งที่เปิดเว็บถ้าไม่จำให้
  */
+
+const RAIL_KEY = "suth-ui-nav-collapsed";
+
+function readCollapsed() {
+  try {
+    return localStorage.getItem(RAIL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export const uiState = reactive({
-  mobileSidebarOpen: false,
+  /** ลิ้นชักเมนูบนจอเล็ก (< lg) — บนจอใหญ่แถบเมนูอยู่ประจำที่เสมอ */
+  mobileNavOpen: false,
+  /** พับแถบเมนูบนจอใหญ่ให้เหลือเฉพาะไอคอน */
+  navCollapsed: readCollapsed(),
+  /** ช่องค้นหาคำสั่ง (Ctrl+K) */
+  commandOpen: false,
 });
 
-export function openMobileSidebar() {
-  uiState.mobileSidebarOpen = true;
+export function openMobileNav() {
+  uiState.mobileNavOpen = true;
 }
 
-export function closeMobileSidebar() {
-  uiState.mobileSidebarOpen = false;
+export function closeMobileNav() {
+  uiState.mobileNavOpen = false;
 }
 
-export function toggleMobileSidebar() {
-  uiState.mobileSidebarOpen = !uiState.mobileSidebarOpen;
+export function toggleNavCollapsed() {
+  uiState.navCollapsed = !uiState.navCollapsed;
+  try {
+    localStorage.setItem(RAIL_KEY, uiState.navCollapsed ? "1" : "0");
+  } catch {
+    // จำข้ามเซสชันไม่ได้ แต่ยังพับได้ในรอบนี้
+  }
+}
+
+export function openCommandPalette() {
+  uiState.commandOpen = true;
+}
+
+export function setCommandPalette(open) {
+  uiState.commandOpen = open;
 }

@@ -1,0 +1,190 @@
+/* ============================================================================
+   base.css — พฤติกรรมพื้นฐานของเอกสารทั้งหน้า
+
+   ไฟล์นี้ตั้งค่าที่ "ทุกหน้าต้องได้เหมือนกัน" โดยไม่ต้องมี component มาห่อ:
+   สีพื้น/ตัวหนังสือเริ่มต้น, การเลือกข้อความ, วงแหวนโฟกัส, สกอลบาร์, ตัวเลข
+   ในตาราง, การเคารพ prefers-reduced-motion และการสั่งพิมพ์
+   ============================================================================ */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* กันหน้ากระตุกซ้าย-ขวาตอนสลับหน้าที่มี/ไม่มีสกอลบาร์ */
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    background-color: var(--canvas);
+    color: var(--ink-soft);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* เปิด contextual alternates ให้สระ/วรรณยุกต์ไทยวางตำแหน่งถูกต้อง */
+    font-feature-settings: "calt" 1;
+  }
+
+  /* หัวข้อทุกระดับใช้สีเข้มสุดและช่องไฟแน่นกว่าเนื้อความเล็กน้อย */
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--ink);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    text-wrap: balance;
+  }
+
+  /* ย่อหน้ายาวไม่ควรทิ้งคำเดียวไว้บรรทัดสุดท้าย */
+  p {
+    text-wrap: pretty;
+  }
+
+  /* ตัวเลขทุกตัวใน UI นี้เป็นตัวเลขที่ต้องเทียบกันในแนวตั้ง (ยอดพิมพ์ จำนวนเงิน)
+     tabular-nums บังคับให้ทุกหลักกว้างเท่ากัน คอลัมน์จึงตรงกันจริง */
+  table,
+  [data-numeric],
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* input ควรรับสีจากธีมเสมอ ไม่ใช่สีระบบของเบราว์เซอร์ */
+  input, select, textarea, button {
+    font: inherit;
+    color: inherit;
+  }
+
+  ::placeholder {
+    color: var(--ink-mute);
+    opacity: 1;
+  }
+
+  ::selection {
+    background-color: var(--brand-soft);
+    color: var(--brand-ink);
+  }
+
+  hr {
+    border-color: var(--line-soft);
+  }
+
+  /* -------------------------------------------------------------------------
+     โฟกัส — เห็นชัดเสมอสำหรับคนที่ใช้คีย์บอร์ด แต่ไม่โผล่ตอนคลิกเมาส์
+     ใช้ :focus-visible ซึ่งเบราว์เซอร์ตัดสินให้เองว่าเป็นการนำทางด้วยคีย์บอร์ดหรือไม่
+     ------------------------------------------------------------------------- */
+  :focus-visible {
+    outline: 2px solid var(--brand-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  /* -------------------------------------------------------------------------
+     สกอลบาร์ — บาง กลมกลืน และเปลี่ยนสีตามโหมด
+     ใช้ทั้งมาตรฐาน (Firefox) และ -webkit- (Chrome/Edge/Safari)
+     ------------------------------------------------------------------------- */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--line-strong);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* -------------------------------------------------------------------------
+     ความหนาแน่นของข้อมูล — ผู้ใช้เลือกเองได้ว่าจะเอาแบบสบายตาหรืออัดแน่น
+
+     คนทำงานเปิดหน้าเดียวกันวันละหลายสิบรอบ บางคนอยากเห็นแถวเยอะๆ ในหน้าจอเดียว
+     บางคนอยากได้ที่ว่างเยอะเพื่อไม่ให้ตาลาย ค่าเหล่านี้ถูกอ่านโดยตารางและฟอร์ม
+     ------------------------------------------------------------------------- */
+  :root {
+    --row-py: 0.625rem;   /* ระยะบน-ล่างในเซลล์ตาราง */
+    --row-px: 0.75rem;
+    --field-h: 2.375rem;  /* ความสูงมาตรฐานของ input/select/ปุ่มขนาดกลาง */
+    --stack: 1.25rem;     /* ระยะห่างมาตรฐานระหว่างบล็อกในหน้า */
+  }
+
+  [data-density="compact"] {
+    --row-py: 0.375rem;
+    --row-px: 0.625rem;
+    --field-h: 2.125rem;
+    --stack: 1rem;
+  }
+
+  [data-density="relaxed"] {
+    --row-py: 0.875rem;
+    --row-px: 1rem;
+    --field-h: 2.625rem;
+    --stack: 1.5rem;
+  }
+
+  /* -------------------------------------------------------------------------
+     เคารพการตั้งค่าของผู้ใช้ที่ขอให้ลดการเคลื่อนไหว (ระบบปฏิบัติการ)
+     ไม่ตัดทิ้งทั้งหมด แต่ย่อให้สั้นจนแทบไม่รู้สึก เพื่อยังคงบอกได้ว่าอะไรเปลี่ยน
+     ------------------------------------------------------------------------- */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* -------------------------------------------------------------------------
+     สั่งพิมพ์ — หน้ารายงานในระบบนี้ถูกพิมพ์ออกกระดาษส่งผู้บริหารจริง
+     ซ่อนเมนู/ปุ่ม แล้วบังคับพื้นขาว-ตัวดำเพื่อไม่ให้เปลืองหมึกและอ่านออก
+     ------------------------------------------------------------------------- */
+  @media print {
+    :root {
+      --canvas: #fff;
+      --surface: #fff;
+      --surface-2: #fff;
+      --surface-3: #fff;
+      --ink: #000;
+      --ink-soft: #1a1a1a;
+      --ink-mute: #444;
+      --line: #999;
+      --line-soft: #ccc;
+    }
+
+    [data-print="hide"],
+    aside,
+    nav[aria-label="เมนูหลัก"] {
+      display: none !important;
+    }
+
+    body {
+      background: #fff;
+    }
+
+    /* ไม่ให้ตัดกลางการ์ดหรือกลางแถวตาราง */
+    .card,
+    tr,
+    figure {
+      break-inside: avoid;
+    }
+
+    a[href]::after {
+      content: "";
+    }
+  }
+}

@@ -31,3 +31,10 @@ Thumbs.db
 
 # script ชั่วคราวสำหรับสร้าง bcrypt hash — มีรหัสผ่านอยู่ในนั้น
 hash.js
+
+# ผลลัพธ์จาก Playwright (apps/web/e2e) — สร้างใหม่ได้ทุกครั้งที่รัน ไม่ใช่ของอ้างอิง
+# ที่ต้อง track (ดู docs/how-to/verify-changes.md)
+test-results/
+playwright-report/
+apps/web/e2e/.artifacts/
+apps/web/e2e/screens/
