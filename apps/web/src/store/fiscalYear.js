@@ -56,7 +56,7 @@ async function fetchFiscalYears() {
         // 2) ไม่งั้น default เป็นปีงบล่าสุด (ตัวสุดท้ายของ list) — เฉพาะตอนที่ค่าที่เลือกไว้เดิม
         // ใช้ไม่ได้แล้ว (ยังไม่เคยเลือก หรือปีงบที่เคยเลือกไว้ถูกลบไปแล้ว) ไม่งั้นจะไปทับปีงบที่
         // ผู้ใช้ตั้งใจเลือกไว้อยู่ทุกครั้งที่มีคน add/edit ปีงบใหม่จากหน้า Admin
-        setActiveFiscalYear(fiscalYearState.list[fiscalYearState.list.length - 1].id);
+        applyFiscalYear(fiscalYearState.list[fiscalYearState.list.length - 1].id);
       }
 
       // ล็อกว่าโหลดสำเร็จแล้วก็ต่อเมื่อ "สำเร็จจริง" เท่านั้น — ถ้าพลาดจะไม่ล็อก เพื่อให้เรียกซ้ำได้ใหม่
@@ -96,13 +96,65 @@ export function resetFiscalYearState() {
   fiscalYearState.activeId = null;
 }
 
-export function setActiveFiscalYear(id) {
+// ด่านที่หน้าต่างๆ ฝากไว้ว่า "ก่อนเปลี่ยนปีงบ ถามฉันก่อน"
+//
+// จำเป็นเพราะการเปลี่ยนปีงบเกิดจากแถบบนซึ่งอยู่คนละที่กับหน้าที่มีของกรอกค้างอยู่
+// ถ้าปล่อยให้หน้านั้นไปดักที่ watch ของตัวเอง ปีงบจะเปลี่ยนไปแล้วก่อนที่จะได้ถาม
+// แล้วต้องย้อนกลับ ซึ่งผู้ใช้จะเห็นตัวเลขปีงบกระพริบไปมา — กันที่ต้นทางตรงนี้แทน
+const guards = new Set();
+
+/**
+ * ฝากด่านไว้ — คืนฟังก์ชันสำหรับถอดออก
+ *
+ * **ต้องถอดตอน unmount เสมอ** ไม่งั้นหน้าที่ปิดไปแล้วยังบล็อกการเปลี่ยนปีงบของทั้งแอป
+ *
+ * @param {(nextId: number) => Promise<boolean>} guard false = ยับยั้งการเปลี่ยน
+ */
+export function registerFiscalYearGuard(guard) {
+  guards.add(guard);
+  return () => guards.delete(guard);
+}
+
+/** ถามด่านทุกตัว — ด่านเดียวที่ปฏิเสธก็พอที่จะยับยั้ง */
+async function guardsAllow(id) {
+  for (const guard of guards) {
+    if (!(await guard(id))) return false;
+  }
+  return true;
+}
+
+/**
+ * เปลี่ยนปีงบจริงๆ โดย **ไม่ผ่านด่าน**
+ *
+ * ใช้เฉพาะตอนเลือกปีงบเริ่มต้นหลังโหลดรายการเสร็จ ซึ่งยังไม่มีหน้าไหนมีของกรอกค้าง
+ * และเป็นจังหวะที่ห้ามถูกยับยั้ง ไม่งั้นแอปจะค้างโดยไม่มีปีงบ active เลย
+ */
+function applyFiscalYear(id) {
   fiscalYearState.activeId = id;
 
   // sync ลง query param ?fy= ทุกครั้งที่เปลี่ยนปีงบ (replace ไม่ push เพื่อไม่ให้ history รก)
   router.replace({
     query: { ...router.currentRoute.value.query, fy: id },
   });
+}
+
+/**
+ * เปลี่ยนปีงบที่ active ตามคำสั่งของผู้ใช้ — ผ่านด่านก่อนเสมอ
+ *
+ * @returns {Promise<boolean>} false = ถูกด่านยับยั้ง ปีงบยังเป็นค่าเดิม
+ */
+export async function setActiveFiscalYear(id) {
+  // เลือกปีเดิมซ้ำไม่ใช่การเปลี่ยน จึงไม่ต้องถามด่าน แต่ยัง sync URL เหมือนเดิม
+  // เผื่อกรณีที่ activeId ถูกตั้งจากที่อื่นโดยที่ ?fy= ยังไม่มีในลิงก์
+  if (id === fiscalYearState.activeId) {
+    applyFiscalYear(id);
+    return true;
+  }
+
+  if (!(await guardsAllow(id))) return false;
+
+  applyFiscalYear(id);
+  return true;
 }
 
 // ถ้า query เปลี่ยนจากทางอื่น (เช่น กด back/forward, หรือ paste link ที่มี ?fy=) ให้ sync state ตาม
@@ -112,12 +164,34 @@ export function setActiveFiscalYear(id) {
 // getter ของ watch จะทำงานทันทีที่สร้าง ถ้าตอนนั้น router/index.js ยังประกาศ const router ไม่เสร็จ
 // จะได้ ReferenceError: Cannot access 'router' before initialization แล้วแอปไม่ mount ทั้งหน้า
 export function startFiscalYearRouterSync() {
+  // ธงกันวน: ตอนที่ด่านยับยั้งแล้วเราเขียน ?fy= กลับเป็นค่าเดิม watch ตัวนี้จะยิงอีกรอบ
+  // ถ้าไม่กันไว้ มันจะเห็นว่า fy ไม่ตรง activeId แล้ววนถามด่านซ้ำไม่จบ
+  let reverting = false;
+
   watch(
     () => router.currentRoute.value.query.fy,
-    (fy) => {
+    async (fy) => {
+      if (reverting) return;
+
       const id = Number(fy);
-      if (id && id !== fiscalYearState.activeId) {
+      if (!id || id === fiscalYearState.activeId) return;
+
+      // ต้องผ่านด่านเหมือนการกดเลือกจากแถบบน — เส้นทางนี้ (กด back/forward หรือเปิด
+      // ลิงก์ที่มี ?fy=) เคยข้ามด่านไปได้ ทำให้ของที่กรอกค้างไว้หายเงียบเหมือนเดิม
+      if (await guardsAllow(id)) {
         fiscalYearState.activeId = id;
+        return;
+      }
+
+      // ถูกยับยั้ง — URL เดินหน้าไปแล้วเพราะเบราว์เซอร์เป็นคนเปลี่ยน ต้องเขียนกลับ
+      // ให้ตรงกับปีงบที่ยังใช้อยู่จริง ไม่งั้นแถบที่อยู่กับหน้าจอจะบอกคนละปี
+      reverting = true;
+      try {
+        await router.replace({
+          query: { ...router.currentRoute.value.query, fy: fiscalYearState.activeId },
+        });
+      } finally {
+        reverting = false;
       }
     }
   );

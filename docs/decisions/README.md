@@ -32,4 +32,5 @@
 | [0008](0008-design-system-tokens-and-ui-kit.md) | สร้าง design system เป็นชั้น token + ชุด component กลาง | Accepted |
 | [0009](0009-tanstack-query-as-the-data-layer.md) | ใช้ TanStack Query เป็นชั้นดึงข้อมูลของฝั่งเว็บ | Accepted |
 | [0010](0010-problem-details-and-api-conventions.md) | ข้อผิดพลาดแบบ Problem Details และข้อตกลงร่วมของ API | Accepted |
-| [0011](0011-read-only-mcp-server.md) | เซิร์ฟเวอร์ MCP แบบอ่านอย่างเดียว | Accepted |
+| [0011](0011-read-only-mcp-server.md) | เซิร์ฟเวอร์ MCP แบบอ่านอย่างเดียว | Superseded by ADR-0012 |
+| [0012](0012-remove-mcp-server.md) | ถอดเซิร์ฟเวอร์ MCP ออกจาก repository | Accepted |

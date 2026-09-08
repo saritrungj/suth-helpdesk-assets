@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/vue-query";
 import { computed, unref } from "vue";
 import api from "../services/api";
+import { takeRevalidationHeaders } from "./http-cache";
 
 /**
  * queries.js — ชั้นดึงข้อมูลของทั้งเว็บ
@@ -63,13 +64,42 @@ export const keys = {
   monthPages: (month) => ["print-transactions", "month", month || null],
 };
 
-const get = (url, params) => api.get(url, { params }).then((res) => res.data ?? []);
+// ส่ง header บังคับ revalidate เฉพาะคำขอแรกหลังจากที่เพิ่งเขียนข้อมูลชนิดนั้น —
+// ไม่งั้นแคชของเบราว์เซอร์ (max-age=60) จะคืนของเก่าให้ทั้งที่เพิ่งล้าง TanStack ไป
+// ดูเหตุผลเต็มใน ./http-cache.js
+const get = (url, params) =>
+  api.get(url, { params, headers: takeRevalidationHeaders(url) }).then((res) => res.data ?? []);
 
 /** ข้อมูลอ้างอิงที่แทบไม่เปลี่ยน — ถือไว้นาน รีเฟรชเบื้องหลังเงียบๆ */
 const REFERENCE = { staleTime: 30 * MINUTE, gcTime: 60 * MINUTE };
 
 /** ข้อมูลที่เปลี่ยนได้ระหว่างวัน — ถือสั้นกว่า แต่ยังตัดการยิงซ้ำตอนสลับหน้าได้ */
 const OPERATIONAL = { staleTime: 2 * MINUTE, gcTime: 15 * MINUTE };
+
+/**
+ * ชุดของ "จอที่เปิดค้างไว้แล้วต้องอัปเดตเอง" — ใช้เฉพาะแดชบอร์ด
+ *
+ * ## ทำไม staleTime อย่างเดียวไม่พอ
+ *
+ * `staleTime` บอกแค่ว่า "ข้อมูลนี้เก่าแล้ว" ไม่ได้สั่งให้ไปดึงใหม่ — ตัวจับเวลา
+ * ของ query-core เรียก `updateResult` ไม่ใช่ fetch การดึงใหม่เกิดจากเหตุการณ์
+ * อย่าง mount หรือ window focus ซึ่งหน้าจอติดผนังไม่มีทั้งคู่ ผลคือจอค้างอยู่ที่
+ * ตัวเลขเดิมจนกว่าจะมีคนเดินไปกด F5 (issue #15)
+ *
+ * ## ทำไมมีเฉพาะแดชบอร์ด
+ *
+ * **ห้ามใส่ให้หน้าที่มีฟอร์มกำลังกรอก** — ตัวเลขที่ขยับเองระหว่างพิมพ์ทำให้ผู้ใช้
+ * ไม่รู้ว่าค่าที่เห็นเป็นของตัวเองหรือของที่เพิ่งโหลดมา `useCoverage` และ
+ * `useMonthPages` ที่หน้าบันทึกยอดพิมพ์ใช้จึงไม่มีชุดนี้
+ *
+ * `refetchIntervalInBackground: false` กันแท็บที่ถูกลืมเปิดทิ้งไว้ยิงคำขอทั้งวัน
+ * โดยไม่มีใครดูอยู่
+ */
+const LIVE = {
+  ...OPERATIONAL,
+  refetchInterval: 5 * MINUTE,
+  refetchIntervalInBackground: false,
+};
 
 export const useBuildings = () =>
   useQuery({ queryKey: keys.buildings(), queryFn: () => get("/buildings"), ...REFERENCE });
@@ -129,7 +159,7 @@ export function useMonthlyKpi(params) {
     queryKey: key,
     queryFn: () => get("/dashboard/monthly-kpi", unref(params) ?? {}),
     placeholderData: (previous) => previous,
-    ...OPERATIONAL,
+    ...LIVE,
   });
 }
 
@@ -147,7 +177,7 @@ export function useOverview(params) {
     queryKey: key,
     queryFn: () => get("/dashboard/overview", unref(params) ?? {}),
     placeholderData: (previous) => previous,
-    ...OPERATIONAL,
+    ...LIVE,
   });
 }
 
@@ -265,7 +295,7 @@ export function useSummaryByBuilding(params) {
     queryKey: key,
     queryFn: () => get("/dashboard/summary-by-building", unref(params) ?? {}),
     placeholderData: (previous) => previous,
-    ...OPERATIONAL,
+    ...LIVE,
   });
 }
 

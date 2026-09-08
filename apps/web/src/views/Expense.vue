@@ -14,7 +14,7 @@
  * packages/domain/money.cjs)
  */
 import { computed, onMounted, ref, watch } from "vue";
-import * as XLSX from "xlsx";
+import { exportSheet } from "../lib/export-xlsx";
 import { ChevronRight, Download, Printer, ReceiptText, Search, TriangleAlert } from "lucide-vue-next";
 import { formatMonthTH, fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
@@ -174,7 +174,7 @@ async function loadExpense() {
  * ส่งออก Excel — หนึ่งแถวต่อหนึ่งเครื่อง ตามตัวกรองเดือนที่เลือกอยู่
  * ใช้ข้อมูลทั้งหมดไม่ตัดตามคำค้นหา เพราะคนที่กด export มักต้องการชุดเต็มไปทำต่อ
  */
-function exportExcel() {
+async function exportExcel() {
   const header = [
     "เลขที่สัญญา",
     "ราคาต่อแผ่น (บาท)",
@@ -197,14 +197,15 @@ function exportExcel() {
     ])
   );
 
-  const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  worksheet["!cols"] = [{ wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 20 }];
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "ค่าใช้จ่ายตามสัญญา");
-
   const suffix = month.value ? `-${month.value.replace(/,/g, "_")}` : "";
-  XLSX.writeFile(workbook, `expense-by-contract${suffix}.xlsx`);
+
+  await exportSheet({
+    header,
+    rows,
+    sheetName: "ค่าใช้จ่ายตามสัญญา",
+    filename: `expense-by-contract${suffix}`,
+    columnWidths: [22, 14, 16, 12, 22, 14, 20],
+  });
 }
 
 // ปีงบเป็น state กลางที่แถบบนเป็นคนตั้ง หน้านี้แค่ตามไปโหลดใหม่เมื่อค่าเปลี่ยน

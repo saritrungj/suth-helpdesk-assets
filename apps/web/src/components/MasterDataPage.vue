@@ -21,7 +21,9 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { Pencil, Plus, Trash2 } from "lucide-vue-next";
 import api from "../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
 import { askConfirm } from "../store/confirmDialog";
+import { invalidateAfterWrite, changeKindForEndpoint } from "../api/invalidate";
 import { toastError, toastSuccess } from "../store/toast";
 import {
   UiAlert,
@@ -55,6 +57,8 @@ const props = defineProps({
 const rows = ref([]);
 const loading = ref(true);
 const loadError = ref("");
+
+const queryClient = useQueryClient();
 
 /** ตัวเลือกของช่องแบบ select ที่ต้องดึงจาก endpoint อื่น — โหลดครั้งเดียวตอนเปิดหน้า */
 const optionSets = reactive({});
@@ -201,7 +205,7 @@ async function submit() {
     }
 
     dialogOpen.value = false;
-    await load();
+    await Promise.all([load(), invalidateRelatedCaches()]);
     await props.onChanged?.();
   } catch (err) {
     console.error(err);
@@ -212,6 +216,21 @@ async function submit() {
   } finally {
     saving.value = false;
   }
+}
+
+/**
+ * ล้างแคชของทุกหน้าที่ใช้ข้อมูลชนิดนี้ ตามตารางใน api/invalidate.js
+ *
+ * `load()` ข้างบนรีเฟรชแค่รายการในหน้านี้ ซึ่งไม่พอ — ชื่ออาคาร/แผนกไปโผล่ใน
+ * ตัวกรองของแดชบอร์ดและในทะเบียนเครื่องด้วย และสองที่นั้นถือแคชไว้ 30 นาที
+ */
+function invalidateRelatedCaches() {
+  const kind = changeKindForEndpoint(props.endpoint);
+
+  // endpoint ที่ไม่มีในตาราง (เช่น /users) ไม่มีใครถือแคชไว้ ไม่ต้องล้างอะไร
+  if (!kind) return Promise.resolve();
+
+  return invalidateAfterWrite(queryClient, kind);
 }
 
 async function remove(row) {
@@ -230,7 +249,7 @@ async function remove(row) {
   try {
     await api.delete(`${props.endpoint}/${row.id}`);
     toastSuccess(`ลบ${props.itemNoun}เรียบร้อย`);
-    await load();
+    await Promise.all([load(), invalidateRelatedCaches()]);
     await props.onChanged?.();
   } catch (err) {
     console.error(err);

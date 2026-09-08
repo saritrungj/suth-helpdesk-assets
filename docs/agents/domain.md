@@ -12,7 +12,7 @@
 
 ## โครงสร้างไฟล์ (single-context)
 
-repo นี้เป็น npm workspace (`apps/api`, `apps/web`, `apps/mcp`, `packages/domain`) แต่กฎโดเมนและ ADR รวมอยู่ที่เดียวไม่แยกตาม package — `packages/domain` มีขึ้นมาเพื่อให้กฎธุรกิจ (ปีงบ เงิน การแสดงผลไทย) มีบ้านเดียวที่ทุกแอปใช้ร่วมกัน (ดู ADR-0004) จึงถือเป็น single-context:
+repo นี้เป็น npm workspace (`apps/api`, `apps/web`, `packages/domain`) แต่กฎโดเมนและ ADR รวมอยู่ที่เดียวไม่แยกตาม package — `packages/domain` มีขึ้นมาเพื่อให้กฎธุรกิจ (ปีงบ เงิน การแสดงผลไทย) มีบ้านเดียวที่ทุกแอปใช้ร่วมกัน (ดู ADR-0004) จึงถือเป็น single-context:
 
 ```text
 /
@@ -24,8 +24,7 @@ repo นี้เป็น npm workspace (`apps/api`, `apps/web`, `apps/mcp`, `p
 │   └── reference/
 ├── apps/
 │   ├── api/
-│   ├── web/
-│   └── mcp/
+│   └── web/
 └── packages/
     └── domain/              ← กฎธุรกิจร่วม — ดู ADR-0004
 ```

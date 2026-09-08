@@ -183,16 +183,39 @@ const monthListQuery = z
   .transform((value) => parseMonths(value));
 
 /**
- * การแบ่งหน้าแบบ offset
+ * ตัวกรองแบบ true/false ที่มาทาง query string
  *
- * ตั้งเพดาน per_page ไว้ที่ 200 ตามคำแนะนำของ Zalando REST guidelines — ปล่อยให้
- * ผู้เรียกขอเท่าไหร่ก็ได้เท่ากับเปิดช่องให้ดึงทั้งตารางในคำขอเดียวโดยไม่ตั้งใจ
- * ไม่ส่ง per_page มาเลย = ไม่แบ่งหน้า (คงพฤติกรรมเดิมของ endpoint ที่มีอยู่ก่อน)
+ * ⚠️ **ห้ามใช้ `z.coerce.boolean()` กับ query string** — มันคือ `Boolean(value)`
+ * ตรงๆ และค่าจาก HTTP เป็นสตริงเสมอ สตริงที่ไม่ว่างจึงเป็น truthy ทั้งหมด
+ * `?unassigned=false` กลายเป็น `true` แล้วตัวกรองทำงานกลับด้าน **โดยไม่มีอะไรฟ้อง**
+ * ซึ่งเป็นบั๊กที่เจอจริงใน `/devices` (issue #24): ไม่ส่งตัวกรองได้ 20 เครื่อง
+ * แต่ส่ง `unassigned=false` ได้ 0
+ *
+ * ตัวนี้จึงอ่านเฉพาะคำที่ตั้งใจเขียนมาว่าเป็น true/false และ **ปฏิเสธค่าที่อ่านไม่ออก**
+ * แทนที่จะเดา — ตัวกรองที่เดาผิดอันตรายกว่าคำขอที่ถูกปฏิเสธ เพราะผู้ใช้เห็นผลลัพธ์
+ * ที่ดูสมเหตุสมผลแต่ผิด
  */
-const pagination = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  per_page: z.coerce.number().int().min(1).max(200).optional(),
-});
+const BOOLEAN_QUERY_TRUE = new Set(["true", "1"]);
+const BOOLEAN_QUERY_FALSE = new Set(["false", "0"]);
+
+// `?unassigned=` ที่ไม่มีค่าตามหลัง แปลว่า "ไม่กรอง" ไม่ใช่ค่าที่อ่านไม่ออก —
+// ฟอร์มฝั่งเว็บส่ง "" มาเมื่อผู้ใช้ไม่ได้เลือก เหมือนกับ optionalId/optionalText
+const booleanQuery = z.preprocess(
+  blankToNull,
+  z.union([
+    z.null(),
+    z.union([z.boolean(), z.string()]).transform((value, ctx) => {
+      if (typeof value === "boolean") return value;
+
+      const normalized = value.trim().toLowerCase();
+      if (BOOLEAN_QUERY_TRUE.has(normalized)) return true;
+      if (BOOLEAN_QUERY_FALSE.has(normalized)) return false;
+
+      ctx.addIssue({ code: "custom", message: "ต้องเป็น true หรือ false" });
+      return z.NEVER;
+    }),
+  ])
+);
 
 module.exports = {
   validate,
@@ -205,5 +228,5 @@ module.exports = {
   optionalMoney,
   monthString,
   monthListQuery,
-  pagination,
+  booleanQuery,
 };

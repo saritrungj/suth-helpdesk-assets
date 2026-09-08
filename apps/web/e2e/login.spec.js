@@ -22,6 +22,72 @@
 import { expect, test } from "@playwright/test";
 import { reasonToSkip } from "./fixtures.js";
 
+for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+  test(`ฟอร์มและปุ่มหลักอยู่ในจอตั้งแต่เปิดที่ ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.reload();
+    const submit = page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true });
+    await expect(submit).toBeVisible();
+    const bounds = await submit.boundingBox();
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
+    for (const selector of ["#login-username", "#current-password"]) {
+      const field = await page.locator(selector).boundingBox();
+      expect(field.height).toBeGreaterThanOrEqual(44);
+      expect(field.width).toBeGreaterThanOrEqual(200);
+    }
+    const size = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      width: document.documentElement.clientWidth,
+    }));
+    expect(size.scroll).toBeLessThanOrEqual(size.width + 1);
+  });
+}
+
+test("เปิดความช่วยเหลือด้วยคีย์บอร์ดได้โดยไม่ต้องออกจากฟอร์ม", async ({ page }) => {
+  const help = page.locator(".login__access");
+  await expect(help).not.toHaveAttribute("open", "");
+  await page.locator("#current-password").fill("synthetic-value");
+  await help.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(help).toHaveAttribute("open", "");
+  await expect(help.getByRole("heading", { level: 2 })).toBeVisible();
+  await expect(page.locator("#current-password")).toHaveValue("synthetic-value");
+  await page.keyboard.press("Enter");
+  await expect(help).not.toHaveAttribute("open", "");
+});
+
+test("ส่งครั้งเดียวระหว่างรอ และกลับมากรอกต่อได้เมื่อเกิดข้อผิดพลาด", async ({ page }) => {
+  let requests = 0;
+  let respond;
+  const pending = new Promise((resolve) => { respond = resolve; });
+  // Synthetic credentials never reach the API or its login rate limiter.
+  await page.route("**/auth/login", async (route) => {
+    requests += 1;
+    await pending;
+    await route.fulfill({
+      status: 503,
+      contentType: "application/problem+json",
+      body: JSON.stringify({ title: "ระบบไม่พร้อมใช้งาน กรุณาลองใหม่", status: 503 }),
+    });
+  });
+  await page.locator("#login-username").fill("synthetic-user");
+  await page.locator("#current-password").fill("synthetic-value");
+  await page.locator("#current-password").press("Enter");
+  try {
+    await expect(page.locator("form")).toHaveAttribute("aria-busy", "true");
+    await expect(page.locator('form button[type="submit"]')).toBeDisabled();
+    await expect(page.locator("#login-username")).toBeDisabled();
+    await expect(page.getByRole("button", { name: /แสดงรหัสผ่าน/ })).toBeDisabled();
+    await page.keyboard.press("Enter");
+    expect(requests).toBe(1);
+  } finally {
+    respond();
+  }
+  await expect(page.getByRole("alert")).toContainText("ระบบไม่พร้อมใช้งาน");
+  await expect(page.locator("#current-password")).toBeEnabled();
+  await expect(page.locator("#current-password")).toHaveValue("synthetic-value");
+});
+
 test.beforeAll(async () => {
   const skip = await reasonToSkip();
   test.skip(Boolean(skip), `ต้องมี API ทำงานอยู่ — ${skip}`);

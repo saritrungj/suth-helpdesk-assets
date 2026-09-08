@@ -1,34 +1,10 @@
-// apps/web/e2e/login-wcag.spec.js
-//
-// หน้าล็อกอินกับ WCAG 2.2 ระดับ AA — วัดจากหน้าจริง ไม่ใช่ไล่เช็กลิสต์ด้วยตา
-//
-// ## ทำไมเขียนเอง ไม่ใช้เครื่องมือสำเร็จรูป
-//
-// เครื่องมือตรวจอัตโนมัติ (axe-core และเพื่อนๆ) จับได้ประมาณ 30–40% ของข้อ
-// กำหนดจริง และการเพิ่มมันเข้ามาคือการเพิ่ม dependency ให้ระบบ ซึ่งต้องขอ
-// อนุมัติก่อน ไฟล์นี้จึงวัดเฉพาะข้อที่ **วัดได้จริงจากหน้าเว็บที่รันอยู่**
-// ด้วยของที่มีอยู่แล้ว และเขียนชื่อข้อกำกับไว้ทุกข้อเพื่อให้ตรวจย้อนได้
-//
-// ข้อที่ยังต้องใช้คนตรวจ (โปรแกรมอ่านหน้าจอจริง, ความหมายของข้อความ) เขียนไว้
-// ใน docs/reference/accessibility.md ว่ายังไม่ได้ตรวจ — ไม่ได้แปลว่าผ่าน
-//
-// ## หมายเหตุเรื่องการวัด contrast
-//
-// แผงซ้ายมีชั้นแสง aurora ที่เป็น gradient โปร่งแสงซ้อนกันสามชั้น จึงอ่านสีพื้น
-// จริงจาก getComputedStyle ไม่ได้ วิธีที่ใช้คือให้ canvas ระบายสีพื้นแล้วระบาย
-// ทับด้วยสีของทั้งสามชั้นที่ค่า **เข้มข้นที่สุด** (ใจกลางของแต่ละ gradient)
-// แล้วอ่านค่าพิกเซลกลับมา นั่นคือกรณีที่พื้นสว่างที่สุดเท่าที่เป็นไปได้ ซึ่งเป็น
-// กรณีที่แย่ที่สุดสำหรับตัวหนังสือสีอ่อน
-//
-// รัน: npm run test:e2e --workspace @suth/web
-
+// Login accessibility checks measure the rendered solid surfaces in both themes.
+// Screen-reader and other unmeasured coverage: docs/reference/accessibility.md.
 import { expect, test } from "@playwright/test";
 import { reasonToSkip } from "./fixtures.js";
 import { CONTRAST_HELPERS } from "./contrast-helper.js";
 
 /** ค่าขั้นต่ำตาม WCAG 2.2 ระดับ AA */
-const AA_TEXT = 4.5; // 1.4.3 ตัวหนังสือขนาดปกติ
-const AA_LARGE_TEXT = 3; // 1.4.3 ตัวหนังสือใหญ่ (>=18.66px หนา หรือ >=24px)
 const AA_NON_TEXT = 3; // 1.4.11 ขอบช่องกรอก ไอคอนที่สื่อความหมาย
 const AA_TARGET = 24; // 2.5.8 พื้นที่กดขั้นต่ำ (CSS px)
 
@@ -131,90 +107,14 @@ test(`1.4.3 [${mode}] ฟอร์มรวม placeholder และค่าท
   await audit(); // Never submits or authenticates these synthetic values.
 });
 
-test(`1.4.3 [${mode}] ตัวหนังสือบนแผงแบรนด์ยังอ่านได้แม้แสง aurora สว่างที่สุด`, async ({ page }) => {
+test(`1.4.3 [${mode}] ทั้งหน้ารวมส่วนช่วยเหลือที่เปิดแล้ว`, async ({ page }) => {
   await openLogin(page, mode);
-  const report = await page.evaluate(`(() => {
-    ${COLOR_HELPERS}
-
-    // พื้นที่สว่างที่สุดที่เป็นไปได้: สีพื้น + ใจกลางของชั้นแสงทั้งสาม
-    const worstBackground = composite([
-      token("--aurora-ground"),
-      token("--aurora-dark-1"),
-      token("--aurora-dark-2"),
-      token("--aurora-dark-3"),
-    ]);
-
-    const measure = (selector) => {
-      const el = document.querySelector(selector);
-      if (!el) return null;
-      const style = getComputedStyle(el);
-      // ตัวหนังสือเองก็โปร่งแสง (--on-aurora-mute เป็นสีโปร่งแสง)
-      // จึงต้องซ้อนบนพื้นเดียวกันก่อนวัด
-      const text = composite([
-        "rgb(" + worstBackground.join(",") + ")",
-        style.color,
-      ]);
-      const px = parseFloat(style.fontSize);
-      const weight = parseInt(style.fontWeight, 10) || 400;
-      return {
-        selector,
-        px,
-        large: px >= 24 || (px >= 18.66 && weight >= 700),
-        ratio: Number(ratio(text, worstBackground).toFixed(2)),
-      };
-    };
-
-    return {
-      background: worstBackground,
-      items: [".login__title", ".login__tagline", ".login__desc", ".login__capDetail", ".login__org"]
-        .map(measure)
-        .filter(Boolean),
-    };
-  })()`);
-
-  console.log("แผงแบรนด์ — พื้นสว่างสุด rgb(%s)", report.background.join(","));
-
-  expect(report.items.length, "ไม่พบตัวหนังสือบนแผงแบรนด์เลย — selector เปลี่ยนไปหรือแผงหาย").toBeGreaterThan(0);
-
-  for (const item of report.items) {
-    const need = item.large ? AA_LARGE_TEXT : AA_TEXT;
-    console.log(`  ${item.selector} — ${item.px}px, ${item.ratio}:1 (ต้องการ ${need}:1)`);
-    expect(item.ratio, `${item.selector} contrast ต่ำกว่าเกณฑ์ AA`).toBeGreaterThanOrEqual(need);
-  }
-});
-
-test(`1.4.3 [${mode}] ตัวหนังสือในแผงฟอร์มผ่านเกณฑ์ AA`, async ({ page }) => {
-  await openLogin(page, mode);
-  const items = await page.evaluate(`(() => {
-    ${COLOR_HELPERS}
-
-    // แผงฟอร์มเป็นพื้นทึบ วัดตรงๆ ได้
-    const panelBg = composite([getComputedStyle(document.querySelector(".login__panel")).backgroundColor]);
-
-    return ["#login-heading", ".login__form header p", "#login-access-heading", "label[for=login-username]"]
-      .map((selector) => {
-        const el = document.querySelector(selector);
-        if (!el) return null;
-        const style = getComputedStyle(el);
-        const px = parseFloat(style.fontSize);
-        const weight = parseInt(style.fontWeight, 10) || 400;
-        return {
-          selector,
-          px,
-          large: px >= 24 || (px >= 18.66 && weight >= 700),
-          ratio: Number(ratio(composite(["rgb(" + panelBg.join(",") + ")", style.color]), panelBg).toFixed(2)),
-        };
-      })
-      .filter(Boolean);
-  })()`);
-
-  expect(items.length).toBeGreaterThan(0);
-
-  for (const item of items) {
-    const need = item.large ? AA_LARGE_TEXT : AA_TEXT;
-    console.log(`  ${item.selector} — ${item.px}px, ${item.ratio}:1 (ต้องการ ${need}:1)`);
-    expect(item.ratio, `${item.selector} contrast ต่ำกว่าเกณฑ์ AA`).toBeGreaterThanOrEqual(need);
-  }
+  await page.locator(".login__access summary").click();
+  await expect(page.getByRole("heading", { name: /ติดต่อฝ่าย/ })).toBeVisible();
+  const report = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText();`);
+  expect(report.measured).toBeGreaterThanOrEqual(9);
+  expect(report.unsupported, "หน้าล็อกอินใช้พื้นทึบที่วัดได้ทั้งหมด").toEqual([]);
+  expect(report.failures, JSON.stringify(report.failures, null, 2)).toEqual([]);
 });
 
 /* ==========================================================================
@@ -254,7 +154,7 @@ test(`1.4.11 [${mode}] ขอบช่องกรอกต่างจากพ
 
 test("2.5.8 ทุกอย่างที่กดได้มีพื้นที่กดอย่างน้อย 24x24", async ({ page }) => {
   const targets = await page.evaluate(() => {
-    const nodes = document.querySelectorAll("a[href], button, input, select, textarea, [tabindex]");
+    const nodes = document.querySelectorAll("a[href], button, input, select, textarea, summary, [tabindex]");
     return Array.from(nodes)
       .filter((el) => el.offsetParent !== null || el === document.activeElement)
       .map((el) => {
@@ -487,9 +387,9 @@ test("3.1.1 + 2.4.2 + 1.1.1 ภาษาของหน้า ชื่อหน
     expect(image.alt, `<img src="${image.src}"> ไม่มี alt`).not.toBeNull();
   }
 
-  // ชั้นแสงและเส้นตารางเป็นของประดับล้วน ต้องถูกข้าม
-  await expect(page.locator(".aurora")).toHaveAttribute("aria-hidden", "true");
-  await expect(page.locator(".login__grid")).toHaveAttribute("aria-hidden", "true");
+  // The redesign has no animated artwork or canvas above the form.
+  await expect(page.locator(".aurora, .login__grid, canvas")).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("เข้าสู่ระบบ");
 });
 
 /* ==========================================================================

@@ -17,11 +17,15 @@
 import { computed, ref } from "vue";
 import { CircleCheck, Download, TriangleAlert, Upload } from "lucide-vue-next";
 import api from "../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
+import { invalidateAfterWrite } from "../api/invalidate";
 import { formatCount } from "../lib/format";
 import { UiAlert, UiButton, UiCard } from "../ui";
 import FileDropzone from "./FileDropzone.vue";
 
 const emit = defineEmits(["imported"]);
+
+const queryClient = useQueryClient();
 
 const file = ref(null);
 const uploading = ref(false);
@@ -69,6 +73,10 @@ async function upload() {
       headers: { "Content-Type": "multipart/form-data" },
     });
     result.value = res.data;
+
+    // นำเข้าทีเดียวหลายร้อยเครื่อง — ทุกหน้าที่นับเครื่องเปลี่ยนหมด
+    await invalidateAfterWrite(queryClient, "device");
+
     emit("imported", res.data);
   } catch (err) {
     console.error("Import devices error:", err);

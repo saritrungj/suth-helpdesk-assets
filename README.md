@@ -8,7 +8,6 @@
 - จัดการข้อมูลอ้างอิง สัญญา และปีงบประมาณ
 - บันทึกหรือนำเข้ายอดพิมพ์รายเดือนจาก CSV/Excel
 - แสดง Dashboard ค่าใช้จ่าย รายงานตามอาคาร/หน่วยงาน และการเปรียบเทียบรายเดือน
-- ถามข้อมูลเป็นภาษาพูดผ่านผู้ช่วย AI ด้วยเซิร์ฟเวอร์ MCP แบบอ่านอย่างเดียว ([วิธีต่อ](docs/how-to/connect-mcp.md))
 - ควบคุมการเข้าถึงด้วย JWT และบทบาท `admin`, `staff`, `viewer`
 
 ## เทคโนโลยี
@@ -16,7 +15,6 @@
 - Backend: Node.js, CommonJS, Express และ MySQL — ข้อผิดพลาดตามมาตรฐาน Problem Details (RFC 9457) และตรวจข้อมูลขาเข้าด้วย zod ทุกเส้นทาง (ดู [ADR-0010](docs/decisions/0010-problem-details-and-api-conventions.md))
 - Frontend: Vue 3, Vite, Tailwind CSS v4, TanStack Query และ Chart.js — หน้าตาทั้งระบบผ่าน design system กลาง (token + Reka UI + lucide-vue-next) ดู [ADR-0008](docs/decisions/0008-design-system-tokens-and-ui-kit.md) และ [ADR-0009](docs/decisions/0009-tanstack-query-as-the-data-layer.md)
 - Database: MySQL schema, ordered migrations และข้อมูลจำลอง
-- ผู้ช่วย AI: เซิร์ฟเวอร์ MCP แบบ stdio อ่านอย่างเดียว (ดู [ADR-0011](docs/decisions/0011-read-only-mcp-server.md))
 
 ## เริ่มต้นใช้งานสำหรับการพัฒนา
 

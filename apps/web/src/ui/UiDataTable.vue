@@ -28,7 +28,7 @@
  */
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { refDebounced } from "@vueuse/core";
-import * as XLSX from "xlsx";
+import { exportSheet } from "../lib/export-xlsx";
 import {
   ArrowDown,
   ArrowUp,
@@ -235,7 +235,7 @@ function toggleColumn(key) {
    ส่งออก Excel — ใช้ผลที่ค้นหาและเรียงแล้ว แต่ไม่ตัดตามหน้า เพราะคนกด export
    ต้องการทั้งชุดที่กรองไว้ ไม่ใช่แค่ 20 แถวที่เห็นอยู่
    -------------------------------------------------------------------------- */
-function exportExcel() {
+async function exportExcel() {
   const cols = visibleColumns.value;
   const header = cols.map((c) => c.label);
 
@@ -246,17 +246,13 @@ function exportExcel() {
     })
   );
 
-  const worksheet = XLSX.utils.aoa_to_sheet([header, ...body]);
-
-  // ตั้งความกว้างคอลัมน์ตามความยาวข้อความจริง ไม่งั้นเปิดไฟล์มาเจอ ##### ทุกช่อง
-  worksheet["!cols"] = cols.map((col, i) => {
-    const longest = body.reduce((max, r) => Math.max(max, String(r[i] ?? "").length), col.label.length);
-    return { wch: Math.min(Math.max(longest + 2, 8), 48) };
+  // ความกว้างคอลัมน์คำนวณให้เองจากความยาวข้อความจริง (ดู lib/export-xlsx.js)
+  await exportSheet({
+    header,
+    rows: body,
+    sheetName: "ข้อมูล",
+    filename: props.exportFilename,
   });
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "ข้อมูล");
-  XLSX.writeFile(workbook, `${props.exportFilename}.xlsx`);
 }
 </script>
 

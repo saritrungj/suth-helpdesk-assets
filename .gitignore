@@ -38,3 +38,7 @@ test-results/
 playwright-report/
 apps/web/e2e/.artifacts/
 apps/web/e2e/screens/
+
+# รายงานการตรวจของแต่ละรอบ — เป็นบันทึก ณ จุดเวลาหนึ่ง ไม่ใช่เอกสารระบบ
+# ข้อพบที่ต้องตามต่อถูกเปิดเป็น GitHub issue แทน
+docs/reference/review-*.md

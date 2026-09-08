@@ -18,7 +18,15 @@
 const db = require("../shared/db");
 const { z } = require("zod");
 const { notFound } = require("../shared/http-error");
-const { validate, idParam, requiredText, optionalText, optionalId, optionalMoney } = require("../shared/validate");
+const {
+  validate,
+  idParam,
+  requiredText,
+  optionalText,
+  optionalId,
+  optionalMoney,
+  booleanQuery,
+} = require("../shared/validate");
 const cache = require("../shared/cache");
 const { DEVICE_STATUSES, MAX_LENGTH } = require("@suth/domain");
 
@@ -74,7 +82,7 @@ const listQuery = z.object({
   contract_id: optionalId,
   status: z.enum(DEVICE_STATUSES).optional(),
   // เครื่องที่ยังไม่ได้ผูกสัญญา — ตอบคำถาม "เครื่องไหนยังคิดเงินไม่ได้"
-  unassigned: z.coerce.boolean().optional(),
+  unassigned: booleanQuery.optional(),
   fiscal_year_id: optionalId,
   sort: z.enum(["serial_number", "model", "building_name", "department_name", "status"]).default("serial_number"),
   order: z.enum(["asc", "desc"]).default("asc"),
@@ -159,7 +167,11 @@ function buildFilters(query) {
     params.push(query.status);
   }
 
-  if (query.unassigned) {
+  // `unassigned=true` = เฉพาะเครื่องที่ยังไม่ผูกสัญญา ส่วน `false` และการไม่ส่งมาเลย
+  // มีความหมายเดียวกันคือ "ไม่กรองด้วยเงื่อนไขนี้" — ไม่ใช่ "เฉพาะเครื่องที่ผูกสัญญาแล้ว"
+  // ซึ่งเป็นสิ่งที่ตัวกรองชื่อนี้ไม่ได้สัญญาไว้ ถ้าวันหลังต้องการด้านตรงข้ามจริงๆ
+  // ให้เพิ่มตัวกรองใหม่ที่บอกความหมายตัวเอง อย่าเปลี่ยนความหมายของ false เงียบๆ
+  if (query.unassigned === true) {
     conditions.push("d.contract_id IS NULL");
   }
 
@@ -582,6 +594,10 @@ exports.remove = async (req, res) => {
 // ============================================================
 // middleware ตรวจข้อมูลของแต่ละเส้นทาง — ประกาศคู่กับ handler เพื่อให้เห็นพร้อมกัน
 // ============================================================
+// เปิดให้เทสเรียกได้ — ตรรกะการกรองนี้เคยพังแบบเงียบมาแล้ว (issue #24)
+// จึงต้องมีตาข่ายรับ โดยไม่ต้องยกฐานข้อมูลขึ้นมาทั้งชุด (listQuery export ไว้ด้านบนแล้ว)
+exports.buildFilters = buildFilters;
+
 exports.validators = {
   list: validate({ query: listQuery }),
   byId: validate({ params: idParam }),

@@ -234,3 +234,73 @@ test("รายชื่อเดือนคั่นด้วย comma คื�
   // IN (?) จะมีค่าซ้ำและทำให้อ่าน SQL ที่ log ไว้แล้วสับสน
   assert.deepEqual(schema.parse({ month: "2568-10,2025-10" }).month, ["2025-10"]);
 });
+
+// ============================================================
+// booleanQuery — ตัวกรองแบบ true/false ที่มาทาง query string (issue #23/#24)
+//
+// เดิมใช้ z.coerce.boolean() ซึ่งเป็น Boolean(value) ตรงๆ — สตริงที่ไม่ว่าง
+// เป็น truthy หมด "false" จึงกลายเป็น true แล้วตัวกรองทำงานกลับด้านเงียบๆ
+// ============================================================
+
+test("booleanQuery: 'false' ต้องเป็น false ไม่ใช่ true", () => {
+  const { booleanQuery } = require("../src/shared/validate");
+  assert.equal(booleanQuery.parse("false"), false);
+});
+
+test("booleanQuery: 'true' ต้องเป็น true", () => {
+  const { booleanQuery } = require("../src/shared/validate");
+  assert.equal(booleanQuery.parse("true"), true);
+});
+
+test("booleanQuery: รับ '1'/'0' และตัวพิมพ์ใหญ่ได้ด้วย", () => {
+  const { booleanQuery } = require("../src/shared/validate");
+  assert.equal(booleanQuery.parse("1"), true);
+  assert.equal(booleanQuery.parse("0"), false);
+  assert.equal(booleanQuery.parse("TRUE"), true);
+  assert.equal(booleanQuery.parse("False"), false);
+});
+
+test("booleanQuery: ไม่ส่งมาเลย = undefined ไม่ใช่ false — ต่างกันตรงที่ 'ไม่กรอง'", () => {
+  const schema = z.object({ unassigned: booleanQueryOptional() });
+  assert.equal(schema.parse({}).unassigned, undefined);
+  assert.equal(schema.parse({ unassigned: "false" }).unassigned, false);
+});
+
+test("booleanQuery: ค่าที่ไม่ใช่ boolean ต้องถูกปฏิเสธ ไม่ใช่เดาเป็น true", () => {
+  const { booleanQuery } = require("../src/shared/validate");
+  assert.throws(() => booleanQuery.parse("ใช่"));
+  assert.throws(() => booleanQuery.parse("yes"));
+});
+
+function booleanQueryOptional() {
+  const { booleanQuery } = require("../src/shared/validate");
+  return booleanQuery.optional();
+}
+
+test("booleanQuery: '?unassigned=' ว่างเปล่า = ไม่กรอง ไม่ใช่ error", () => {
+  const { booleanQuery } = require("../src/shared/validate");
+  const schema = z.object({ unassigned: booleanQuery.optional() });
+  assert.equal(schema.parse({ unassigned: "" }).unassigned, null);
+});
+
+// ============================================================
+// ตัวกรอง unassigned ของ /devices ครบทั้งสามสถานะ (issue #24)
+// ============================================================
+
+test("listQuery ของ /devices: unassigned=false ต้องไม่กรอง เหมือนไม่ส่งมาเลย", () => {
+  const { buildFilters, listQuery } = require("../src/devices/controller");
+
+  const none = buildFilters(listQuery.parse({}));
+  const explicitFalse = buildFilters(listQuery.parse({ unassigned: "false" }));
+
+  assert.equal(explicitFalse.where, none.where);
+  assert.ok(!explicitFalse.where.includes("contract_id IS NULL"));
+});
+
+test("listQuery ของ /devices: unassigned=true ต้องกรองเฉพาะเครื่องที่ยังไม่ผูกสัญญา", () => {
+  const { buildFilters, listQuery } = require("../src/devices/controller");
+
+  const { where } = buildFilters(listQuery.parse({ unassigned: "true" }));
+
+  assert.ok(where.includes("d.contract_id IS NULL"));
+});

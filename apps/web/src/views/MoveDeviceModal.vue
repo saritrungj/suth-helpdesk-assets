@@ -19,6 +19,8 @@ import { computed, ref, watch } from "vue";
 import { ArrowRight, History, MapPin } from "lucide-vue-next";
 import { formatDateTH } from "@suth/domain";
 import api from "../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
+import { invalidateAfterWrite } from "../api/invalidate";
 import { askConfirm } from "../store/confirmDialog";
 import { toastError, toastSuccess } from "../store/toast";
 import { formatBahtValue, formatCount } from "../lib/format";
@@ -39,6 +41,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:modelValue", "saved"]);
+
+const queryClient = useQueryClient();
 
 const emptyForm = () => ({
   building_id: "",
@@ -250,6 +254,9 @@ async function submit() {
       division_id: form.value.division_id ? Number(form.value.division_id) : null,
       department_id: form.value.department_id ? Number(form.value.department_id) : null,
     });
+
+    // ย้ายเครื่องเปลี่ยนที่ตั้ง/สังกัด ทุกรายงานที่แยกตามอาคาร/แผนกจึงเปลี่ยนตาม
+    await invalidateAfterWrite(queryClient, "device");
 
     emit("saved", res.data);
 

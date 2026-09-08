@@ -17,15 +17,22 @@
  * ตอนบันทึกจะส่งครบทุกเดือนเสมอ รวมถึงเดือนที่ถูกลบจนว่าง เพราะฝั่ง API ต้องรู้ว่า
  * ให้ลบค่าที่เคยบันทึกไว้ทิ้ง ไม่ใช่แค่ไม่พูดถึงเดือนนั้น
  */
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { CircleCheck, ClipboardList, ClipboardPaste, Pencil, Search, Undo2 } from "lucide-vue-next";
 import { fiscalYearLabel, formatMonthTH } from "@suth/domain";
 import api from "../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
+import { invalidateAfterWrite } from "../api/invalidate";
 import { authState } from "../store/auth";
-import { activeFiscalYearRange, fiscalYearMonths, fiscalYearState } from "../store/fiscalYear";
+import {
+  activeFiscalYearRange,
+  fiscalYearMonths,
+  fiscalYearState,
+  registerFiscalYearGuard,
+} from "../store/fiscalYear";
 import { toastError, toastSuccess } from "../store/toast";
-import { askConfirm } from "../store/confirmDialog";
+import { createDraftGuard } from "../lib/draft-guard";
 import { formatCount, percentOf } from "../lib/format";
 import { errorMessage } from "../lib/api-error";
 import { applyPaste, describePaste, parseNumbers } from "../lib/paste-numbers";
@@ -59,6 +66,8 @@ import {
  * ผู้ใช้ไล่หาเองว่าเดือนไหนที่ยังขาด ซึ่งเป็นข้อมูลที่หน้าแรกรู้อยู่แล้ว
  */
 const route = useRoute();
+
+const queryClient = useQueryClient();
 
 /** viewer ดูได้อย่างเดียว — API บังคับด้วย staffMiddleware อยู่แล้ว ที่นี่แค่ไม่แสดงปุ่มที่กดไม่ได้ */
 const canEdit = computed(() => authState.user?.role !== "viewer");
@@ -251,6 +260,23 @@ function onDirtyChange(count) {
 }
 
 /**
+ * ด่านเดียวที่ทุกเส้นทาง "ทำให้ตารางกรอกหายไปจากหน้าจอ" ต้องผ่าน
+ *
+ * ตัวนับของแก้ค้างส่งเป็น 0 เมื่อไม่ได้อยู่โหมดกรอก เพื่อไม่ให้ถามในสถานการณ์ที่
+ * ไม่มีอะไรจะหาย — ตารางที่ไม่ได้แสดงอยู่ไม่มี draft ให้รักษา
+ */
+const confirmDiscardDraft = createDraftGuard({
+  dirtyCount: () => (mode.value === "month" ? monthDirtyCount.value : 0),
+  describe: (count, consequence) =>
+    `มียอดพิมพ์ที่แก้ไว้ ${count} รายการแต่ยังไม่ได้บันทึก ${consequence}`,
+  discard: () => {
+    monthDirty.value = false;
+    monthDirtyCount.value = 0;
+    entryGrid.value?.discard();
+  },
+});
+
+/**
  * เปลี่ยนเดือนที่กำลังดู/กรอก
  *
  * ⚠️ ต้องถามที่ **หน้าแม่** ไม่ใช่ฝากไว้กับ watch ในตารางกรอกอย่างเดียว
@@ -265,19 +291,11 @@ function onDirtyChange(count) {
 async function changeMonth(next) {
   if (next === filters.value.month) return;
 
-  if (mode.value === "month" && monthDirty.value) {
-    const ok = await askConfirm(
-      `มียอดพิมพ์ที่แก้ไว้ ${monthDirtyCount.value} รายการแต่ยังไม่ได้บันทึก ` +
-        `ถ้าเปลี่ยนเดือนตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด`,
-      { title: "ยังมีข้อมูลที่ยังไม่ได้บันทึก", confirmText: "เปลี่ยนเดือนโดยไม่บันทึก", danger: true }
-    );
-    if (!ok) return;
-
-    // ผู้ใช้ยืนยันแล้ว — ล้าง draft เองก่อน เพื่อไม่ให้ watch ในตารางถามซ้ำอีกรอบ
-    monthDirty.value = false;
-    monthDirtyCount.value = 0;
-    entryGrid.value?.discard();
-  }
+  // ด่านล้าง draft ให้เองเมื่อผู้ใช้ยืนยัน เพื่อไม่ให้ watch ในตารางถามซ้ำอีกรอบ
+  const ok = await confirmDiscardDraft("ถ้าเปลี่ยนเดือนตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", {
+    confirmText: "เปลี่ยนเดือนโดยไม่บันทึก",
+  });
+  if (!ok) return;
 
   filters.value.month = next;
 }
@@ -309,14 +327,10 @@ function defaultEntryMonth() {
 async function setMode(next) {
   if (next === mode.value) return;
 
-  if (mode.value === "month" && monthDirty.value) {
-    const ok = await askConfirm(
-      `มียอดพิมพ์ที่แก้ไว้ ${monthDirtyCount.value} รายการแต่ยังไม่ได้บันทึก ` +
-        `ถ้าออกจากโหมดกรอกตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด`,
-      { title: "ยังมีข้อมูลที่ยังไม่ได้บันทึก", confirmText: "ออกโดยไม่บันทึก", danger: true }
-    );
-    if (!ok) return;
-  }
+  const ok = await confirmDiscardDraft("ถ้าออกจากโหมดกรอกตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", {
+    confirmText: "ออกโดยไม่บันทึก",
+  });
+  if (!ok) return;
 
   if (next === "month" && !filters.value.month) {
     filters.value.month = defaultEntryMonth();
@@ -376,6 +390,11 @@ async function init() {
 }
 
 // เปลี่ยนปีงบ -> เดือนที่เลือกไว้อาจอยู่นอกช่วงของปีใหม่ ล้างก่อนแล้วโหลดสรุปใหม่
+//
+// การล้างเดือนตรงนี้คือสิ่งที่ทำให้ตารางกรอกถูกถอดออกจากหน้าจอ จึงต้องมีคนถามก่อน
+// แต่ **ถามที่นี่ไม่ทัน** — พอ watch ทำงาน ปีงบก็เปลี่ยนไปแล้ว ด่านจึงไปดักที่
+// setActiveFiscalYear ในสโตร์แทน (ดู onMounted ด้านล่าง) พอถึงตรงนี้แปลว่าผ่านด่าน
+// มาแล้วเสมอ
 watch(
   fiscalYearId,
   () => {
@@ -477,7 +496,16 @@ function removeFilter(key) {
   filters.value = { ...filters.value, [key]: "" };
 }
 
-function resetFilters() {
+/**
+ * ล้างตัวกรองทั้งหมด — รวม `month` ด้วย ซึ่งทำให้ตารางกรอกถูกถอดออกจากหน้าจอ
+ * จึงต้องผ่านด่านเดียวกับการเปลี่ยนเดือน ไม่ใช่ล้างทันที
+ */
+async function resetFilters() {
+  const ok = await confirmDiscardDraft("ถ้าล้างตัวกรองตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", {
+    confirmText: "ล้างตัวกรองโดยไม่บันทึก",
+  });
+  if (!ok) return;
+
   search.value = "";
   filters.value = {
     building: "",
@@ -741,9 +769,7 @@ async function save() {
     });
 
     toastSuccess(`บันทึกยอดพิมพ์ของ ${dialogDevice.value.serial_number} เรียบร้อย`);
-    await loadSummary();
-    if (filters.value.month) await monthPagesQuery.refetch();
-    refetchCoverage();
+    await Promise.all([loadSummary(), invalidateAfterWrite(queryClient, "usage")]);
     dialogOpen.value = false;
   } catch (err) {
     console.error("Save print transactions error:", err);
@@ -754,6 +780,20 @@ async function save() {
 }
 
 onMounted(init);
+
+// ฝากด่านไว้กับสโตร์ปีงบตลอดเวลาที่หน้านี้ยังอยู่ — ถามที่นั่นไม่ใช่ที่ watch ของหน้านี้
+// เพราะกว่า watch จะทำงาน ปีงบก็เปลี่ยนไปแล้ว
+//
+// ⚠️ ถ้าวันหลังหน้านี้ถูกครอบด้วย <KeepAlive> ต้องเปลี่ยนไปใช้ onActivated/onDeactivated
+// ด้วย เพราะ onUnmounted จะไม่ยิงตอน deactivate แล้วด่านจะค้างบล็อกการเปลี่ยนปีงบ
+// ของทั้งแอปทั้งที่ผู้ใช้ออกจากหน้านี้ไปแล้ว
+const unregisterFiscalYearGuard = registerFiscalYearGuard(() =>
+  confirmDiscardDraft("ถ้าเปลี่ยนปีงบตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", {
+    confirmText: "เปลี่ยนปีงบโดยไม่บันทึก",
+  })
+);
+
+onUnmounted(unregisterFiscalYearGuard);
 </script>
 
 <template>

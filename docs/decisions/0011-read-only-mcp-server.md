@@ -1,6 +1,6 @@
 # 0011 — เซิร์ฟเวอร์ MCP แบบอ่านอย่างเดียว
 
-**สถานะ:** Accepted
+**สถานะ:** Superseded by [ADR-0012](0012-remove-mcp-server.md)
 
 ## บริบท
 
