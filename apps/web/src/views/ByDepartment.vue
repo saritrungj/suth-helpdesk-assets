@@ -18,7 +18,7 @@
  * บริบทค่าใช้จ่ายคือเรื่องไม่ดี ซึ่งตรงข้ามกับสัญชาตญาณของสีเขียว/แดงทั่วไป
  */
 import { computed, onMounted, ref, watch } from "vue";
-import * as XLSX from "xlsx";
+import { exportSheet } from "../lib/export-xlsx";
 import {
   Building2,
   ChevronRight,
@@ -543,7 +543,7 @@ const usageColumns = [
 /* --------------------------------------------------------------------------
    ส่งออก Excel
    -------------------------------------------------------------------------- */
-function exportTreeExcel() {
+async function exportTreeExcel() {
   const header = ["ฝ่าย", "แผนก", "Serial", "รุ่น", "ยี่ห้อ", "จำนวนหน้ารวมทั้งปีงบ", "ค่าใช้จ่ายสุทธิทั้งปีงบ"];
 
   const rows = divisions.value.flatMap((division) =>
@@ -560,10 +560,12 @@ function exportTreeExcel() {
     )
   );
 
-  const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "แยกตามฝ่าย-แผนก");
-  XLSX.writeFile(workbook, "expense-by-department.xlsx");
+  await exportSheet({
+    header,
+    rows,
+    sheetName: "แยกตามฝ่าย-แผนก",
+    filename: "expense-by-department",
+  });
 }
 
 onMounted(async () => {

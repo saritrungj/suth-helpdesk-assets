@@ -64,7 +64,7 @@ npm run test:e2e --workspace @suth/web -- wcag.spec.js contrast-helper.spec.js
 
 ค่า contrast ที่คำนวณล่วงหน้าจาก token ใช้ได้เฉพาะกรณีที่ตัวหนังสือทึบวางบนพื้นทึบ
 ในของจริงมีสองอย่างที่ทำให้ค่านั้นไม่ตรง: ตัวหนังสือบางตัวโปร่งแสง และพื้นบางที่
-เกิดจากการซ้อนหลายชั้น (แผง aurora ของหน้าล็อกอิน หรือ badge บนการ์ดบนพื้นหน้า)
+เกิดจากการซ้อนหลายชั้น (เช่น badge บนการ์ดบนพื้นหน้า)
 
 เทสจึงไม่อ่านค่าจาก token แต่
 
@@ -83,7 +83,7 @@ npm run test:e2e --workspace @suth/web -- wcag.spec.js contrast-helper.spec.js
 ไว้ใน attachment `contrast-report` พร้อม annotation `unmeasured` ไม่เพิ่มจำนวน measured
 การผ่านของเทสแปลว่าเฉพาะตัวอย่างที่วัดได้ไม่มี failure ไม่ใช่ว่าส่วน unsupported ผ่านด้วย
 ตัววัดไม่จำลอง pseudo-element ซ้อนพื้น, sibling overlays, text-shadow หรือ canvas text
-จึงยังต้องตรวจส่วนเหล่านี้แยก แผง aurora ของล็อกอินยังมีเทส worst-case โดยเฉพาะ
+จึงยังต้องตรวจส่วนเหล่านี้แยก หน้าล็อกอินปัจจุบันใช้พื้นทึบและตรวจ contrast ทั้งหน้า รวมส่วนช่วยเหลือที่กางออก
 
 ### หมายเหตุเรื่องเทส 1.4.10
 
@@ -138,6 +138,14 @@ npm run test:e2e --workspace @suth/web -- wcag.spec.js contrast-helper.spec.js
 ---
 
 ## หน้าล็อกอิน
+
+### Layout ปัจจุบัน (8 กันยายน 2026)
+
+ใช้ฟอร์มเดียวตรงกลาง แยกชื่อระบบออกจากหัวข้อเข้าสู่ระบบ ตัดแผงแนะนำความสามารถและภาพเคลื่อนไหวออกจากหน้านี้ และเก็บคำแนะนำขอบัญชีไว้ในส่วนช่วยเหลือที่เปิดด้วยคีย์บอร์ดได้ โดยไม่เปลี่ยนขั้นตอนยืนยันตัวตน ช่องกรอกและปุ่มหลักสูงอย่างน้อย 48px และไม่เรียกคีย์บอร์ดบนมือถือทันทีที่เปิดหน้า
+
+แนวทางนี้เป็นการประยุกต์จาก [USWDS Sign-in](https://designsystem.digital.gov/templates/authentication-pages/sign-in/), [GOV.UK Password input](https://design-system.service.gov.uk/components/password-input/) และ [W3C Accessible Authentication](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) ไม่ใช่การรับรองว่าผ่าน WCAG ทั้งระบบ
+
+ชุด `login.spec.js` และ `login-wcag.spec.js` ผ่านรวม 30 เคสหลังเปลี่ยน layout ครอบคลุมสองธีม การกางส่วนช่วยเหลือ contrast การใช้คีย์บอร์ด สถานะกำลังส่ง/ผิดพลาด และ viewport 320, 390, 768, 1440px โดยตรวจว่าปุ่มหลักอยู่ในจอเริ่มต้น ยังไม่ได้ทดสอบกับ NVDA, Windows forced-colors หรือ Voice Control จริง
 
 หน้านี้มีเทสของตัวเองเพิ่มอีกชุด เพราะเป็นหน้าเดียวที่คนนอกองค์กรเปิดเจอได้
 และเป็นด่านเดียวที่ถ้าใช้ไม่ได้ก็คือใช้ทั้งระบบไม่ได้ ไม่มีทางอ้อม
