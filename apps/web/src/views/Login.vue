@@ -54,7 +54,7 @@ async function login() {
 <template>
   <div class="login">
     <header class="login__masthead">
-      <img class="login__logo" src="/logo-suth.png" :alt="ORG_NAME" width="120" height="48" />
+      <img class="login__logo" src="/logo-suthnews.png" :alt="ORG_NAME" width="120" height="48" />
       <div class="login__identity">
         <p class="login__name">{{ APP_NAME }}</p>
         <p class="login__tagline">{{ APP_TAGLINE }}</p>
