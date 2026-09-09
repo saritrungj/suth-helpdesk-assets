@@ -1,8 +1,4 @@
 <script setup>
-import { usePortalTarget } from "./portal-target";
-const portalTarget = usePortalTarget();
-import { t } from "../lib/locale";
-
 /**
  * UiToaster — กล่องแจ้งผลลัพธ์ที่ลอยขึ้นแล้วหายเอง
  *
@@ -39,7 +35,7 @@ const RAILS = {
 </script>
 
 <template>
-  <Teleport :to="portalTarget">
+  <Teleport to="body">
     <div
       class="fixed z-[130] flex flex-col gap-2 pointer-events-none
              inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))]
@@ -76,7 +72,7 @@ const RAILS = {
           <button
             type="button"
             class="shrink-0 -mr-1 -mt-0.5 grid place-items-center w-6 h-6 rounded-sm text-ink-faint hover:text-ink hover:bg-surface-3 transition-colors"
-            :aria-label="t(&quot;ปิดการแจ้งเตือน&quot;)"
+            aria-label="ปิดการแจ้งเตือน"
             @click="dismissToast(t.id)"
           >
             <X :size="14" aria-hidden="true" />

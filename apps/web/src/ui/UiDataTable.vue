@@ -1,6 +1,4 @@
 <script setup>
-import { t } from "../lib/locale";
-
 /**
  * UiDataTable — ตารางข้อมูลของทั้งระบบ
  *
@@ -29,7 +27,6 @@ import { t } from "../lib/locale";
  *                 value?: (row) => any, csv?: (row) => any }
  */
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
-import { useFullscreen } from "./use-fullscreen";
 import { refDebounced } from "@vueuse/core";
 import { exportSheet } from "../lib/export-xlsx";
 import {
@@ -52,20 +49,17 @@ import UiMenu from "./UiMenu.vue";
 import UiSelect from "./UiSelect.vue";
 import UiSkeleton from "./UiSkeleton.vue";
 
-const tableRoot = useTemplateRef("tableRoot");
-const { expanded, expandError, toggleExpanded } = useFullscreen(tableRoot);
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   columns: { type: Array, required: true },
   rowKey: { type: String, default: "id" },
   loading: { type: Boolean, default: false },
   searchable: { type: Boolean, default: true },
-  searchPlaceholder: { type: String, default: t("ค้นหาในตาราง...") },
+  searchPlaceholder: { type: String, default: "ค้นหาในตาราง..." },
   pageSizeOptions: { type: Array, default: () => [10, 20, 50, 100] },
   defaultPageSize: { type: Number, default: 20 },
-  exportContext: { type: Array, default: () => [] },
   exportFilename: { type: String, default: "data" },
-  emptyText: { type: String, default: t("ยังไม่มีข้อมูลในตารางนี้") },
+  emptyText: { type: String, default: "ยังไม่มีข้อมูลในตารางนี้" },
   emptyHint: { type: String, default: "" },
   showExport: { type: Boolean, default: true },
   /** ให้ผู้ใช้ซ่อน/แสดงคอลัมน์เองได้ — ช่วยมากกับตารางที่มีสิบกว่าคอลัมน์ */
@@ -221,9 +215,9 @@ function sortState(col) {
 
 function sortHint(col) {
   const state = sortState(col);
-  if (state === "none") return t("เรียงตาม {0} จากน้อยไปมาก", [col.label]);
-  if (state === "ascending") return t("เรียงตาม {0} จากมากไปน้อย", [col.label]);
-  return t("เลิกเรียงลำดับ กลับไปลำดับเดิม");
+  if (state === "none") return `เรียงตาม ${col.label} จากน้อยไปมาก`;
+  if (state === "ascending") return `เรียงตาม ${col.label} จากมากไปน้อย`;
+  return "เลิกเรียงลำดับ กลับไปลำดับเดิม";
 }
 
 function alignClass(col) {
@@ -256,16 +250,14 @@ async function exportExcel() {
   await exportSheet({
     header,
     rows: body,
-    sheetName: t("ข้อมูล"),
+    sheetName: "ข้อมูล",
     filename: props.exportFilename,
-    context: [...props.exportContext, [t("ค้นหา"), search.value]],
   });
 }
 </script>
 
 <template>
-  <div ref="tableRoot" class="flex flex-col min-w-0 bg-surface" :class="expanded && 'h-screen overflow-auto p-5'">
-    <p v-if="expandError" role="status">{{ expandError }}</p>
+  <div class="flex flex-col min-w-0">
     <!-- แถบเครื่องมือ -->
     <div class="flex flex-wrap items-center gap-2 mb-3" data-print="hide">
       <div v-if="searchable" class="min-w-[13rem] flex-1 max-w-sm">
@@ -285,12 +277,11 @@ async function exportExcel() {
       <slot name="toolbar-extra" />
 
       <div class="flex items-center gap-2 ml-auto">
-        <UiButton size="sm" variant="secondary" @click="toggleExpanded">{{ expanded ? t("ย่อตาราง") : t("ขยายตาราง") }}</UiButton>
-        <UiMenu v-if="showColumnPicker" :label="t(&quot;แสดงคอลัมน์&quot;)">
+        <UiMenu v-if="showColumnPicker" label="แสดงคอลัมน์">
           <template #trigger>
-            <UiButton size="sm" variant="secondary" :label="t(&quot;เลือกคอลัมน์ที่จะแสดง&quot;)">
+            <UiButton size="sm" variant="secondary" label="เลือกคอลัมน์ที่จะแสดง">
               <template #icon><Columns3 :size="15" /></template>
-              <span class="hidden sm:inline"> {{ t("คอลัมน์") }} </span>
+              <span class="hidden sm:inline">คอลัมน์</span>
             </UiButton>
           </template>
 
@@ -310,8 +301,8 @@ async function exportExcel() {
           v-if="showExport"
           size="sm"
           variant="secondary"
-          :label="t(&quot;ดาวน์โหลดข้อมูลที่กรองไว้เป็นไฟล์ Excel&quot;)"
-          :disabled="!sortedRows.length || search !== searchTerm"
+          label="ดาวน์โหลดข้อมูลที่กรองไว้เป็นไฟล์ Excel"
+          :disabled="!sortedRows.length"
           @click="exportExcel"
         >
           <template #icon><Download :size="15" /></template>
@@ -322,10 +313,13 @@ async function exportExcel() {
 
     <!-- สรุปจำนวน — เป็น live region ให้โปรแกรมอ่านหน้าจอประกาศเมื่อผลลัพธ์เปลี่ยน -->
     <p class="text-xs text-ink-mute mb-2" aria-live="polite">
-      <template v-if="loading"> {{ t("กำลังโหลดข้อมูล…") }} </template>
-      <template v-else-if="sortedRows.length"> {{ t("แสดง") }} <span class="numeral font-medium text-ink-soft">{{ rangeStart.toLocaleString("th-TH") }}–{{ rangeEnd.toLocaleString("th-TH") }}</span> {{ t("จาก") }} <span class="numeral font-medium text-ink-soft">{{ sortedRows.length.toLocaleString("th-TH") }}</span> {{ t("รายการ") }} <span v-if="search" class="text-ink-mute"> {{ t("(กรองจากทั้งหมด") }} {{ rows.length.toLocaleString("th-TH") }})</span>
+      <template v-if="loading">กำลังโหลดข้อมูล…</template>
+      <template v-else-if="sortedRows.length">
+        แสดง <span class="numeral font-medium text-ink-soft">{{ rangeStart.toLocaleString("th-TH") }}–{{ rangeEnd.toLocaleString("th-TH") }}</span>
+        จาก <span class="numeral font-medium text-ink-soft">{{ sortedRows.length.toLocaleString("th-TH") }}</span> รายการ
+        <span v-if="search" class="text-ink-mute">(กรองจากทั้งหมด {{ rows.length.toLocaleString("th-TH") }})</span>
       </template>
-      <template v-else> {{ t("ไม่มีรายการที่ตรงกับเงื่อนไข") }} </template>
+      <template v-else>ไม่มีรายการที่ตรงกับเงื่อนไข</template>
     </p>
 
     <!-- ตาราง (จอ >= sm) -->
@@ -376,7 +370,9 @@ async function exportExcel() {
               v-if="$slots.actions"
               scope="col"
               class="border-b border-line-soft bg-surface-2 px-[var(--row-px)] py-[var(--row-py)] text-center text-xs font-semibold text-ink-mute whitespace-nowrap"
-            > {{ t("จัดการ") }} </th>
+            >
+              จัดการ
+            </th>
           </tr>
         </thead>
 
@@ -402,11 +398,11 @@ async function exportExcel() {
               <slot name="empty" :search="search">
                 <UiEmpty
                   :variant="search ? 'search' : 'empty'"
-                  :title="search ? t(&quot;ไม่พบรายการที่ตรงกับ “{0}”&quot;, [search]) : emptyText"
-                  :description="search ? t(&quot;ลองใช้คำที่สั้นลง หรือล้างตัวกรองด้านบน&quot;) : emptyHint"
+                  :title="search ? `ไม่พบรายการที่ตรงกับ “${search}”` : emptyText"
+                  :description="search ? 'ลองใช้คำที่สั้นลง หรือล้างตัวกรองด้านบน' : emptyHint"
                 >
                   <template v-if="search" #actions>
-                    <UiButton size="sm" variant="secondary" @click="search = ''"> {{ t("ล้างคำค้นหา") }} </UiButton>
+                    <UiButton size="sm" variant="secondary" @click="search = ''">ล้างคำค้นหา</UiButton>
                   </template>
                 </UiEmpty>
               </slot>
@@ -468,8 +464,8 @@ async function exportExcel() {
       <slot name="empty" :search="search">
         <UiEmpty
           :variant="search ? 'search' : 'empty'"
-          :title="search ? t(&quot;ไม่พบรายการที่ตรงกัน&quot;) : emptyText"
-          :description="search ? t(&quot;ลองใช้คำที่สั้นลง หรือล้างตัวกรอง&quot;) : emptyHint"
+          :title="search ? 'ไม่พบรายการที่ตรงกัน' : emptyText"
+          :description="search ? 'ลองใช้คำที่สั้นลง หรือล้างตัวกรอง' : emptyHint"
           compact
         />
       </slot>
@@ -512,16 +508,16 @@ async function exportExcel() {
     <nav
       v-if="totalPages > 1 && !loading"
       class="flex flex-wrap items-center justify-between gap-3 mt-4"
-      :aria-label="t(&quot;แบ่งหน้าของตาราง&quot;)"
+      aria-label="แบ่งหน้าของตาราง"
       data-print="hide"
     >
       <div class="flex items-center gap-2 order-2 sm:order-1">
-        <span class="text-xs text-ink-mute whitespace-nowrap"> {{ t("แสดงหน้าละ") }} </span>
+        <span class="text-xs text-ink-mute whitespace-nowrap">แสดงหน้าละ</span>
         <UiSelect
           :model-value="pageSize"
           size="sm"
           class="w-auto"
-          :aria-label="t(&quot;จำนวนรายการต่อหน้า&quot;)"
+          aria-label="จำนวนรายการต่อหน้า"
           @update:model-value="pageSize = Number($event)"
         >
           <option v-for="n in pageSizeOptions" :key="n" :value="n">{{ n }}</option>
@@ -530,12 +526,12 @@ async function exportExcel() {
 
       <ul class="flex items-center gap-1 order-1 sm:order-2 list-none mx-auto sm:mx-0">
         <li>
-          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;ไปหน้าแรก&quot;)" :disabled="currentPage === 1" @click="goToPage(1)">
+          <UiButton size="sm" variant="ghost" icon-only label="ไปหน้าแรก" :disabled="currentPage === 1" @click="goToPage(1)">
             <ChevronsLeft :size="16" />
           </UiButton>
         </li>
         <li>
-          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;หน้าก่อนหน้า&quot;)" :disabled="currentPage === 1" @click="goToPage(currentPage - 1)">
+          <UiButton size="sm" variant="ghost" icon-only label="หน้าก่อนหน้า" :disabled="currentPage === 1" @click="goToPage(currentPage - 1)">
             <ChevronLeft :size="16" />
           </UiButton>
         </li>
@@ -547,7 +543,7 @@ async function exportExcel() {
             size="sm"
             :variant="p === currentPage ? 'primary' : 'ghost'"
             class="min-w-8 numeral"
-            :label="t(&quot;ไปหน้า {0}&quot;, [p])"
+            :label="`ไปหน้า ${p}`"
             :aria-current="p === currentPage ? 'page' : undefined"
             @click="goToPage(p)"
           >
@@ -556,18 +552,19 @@ async function exportExcel() {
         </li>
 
         <li>
-          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;หน้าถัดไป&quot;)" :disabled="currentPage === totalPages" @click="goToPage(currentPage + 1)">
+          <UiButton size="sm" variant="ghost" icon-only label="หน้าถัดไป" :disabled="currentPage === totalPages" @click="goToPage(currentPage + 1)">
             <ChevronRight :size="16" />
           </UiButton>
         </li>
         <li>
-          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;ไปหน้าสุดท้าย&quot;)" :disabled="currentPage === totalPages" @click="goToPage(totalPages)">
+          <UiButton size="sm" variant="ghost" icon-only label="ไปหน้าสุดท้าย" :disabled="currentPage === totalPages" @click="goToPage(totalPages)">
             <ChevronsRight :size="16" />
           </UiButton>
         </li>
       </ul>
 
-      <p class="text-xs text-ink-mute numeral order-3 hidden sm:block"> {{ t("หน้า") }} {{ currentPage }} / {{ totalPages }}
+      <p class="text-xs text-ink-mute numeral order-3 hidden sm:block">
+        หน้า {{ currentPage }} / {{ totalPages }}
       </p>
     </nav>
   </div>

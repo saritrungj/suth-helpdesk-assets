@@ -1,8 +1,4 @@
 <script setup>
-import { usePortalTarget } from "./portal-target";
-const portalTarget = usePortalTarget();
-import { t } from "../lib/locale";
-
 /**
  * UiModal — หน้าต่างซ้อนที่ต้องจัดการก่อนถึงจะทำอย่างอื่นต่อได้
  *
@@ -51,7 +47,7 @@ const SIZES = {
 
 <template>
   <DialogRoot :open="open" @update:open="$emit('update:open', $event)">
-    <DialogPortal :to="portalTarget">
+    <DialogPortal>
       <DialogOverlay
         class="fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px] data-[state=open]:animate-fade-in"
       />
@@ -82,7 +78,7 @@ const SIZES = {
 
           <DialogClose
             class="shrink-0 grid place-items-center w-8 h-8 -mr-1 rounded-md text-ink-mute hover:text-ink hover:bg-surface-3 transition-colors"
-            :aria-label="t(&quot;ปิดหน้าต่าง&quot;)"
+            aria-label="ปิดหน้าต่าง"
           >
             <X :size="17" aria-hidden="true" />
           </DialogClose>
