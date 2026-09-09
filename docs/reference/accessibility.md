@@ -139,9 +139,11 @@ npm run test:e2e --workspace @suth/web -- wcag.spec.js contrast-helper.spec.js
 
 ## หน้าล็อกอิน
 
-### Layout ปัจจุบัน (8 กันยายน 2026)
+### Layout ปัจจุบัน (9 กันยายน 2026)
 
-ใช้ฟอร์มเดียวตรงกลาง พร้อมโลโก้และชื่อระบบกึ่งกลางเหนือหัวข้อเข้าสู่ระบบ พื้นหลังใช้ AuroraCanvas variant `hero` บน `--surface` และสี `--aurora-1..3` เหมือน DashboardHero ทุกโหมด ไม่ใช้ variant `page` ที่บังคับพื้นเข้ม ปิดการเคลื่อนไหวเฉพาะหน้าล็อกอิน ภาพประดับมี aria-hidden และไม่รับ pointer events ส่วนฟอร์มและข้อความท้ายหน้าอยู่บนพื้นทึบเพื่อวัด contrast ได้ ตัดแผงแนะนำความสามารถออก และเก็บคำแนะนำขอบัญชีไว้ในส่วนช่วยเหลือที่เปิดด้วยคีย์บอร์ดได้ โดยไม่เปลี่ยนขั้นตอนยืนยันตัวตน ช่องกรอกและปุ่มหลักสูงอย่างน้อย 48px และไม่เรียกคีย์บอร์ดบนมือถือทันทีที่เปิดหน้า เทสตรวจพื้นและ gradient ตรงชุดสี Dashboard ทั้งสองธีมและบันทึกภาพไว้ใน `apps/web/e2e/screens/`
+บนจอ desktop แบ่งเป็นพื้นที่แบรนด์ 55% กับพื้นที่ฟอร์ม 45% ฝั่งแบรนด์ใช้ `/brand/suth-horizontal.webp` เต็มภาพบนพื้นขาวคงที่ทั้งสองธีม และฝั่งฟอร์มใช้พื้นทึบตามธีม AuroraCanvas variant `hero` ยังคงเป็นภาพประดับ `aria-hidden` ที่ไม่รับ pointer events และไม่เคลื่อนไหว การกางส่วนช่วยเหลือ ขั้นตอนยืนยันตัวตน และ handler ของ error/session ไม่เปลี่ยน
+
+ช่องกรอกและปุ่มหลักสูงอย่างน้อย 48px ไม่เรียกคีย์บอร์ดบนมือถือทันทีที่เปิดหน้า และภาพไม่ยืดถูกล็อกด้วยเทสอัตราส่วน เทสยังตรวจ contrast, keyboard, pending/error, viewport 320/390/768/1440px และบันทึกภาพไว้ใน `apps/web/e2e/screens/`
 
 แนวทางนี้เป็นการประยุกต์จาก [USWDS Sign-in](https://designsystem.digital.gov/templates/authentication-pages/sign-in/), [GOV.UK Password input](https://design-system.service.gov.uk/components/password-input/) และ [W3C Accessible Authentication](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) ไม่ใช่การรับรองว่าผ่าน WCAG ทั้งระบบ
 
