@@ -31,6 +31,7 @@ const asyncHandler = require("../shared/async-handler");
 const { validate } = require("../shared/validate");
 const cache = require("../shared/cache");
 const { notFound } = require("../shared/http-error");
+const { effectiveLocationJoin } = require("../shared/effective-location-sql");
 const { reportQuery } = require("./filters");
 const { toSatang, fromSatang, sumSatang } = require("@suth/domain");
 
@@ -104,19 +105,20 @@ router.get(
            d.status,
            b.name AS brand_name,
            v.month,
+           CASE WHEN h.id IS NOT NULL THEN h.location ELSE d.location END AS location,
+           eb.name AS building_name,
+           ef.name AS floor_name,
            v.net_pages,
            v.total_cost,
-           COALESCE(h.department_id, d.department_id) AS effective_department_id
+           CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END AS effective_department_id
          FROM devices d
          LEFT JOIN brand b ON d.brand_id = b.id
          LEFT JOIN v_monthly_kpi v
            ON v.device_id = d.id
            ${fiscalYear ? "AND v.month BETWEEN ? AND ?" : ""}
-         LEFT JOIN device_location_history h
-           ON h.device_id = d.id
-           AND v.month IS NOT NULL
-           AND v.month >= DATE_FORMAT(h.effective_from, '%Y-%m')
-           AND (h.effective_to IS NULL OR v.month < DATE_FORMAT(h.effective_to, '%Y-%m'))
+         ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
+         LEFT JOIN building eb ON eb.id = CASE WHEN h.id IS NOT NULL THEN h.building_id ELSE d.building_id END
+         LEFT JOIN floor ef ON ef.id = CASE WHEN h.id IS NOT NULL THEN h.floor_id ELSE d.floor_id END
          ORDER BY effective_department_id, d.serial_number, v.month`,
         fiscalYear ? [fiscalYear.start_month, fiscalYear.end_month] : []
       ),
@@ -142,11 +144,13 @@ router.get(
           brand_name: row.brand_name,
           department_id: row.effective_department_id,
           monthly: [],
+          locations: [],
         });
 
         departmentsPerDevice.set(row.device_id, (departmentsPerDevice.get(row.device_id) || 0) + 1);
       }
 
+      deviceMap.get(key).locations.push({ month: row.month, building_name: row.building_name, floor_name: row.floor_name, location: row.location });
       if (row.month) {
         deviceMap.get(key).monthly.push({
           month: row.month,

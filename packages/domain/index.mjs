@@ -6,6 +6,7 @@
 import domain from "./index.cjs";
 
 export const {
+  computeCoverage,
   formatMonth,
   formatDate,
   formatFiscalYear,
