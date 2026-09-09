@@ -6,10 +6,11 @@
 กฎข้อเดียวของเอกสารนี้: ทุกแถวต้องตอบได้ว่า *"แล้วมันไปโผล่ที่ไหนในโค้ด"* ถ้าตอบ
 ไม่ได้ แปลว่ายังไม่ได้เอามาใช้ ให้ย้ายไปหัวข้อท้ายเอกสารแทน
 
-> **เรื่องลิขสิทธิ์:** งานทุกชิ้นด้านล่างเป็นของเจ้าของต้นฉบับ ใช้เพื่อ *ศึกษา
-> องค์ประกอบและพฤติกรรม* เท่านั้น — ไม่คัดลอกโลโก้ ภาพ ไอคอน ตัวอักษร หรือไฟล์
-> ใดๆ เข้ามาใน repository นี้ artwork ทุกชิ้นใน SUTH สร้างใหม่ด้วย CSS/SVG จาก
-> สีแบรนด์ของโรงพยาบาลเอง
+> **เรื่องลิขสิทธิ์:** งานอ้างอิงภายนอกด้านล่างเป็นของเจ้าของต้นฉบับ ใช้เพื่อ *ศึกษา
+> องค์ประกอบและพฤติกรรม* เท่านั้น — **ห้ามคัดลอก asset ของ reference เหล่านั้นเข้า
+> repository เด็ดขาด** ส่วน brand asset ของเจ้าของระบบเก็บได้ตาม
+> [ADR-0015](../decisions/0015-brand-assets-in-repository.md) โดยมีบ้านเดียวที่
+> [`docs/assets/brand/`](../assets/brand/README.md)
 
 ## ข้อควรระวังเรื่องตัวเลขความนิยม
 
@@ -28,13 +29,13 @@
 
 | แหล่ง | ที่มา | เอามาใช้ที่ |
 |---|---|---|
-| [Linear — Design Refresh](https://linear.app/now/behind-the-latest-design-refresh) | บทความจากทีมออกแบบผลิตภัณฑ์จริง | `app/AppSidebar.vue` — แถบเมนูเป็นพื้นหลังของงาน ไม่ใช่ตัวเอก: พื้นเดียวกับ canvas, เส้นคั่นบาง, ตัวหนังสือ mute จนกว่าจะ active |
+| [Linear — Design Refresh](https://linear.app/now/behind-the-latest-design-refresh) | บทความจากทีมออกแบบผลิตภัณฑ์จริง | `app/AppSidebar.vue` — แถบเมนูเป็นพื้นหลังของงาน, แบ่งหมวดตามจังหวะใช้งาน, active มีทั้งแผ่นพื้น/ขีด/`aria-current` และย่อเป็น rail ได้ |
 | [Linear Insights](https://linear.app/insights) | ผลิตภัณฑ์จริง มี drill-down | `views/Dashboard.vue` — ตัวเลขที่คลิกได้ต้องพาไปยังข้อมูลที่อธิบายตัวเลขนั้น พร้อมตัวกรองเดิม |
 | [Medtech Platform — HALO LAB](https://dribbble.com/shots/19419939-Medtech-platform-dashboard-analytics-UX) | ~3.2K likes | `views/Dashboard.vue` — กริดที่มี "จุดนำสายตา" ชิ้นใหญ่หนึ่งชิ้น แทนการ์ดขนาดเท่ากันเรียงกันทั้งหน้า |
 | [Stripe — Customer Detail](https://support.stripe.com/questions/updates-to-the-customer-detail-page) | เอกสารการปรับหน้าจากผู้พัฒนา | `views/AssetDetail.vue` — แยก "ข้อมูลประจำตัวที่ไม่เปลี่ยน" (serial, ยี่ห้อ) ออกจาก "สิ่งที่เปลี่ยนบ่อย" (ยอดพิมพ์, ที่ตั้ง) |
 | [Attio Reporting](https://attio.com/platform/reporting) | ผลิตภัณฑ์จริง | `views/PrintTransactions.vue` — ตัวกรอง → ตาราง → การกระทำ ต้องต่อเนื่องกันโดยไม่ต้องเลื่อนกลับขึ้นไป |
 
-**สิ่งที่ตัดสินใจจากกลุ่มนี้:** แถบเมนู 224px ย่อเป็น rail 64px ได้, topbar 56px,
+**สิ่งที่ตัดสินใจจากกลุ่มนี้:** แถบเมนู 232px ย่อเป็น rail 64px ได้, topbar 56px,
 เนื้อหา padding 24px, dashboard เป็นกริด 12 คอลัมน์ที่มีกราฟหลัก 8 คอลัมน์คู่กับ
 แผงงานค้าง 4 คอลัมน์ — ไม่ใช่การ์ดสี่ใบเท่ากัน
 
@@ -44,6 +45,7 @@
 |---|---|---|
 | [Golden Suisse — Moonsight](https://www.behance.net/gallery/186859499/Golden-Suisse) | ~6.2K appreciations, Featured UI/UX | `design/tokens.css` — แยกระดับพื้นผิวด้วย **ความสว่าง** ไม่ใช่ด้วยเงาหนักๆ; ที่ว่างรอบตัวเลขใหญ่คือสิ่งที่ทำให้ดูแพง ไม่ใช่ gradient |
 | [Lando Norris — OFF+BRAND](https://www.awwwards.com/sites/lando-norris) | Site of the Year, 8.18/10 | `views/Login.vue`, `components/AuroraCanvas.vue` — เอกลักษณ์ที่จำได้ต้องมาจาก "ลายเซ็นภาพ" ชิ้นเดียวที่ใช้ซ้ำ ไม่ใช่เอฟเฟกต์กระจายทั้งเว็บ |
+| [USWDS — Sign-in](https://designsystem.digital.gov/templates/authentication-pages/sign-in/) | design system ของรัฐบาลที่ใช้งานจริง | `views/Login.vue` — ฝั่งฟอร์มเป็นพื้นทึบ, ลำดับหัวเรื่อง→ช่องกรอก→คำสั่งหลัก และความช่วยเหลืออยู่ท้ายฟอร์ม |
 
 **สิ่งที่ตัดสินใจจากกลุ่มนี้:** artwork แบบ aurora (ชั้นแสง teal→ส้ม) ใช้ **สอง
 ที่เท่านั้น** — หน้าล็อกอิน และแผงสรุปบนสุดของแดชบอร์ด พื้นหลังของตาราง กราฟ

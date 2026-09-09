@@ -18,6 +18,23 @@ src/app/      เปลือกแอป   แถบเมนู แถบบ�
 
 หน้าจอ (`src/views/`) และ component เชิงธุรกิจ (`src/components/`) เรียกใช้ทั้งสามชั้น แต่ชั้นล่างไม่รู้จักชั้นบน — `src/ui/` ห้ามมีคำว่าเครื่องพิมพ์ ปีงบ หรือแผนกอยู่ในไฟล์เด็ดขาด
 
+## App shell contract
+
+ค่า layout กลางอยู่ที่ `design/tokens.css`: sidebar 232px, rail 64px, topbar 56px, content padding 24px, content max 1600px หน้าจอห้ามใส่ตัวเลขชุดนี้ซ้ำเอง
+
+เมนูแบ่งเป็น ภาพรวม → งานประจำ → รายงาน → ตั้งค่าระบบ โดย `app/navigation.js` เป็นเจ้าของชื่อ route, role visibility, breadcrumb และ command search งานประจำเปิดเริ่มต้น และหมวด active เปิดเองเมื่อเข้าผ่าน direct link ตอนเป็น rail ทุกรายการมี accessible name และ tooltip ที่เปิดทั้ง hover/focus
+
+### State inventory ของ shared UI
+
+| บริบท | สถานะที่ต้องรักษา | จุดตรวจ |
+|---|---|---|
+| Login | default, focus-visible, pending/disabled, API error, help expanded | `e2e/login.spec.js`, `e2e/login-wcag.spec.js` |
+| Sidebar | group open/closed, active route, expanded/rail, tooltip hover/focus, admin hidden | `e2e/shell.spec.js`, `app/navigation.test.js` |
+| Topbar | ปีงบ loading/list/empty, account menu, ภาษา, theme และ density ที่จำค่า | `e2e/shell.spec.js`, store tests เดิม |
+| Command search | closed/open, keyboard cursor, empty result, route filtered by role | `e2e/shell.spec.js` |
+
+งาน #47 ไม่เปลี่ยน state ของข้อมูลในหน้าธุรกิจ loading/error/retry/empty/filtered-empty/success ยังคงเป็นเจ้าของหน้าเดิม และจะถูก redesign เฉพาะหลัง human gate ตาม #46
+
 ## สี
 
 สีถูกกำหนดเป็นสามระดับใน `src/design/tokens.css` และ **ห้ามข้ามระดับ**

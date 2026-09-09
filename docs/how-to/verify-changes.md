@@ -14,9 +14,9 @@ npm test
 |---|---|---|
 | `packages/domain` | ปีงบ เดือน พ.ศ./ค.ศ. การแสดงผลไทย และการคิดเงินเป็นสตางค์ | `node:test` |
 | `apps/api` | requireAuth, ความปลอดภัยของ cookie, Problem Details, validate ที่ปากทาง และ shared helpers | `node:test` |
-| `apps/web` | store ของ session, ชั้นดึงข้อมูล TanStack Query และรายการเมนู | `vitest` |
+| `apps/web` | store ของ session, ชั้นดึงข้อมูล TanStack Query, navigation และ component เฉพาะจุดที่เสี่ยง เช่น race ของ `MonthEntryGrid` | `vitest` + Vue Test Utils |
 
-ยังไม่มีเทสระดับ route ของ `apps/api` ที่ต่อฐานข้อมูลจริง และยังไม่มีเทส component ของ Vue (มีเทส E2E ผ่านเบราว์เซอร์จริงแทน ดูหัวข้อถัดไป)
+ยังไม่มีเทสระดับ route ของ `apps/api` ที่ต่อฐานข้อมูลจริง ส่วนฝั่ง Vue มี component tests เฉพาะพฤติกรรมที่เสี่ยง ไม่ได้ครอบทุก component; พฤติกรรมข้าม component ตรวจด้วย E2E ผ่านเบราว์เซอร์จริงด้านล่าง
 
 ## Build ฝั่งเว็บ
 

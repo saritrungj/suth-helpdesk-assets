@@ -12,7 +12,6 @@ import {
   Printer,
   ReceiptText,
   ScrollText,
-  ShieldCheck,
   Tags,
   UserCog,
   Users,
@@ -39,10 +38,10 @@ import {
 /**
  * สี่กลุ่มนี้เรียงตาม "จังหวะของงานจริง" ไม่ใช่ตามโครงสร้างฐานข้อมูล
  *
- *   ศูนย์งาน    เปิดมาแล้วรู้ทันทีว่าวันนี้มีอะไรค้าง
+ *   ภาพรวม     เปิดมาแล้วรู้ทันทีว่าวันนี้มีอะไรค้าง
  *   งานประจำ    สิ่งที่ต้องทำซ้ำทุกเดือน — กรอกมิเตอร์ และดูแลทะเบียนให้ตรง
- *   วิเคราะห์   ตอบคำถามเรื่องเงิน ทำเป็นครั้งคราวตอนมีคนถามหรือตรวจใบแจ้งหนี้
- *   จัดการระบบ  ตั้งค่าที่ตั้งครั้งเดียวแล้วแทบไม่แตะอีก
+ *   รายงาน      ตอบคำถามเรื่องเงิน ทำเป็นครั้งคราวตอนมีคนถามหรือตรวจใบแจ้งหนี้
+ *   ตั้งค่าระบบ ตั้งค่าที่ตั้งครั้งเดียวแล้วแทบไม่แตะอีก
  *
  * ลำดับนี้คือความถี่ในการใช้จากมากไปน้อย ของที่ใช้ทุกวันจึงอยู่บนสุดเสมอ
  *
@@ -53,8 +52,8 @@ import {
  */
 export const NAV_GROUPS = [
   {
-    key: "today",
-    label: t("ศูนย์งาน"),
+    key: "overview",
+    label: t("ภาพรวม"),
     items: [
       {
         to: "/dashboard",
@@ -66,6 +65,7 @@ export const NAV_GROUPS = [
   },
   {
     key: "routine",
+    defaultOpen: true,
     label: t("งานประจำ"),
     items: [
       {
@@ -83,8 +83,8 @@ export const NAV_GROUPS = [
     ],
   },
   {
-    key: "analyse",
-    label: t("วิเคราะห์"),
+    key: "reports",
+    label: t("รายงาน"),
     items: [
       {
         to: "/expense",
@@ -109,7 +109,7 @@ export const NAV_GROUPS = [
 ];
 
 /**
- * จัดการระบบ — แบนเป็นชั้นเดียว ไม่แบ่งกลุ่มย่อยอีกแล้ว
+ * ตั้งค่าระบบ — รายการภายในเป็นชั้นเดียว ไม่แบ่งกลุ่มย่อยอีกแล้ว
  *
  * เดิมแบ่งเป็นสี่หัวข้อย่อย (อุปกรณ์ / สถานที่ / หน่วยงาน / สัญญา) รวมกันแล้ว
  * กินความสูง 13 บรรทัดสำหรับ 9 รายการ ทำให้แถบเมนูต้องเลื่อนบนจอ 900px
@@ -117,8 +117,8 @@ export const NAV_GROUPS = [
  */
 export const ADMIN_GROUPS = [
   {
-    key: "admin",
-    label: t("จัดการระบบ"),
+    key: "settings",
+    label: t("ตั้งค่าระบบ"),
     admin: true,
     items: [
       {
@@ -198,16 +198,21 @@ export const HIDDEN_NAV_ITEMS = [
   },
 ];
 
-/** ทุกรายการแบนเป็นชั้นเดียว สำหรับช่องค้นหาคำสั่งและการหาชื่อหน้าปัจจุบัน */
-export const ALL_NAV_ITEMS = [
-  ...[...NAV_GROUPS, ...ADMIN_GROUPS].flatMap((group) =>
-    group.items.map((item) => ({ ...item, groupLabel: group.label }))
-  ),
-  ...HIDDEN_NAV_ITEMS.map((item) => ({ ...item, groupLabel: t("จัดการระบบ") })),
-];
+/** ทุกหมวดตามลำดับที่ sidebar และ command search ใช้ร่วมกัน */
+export const ALL_NAV_GROUPS = [...NAV_GROUPS, ...ADMIN_GROUPS];
 
-/** ไอคอนสำหรับหัวข้อกลุ่ม Admin ในแถบเมนู */
-export const ADMIN_ICON = ShieldCheck;
+/** รวมทุกรายการเป็นลิสต์เดียวสำหรับช่องค้นหาคำสั่งและการหาชื่อหน้าปัจจุบัน */
+export const ALL_NAV_ITEMS = [
+  ...ALL_NAV_GROUPS.flatMap((group) =>
+    group.items.map((item) => ({ ...item, groupKey: group.key, groupLabel: group.label }))
+  ),
+  // หน้าที่ไม่มีเมนูถือว่าอยู่ใต้หมวดตั้งค่า — อ้างจากหมวดจริง ไม่พิมพ์ชื่อซ้ำ
+  ...HIDDEN_NAV_ITEMS.map((item) => ({
+    ...item,
+    groupKey: ADMIN_GROUPS[0].key,
+    groupLabel: ADMIN_GROUPS[0].label,
+  })),
+];
 
 /** ไอคอนของหน้านำเข้าไฟล์ ใช้ในปุ่มลัดของแดชบอร์ด */
 export const IMPORT_ICON = FileSpreadsheet;
@@ -258,6 +263,12 @@ export function findActiveItem(route) {
       (a, b) => pathOf(b.to).length - pathOf(a.to).length
     )[0] ?? null
   );
+}
+
+/** หาหมวดของ route เพื่อกาง accordion ให้ถูกเมื่อเข้าผ่าน direct link */
+export function findActiveGroup(route) {
+  const item = findActiveItem(route);
+  return item ? ALL_NAV_GROUPS.find((group) => group.key === item.groupKey) ?? null : null;
 }
 
 /**

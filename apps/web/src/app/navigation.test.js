@@ -14,7 +14,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import { NAV_GROUPS, findActiveItem, isActiveNav, matchesRoute } from "./navigation";
+import {
+  ADMIN_GROUPS,
+  NAV_GROUPS,
+  findActiveGroup,
+  findActiveItem,
+  isActiveNav,
+  matchesRoute,
+} from "./navigation";
 
 /** สร้าง route จำลองแบบที่ vue-router ส่งให้ (ต้องมี path และ query เสมอ) */
 function routeAt(path, query = {}) {
@@ -51,6 +58,23 @@ describe("findActiveItem", () => {
     // "/assets-archive" ขึ้นต้นด้วย "/assets" แต่ไม่ใช่หน้าลูกของมัน
     // ถ้าเทียบด้วย startsWith เฉยๆ โดยไม่มี "/" ต่อท้าย จะจับผิดเคสนี้
     expect(findActiveItem(routeAt("/assets-archive"))).toBeNull();
+  });
+});
+
+describe("navigation groups", () => {
+  it("ใช้สี่หมวดตามภาษาของงาน", () => {
+    expect([...NAV_GROUPS, ...ADMIN_GROUPS].map((group) => group.label)).toEqual([
+      "ภาพรวม",
+      "งานประจำ",
+      "รายงาน",
+      "ตั้งค่าระบบ",
+    ]);
+  });
+
+  it("หน้าลูกและ direct link ชี้หมวดที่ sidebar ต้องกาง", () => {
+    expect(findActiveGroup(routeAt("/assets/17"))?.key).toBe("routine");
+    expect(findActiveGroup(routeAt("/admin/contracts"))?.key).toBe("settings");
+    expect(findActiveGroup(routeAt("/admin/add-asset"))?.key).toBe("settings");
   });
 });
 

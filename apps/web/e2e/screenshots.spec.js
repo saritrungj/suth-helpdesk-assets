@@ -11,7 +11,7 @@
 //
 //   npm run test:e2e:shots --workspace @suth/web
 //
-// ภาพออกที่ `apps/web/e2e/screens/<ธีม>/<ขนาด>/<ชื่อหน้า>.png`
+// ภาพออกที่ `apps/web/e2e/screens/<ภาษา>/<ธีม>/<ขนาด>/<ชื่อหน้า>.png`
 //
 // ## ข้อจำกัดที่ต้องรู้
 //
@@ -38,6 +38,30 @@ const SIZES = [
 
 const THEMES = ["light", "dark"];
 
+/**
+ * สองภาษาที่ระบบรับรอง — ภาษาอังกฤษต้องมีภาพด้วย ไม่ใช่ตรวจแค่ชื่อเมนูในเทส
+ * เพราะความยาวคำต่างกันมากพอที่จะดันโครงหน้าเพี้ยนได้ และนั่นเห็นได้จากภาพเท่านั้น
+ */
+const LANGUAGES = [
+  { code: "th", locale: "th-TH", signInLabel: "เข้าสู่ระบบ" },
+  { code: "en", locale: "en-US", signInLabel: "Sign in" },
+];
+
+/** ระบบอ่านธีมและภาษาจาก localStorage ก่อน CSS วาดครั้งแรก จึงต้องหว่านค่าไว้ล่วงหน้า */
+function seedPreferences(context, theme, language) {
+  return context.addInitScript(
+    ([mode, lang]) => {
+      try {
+        localStorage.setItem("suth-ui-mode", mode);
+        localStorage.setItem("suth-language", lang);
+      } catch {
+        // โหมดส่วนตัวเขียน localStorage ไม่ได้ — ปล่อยให้ใช้ค่าเริ่มต้น
+      }
+    },
+    [theme, language]
+  );
+}
+
 /** หน้าที่ต้องเก็บภาพ — ครอบทุกกลุ่มหน้า ไม่ใช่เฉพาะแดชบอร์ด */
 const PAGES = [
   { name: "02-dashboard", url: "/dashboard" },
@@ -56,23 +80,25 @@ test.beforeAll(async () => {
   test.skip(Boolean(skip), `ต้องมี API + ฐานข้อมูลทำงานอยู่ — ${skip}`);
 });
 
-for (const theme of THEMES) {
+for (const language of LANGUAGES) {
+ for (const theme of THEMES) {
   for (const size of SIZES) {
-    test(`ภาพหน้าจอ · ${theme} · ${size.name}`, async ({ browser }) => {
+    test(`ภาพหน้าจอ · ${language.code} · ${theme} · ${size.name}`, async ({ browser }) => {
       test.setTimeout(120_000);
 
-      const dir = path.join(OUT, theme, size.name);
+      const dir = path.join(OUT, language.code, theme, size.name);
       fs.mkdirSync(dir, { recursive: true });
 
       const context = await browser.newContext({
         viewport: { width: size.width, height: size.height },
         colorScheme: theme,
-        locale: "th-TH",
+        locale: language.locale,
         timezoneId: "Asia/Bangkok",
         // ปิดการเคลื่อนไหวทั้งหมด ไม่งั้นภาพจะจับกลางอนิเมชันแล้วต่างกันทุกรอบ
         reducedMotion: "reduce",
       });
 
+      await seedPreferences(context, theme, language.code);
       await signIn(context);
       const page = await context.newPage();
 
@@ -86,35 +112,19 @@ for (const theme of THEMES) {
       const guestContext = await browser.newContext({
         viewport: { width: size.width, height: size.height },
         colorScheme: theme,
-        locale: "th-TH",
+        locale: language.locale,
         timezoneId: "Asia/Bangkok",
         reducedMotion: "reduce",
       });
-      await guestContext.addInitScript((mode) => {
-        try {
-          localStorage.setItem("suth-ui-mode", mode);
-        } catch {
-          // โหมดส่วนตัวเขียน localStorage ไม่ได้
-        }
-      }, theme);
+      await seedPreferences(guestContext, theme, language.code);
 
       const guestPage = await guestContext.newPage();
       await guestPage.goto("/login");
-      await expect(guestPage.getByRole("button", { name: /เข้าสู่ระบบ/ })).toBeVisible({
-        timeout: 20000,
-      });
+      await expect(
+        guestPage.getByRole("button", { name: new RegExp(language.signInLabel) })
+      ).toBeVisible({ timeout: 20000 });
       await guestPage.screenshot({ path: path.join(dir, "01-login.png") });
       await guestContext.close();
-
-      // ระบบจำโหมดสีไว้ใน localStorage และตั้งค่าก่อน CSS วาดครั้งแรก
-      // ต้องตั้งให้ตรงกับ colorScheme ไม่งั้นได้ธีมผสมกัน
-      await page.addInitScript((mode) => {
-        try {
-          localStorage.setItem("suth-ui-mode", mode);
-        } catch {
-          // โหมดส่วนตัวเขียน localStorage ไม่ได้ — ปล่อยให้ใช้ค่าเริ่มต้น
-        }
-      }, theme);
 
       for (const target of PAGES) {
         await page.goto(target.url);
@@ -142,4 +152,5 @@ for (const theme of THEMES) {
       await context.close();
     });
   }
+ }
 }
