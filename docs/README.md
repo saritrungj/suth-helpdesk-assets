@@ -8,6 +8,7 @@
 | มีงานเฉพาะหน้าต้องทำให้เสร็จ | [`how-to/`](how-to/) |
 | ต้องเปิดหาค่า ชื่อคอลัมน์ หรือ endpoint | [`reference/`](reference/) |
 | อยากรู้ว่าทำไมถึงตัดสินใจแบบนั้น | [`decisions/`](decisions/) |
+| ทำงานใน repo นี้ในฐานะ AI agent | [`agents/`](agents/) และ [`AGENTS.md`](../AGENTS.md) |
 
 ## explanation — เพื่อความเข้าใจ
 
@@ -43,6 +44,22 @@
 ## decisions — บันทึกการตัดสินใจ
 
 [ADR](decisions/) หนึ่งไฟล์ต่อหนึ่งการตัดสินใจที่ย้อนกลับยาก เขียนตอนตัดสิน ไม่ใช่ตอนสรุปทีหลัง
+
+รายการทั้งหมดพร้อมสถานะอยู่ใน [สารบัญ ADR](decisions/README.md)
+
+## agents — สำหรับ AI agent
+
+ข้อตกลงเฉพาะของ repo นี้ที่ agent ต้องรู้ ส่วนวิธีทำงานร่วมกับทีมอยู่ใน [`AGENTS.md`](../AGENTS.md)
+
+- [เอกสารโดเมนสำหรับ agent](agents/domain.md) — อ่านไฟล์ไหนก่อนเริ่มสำรวจโค้ด
+- [Issue tracker](agents/issue-tracker.md) — ใช้ GitHub Issues ผ่าน `gh` CLI
+- [Triage labels](agents/triage-labels.md) — 5 บทบาทมาตรฐาน map กับ label จริงบน GitHub
+
+## นอกโฟลเดอร์นี้
+
+- [README ของโปรเจกต์](../README.md) — สถานะปัจจุบัน วิธีเริ่มพัฒนา และโครงสร้าง repository
+- [CHANGELOG](../CHANGELOG.md) — สิ่งที่เปลี่ยนและผู้ใช้สังเกตเห็นได้
+- [ข้อตกลงการทำงานของทีม](../CONTRIBUTING.md) — ลำดับการทำงาน ชื่อ branch และข้อความ commit
 
 ---
 
