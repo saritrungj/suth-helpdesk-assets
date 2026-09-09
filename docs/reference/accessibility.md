@@ -141,7 +141,7 @@ npm run test:e2e --workspace @suth/web -- wcag.spec.js contrast-helper.spec.js
 
 ### Layout ปัจจุบัน (8 กันยายน 2026)
 
-ใช้ฟอร์มเดียวตรงกลาง แยกชื่อระบบออกจากหัวข้อเข้าสู่ระบบ ตัดแผงแนะนำความสามารถและภาพเคลื่อนไหวออกจากหน้านี้ และเก็บคำแนะนำขอบัญชีไว้ในส่วนช่วยเหลือที่เปิดด้วยคีย์บอร์ดได้ โดยไม่เปลี่ยนขั้นตอนยืนยันตัวตน ช่องกรอกและปุ่มหลักสูงอย่างน้อย 48px และไม่เรียกคีย์บอร์ดบนมือถือทันทีที่เปิดหน้า
+ใช้ฟอร์มเดียวตรงกลาง พร้อมโลโก้และชื่อระบบกึ่งกลางเหนือหัวข้อเข้าสู่ระบบ พื้นหลังใช้ AuroraCanvas variant `hero` บน `--surface` และสี `--aurora-1..3` เหมือน DashboardHero ทุกโหมด ไม่ใช้ variant `page` ที่บังคับพื้นเข้ม ปิดการเคลื่อนไหวเฉพาะหน้าล็อกอิน ภาพประดับมี aria-hidden และไม่รับ pointer events ส่วนฟอร์มและข้อความท้ายหน้าอยู่บนพื้นทึบเพื่อวัด contrast ได้ ตัดแผงแนะนำความสามารถออก และเก็บคำแนะนำขอบัญชีไว้ในส่วนช่วยเหลือที่เปิดด้วยคีย์บอร์ดได้ โดยไม่เปลี่ยนขั้นตอนยืนยันตัวตน ช่องกรอกและปุ่มหลักสูงอย่างน้อย 48px และไม่เรียกคีย์บอร์ดบนมือถือทันทีที่เปิดหน้า เทสตรวจพื้นและ gradient ตรงชุดสี Dashboard ทั้งสองธีมและบันทึกภาพไว้ใน `apps/web/e2e/screens/`
 
 แนวทางนี้เป็นการประยุกต์จาก [USWDS Sign-in](https://designsystem.digital.gov/templates/authentication-pages/sign-in/), [GOV.UK Password input](https://design-system.service.gov.uk/components/password-input/) และ [W3C Accessible Authentication](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) ไม่ใช่การรับรองว่าผ่าน WCAG ทั้งระบบ
 

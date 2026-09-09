@@ -109,6 +109,28 @@ test(`1.4.3 [${mode}] ฟอร์มรวม placeholder และค่าท
 
 test(`1.4.3 [${mode}] ทั้งหน้ารวมส่วนช่วยเหลือที่เปิดแล้ว`, async ({ page }) => {
   await openLogin(page, mode);
+  // DashboardHero uses --surface with --aurora-1..3, not the always-dark page palette.
+  const palette = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    document.body.append(probe);
+    try {
+      probe.style.backgroundColor = "var(--surface)";
+      const groundMatches = getComputedStyle(document.querySelector(".login")).backgroundColor
+        === getComputedStyle(probe).backgroundColor;
+      const layersMatch = [1, 2, 3].map((layer) => {
+        probe.style.backgroundImage = layer === 3
+          ? "radial-gradient(ellipse, var(--aurora-3) 0%, transparent 68%)"
+          : `radial-gradient(circle, var(--aurora-${layer}) 0%, transparent 70%)`;
+        return getComputedStyle(document.querySelector(`.aurora__layer--${layer}`)).backgroundImage
+          === getComputedStyle(probe).backgroundImage;
+      });
+      return { groundMatches, layersMatch };
+    } finally {
+      probe.remove();
+    }
+  });
+  expect(palette).toEqual({ groundMatches: true, layersMatch: [true, true, true] });
+  await page.screenshot({ path: `e2e/screens/login-${mode}.png`, fullPage: true });
   await page.locator(".login__access summary").click();
   await expect(page.getByRole("heading", { name: /ติดต่อฝ่าย/ })).toBeVisible();
   const report = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText();`);
@@ -387,8 +409,14 @@ test("3.1.1 + 2.4.2 + 1.1.1 ภาษาของหน้า ชื่อหน
     expect(image.alt, `<img src="${image.src}"> ไม่มี alt`).not.toBeNull();
   }
 
-  // The redesign has no animated artwork or canvas above the form.
-  await expect(page.locator(".aurora, .login__grid, canvas")).toHaveCount(0);
+  // Shared Dashboard artwork is decorative and cannot intercept form clicks.
+  await expect(page.locator(".aurora--hero")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator(".aurora--hero")).toHaveCSS("pointer-events", "none");
+  await expect(page.locator(".aurora__layer").first()).toHaveCSS("animation-name", "none");
+  await expect(page.locator("canvas")).toHaveCount(0);
+  const logo = await page.locator(".login__logo").boundingBox();
+  const panel = await page.locator(".login__panel").boundingBox();
+  expect(Math.abs(logo.x + logo.width / 2 - panel.x - panel.width / 2)).toBeLessThan(1);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("เข้าสู่ระบบ");
 });
 

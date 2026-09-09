@@ -1,24 +1,28 @@
 # ไฟล์ต้นฉบับโลโก้
 
-`logo-suth.jpg` คือไฟล์ต้นฉบับความละเอียดเต็ม (4096×4096, พื้นขาว) เก็บไว้ที่นี่
-เพื่อให้สร้างไฟล์ที่เว็บใช้จริงขึ้นมาใหม่ได้ ไม่ได้ถูกโหลดโดยแอปโดยตรง
+`logo-suthnews.jpg` คือไฟล์ต้นฉบับความละเอียดเต็มที่ใช้งานอยู่ปัจจุบัน (6336×2688, พื้นขาว)
+เก็บไว้ที่นี่เพื่อให้สร้างไฟล์ที่เว็บใช้จริงขึ้นมาใหม่ได้ ไม่ได้ถูกโหลดโดยแอปโดยตรง
+
+`logo-suth.jpg` (4096×4096) คือไฟล์ต้นฉบับรุ่นก่อนหน้า เก็บไว้เป็นประวัติเฉยๆ ไม่ได้ใช้สร้างไฟล์ใดแล้ว
 
 ไฟล์ที่เว็บใช้จริงอยู่ใน `apps/web/public/` และสร้างจากไฟล์นี้ด้วย ffmpeg:
 
 ```sh
 # ตัดขอบขาวส่วนเกินออก (เหลือเฉพาะตัวโลโก้ + เว้นระยะเล็กน้อย) แล้วย่อ
-ffmpeg -y -i brand/logo-suth.jpg \
-  -vf "crop=3776:1552:136:1280,scale=480:-2" \
-  apps/web/public/logo-suth.png
+# ค่า crop หาได้จาก bounding box ของพิกเซลที่ไม่ใช่พื้นขาว (threshold ~200)
+# บวกระยะขอบ ~70px แล้วปัดเป็นเลขกลมๆ — ดูสัดส่วนกว้าง:สูงใกล้เคียงไฟล์เดิม (~2.43:1)
+ffmpeg -y -i brand/logo-suthnews.jpg \
+  -vf "crop=3644:1502:1349:618,scale=480:-2" \
+  apps/web/public/logo-suthnews.png
 
 # ไอคอนหน้าจอโฮมของ iOS — จัดโลโก้กลางกรอบสี่เหลี่ยมพื้นขาว
-ffmpeg -y -i brand/logo-suth.jpg \
-  -vf "crop=3776:1552:136:1280,scale=164:68,pad=180:180:8:56:white" \
+ffmpeg -y -i brand/logo-suthnews.jpg \
+  -vf "crop=3644:1502:1349:618,scale=164:68,pad=180:180:8:56:white" \
   apps/web/public/apple-touch-icon.png
 
 # favicon
-ffmpeg -y -i brand/logo-suth.jpg \
-  -vf "crop=3776:1552:136:1280,scale=58:24,pad=64:64:3:20:white" \
+ffmpeg -y -i brand/logo-suthnews.jpg \
+  -vf "crop=3644:1502:1349:618,scale=58:24,pad=64:64:3:20:white" \
   apps/web/public/favicon.png
 ```
 

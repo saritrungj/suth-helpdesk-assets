@@ -29,7 +29,7 @@ import { UiTooltip } from "../ui";
 
 // โลโก้อยู่ใน public/ จึงอ้างด้วย URL ตรงๆ ไม่ผ่าน import — ไฟล์ใน public
 // ถูกคัดลอกไปที่รากของ build ตามเดิมโดยไม่ผ่านการ hash ชื่อ
-const logoUrl = "/logo-suth.png";
+const logoUrl = "/logo-suthnews.png";
 
 const route = useRoute();
 

@@ -8,6 +8,7 @@ import { errorMessage } from "../lib/api-error";
 import { setAuth } from "../store/auth";
 import { APP_NAME, APP_TAGLINE, ORG_NAME, OWNER_TEAM, SUPPORT_CHANNELS, supportHref } from "../app/brand";
 import { UiAlert, UiButton, UiField, UiInput } from "../ui";
+import AuroraCanvas from "../components/AuroraCanvas.vue";
 
 const router = useRouter();
 const route = useRoute();
@@ -53,16 +54,17 @@ async function login() {
 
 <template>
   <div class="login">
-    <header class="login__masthead">
-      <img class="login__logo" src="/logo-suth.png" :alt="ORG_NAME" width="120" height="48" />
-      <div class="login__identity">
-        <p class="login__name">{{ APP_NAME }}</p>
-        <p class="login__tagline">{{ APP_TAGLINE }}</p>
-      </div>
-    </header>
-
+    <AuroraCanvas variant="hero" />
     <main class="login__main">
       <section class="login__panel" aria-labelledby="login-heading">
+        <header class="login__masthead">
+          <img class="login__logo" src="/logo-suthnews.png" :alt="ORG_NAME" width="120" height="48" />
+          <div class="login__identity">
+            <p class="login__name">{{ APP_NAME }}</p>
+            <p class="login__tagline">{{ APP_TAGLINE }}</p>
+          </div>
+        </header>
+
         <div class="login__form">
           <header class="login__intro">
             <h1 id="login-heading">เข้าสู่ระบบ</h1>
@@ -147,30 +149,35 @@ async function login() {
 
 <style scoped>
 .login {
+  position: relative;
+  isolation: isolate;
   min-height: 100dvh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  background: var(--canvas);
+  grid-template-rows: 1fr auto;
+  /* Same base surface and theme-aware artwork as DashboardHero. */
+  background: var(--surface);
   color: var(--ink);
 }
+.login > :deep(.aurora) { z-index: -1; }
+/* Static artwork: no ongoing GPU animation, including reduced-motion users. */
+.login :deep(.aurora__layer) { animation: none; will-change: auto; }
 .login__masthead {
-  width: min(100%, 76rem);
   margin-inline: auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 1rem;
-  padding: 1.75rem 2.5rem;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+  text-align: center;
 }
 .login__logo {
-  width: 7.5rem;
-  height: 3rem;
+  width: 9rem;
+  height: 3.6rem;
   object-fit: contain;
   flex-shrink: 0;
 }
 .login__identity {
   min-width: 0;
-  padding-left: 1rem;
-  border-left: 1px solid var(--line);
 }
 .login__name {
   font-size: 0.9375rem;
@@ -186,19 +193,18 @@ async function login() {
   display: grid;
   align-content: center;
   justify-items: center;
-  padding: 2rem 1.25rem 3rem;
+  padding: 2rem 1.25rem;
 }
 .login__panel {
   width: min(100%, 28rem);
-  padding: 2.5rem;
+  padding: 2rem 2.5rem;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-top: 3px solid var(--brand);
   border-radius: var(--radius-2xl);
-  box-shadow: var(--elev-3);
+  box-shadow: var(--elev-2);
 }
 .login__form { min-width: 0; }
-.login__intro { margin-bottom: 2rem; }
+.login__intro { margin-bottom: 1.5rem; text-align: center; }
 .login__intro h1 {
   font-size: 1.875rem;
   line-height: 1.3;
@@ -206,7 +212,7 @@ async function login() {
   letter-spacing: -0.025em;
 }
 .login__intro p {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   font-size: 0.875rem;
   line-height: 1.7;
   color: var(--ink-mute);
@@ -257,16 +263,17 @@ async function login() {
 }
 .login__channel:hover { text-decoration: underline; }
 .login__footer {
-  padding: 1rem 1.25rem 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-top: 1px solid var(--line-soft);
   text-align: center;
   font-size: 0.75rem;
   line-height: 1.7;
   color: var(--ink-mute);
 }
 @media (max-width: 639px) {
-  .login__masthead { padding: 1.25rem; gap: 0.75rem; }
-  .login__logo { width: 5.5rem; height: 2.5rem; }
-  .login__identity { padding-left: 0.75rem; }
+  .login__masthead { margin-bottom: 1.25rem; gap: 0.5rem; }
+  .login__logo { width: 7.5rem; height: 3rem; }
   .login__name { font-size: 0.8125rem; }
   .login__tagline { font-size: 0.75rem; }
   .login__main { padding: 1rem 1rem 2rem; align-content: start; }
