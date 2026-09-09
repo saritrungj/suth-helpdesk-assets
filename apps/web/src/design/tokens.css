@@ -15,7 +15,7 @@
    จริงทุกสี และคำนวณ contrast ล่วงหน้าได้ นอกจากนี้ยังแสดงผลได้กว้างกว่า sRGB
    บนจอ P3 โดยเบราว์เซอร์ทำ gamut mapping ให้เองบนจอที่แคบกว่า
 
-   สีแบรนด์มาจากโลโก้โรงพยาบาลจริง (brand/logo-suthnews.jpg)
+   สีแบรนด์มาจากโลโก้โรงพยาบาลจริง (docs/assets/brand/suth-horizontal-source.png)
      ส้ม  #F05C2A -> oklch(0.662 0.193 38)   ใช้เป็น accent
      teal #3C686E -> oklch(0.488 0.050 207)  ใช้เป็นสีหลักของระบบ (เพิ่ม chroma
                                              ให้อิ่มขึ้นเพื่อให้ใช้เป็นสีปุ่มได้)
@@ -153,6 +153,9 @@
   --surface-3: var(--n-150);        /* hover ของแถว/รายการ */
   --surface-inset: var(--n-100);    /* กล่องที่ "จม" ลงไป เช่น code, well */
   --surface-float: oklch(1 0 0);    /* เมนู popover dialog */
+  --brand-backdrop: oklch(1 0 0);   /* พื้นโลโก้ต้นฉบับ — ขาวคงที่ทั้งสองธีม */
+  --brand-backdrop-ink: var(--n-900);
+  --brand-backdrop-ink-soft: var(--n-650);
   --scrim: oklch(0.270 0.020 220 / 0.45); /* ฉากหลังทึบตอนเปิด dialog */
 
   /* Aurora — ลายเซ็นภาพของระบบ ชั้นแสง teal→ส้มจากสีโลโก้
@@ -329,6 +332,8 @@
   --surface-3: oklch(0.285 0.017 205);
   --surface-inset: oklch(0.190 0.014 205);
   --surface-float: oklch(0.255 0.016 205);
+  /* --brand-backdrop-ink/-ink-soft ไม่ต้องประกาศซ้ำ — n-900/n-650 ไม่เปลี่ยนในโหมดมืด */
+  --brand-backdrop: oklch(1 0 0);   /* ห้ามกลับสี โลโก้ถูกออกแบบบนพื้นขาว */
   --scrim: oklch(0.12 0.012 205 / 0.65);
 
   /* บนพื้นมืด แสงสีต้องแรงขึ้นถึงจะมองเห็น — ค่าเดียวกับโหมดสว่างจะหายไปเลย */
@@ -434,6 +439,7 @@
   --color-surface-3: var(--surface-3);
   --color-surface-inset: var(--surface-inset);
   --color-surface-float: var(--surface-float);
+  --color-brand-backdrop: var(--brand-backdrop);
   --color-scrim: var(--scrim);
 
   --color-line-soft: var(--line-soft);
@@ -530,7 +536,7 @@
   --text-base--line-height: 1.7;
   --text-md: 0.9375rem;               /* 15px */
   --text-md--line-height: 1.7;
-  --text-lg: 1.0625rem;               /* 17px — หัวข้อการ์ด */
+  --text-lg: 1rem;                    /* 16px — หัวข้อส่วน */
   --text-lg--line-height: 1.55;
   --text-xl: 1.25rem;                 /* 20px */
   --text-xl--line-height: 1.45;
@@ -572,6 +578,13 @@
   --dur-enter: 260ms;    /* เนื้อหาตอนเข้าหน้าครั้งแรก */
   --dur-chart: 250ms;    /* กราฟปรับตามข้อมูลใหม่ */
   --dur-aurora: 600ms;   /* artwork ตอนเข้าหน้า — เล่นครั้งเดียวแล้วหยุดถาวร */
+
+  /* App shell contract — รวมไว้ที่เดียวเพื่อไม่ให้ layout ของแต่ละหน้าเพี้ยน */
+  --shell-sidebar-width: 14.5rem;      /* 232px */
+  --shell-sidebar-rail-width: 4rem;   /* 64px */
+  --shell-topbar-height: 3.5rem;      /* 56px */
+  --shell-content-padding: 1.5rem;    /* 24px */
+  --shell-content-max: 100rem;        /* 1600px */
 
 
   --animate-fade-in: fade-in 0.16s var(--ease-out-quart);

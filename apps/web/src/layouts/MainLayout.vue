@@ -32,8 +32,8 @@ import AppTopbar from "../app/AppTopbar.vue";
     <div class="flex-1 min-w-0 flex flex-col">
       <AppTopbar />
 
-      <main id="main-content" class="flex-1 min-w-0 px-3 py-5 sm:px-6 sm:py-6" tabindex="-1">
-        <div class="mx-auto w-full max-w-[100rem]">
+      <main id="main-content" class="flex-1 min-w-0 p-[var(--shell-content-padding)]" tabindex="-1">
+        <div class="mx-auto w-full max-w-[var(--shell-content-max)]">
           <RouterView v-slot="{ Component, route }">
             <!-- key ตาม path เพื่อให้หน้าที่ใช้ component เดียวกันแต่คนละ route
                  (เช่น /expense กับ /by-department) ถูกสร้างใหม่จริง ไม่ใช้ state ค้างกัน -->
