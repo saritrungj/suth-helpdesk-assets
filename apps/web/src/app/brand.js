@@ -1,3 +1,4 @@
+import { t } from "../lib/locale";
 /**
  * brand.js — ชื่อและคำบรรยายของระบบ ที่เดียว
  *
@@ -27,16 +28,16 @@ export const APP_NAME = "SUTH Helpdesk Assets";
 export const APP_NAME_SHORT = "SUTH Assets";
 
 /** คำบรรยายสั้นภาษาไทย — บอกว่าระบบทำอะไร */
-export const APP_TAGLINE = "ระบบดูแลทรัพย์สินและงานพิมพ์";
+export const APP_TAGLINE = t("ระบบดูแลทรัพย์สินและงานพิมพ์");
 
 /** ชื่อหน่วยงานเจ้าของระบบ */
-export const ORG_NAME = "โรงพยาบาลมหาวิทยาลัยเทคโนโลยีสุรนารี";
+export const ORG_NAME = t("โรงพยาบาลมหาวิทยาลัยเทคโนโลยีสุรนารี");
 
 /** ชื่อหน่วยงานแบบย่อ ใช้ในที่แคบ */
-export const ORG_NAME_SHORT = "โรงพยาบาล มทส.";
+export const ORG_NAME_SHORT = t("โรงพยาบาล มทส.");
 
 /** ฝ่ายที่ดูแลระบบ — ใช้ในข้อความติดต่อเมื่อเข้าใช้งานไม่ได้ */
-export const OWNER_TEAM = "ฝ่ายเทคโนโลยีสารสนเทศ";
+export const OWNER_TEAM = t("ฝ่ายเทคโนโลยีสารสนเทศ");
 
 /**
  * ชื่อแท็บเบราว์เซอร์

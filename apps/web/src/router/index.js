@@ -1,3 +1,4 @@
+import { t } from "../lib/locale";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { authState } from "../store/auth";
@@ -57,7 +58,7 @@ const routes = [
     name: "AssetDetail",
     component: () => import("../views/AssetDetail.vue"),
     // ชื่อขั้นสุดท้ายของ breadcrumb — หน้านี้ไม่มีรายการเมนูของตัวเอง
-    meta: { breadcrumb: "รายละเอียดเครื่อง" },
+    meta: { breadcrumb: t("รายละเอียดเครื่อง") },
   },
 
   // ค่าใช้จ่าย + ยอดพิมพ์แยกตามฝ่าย/แผนก อยู่หน้าเดียวกันเป็นแท็บ

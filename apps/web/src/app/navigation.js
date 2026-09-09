@@ -1,3 +1,4 @@
+import { t } from "../lib/locale";
 import {
   Boxes,
   Building2,
@@ -53,55 +54,55 @@ import {
 export const NAV_GROUPS = [
   {
     key: "today",
-    label: "ศูนย์งาน",
+    label: t("ศูนย์งาน"),
     items: [
       {
         to: "/dashboard",
-        label: "แดชบอร์ด",
+        label: t("แดชบอร์ด"),
         icon: Gauge,
-        keywords: "dashboard home หน้าแรก ภาพรวม สรุป งานค้าง",
+        keywords: t("dashboard home หน้าแรก ภาพรวม สรุป งานค้าง"),
       },
     ],
   },
   {
     key: "routine",
-    label: "งานประจำ",
+    label: t("งานประจำ"),
     items: [
       {
         to: "/print-transactions",
-        label: "บันทึกยอดพิมพ์",
+        label: t("บันทึกยอดพิมพ์"),
         icon: Printer,
-        keywords: "meter มิเตอร์ ยอดพิมพ์ print counter บันทึก กรอก",
+        keywords: t("meter มิเตอร์ ยอดพิมพ์ print counter บันทึก กรอก"),
       },
       {
         to: "/assets",
-        label: "ทะเบียนทรัพย์สิน",
+        label: t("ทะเบียนทรัพย์สิน"),
         icon: Boxes,
-        keywords: "asset device เครื่อง ทะเบียน ครุภัณฑ์ printer เพิ่ม นำเข้า",
+        keywords: t("asset device เครื่อง ทะเบียน ครุภัณฑ์ printer เพิ่ม นำเข้า"),
       },
     ],
   },
   {
     key: "analyse",
-    label: "วิเคราะห์",
+    label: t("วิเคราะห์"),
     items: [
       {
         to: "/expense",
-        label: "ค่าใช้จ่าย",
+        label: t("ค่าใช้จ่าย"),
         icon: Wallet,
-        keywords: "expense cost เงิน ค่าใช้จ่าย งบ สัญญา แผนก",
+        keywords: t("expense cost เงิน ค่าใช้จ่าย งบ สัญญา แผนก"),
       },
       {
         to: "/compare",
-        label: "เปรียบเทียบรายเดือน",
+        label: t("เปรียบเทียบรายเดือน"),
         icon: ChartColumnBig,
-        keywords: "compare เทียบ เดือน month",
+        keywords: t("compare เทียบ เดือน month"),
       },
       {
         to: "/report",
-        label: "รายงานสรุป",
+        label: t("รายงานสรุป"),
         icon: ScrollText,
-        keywords: "report สรุป พิมพ์ออก export",
+        keywords: t("report สรุป พิมพ์ออก export"),
       },
     ],
   },
@@ -117,63 +118,63 @@ export const NAV_GROUPS = [
 export const ADMIN_GROUPS = [
   {
     key: "admin",
-    label: "จัดการระบบ",
+    label: t("จัดการระบบ"),
     admin: true,
     items: [
       {
         to: "/admin/contracts",
-        label: "สัญญา",
+        label: t("สัญญา"),
         icon: ReceiptText,
-        keywords: "contract สัญญา ราคาต่อแผ่น",
+        keywords: t("contract สัญญา ราคาต่อแผ่น"),
         admin: true,
       },
       {
         to: "/admin/fiscal-years",
-        label: "ปีงบประมาณ",
+        label: t("ปีงบประมาณ"),
         icon: CalendarRange,
-        keywords: "fiscal year ปีงบ งบประมาณ",
+        keywords: t("fiscal year ปีงบ งบประมาณ"),
         admin: true,
       },
       {
         to: "/admin/brands",
-        label: "ยี่ห้อ",
+        label: t("ยี่ห้อ"),
         icon: Tags,
-        keywords: "brand ยี่ห้อ รุ่น",
+        keywords: t("brand ยี่ห้อ รุ่น"),
         admin: true,
       },
       {
         to: "/admin/buildings",
-        label: "อาคาร",
+        label: t("อาคาร"),
         icon: Building2,
-        keywords: "building อาคาร ตึก",
+        keywords: t("building อาคาร ตึก"),
         admin: true,
       },
       {
         to: "/admin/floors",
-        label: "ชั้น",
+        label: t("ชั้น"),
         icon: Layers,
-        keywords: "floor ชั้น",
+        keywords: t("floor ชั้น"),
         admin: true,
       },
       {
         to: "/admin/divisions",
-        label: "ฝ่าย",
+        label: t("ฝ่าย"),
         icon: Users,
-        keywords: "division ฝ่าย",
+        keywords: t("division ฝ่าย"),
         admin: true,
       },
       {
         to: "/admin/departments",
-        label: "แผนก",
+        label: t("แผนก"),
         icon: FolderTree,
-        keywords: "department แผนก หน่วยงาน",
+        keywords: t("department แผนก หน่วยงาน"),
         admin: true,
       },
       {
         to: "/admin/users",
-        label: "จัดการผู้ใช้งาน",
+        label: t("จัดการผู้ใช้งาน"),
         icon: UserCog,
-        keywords: "user account ผู้ใช้ รหัสผ่าน สิทธิ์",
+        keywords: t("user account ผู้ใช้ รหัสผ่าน สิทธิ์"),
         admin: true,
       },
     ],
@@ -190,9 +191,9 @@ export const ADMIN_GROUPS = [
 export const HIDDEN_NAV_ITEMS = [
   {
     to: "/admin/add-asset",
-    label: "เพิ่มทรัพย์สิน",
+    label: t("เพิ่มทรัพย์สิน"),
     icon: CirclePlus,
-    keywords: "add new เพิ่ม สร้าง import นำเข้า เครื่องใหม่",
+    keywords: t("add new เพิ่ม สร้าง import นำเข้า เครื่องใหม่"),
     admin: true,
   },
 ];
@@ -202,7 +203,7 @@ export const ALL_NAV_ITEMS = [
   ...[...NAV_GROUPS, ...ADMIN_GROUPS].flatMap((group) =>
     group.items.map((item) => ({ ...item, groupLabel: group.label }))
   ),
-  ...HIDDEN_NAV_ITEMS.map((item) => ({ ...item, groupLabel: "จัดการระบบ" })),
+  ...HIDDEN_NAV_ITEMS.map((item) => ({ ...item, groupLabel: t("จัดการระบบ") })),
 ];
 
 /** ไอคอนสำหรับหัวข้อกลุ่ม Admin ในแถบเมนู */

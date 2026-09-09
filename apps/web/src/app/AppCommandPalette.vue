@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * AppCommandPalette — ช่องค้นหาคำสั่ง เปิดด้วย Ctrl+K (หรือ ⌘K บน Mac)
  *
@@ -100,13 +102,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
                w-[calc(100%-2rem)] max-w-xl overflow-hidden
                rounded-xl border border-line-soft bg-surface-float shadow-pop
                data-[state=open]:animate-pop-in"
-        aria-label="ค้นหาหน้าในระบบ"
+        :aria-label="t(&quot;ค้นหาหน้าในระบบ&quot;)"
         aria-describedby="undefined"
         @keydown.down.prevent="move(1)"
         @keydown.up.prevent="move(-1)"
         @keydown.enter.prevent="go(results[cursor])"
       >
-        <DialogTitle class="sr-only">ค้นหาหน้าในระบบ</DialogTitle>
+        <DialogTitle class="sr-only"> {{ t("ค้นหาหน้าในระบบ") }} </DialogTitle>
 
         <div class="flex items-center gap-2.5 px-4 h-12 border-b border-line-soft">
           <Search :size="17" class="text-ink-faint shrink-0" aria-hidden="true" />
@@ -114,7 +116,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
             ref="inputEl"
             v-model="query"
             type="text"
-            placeholder="พิมพ์ชื่อหน้าที่ต้องการไป…"
+            :placeholder="t(&quot;พิมพ์ชื่อหน้าที่ต้องการไป…&quot;)"
             class="flex-1 bg-transparent outline-none text-md text-ink placeholder:text-ink-faint"
             aria-controls="command-results"
             autocomplete="off"
@@ -158,8 +160,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
           </li>
         </ul>
 
-        <p v-else class="px-4 py-10 text-center text-sm text-ink-mute">
-          ไม่พบหน้าที่ตรงกับ &ldquo;{{ query }}&rdquo;
+        <p v-else class="px-4 py-10 text-center text-sm text-ink-mute"> {{ t("ไม่พบหน้าที่ตรงกับ “") }} {{ query }}&rdquo;
         </p>
 
         <div
@@ -167,13 +168,9 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
         >
           <span class="flex items-center gap-1.5">
             <kbd class="font-mono px-1 py-0.5 rounded-xs border border-line-soft">↑</kbd>
-            <kbd class="font-mono px-1 py-0.5 rounded-xs border border-line-soft">↓</kbd>
-            เลื่อน
-          </span>
+            <kbd class="font-mono px-1 py-0.5 rounded-xs border border-line-soft">↓</kbd> {{ t("เลื่อน") }} </span>
           <span class="flex items-center gap-1.5">
-            <kbd class="font-mono px-1 py-0.5 rounded-xs border border-line-soft">Enter</kbd>
-            เปิดหน้า
-          </span>
+            <kbd class="font-mono px-1 py-0.5 rounded-xs border border-line-soft">Enter</kbd> {{ t("เปิดหน้า") }} </span>
         </div>
       </DialogContent>
     </DialogPortal>

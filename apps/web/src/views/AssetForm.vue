@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * AssetForm — หน้าต่างแก้ไข/เพิ่มเครื่องหนึ่งเครื่อง
  *
@@ -45,19 +47,17 @@ async function save() {
 <template>
   <UiModal
     :open="modelValue"
-    :title="assetId ? 'แก้ไขข้อมูลเครื่อง' : 'เพิ่มเครื่องเข้าทะเบียน'"
-    description="ช่องที่มีเครื่องหมาย * ต้องกรอก ช่องอื่นเว้นไว้แล้วมาเติมทีหลังได้"
+    :title="assetId ? t(&quot;แก้ไขข้อมูลเครื่อง&quot;) : t(&quot;เพิ่มเครื่องเข้าทะเบียน&quot;)"
+    :description="t(&quot;ช่องที่มีเครื่องหมาย * ต้องกรอก ช่องอื่นเว้นไว้แล้วมาเติมทีหลังได้&quot;)"
     size="lg"
     @update:open="emit('update:modelValue', $event)"
   >
     <DeviceFormFields ref="fields" :asset-id="assetId" />
 
     <template #footer>
-      <UiButton variant="secondary" :disabled="busy" @click="emit('update:modelValue', false)">
-        ยกเลิก
-      </UiButton>
+      <UiButton variant="secondary" :disabled="busy" @click="emit('update:modelValue', false)"> {{ t("ยกเลิก") }} </UiButton>
       <UiButton variant="primary" :loading="busy" @click="save">
-        {{ assetId ? "บันทึกการแก้ไข" : "เพิ่มเครื่อง" }}
+        {{ assetId ? t("บันทึกการแก้ไข") : t("เพิ่มเครื่อง") }}
       </UiButton>
     </template>
   </UiModal>

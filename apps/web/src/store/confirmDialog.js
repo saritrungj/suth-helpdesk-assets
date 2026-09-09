@@ -1,3 +1,4 @@
+import { t } from "../lib/locale";
 import { reactive } from "vue";
 
 /**
@@ -12,10 +13,10 @@ import { reactive } from "vue";
 
 export const confirmState = reactive({
   visible: false,
-  title: "ยืนยันการทำรายการ",
+  title: t("ยืนยันการทำรายการ"),
   message: "",
-  confirmText: "ยืนยัน",
-  cancelText: "ยกเลิก",
+  confirmText: t("ยืนยัน"),
+  cancelText: t("ยกเลิก"),
   danger: true,
   _resolve: null,
 });
@@ -27,10 +28,10 @@ export function askConfirm(message, options = {}) {
       confirmState._resolve(false);
     }
 
-    confirmState.title = options.title ?? "ยืนยันการทำรายการ";
+    confirmState.title = options.title ?? t("ยืนยันการทำรายการ");
     confirmState.message = message;
-    confirmState.confirmText = options.confirmText ?? "ยืนยัน";
-    confirmState.cancelText = options.cancelText ?? "ยกเลิก";
+    confirmState.confirmText = options.confirmText ?? t("ยืนยัน");
+    confirmState.cancelText = options.cancelText ?? t("ยกเลิก");
     confirmState.danger = options.danger ?? true;
     confirmState._resolve = resolve;
     confirmState.visible = true;

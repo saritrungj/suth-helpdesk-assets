@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../../lib/locale";
+
 /**
  * Building — อาคารในโรงพยาบาล
  *
@@ -8,32 +10,32 @@
 import MasterDataPage from "../../components/MasterDataPage.vue";
 
 const columns = [
-  { key: "name", label: "ชื่ออาคาร" },
-  { key: "id", label: "รหัส", align: "right", width: "6rem" },
+  { key: "name", label: t("ชื่ออาคาร") },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
 ];
 
 const fields = [
   {
     key: "name",
-    label: "ชื่ออาคาร",
+    label: t("ชื่ออาคาร"),
     type: "text",
     required: true,
     unique: true,
     maxlength: 100,
-    placeholder: "เช่น อาคารรัตนเวชพัฒน์",
+    placeholder: t("เช่น อาคารรัตนเวชพัฒน์"),
   },
 ];
 </script>
 
 <template>
   <MasterDataPage
-    title="อาคาร"
-    eyebrow="ข้อมูลอ้างอิง · สถานที่"
-    description="อาคารที่ใช้จัดกลุ่มเครื่องพิมพ์และแยกยอดในรายงาน"
+    :title="t(&quot;อาคาร&quot;)"
+    :eyebrow="t(&quot;ข้อมูลอ้างอิง · สถานที่&quot;)"
+    :description="t(&quot;อาคารที่ใช้จัดกลุ่มเครื่องพิมพ์และแยกยอดในรายงาน&quot;)"
     endpoint="/buildings"
-    item-noun="อาคาร"
+    :item-noun="t(&quot;อาคาร&quot;)"
     export-filename="buildings"
-    empty-hint="เพิ่มอาคารก่อน แล้วจึงเพิ่มชั้นในอาคารนั้น"
+    :empty-hint="t(&quot;เพิ่มอาคารก่อน แล้วจึงเพิ่มชั้นในอาคารนั้น&quot;)"
     :columns="columns"
     :fields="fields"
   />

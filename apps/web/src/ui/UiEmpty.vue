@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiEmpty — สถานะ "ยังไม่มีข้อมูล"
  *
@@ -16,7 +18,7 @@ import { computed } from "vue";
 import { Inbox, SearchX } from "lucide-vue-next";
 
 const props = defineProps({
-  title: { type: String, default: "ยังไม่มีข้อมูล" },
+  title: { type: String, default: t("ยังไม่มีข้อมูล") },
   description: { type: String, default: "" },
   variant: { type: String, default: "empty" },
   /** ย่อขนาดลงสำหรับใช้ในกล่องเล็ก เช่น ในการ์ดกราฟ */

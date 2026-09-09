@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * MainLayout — โครงหน้าจอของทุกหน้าหลังล็อกอิน
  *
@@ -23,9 +25,7 @@ import AppTopbar from "../app/AppTopbar.vue";
       class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200]
              focus:w-auto focus:h-auto focus:m-0 focus:px-4 focus:py-2 focus:rounded-lg
              focus:bg-brand focus:text-brand-on focus:shadow-e3"
-    >
-      ข้ามไปยังเนื้อหา
-    </a>
+    > {{ t("ข้ามไปยังเนื้อหา") }} </a>
 
     <AppSidebar />
 

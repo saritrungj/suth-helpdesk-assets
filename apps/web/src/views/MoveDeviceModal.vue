@@ -1,4 +1,9 @@
 <script setup>
+import { formatDate } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+import { errorMessage } from "../lib/api-error";
+
 /**
  * MoveDeviceModal — ย้ายเครื่องไปที่ตั้ง/หน่วยงานใหม่
  *
@@ -17,7 +22,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { ArrowRight, History, MapPin } from "lucide-vue-next";
-import { formatDateTH } from "@suth/domain";
+
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateAfterWrite } from "../api/invalidate";
@@ -104,8 +109,8 @@ watch(
 );
 
 function nameOf(list, id) {
-  if (!id) return "ยังไม่ระบุ";
-  return list.find((item) => Number(item.id) === Number(id))?.name ?? "ยังไม่ระบุ";
+  if (!id) return t("ยังไม่ระบุ");
+  return list.find((item) => Number(item.id) === Number(id))?.name ?? t("ยังไม่ระบุ");
 }
 
 const destination = computed(() => {
@@ -118,16 +123,16 @@ const destination = computed(() => {
     form.value.floor_id ? nameOf(floors.value, form.value.floor_id) : "",
     form.value.location?.trim() ?? "",
   ]
-    .filter((p) => p && p !== "ยังไม่ระบุ")
+    .filter((p) => p && p !== t("ยังไม่ระบุ"))
     .join(" · ");
 
   return `${parts.join(" / ")}${place ? ` — ${place}` : ""}`;
 });
 
 const origin = computed(() => {
-  if (!currentUsage.value) return "ที่ตั้งปัจจุบัน";
+  if (!currentUsage.value) return t("ที่ตั้งปัจจุบัน");
   const usage = currentUsage.value;
-  return `${usage.division_name || "ไม่ระบุฝ่าย"} / ${usage.department_name || "ไม่ระบุแผนก"}`;
+  return `${usage.division_name || t("ไม่ระบุฝ่าย")} / ${usage.department_name || t("ไม่ระบุแผนก")}`;
 });
 
 async function loadMasterData() {
@@ -148,7 +153,7 @@ async function loadMasterData() {
     masterLoaded.value = true;
   } catch (err) {
     console.error("Load master data error:", err);
-    formError.value = "โหลดข้อมูลอ้างอิงไม่สำเร็จ";
+    formError.value = t("โหลดข้อมูลอ้างอิงไม่สำเร็จ");
   }
 }
 
@@ -170,7 +175,7 @@ async function loadAsset(id) {
     };
   } catch (err) {
     console.error("Load device error:", err);
-    formError.value = "โหลดข้อมูลเครื่องไม่สำเร็จ";
+    formError.value = t("โหลดข้อมูลเครื่องไม่สำเร็จ");
   } finally {
     loading.value = false;
   }
@@ -210,7 +215,7 @@ async function loadHistory(id) {
  */
 function historyDate(value) {
   if (!value) return "—";
-  return formatDateTH(String(value).split("T")[0]);
+  return formatDate(String(value).split("T")[0]);
 }
 
 watch(
@@ -237,8 +242,8 @@ watch(
 
 async function submit() {
   const confirmed = await askConfirm(
-    `ย้ายจาก\n${origin.value}\n\nไปที่\n${destination.value}\n\nยอดพิมพ์ที่บันทึกไว้ก่อนหน้านี้จะยังเป็นของหน่วยงานเดิม ระบบจะเปิดช่วงใหม่นับจากวันนี้`,
-    { title: "ยืนยันการย้ายเครื่อง", confirmText: "ย้ายเครื่อง", danger: false }
+    t("ย้ายจาก\n{0}\n\nไปที่\n{1}\n\nยอดพิมพ์ที่บันทึกไว้ก่อนหน้านี้จะยังเป็นของหน่วยงานเดิม ระบบจะเปิดช่วงใหม่นับจากวันนี้", [origin.value, destination.value]),
+    { title: t("ยืนยันการย้ายเครื่อง"), confirmText: t("ย้ายเครื่อง"), danger: false }
   );
   if (!confirmed) return;
 
@@ -263,11 +268,11 @@ async function submit() {
     // ไม่ปิดหน้าต่างทันที — โหลดยอดและประวัติใหม่ให้ผู้ใช้เห็นกับตาว่าช่วงเดิมถูก
     // ปิดและบันทึกไว้จริง ของเดิมปิดทันทีจนไม่มีใครรู้ว่าประวัติถูกเขียนหรือไม่
     await Promise.all([loadCurrentUsage(props.assetId), loadHistory(props.assetId)]);
-    successMessage.value = "ย้ายเรียบร้อย — ประวัติด้านล่างอัปเดตแล้ว";
-    toastSuccess("ย้ายเครื่องเรียบร้อย");
+    successMessage.value = t("ย้ายเรียบร้อย — ประวัติด้านล่างอัปเดตแล้ว");
+    toastSuccess(t("ย้ายเครื่องเรียบร้อย"));
   } catch (err) {
     console.error("Move device error:", err);
-    const message = err.response?.data?.error || "ย้ายเครื่องไม่สำเร็จ";
+    const message = errorMessage(err, t("ย้ายเครื่องไม่สำเร็จ"));
     formError.value = message;
     toastError(message);
   } finally {
@@ -279,7 +284,7 @@ async function submit() {
 <template>
   <UiModal
     :open="modelValue"
-    title="ย้ายเครื่อง"
+    :title="t(&quot;ย้ายเครื่อง&quot;)"
     :description="serialNumber ? `Serial ${serialNumber}` : ''"
     size="lg"
     @update:open="emit('update:modelValue', $event)"
@@ -293,7 +298,7 @@ async function submit() {
 
       <!-- ที่ตั้งปัจจุบันและยอดสะสมของช่วงนี้ -->
       <section class="rounded-lg border border-line-soft bg-surface-2 px-4 py-3">
-        <p class="eyebrow mb-2">ช่วงการใช้งานปัจจุบัน</p>
+        <p class="eyebrow mb-2"> {{ t("ช่วงการใช้งานปัจจุบัน") }} </p>
 
         <div v-if="usageLoading" class="flex flex-col gap-2">
           <UiSkeleton height="1rem" width="60%" />
@@ -308,54 +313,52 @@ async function submit() {
 
           <dl class="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs">
             <div class="flex items-baseline gap-1.5">
-              <dt class="text-ink-mute">ยอดพิมพ์สะสม</dt>
+              <dt class="text-ink-mute"> {{ t("ยอดพิมพ์สะสม") }} </dt>
               <dd class="numeral font-semibold text-ink">
-                {{ formatCount(currentUsage.total_pages ?? currentUsage.net_pages) }} หน้า
-              </dd>
+                {{ formatCount(currentUsage.total_pages ?? currentUsage.net_pages) }} {{ t("หน้า") }} </dd>
             </div>
             <div v-if="currentUsage.total_cost !== undefined" class="flex items-baseline gap-1.5">
-              <dt class="text-ink-mute">ค่าใช้จ่ายสะสม</dt>
+              <dt class="text-ink-mute"> {{ t("ค่าใช้จ่ายสะสม") }} </dt>
               <dd class="numeral font-semibold text-ink">
-                {{ formatBahtValue(currentUsage.total_cost) }} บาท
-              </dd>
+                {{ formatBahtValue(currentUsage.total_cost) }} {{ t("บาท") }} </dd>
             </div>
           </dl>
         </template>
 
-        <p v-else class="text-sm text-ink-mute">ยังไม่มียอดพิมพ์บันทึกไว้ในช่วงนี้</p>
+        <p v-else class="text-sm text-ink-mute"> {{ t("ยังไม่มียอดพิมพ์บันทึกไว้ในช่วงนี้") }} </p>
       </section>
 
       <!-- ที่ตั้งใหม่ -->
       <form class="grid grid-cols-1 sm:grid-cols-2 gap-4" @submit.prevent="submit">
-        <UiField label="อาคาร" class="sm:col-span-1">
-          <UiCombobox v-model="form.building_id" :options="buildingOptions" placeholder="เลือกอาคาร" any-label="ยังไม่ระบุ" />
+        <UiField :label="t(&quot;อาคาร&quot;)" class="sm:col-span-1">
+          <UiCombobox v-model="form.building_id" :options="buildingOptions" :placeholder="t(&quot;เลือกอาคาร&quot;)" :any-label="t(&quot;ยังไม่ระบุ&quot;)" />
         </UiField>
 
-        <UiField label="ชั้น" :hint="form.building_id ? '' : 'เลือกอาคารก่อน'">
+        <UiField :label="t(&quot;ชั้น&quot;)" :hint="form.building_id ? '' : t(&quot;เลือกอาคารก่อน&quot;)">
           <UiCombobox
             v-model="form.floor_id"
             :options="floorOptions"
             :disabled="!form.building_id"
-            placeholder="เลือกชั้น"
-            any-label="ยังไม่ระบุ"
+            :placeholder="t(&quot;เลือกชั้น&quot;)"
+            :any-label="t(&quot;ยังไม่ระบุ&quot;)"
           />
         </UiField>
 
-        <UiField label="ตำแหน่งที่ตั้ง" class="sm:col-span-2">
-          <UiInput v-model="form.location" placeholder="เช่น เคาน์เตอร์พยาบาล ฝั่งตะวันออก" />
+        <UiField :label="t(&quot;ตำแหน่งที่ตั้ง&quot;)" class="sm:col-span-2">
+          <UiInput v-model="form.location" :placeholder="t(&quot;เช่น เคาน์เตอร์พยาบาล ฝั่งตะวันออก&quot;)" />
         </UiField>
 
-        <UiField label="ฝ่าย">
-          <UiCombobox v-model="form.division_id" :options="divisionOptions" placeholder="เลือกฝ่าย" any-label="ยังไม่ระบุ" />
+        <UiField :label="t(&quot;ฝ่าย&quot;)">
+          <UiCombobox v-model="form.division_id" :options="divisionOptions" :placeholder="t(&quot;เลือกฝ่าย&quot;)" :any-label="t(&quot;ยังไม่ระบุ&quot;)" />
         </UiField>
 
-        <UiField label="แผนก" :hint="form.division_id ? 'แผนกนี้จะรับผิดชอบค่าใช้จ่ายนับจากวันย้าย' : 'เลือกฝ่ายก่อน'">
+        <UiField :label="t(&quot;แผนก&quot;)" :hint="form.division_id ? t(&quot;แผนกนี้จะรับผิดชอบค่าใช้จ่ายนับจากวันย้าย&quot;) : t(&quot;เลือกฝ่ายก่อน&quot;)">
           <UiCombobox
             v-model="form.department_id"
             :options="departmentOptions"
             :disabled="!form.division_id"
-            placeholder="เลือกแผนก"
-            any-label="ยังไม่ระบุ"
+            :placeholder="t(&quot;เลือกแผนก&quot;)"
+            :any-label="t(&quot;ยังไม่ระบุ&quot;)"
           />
         </UiField>
       </form>
@@ -372,9 +375,7 @@ async function submit() {
       <!-- ประวัติการย้าย -->
       <section>
         <h3 class="flex items-center gap-1.5 eyebrow mb-2">
-          <History :size="13" aria-hidden="true" />
-          ประวัติการย้ายของเครื่องนี้
-        </h3>
+          <History :size="13" aria-hidden="true" /> {{ t("ประวัติการย้ายของเครื่องนี้") }} </h3>
 
         <div v-if="historyLoading" class="flex flex-col gap-2">
           <UiSkeleton v-for="n in 3" :key="n" height="2.25rem" />
@@ -382,8 +383,8 @@ async function submit() {
 
         <UiEmpty
           v-else-if="!historyRows.length"
-          title="ยังไม่เคยย้ายเครื่องนี้"
-          description="การย้ายครั้งแรกจะถูกบันทึกไว้ที่นี่"
+          :title="t(&quot;ยังไม่เคยย้ายเครื่องนี้&quot;)"
+          :description="t(&quot;การย้ายครั้งแรกจะถูกบันทึกไว้ที่นี่&quot;)"
           compact
         />
 
@@ -398,8 +399,8 @@ async function submit() {
               {{ historyDate(row.start_date ?? row.moved_at ?? row.changed_at) }}
             </span>
             <span class="text-ink-soft min-w-0">
-              {{ row.division_name || row.to_division || "ไม่ระบุฝ่าย" }} /
-              {{ row.department_name || row.to_department || "ไม่ระบุแผนก" }}
+              {{ row.division_name || row.to_division || t("ไม่ระบุฝ่าย") }} /
+              {{ row.department_name || row.to_department || t("ไม่ระบุแผนก") }}
             </span>
             <span class="text-xs text-ink-mute min-w-0">
               {{ row.building_name || row.to_building || "" }}
@@ -411,10 +412,8 @@ async function submit() {
     </div>
 
     <template #footer>
-      <UiButton variant="secondary" :disabled="saving" @click="emit('update:modelValue', false)">
-        ปิด
-      </UiButton>
-      <UiButton variant="primary" :loading="saving" @click="submit">ย้ายเครื่อง</UiButton>
+      <UiButton variant="secondary" :disabled="saving" @click="emit('update:modelValue', false)"> {{ t("ปิด") }} </UiButton>
+      <UiButton variant="primary" :loading="saving" @click="submit"> {{ t("ย้ายเครื่อง") }} </UiButton>
     </template>
   </UiModal>
 </template>

@@ -1,4 +1,6 @@
 <script setup>
+import { usePortalTarget } from "./portal-target";
+const portalTarget = usePortalTarget();
 /**
  * UiTooltip — คำอธิบายสั้นที่โผล่เมื่อชี้เมาส์หรือโฟกัสด้วยคีย์บอร์ด
  *
@@ -40,7 +42,7 @@ const enabled = computed(() => Boolean(props.content) || Boolean(slots.content))
         <slot />
       </TooltipTrigger>
 
-      <TooltipPortal>
+      <TooltipPortal :to="portalTarget">
         <TooltipContent
           :side="side"
           :side-offset="6"

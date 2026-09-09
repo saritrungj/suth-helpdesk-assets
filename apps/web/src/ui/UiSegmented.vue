@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiSegmented — ปุ่มเลือกหนึ่งจากไม่กี่ตัวเลือก วางเรียงติดกันในราง
  *
@@ -19,7 +21,7 @@ const props = defineProps({
   /** [{ value, label, icon?, count? }] */
   options: { type: Array, required: true },
   size: { type: String, default: "md" },
-  label: { type: String, default: "ตัวเลือก" },
+  label: { type: String, default: t("ตัวเลือก") },
   block: { type: Boolean, default: false },
 });
 

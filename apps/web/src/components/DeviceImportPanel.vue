@@ -1,4 +1,7 @@
 <script setup>
+import { t } from "../lib/locale";
+import { errorMessage } from "../lib/api-error";
+
 /**
  * DeviceImportPanel — นำเข้าทะเบียนเครื่องจากไฟล์ CSV/Excel
  *
@@ -80,7 +83,7 @@ async function upload() {
     emit("imported", res.data);
   } catch (err) {
     console.error("Import devices error:", err);
-    result.value = { error: err.response?.data?.error || "นำเข้าไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" };
+    result.value = { error: errorMessage(err, t("นำเข้าไม่สำเร็จ กรุณาลองใหม่อีกครั้ง")) };
   } finally {
     uploading.value = false;
   }
@@ -95,15 +98,9 @@ function onFileChange(next) {
 
 <template>
   <div class="flex flex-col gap-4">
-    <UiAlert tone="info" title="นำเข้าจากไฟล์ที่มีอยู่แล้วจะเร็วกว่ามาก">
-      กรอกข้อมูลลงไฟล์ตัวอย่าง แล้วอัปโหลดกลับมาได้ทั้งหมดในครั้งเดียว
-      แถวที่ข้อมูลอ้างอิงไม่ตรงกับในระบบจะถูกข้ามพร้อมบอกเหตุผลรายแถว
-
-      <template #actions>
+    <UiAlert tone="info" :title="t(&quot;นำเข้าจากไฟล์ที่มีอยู่แล้วจะเร็วกว่ามาก&quot;)"> {{ t("กรอกข้อมูลลงไฟล์ตัวอย่าง แล้วอัปโหลดกลับมาได้ทั้งหมดในครั้งเดียว แถวที่ข้อมูลอ้างอิงไม่ตรงกับในระบบจะถูกข้ามพร้อมบอกเหตุผลรายแถว") }} <template #actions>
         <UiButton size="sm" variant="secondary" @click="downloadTemplate">
-          <template #icon><Download :size="14" /></template>
-          ไฟล์ตัวอย่าง
-        </UiButton>
+          <template #icon><Download :size="14" /></template> {{ t("ไฟล์ตัวอย่าง") }} </UiButton>
       </template>
     </UiAlert>
 
@@ -112,7 +109,7 @@ function onFileChange(next) {
     <div class="flex justify-end">
       <UiButton variant="primary" :disabled="!file" :loading="uploading" @click="upload">
         <template #icon><Upload :size="15" /></template>
-        {{ uploading ? "กำลังนำเข้า…" : "นำเข้าข้อมูล" }}
+        {{ uploading ? t("กำลังนำเข้า…") : t("นำเข้าข้อมูล") }}
       </UiButton>
     </div>
 
@@ -121,7 +118,7 @@ function onFileChange(next) {
     <template v-else-if="result">
       <div class="grid grid-cols-3 gap-3">
         <div class="card px-4 py-3">
-          <p class="eyebrow">แถวในไฟล์</p>
+          <p class="eyebrow"> {{ t("แถวในไฟล์") }} </p>
           <p class="text-xl font-semibold text-ink numeral mt-0.5">
             {{ formatCount(result.total_rows) }}
           </p>
@@ -129,9 +126,7 @@ function onFileChange(next) {
 
         <div class="card px-4 py-3 border-ok-line bg-ok-soft/40">
           <p class="eyebrow flex items-center gap-1 text-ok-ink">
-            <CircleCheck :size="12" aria-hidden="true" />
-            บันทึกสำเร็จ
-          </p>
+            <CircleCheck :size="12" aria-hidden="true" /> {{ t("บันทึกสำเร็จ") }} </p>
           <p class="text-xl font-semibold text-ok-ink numeral mt-0.5">
             {{ formatCount(result.inserted) }}
           </p>
@@ -142,9 +137,7 @@ function onFileChange(next) {
           :class="skipped.length && 'border-warn-line bg-warn-soft/40'"
         >
           <p class="eyebrow flex items-center gap-1" :class="skipped.length && 'text-warn-ink'">
-            <TriangleAlert v-if="skipped.length" :size="12" aria-hidden="true" />
-            ข้ามไป
-          </p>
+            <TriangleAlert v-if="skipped.length" :size="12" aria-hidden="true" /> {{ t("ข้ามไป") }} </p>
           <p
             class="text-xl font-semibold numeral mt-0.5"
             :class="skipped.length ? 'text-warn-ink' : 'text-ink'"
@@ -157,8 +150,8 @@ function onFileChange(next) {
       <UiCard
         v-if="skipped.length"
         flush
-        title="แถวที่ยังไม่ได้บันทึก"
-        description="แก้ค่าในไฟล์ให้ตรงกับชื่อที่มีอยู่จริงในระบบ แล้วนำเข้าไฟล์เดิมซ้ำได้เลย"
+        :title="t(&quot;แถวที่ยังไม่ได้บันทึก&quot;)"
+        :description="t(&quot;แก้ค่าในไฟล์ให้ตรงกับชื่อที่มีอยู่จริงในระบบ แล้วนำเข้าไฟล์เดิมซ้ำได้เลย&quot;)"
       >
         <div class="overflow-x-auto max-h-72">
           <table class="w-full text-sm border-collapse">
@@ -167,15 +160,9 @@ function onFileChange(next) {
                 <th class="text-left font-semibold text-xs text-ink-mute px-4 py-2 border-b border-line-soft">
                   Serial
                 </th>
-                <th class="text-left font-semibold text-xs text-ink-mute px-4 py-2 border-b border-line-soft">
-                  ยี่ห้อ
-                </th>
-                <th class="text-left font-semibold text-xs text-ink-mute px-4 py-2 border-b border-line-soft">
-                  อาคาร
-                </th>
-                <th class="text-left font-semibold text-xs text-ink-mute px-4 py-2 border-b border-line-soft">
-                  เหตุผลที่ข้าม
-                </th>
+                <th class="text-left font-semibold text-xs text-ink-mute px-4 py-2 border-b border-line-soft"> {{ t("ยี่ห้อ") }} </th>
+                <th class="text-left font-semibold text-xs text-ink-mute px-4 py-2 border-b border-line-soft"> {{ t("อาคาร") }} </th>
+                <th class="text-left font-semibold text-xs text-ink-mute px-4 py-2 border-b border-line-soft"> {{ t("เหตุผลที่ข้าม") }} </th>
               </tr>
             </thead>
             <tbody>

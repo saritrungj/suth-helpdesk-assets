@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * AppSidebar — แถบเมนูหลักด้านซ้าย
  *
@@ -56,7 +58,7 @@ watch(() => route.fullPath, closeMobileNav);
       uiState.navCollapsed ? 'w-16' : 'w-56',
       uiState.mobileNavOpen ? 'translate-x-0 shadow-e3' : '-translate-x-full',
     ]"
-    :aria-label="'เมนูหลัก'"
+    :aria-label="t(&quot;เมนูหลัก&quot;)"
   >
     <!-- ตราสัญลักษณ์ -->
     <div class="flex items-center gap-2.5 h-14 px-3 shrink-0 border-b border-line-soft">
@@ -84,7 +86,7 @@ watch(() => route.fullPath, closeMobileNav);
       <button
         type="button"
         class="lg:hidden ml-auto grid place-items-center w-8 h-8 rounded-md text-ink-mute hover:bg-surface-3 hover:text-ink transition-colors"
-        aria-label="ปิดเมนู"
+        :aria-label="t(&quot;ปิดเมนู&quot;)"
         @click="closeMobileNav"
       >
         <X :size="18" aria-hidden="true" />
@@ -179,7 +181,7 @@ watch(() => route.fullPath, closeMobileNav);
         class="flex items-center gap-2.5 w-full h-9 px-2.5 rounded-lg text-sm text-ink-mute
                hover:bg-surface-3 hover:text-ink transition-colors"
         :aria-pressed="uiState.navCollapsed"
-        :title="uiState.navCollapsed ? 'กางแถบเมนู' : 'พับแถบเมนูให้เหลือไอคอน'"
+        :title="uiState.navCollapsed ? t(&quot;กางแถบเมนู&quot;) : t(&quot;พับแถบเมนูให้เหลือไอคอน&quot;)"
         @click="toggleNavCollapsed"
       >
         <component
@@ -188,7 +190,7 @@ watch(() => route.fullPath, closeMobileNav);
           class="shrink-0"
           aria-hidden="true"
         />
-        <span v-if="!uiState.navCollapsed" class="truncate">พับเมนู</span>
+        <span v-if="!uiState.navCollapsed" class="truncate"> {{ t("พับเมนู") }} </span>
       </button>
     </div>
   </aside>

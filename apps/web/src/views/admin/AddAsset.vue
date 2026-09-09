@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../../lib/locale";
+
 /**
  * AddAsset — หน้าเพิ่มเครื่องเข้าทะเบียน (/admin/add-asset)
  *
@@ -23,8 +25,8 @@ const router = useRouter();
 const route = useRoute();
 
 const TABS = [
-  { value: "single", label: "เพิ่มทีละเครื่อง", icon: Plus },
-  { value: "import", label: "นำเข้าจากไฟล์", icon: FileSpreadsheet },
+  { value: "single", label: t("เพิ่มทีละเครื่อง"), icon: Plus },
+  { value: "import", label: t("นำเข้าจากไฟล์"), icon: FileSpreadsheet },
 ];
 
 const tab = computed({
@@ -52,16 +54,16 @@ async function save(goBack) {
 <template>
   <div>
     <UiPageHeader
-      eyebrow="ผู้ดูแลระบบ · อุปกรณ์"
-      title="เพิ่มเครื่องเข้าทะเบียน"
-      description="กรอกทีละเครื่องสำหรับของที่เพิ่งรับเข้ามา หรือนำเข้าทั้งล็อตจากไฟล์ที่มีอยู่แล้ว"
+      :eyebrow="t(&quot;ผู้ดูแลระบบ · อุปกรณ์&quot;)"
+      :title="t(&quot;เพิ่มเครื่องเข้าทะเบียน&quot;)"
+      :description="t(&quot;กรอกทีละเครื่องสำหรับของที่เพิ่งรับเข้ามา หรือนำเข้าทั้งล็อตจากไฟล์ที่มีอยู่แล้ว&quot;)"
     >
       <template #actions>
-        <UiButton to="/assets" variant="secondary">กลับไปหน้าทะเบียน</UiButton>
+        <UiButton to="/assets" variant="secondary"> {{ t("กลับไปหน้าทะเบียน") }} </UiButton>
       </template>
     </UiPageHeader>
 
-    <UiTabs v-model="tab" :tabs="TABS" label="วิธีเพิ่มเครื่อง">
+    <UiTabs v-model="tab" :tabs="TABS" :label="t(&quot;วิธีเพิ่มเครื่อง&quot;)">
       <template #single>
         <UiCard>
           <DeviceFormFields ref="fields" :asset-id="null" />
@@ -70,12 +72,8 @@ async function save(goBack) {
             <div class="flex flex-wrap justify-end gap-2">
               <!-- "บันทึกแล้วเพิ่มต่อ" มีไว้สำหรับตอนรับเครื่องเข้ามาหลายตัวพร้อมกัน
                    ไม่ต้องกลับไปกดปุ่มเพิ่มใหม่ทุกครั้ง -->
-              <UiButton variant="secondary" :loading="saving" @click="save(false)">
-                บันทึกแล้วเพิ่มเครื่องถัดไป
-              </UiButton>
-              <UiButton variant="primary" :loading="saving" @click="save(true)">
-                บันทึกและกลับไปหน้าทะเบียน
-              </UiButton>
+              <UiButton variant="secondary" :loading="saving" @click="save(false)"> {{ t("บันทึกแล้วเพิ่มเครื่องถัดไป") }} </UiButton>
+              <UiButton variant="primary" :loading="saving" @click="save(true)"> {{ t("บันทึกและกลับไปหน้าทะเบียน") }} </UiButton>
             </div>
           </template>
         </UiCard>

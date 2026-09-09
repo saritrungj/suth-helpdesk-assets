@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiField — ป้ายกำกับ คำอธิบาย และข้อความแจ้งเตือนของช่องกรอกหนึ่งช่อง
  *
@@ -79,7 +81,7 @@ provideField({
     >
       {{ label }}
       <span v-if="required" class="text-danger-ink" aria-hidden="true">*</span>
-      <span v-if="required" class="sr-only">จำเป็นต้องกรอก</span>
+      <span v-if="required" class="sr-only"> {{ t("จำเป็นต้องกรอก") }} </span>
     </label>
 
     <div class="min-w-0" :class="inline && 'flex-1'">

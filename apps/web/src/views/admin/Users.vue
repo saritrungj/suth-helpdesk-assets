@@ -1,4 +1,7 @@
 <script setup>
+import { formatDate } from "../../lib/locale-format";
+import { t } from "../../lib/locale";
+
 /**
  * Users — จัดการบัญชีผู้ใช้งานและสิทธิ์
  *
@@ -18,6 +21,7 @@ import api from "../../services/api";
 import { authState } from "../../store/auth";
 import { askConfirm } from "../../store/confirmDialog";
 import { toastError, toastSuccess } from "../../store/toast";
+import { errorMessage } from "../../lib/api-error";
 import {
   UiAlert,
   UiBadge,
@@ -34,21 +38,21 @@ import {
 const ROLES = [
   {
     value: "admin",
-    label: "ผู้ดูแลระบบ",
+    label: t("ผู้ดูแลระบบ"),
     tone: "accent",
-    hint: "ทำได้ทุกอย่าง รวมถึงแก้ข้อมูลอ้างอิง สัญญา และจัดการผู้ใช้งาน",
+    hint: t("ทำได้ทุกอย่าง รวมถึงแก้ข้อมูลอ้างอิง สัญญา และจัดการผู้ใช้งาน"),
   },
   {
     value: "staff",
-    label: "เจ้าหน้าที่",
+    label: t("เจ้าหน้าที่"),
     tone: "brand",
-    hint: "บันทึกและแก้ไขยอดพิมพ์รายเดือนได้ แต่เข้าเมนูผู้ดูแลระบบไม่ได้",
+    hint: t("บันทึกและแก้ไขยอดพิมพ์รายเดือนได้ แต่เข้าเมนูผู้ดูแลระบบไม่ได้"),
   },
   {
     value: "viewer",
-    label: "ดูอย่างเดียว",
+    label: t("ดูอย่างเดียว"),
     tone: "neutral",
-    hint: "เปิดดูรายงานและทะเบียนได้ แต่แก้ไขอะไรไม่ได้เลย",
+    hint: t("เปิดดูรายงานและทะเบียนได้ แต่แก้ไขอะไรไม่ได้เลย"),
   },
 ];
 
@@ -68,14 +72,14 @@ const isEditing = computed(() => editingId.value !== null);
 const selectedRoleHint = computed(() => roleOf(form.value.role)?.hint ?? "");
 
 const columns = [
-  { key: "username", label: "ชื่อผู้ใช้" },
-  { key: "role", label: "สิทธิ์การใช้งาน", value: (u) => roleOf(u.role)?.label ?? u.role },
+  { key: "username", label: t("ชื่อผู้ใช้") },
+  { key: "role", label: t("สิทธิ์การใช้งาน"), value: (u) => roleOf(u.role)?.label ?? u.role },
   {
     key: "created_at",
-    label: "สร้างเมื่อ",
-    value: (u) => (u.created_at ? new Date(u.created_at).toLocaleDateString("th-TH") : "—"),
+    label: t("สร้างเมื่อ"),
+    value: (u) => (u.created_at ? formatDate(u.created_at) : "—"),
   },
-  { key: "id", label: "รหัส", align: "right", width: "6rem" },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
 ];
 
 function isSelf(user) {
@@ -91,7 +95,7 @@ async function load() {
     users.value = res.data ?? [];
   } catch (err) {
     console.error("Load users error:", err);
-    loadError.value = "โหลดรายชื่อผู้ใช้งานไม่สำเร็จ";
+    loadError.value = t("โหลดรายชื่อผู้ใช้งานไม่สำเร็จ");
   } finally {
     loading.value = false;
   }
@@ -115,12 +119,12 @@ function openEdit(user) {
 function validate() {
   const { username, password, role } = form.value;
 
-  if (!username.trim()) return "กรอกชื่อผู้ใช้ก่อน";
+  if (!username.trim()) return t("กรอกชื่อผู้ใช้ก่อน");
   if (!isEditing.value && (!password || password.length < 6)) {
-    return "ตั้งรหัสผ่านอย่างน้อย 6 ตัวอักษร";
+    return t("ตั้งรหัสผ่านอย่างน้อย 6 ตัวอักษร");
   }
-  if (password && password.length < 6) return "รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร";
-  if (!role) return "เลือกสิทธิ์การใช้งานก่อน";
+  if (password && password.length < 6) return t("รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร");
+  if (!role) return t("เลือกสิทธิ์การใช้งานก่อน");
   return "";
 }
 
@@ -141,17 +145,17 @@ async function submit() {
       if (form.value.password) body.password = form.value.password;
 
       await api.put(`/users/${editingId.value}`, body);
-      toastSuccess("บันทึกการแก้ไขเรียบร้อย");
+      toastSuccess(t("บันทึกการแก้ไขเรียบร้อย"));
     } else {
       await api.post("/users", { ...form.value, username: form.value.username.trim() });
-      toastSuccess("เพิ่มผู้ใช้งานเรียบร้อย");
+      toastSuccess(t("เพิ่มผู้ใช้งานเรียบร้อย"));
     }
 
     dialogOpen.value = false;
     await load();
   } catch (err) {
     console.error(err);
-    formError.value = err.response?.data?.error || "บันทึกข้อมูลไม่สำเร็จ";
+    formError.value = errorMessage(err, t("บันทึกข้อมูลไม่สำเร็จ"));
   } finally {
     saving.value = false;
   }
@@ -159,23 +163,23 @@ async function submit() {
 
 async function remove(user) {
   if (isSelf(user)) {
-    toastError("ลบบัญชีของตัวเองไม่ได้ ให้ผู้ดูแลระบบคนอื่นเป็นคนลบให้");
+    toastError(t("ลบบัญชีของตัวเองไม่ได้ ให้ผู้ดูแลระบบคนอื่นเป็นคนลบให้"));
     return;
   }
 
   const confirmed = await askConfirm(
-    `บัญชี “${user.username}” จะเข้าระบบไม่ได้อีก และประวัติการบันทึกที่ทำไว้จะยังคงอยู่`,
-    { title: "ลบผู้ใช้งานนี้", confirmText: "ลบผู้ใช้งาน", danger: true }
+    t("บัญชี “{0}” จะเข้าระบบไม่ได้อีก และประวัติการบันทึกที่ทำไว้จะยังคงอยู่", [user.username]),
+    { title: t("ลบผู้ใช้งานนี้"), confirmText: t("ลบผู้ใช้งาน"), danger: true }
   );
   if (!confirmed) return;
 
   try {
     await api.delete(`/users/${user.id}`);
-    toastSuccess("ลบผู้ใช้งานเรียบร้อย");
+    toastSuccess(t("ลบผู้ใช้งานเรียบร้อย"));
     await load();
   } catch (err) {
     console.error(err);
-    toastError(err.response?.data?.error || "ลบผู้ใช้งานไม่สำเร็จ");
+    toastError(errorMessage(err, t("ลบผู้ใช้งานไม่สำเร็จ")));
   }
 }
 
@@ -185,22 +189,20 @@ onMounted(load);
 <template>
   <div>
     <UiPageHeader
-      eyebrow="ผู้ดูแลระบบ · บัญชีผู้ใช้"
-      title="จัดการผู้ใช้งานระบบ"
-      description="เพิ่ม แก้ไข และกำหนดสิทธิ์ของผู้ที่เข้าใช้งานระบบ"
+      :eyebrow="t(&quot;ผู้ดูแลระบบ · บัญชีผู้ใช้&quot;)"
+      :title="t(&quot;จัดการผู้ใช้งานระบบ&quot;)"
+      :description="t(&quot;เพิ่ม แก้ไข และกำหนดสิทธิ์ของผู้ที่เข้าใช้งานระบบ&quot;)"
     >
       <template #actions>
         <UiButton variant="primary" @click="openCreate">
-          <template #icon><UserPlus :size="16" /></template>
-          เพิ่มผู้ใช้งาน
-        </UiButton>
+          <template #icon><UserPlus :size="16" /></template> {{ t("เพิ่มผู้ใช้งาน") }} </UiButton>
       </template>
     </UiPageHeader>
 
     <UiAlert v-if="loadError" tone="danger" class="mb-4">
       {{ loadError }}
       <template #actions>
-        <UiButton size="sm" variant="secondary" @click="load">ลองใหม่</UiButton>
+        <UiButton size="sm" variant="secondary" @click="load"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
 
@@ -210,13 +212,13 @@ onMounted(load);
       :loading="loading"
       row-key="id"
       export-filename="users"
-      search-placeholder="ค้นหาชื่อผู้ใช้…"
-      empty-text="ยังไม่มีผู้ใช้งานในระบบ"
+      :search-placeholder="t(&quot;ค้นหาชื่อผู้ใช้…&quot;)"
+      :empty-text="t(&quot;ยังไม่มีผู้ใช้งานในระบบ&quot;)"
     >
       <template #cell-username="{ row }">
         <span class="flex items-center gap-2">
           <span class="font-medium text-ink">{{ row.username }}</span>
-          <UiBadge v-if="isSelf(row)" size="sm" tone="brand">บัญชีของคุณ</UiBadge>
+          <UiBadge v-if="isSelf(row)" size="sm" tone="brand"> {{ t("บัญชีของคุณ") }} </UiBadge>
         </span>
       </template>
 
@@ -227,18 +229,18 @@ onMounted(load);
       </template>
 
       <template #actions="{ row }">
-        <UiTooltip content="แก้ไขบัญชีและสิทธิ์">
-          <UiButton size="sm" variant="ghost" icon-only :label="`แก้ไข ${row.username}`" @click="openEdit(row)">
+        <UiTooltip :content="t(&quot;แก้ไขบัญชีและสิทธิ์&quot;)">
+          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;แก้ไข {0}&quot;, [row.username])" @click="openEdit(row)">
             <Pencil :size="15" />
           </UiButton>
         </UiTooltip>
 
-        <UiTooltip :content="isSelf(row) ? 'ลบบัญชีของตัวเองไม่ได้' : 'ลบผู้ใช้งาน'">
+        <UiTooltip :content="isSelf(row) ? t(&quot;ลบบัญชีของตัวเองไม่ได้&quot;) : t(&quot;ลบผู้ใช้งาน&quot;)">
           <UiButton
             size="sm"
             variant="danger-ghost"
             icon-only
-            :label="`ลบ ${row.username}`"
+            :label="t(&quot;ลบ {0}&quot;, [row.username])"
             :disabled="isSelf(row)"
             @click="remove(row)"
           >
@@ -250,26 +252,26 @@ onMounted(load);
 
     <UiModal
       v-model:open="dialogOpen"
-      :title="isEditing ? 'แก้ไขผู้ใช้งาน' : 'เพิ่มผู้ใช้งาน'"
-      :description="isEditing ? 'เว้นช่องรหัสผ่านว่างไว้ถ้าไม่ต้องการเปลี่ยน' : ''"
+      :title="isEditing ? t(&quot;แก้ไขผู้ใช้งาน&quot;) : t(&quot;เพิ่มผู้ใช้งาน&quot;)"
+      :description="isEditing ? t(&quot;เว้นช่องรหัสผ่านว่างไว้ถ้าไม่ต้องการเปลี่ยน&quot;) : ''"
       size="sm"
     >
       <form class="flex flex-col gap-4" @submit.prevent="submit">
-        <UiField label="ชื่อผู้ใช้" required>
-          <UiInput v-model="form.username" autocomplete="off" placeholder="เช่น somchai.it" />
+        <UiField :label="t(&quot;ชื่อผู้ใช้&quot;)" required>
+          <UiInput v-model="form.username" autocomplete="off" :placeholder="t(&quot;เช่น somchai.it&quot;)" />
         </UiField>
 
         <UiField
-          :label="isEditing ? 'รหัสผ่านใหม่' : 'รหัสผ่าน'"
+          :label="isEditing ? t(&quot;รหัสผ่านใหม่&quot;) : t(&quot;รหัสผ่าน&quot;)"
           :required="!isEditing"
-          :hint="isEditing ? 'เว้นว่างไว้ = ใช้รหัสผ่านเดิมต่อ' : 'อย่างน้อย 6 ตัวอักษร'"
+          :hint="isEditing ? t(&quot;เว้นว่างไว้ = ใช้รหัสผ่านเดิมต่อ&quot;) : t(&quot;อย่างน้อย 6 ตัวอักษร&quot;)"
         >
           <UiInput v-model="form.password" type="password" autocomplete="new-password">
             <template #icon><KeyRound :size="15" /></template>
           </UiInput>
         </UiField>
 
-        <UiField label="สิทธิ์การใช้งาน" required :hint="selectedRoleHint">
+        <UiField :label="t(&quot;สิทธิ์การใช้งาน&quot;)" required :hint="selectedRoleHint">
           <UiSelect v-model="form.role" :options="ROLES" value-key="value" label-key="label" />
         </UiField>
 
@@ -279,9 +281,9 @@ onMounted(load);
       </form>
 
       <template #footer>
-        <UiButton variant="secondary" :disabled="saving" @click="dialogOpen = false">ยกเลิก</UiButton>
+        <UiButton variant="secondary" :disabled="saving" @click="dialogOpen = false"> {{ t("ยกเลิก") }} </UiButton>
         <UiButton variant="primary" :loading="saving" @click="submit">
-          {{ isEditing ? "บันทึกการแก้ไข" : "เพิ่มผู้ใช้งาน" }}
+          {{ isEditing ? t("บันทึกการแก้ไข") : t("เพิ่มผู้ใช้งาน") }}
         </UiButton>
       </template>
     </UiModal>

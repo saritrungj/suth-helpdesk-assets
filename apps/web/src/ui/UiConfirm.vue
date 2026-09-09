@@ -1,4 +1,6 @@
 <script setup>
+import { usePortalTarget } from "./portal-target";
+const portalTarget = usePortalTarget();
 /**
  * UiConfirm — หน้าต่างยืนยันก่อนทำสิ่งที่ย้อนกลับไม่ได้
  *
@@ -13,7 +15,6 @@
  * เพราะคนอ่านแค่ปุ่มแล้วกด โดยไม่ได้อ่านคำถามด้านบน
  */
 import {
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -31,7 +32,7 @@ import { confirmState, resolveConfirm } from "../store/confirmDialog";
     :open="confirmState.visible"
     @update:open="(open) => !open && resolveConfirm(false)"
   >
-    <AlertDialogPortal>
+    <AlertDialogPortal :to="portalTarget">
       <AlertDialogOverlay
         class="fixed inset-0 z-[140] bg-scrim backdrop-blur-[2px] data-[state=open]:animate-fade-in"
       />
@@ -72,7 +73,8 @@ import { confirmState, resolveConfirm } from "../store/confirmDialog";
             {{ confirmState.cancelText }}
           </AlertDialogCancel>
 
-          <AlertDialogAction
+          <button
+            type="button"
             class="inline-flex items-center justify-center h-[var(--field-h)] px-5 rounded-md border border-transparent
                    text-base font-medium shadow-e1 transition-colors"
             :class="
@@ -83,7 +85,7 @@ import { confirmState, resolveConfirm } from "../store/confirmDialog";
             @click="resolveConfirm(true)"
           >
             {{ confirmState.confirmText }}
-          </AlertDialogAction>
+          </button>
         </div>
       </AlertDialogContent>
     </AlertDialogPortal>

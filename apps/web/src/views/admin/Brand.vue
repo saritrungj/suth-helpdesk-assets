@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../../lib/locale";
+
 /**
  * Brand — ยี่ห้อของอุปกรณ์
  *
@@ -8,33 +10,33 @@
 import MasterDataPage from "../../components/MasterDataPage.vue";
 
 const columns = [
-  { key: "name", label: "ชื่อยี่ห้อ" },
-  { key: "id", label: "รหัส", align: "right", width: "6rem" },
+  { key: "name", label: t("ชื่อยี่ห้อ") },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
 ];
 
 const fields = [
   {
     key: "name",
-    label: "ชื่อยี่ห้อ",
+    label: t("ชื่อยี่ห้อ"),
     type: "text",
     required: true,
     unique: true,
     maxlength: 100,
-    placeholder: "เช่น Canon, HP, Ricoh",
-    hint: "ใช้ชื่อตามที่พิมพ์อยู่บนตัวเครื่อง เพื่อให้ค้นหาแล้วตรงกับของจริง",
+    placeholder: t("เช่น Canon, HP, Ricoh"),
+    hint: t("ใช้ชื่อตามที่พิมพ์อยู่บนตัวเครื่อง เพื่อให้ค้นหาแล้วตรงกับของจริง"),
   },
 ];
 </script>
 
 <template>
   <MasterDataPage
-    title="ยี่ห้ออุปกรณ์"
-    eyebrow="ข้อมูลอ้างอิง · อุปกรณ์"
-    description="ยี่ห้อที่เลือกได้ตอนเพิ่มเครื่องเข้าทะเบียน"
+    :title="t(&quot;ยี่ห้ออุปกรณ์&quot;)"
+    :eyebrow="t(&quot;ข้อมูลอ้างอิง · อุปกรณ์&quot;)"
+    :description="t(&quot;ยี่ห้อที่เลือกได้ตอนเพิ่มเครื่องเข้าทะเบียน&quot;)"
     endpoint="/brands"
-    item-noun="ยี่ห้อ"
+    :item-noun="t(&quot;ยี่ห้อ&quot;)"
     export-filename="brands"
-    empty-hint="เพิ่มยี่ห้อก่อน แล้วจะเลือกได้ตอนบันทึกเครื่องใหม่"
+    :empty-hint="t(&quot;เพิ่มยี่ห้อก่อน แล้วจะเลือกได้ตอนบันทึกเครื่องใหม่&quot;)"
     :columns="columns"
     :fields="fields"
   />

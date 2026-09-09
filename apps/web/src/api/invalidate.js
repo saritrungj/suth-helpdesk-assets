@@ -1,3 +1,4 @@
+import { t } from "../lib/locale";
 import { keys } from "./queries";
 import { markForRevalidation } from "./http-cache";
 
@@ -77,7 +78,7 @@ export function invalidateAfterWrite(queryClient, change) {
 
   if (!keyList) {
     // เขียนชื่อชนิดผิดแปลว่าแคชจะไม่ถูกล้างเลย ซึ่งเป็นบั๊กที่เงียบมาก — ต้องดังไว้ก่อน
-    throw new Error(`invalidateAfterWrite: ไม่รู้จักชนิดการเขียน "${change}"`);
+    throw new Error(t("invalidateAfterWrite: ไม่รู้จักชนิดการเขียน \"{0}\"", [change]));
   }
 
   markForRevalidation(AFFECTED_URLS[change] ?? []);

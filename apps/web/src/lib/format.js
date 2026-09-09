@@ -1,3 +1,5 @@
+import { locale } from "./locale";
+import { t } from "./locale";
 /**
  * format.js — การจัดรูปแบบตัวเลขสำหรับ "การแสดงผล" ฝั่งเว็บเท่านั้น
  *
@@ -9,16 +11,16 @@
  * เหมือนกัน ไม่งั้นเวลาเอามาเทียบกันจะดูเหมือนตัวเลขคนละชุด
  */
 
-const TH = "th-TH";
+const TH = () => locale.value === "en" ? "en-GB" : "th-TH";
 
 /** จำนวนนับ (เครื่อง, แผ่น, รายการ) — ไม่มีทศนิยม */
 export function formatCount(value) {
-  return Number(value ?? 0).toLocaleString(TH, { maximumFractionDigits: 0 });
+  return Number(value ?? 0).toLocaleString(TH(), { maximumFractionDigits: 0 });
 }
 
 /** จำนวนเงินหน่วยบาท — ทศนิยมสองตำแหน่งเสมอ ให้หลักตรงกันเมื่อวางเรียงกัน */
 export function formatBahtValue(value) {
-  return Number(value ?? 0).toLocaleString(TH, {
+  return Number(value ?? 0).toLocaleString(TH(), {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -32,10 +34,11 @@ export function formatBahtValue(value) {
  */
 export function formatCompact(value) {
   const n = Number(value ?? 0);
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toLocaleString(TH, { maximumFractionDigits: 1 })} ล้าน`;
-  if (Math.abs(n) >= 10_000) return `${(n / 10_000).toLocaleString(TH, { maximumFractionDigits: 1 })} หมื่น`;
-  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toLocaleString(TH, { maximumFractionDigits: 1 })} พัน`;
-  return n.toLocaleString(TH, { maximumFractionDigits: 0 });
+  if (locale.value === "en") return new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+  if (Math.abs(n) >= 1_000_000) return t("{0} ล้าน", [(n / 1_000_000).toLocaleString(TH(), { maximumFractionDigits: 1 })]);
+  if (Math.abs(n) >= 10_000) return t("{0} หมื่น", [(n / 10_000).toLocaleString(TH(), { maximumFractionDigits: 1 })]);
+  if (Math.abs(n) >= 1_000) return t("{0} พัน", [(n / 1_000).toLocaleString(TH(), { maximumFractionDigits: 1 })]);
+  return n.toLocaleString(TH(), { maximumFractionDigits: 0 });
 }
 
 /** เปอร์เซ็นต์ที่ปลอดภัยจากการหารด้วยศูนย์ */

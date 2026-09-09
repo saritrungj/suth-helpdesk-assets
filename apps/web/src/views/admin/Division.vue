@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../../lib/locale";
+
 /**
  * Division — ฝ่าย (ระดับบนของแผนก)
  *
@@ -8,32 +10,32 @@
 import MasterDataPage from "../../components/MasterDataPage.vue";
 
 const columns = [
-  { key: "name", label: "ชื่อฝ่าย" },
-  { key: "id", label: "รหัส", align: "right", width: "6rem" },
+  { key: "name", label: t("ชื่อฝ่าย") },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
 ];
 
 const fields = [
   {
     key: "name",
-    label: "ชื่อฝ่าย",
+    label: t("ชื่อฝ่าย"),
     type: "text",
     required: true,
     unique: true,
     maxlength: 100,
-    placeholder: "เช่น ฝ่ายการพยาบาล",
+    placeholder: t("เช่น ฝ่ายการพยาบาล"),
   },
 ];
 </script>
 
 <template>
   <MasterDataPage
-    title="ฝ่าย"
-    eyebrow="ข้อมูลอ้างอิง · หน่วยงาน"
-    description="ระดับบนสุดของหน่วยงาน ใช้จัดกลุ่มแผนกในรายงานค่าใช้จ่าย"
+    :title="t(&quot;ฝ่าย&quot;)"
+    :eyebrow="t(&quot;ข้อมูลอ้างอิง · หน่วยงาน&quot;)"
+    :description="t(&quot;ระดับบนสุดของหน่วยงาน ใช้จัดกลุ่มแผนกในรายงานค่าใช้จ่าย&quot;)"
     endpoint="/divisions"
-    item-noun="ฝ่าย"
+    :item-noun="t(&quot;ฝ่าย&quot;)"
     export-filename="divisions"
-    empty-hint="เพิ่มฝ่ายก่อน แล้วจึงเพิ่มแผนกที่อยู่ใต้ฝ่ายนั้น"
+    :empty-hint="t(&quot;เพิ่มฝ่ายก่อน แล้วจึงเพิ่มแผนกที่อยู่ใต้ฝ่ายนั้น&quot;)"
     :columns="columns"
     :fields="fields"
   />

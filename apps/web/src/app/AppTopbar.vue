@@ -1,4 +1,9 @@
 <script setup>
+import { locale } from "../lib/locale";
+import { yearLabel } from "../lib/locale-format";
+import { changeLanguage } from "./change-language";
+import { t } from "../lib/locale";
+
 /**
  * AppTopbar — แถบบนสุดที่อยู่เหนือทุกหน้า
  *
@@ -50,21 +55,21 @@ const activeItem = computed(() => findActiveItem(route));
 
 const roleLabel = computed(
   () =>
-    ({ admin: "ผู้ดูแลระบบ", staff: "เจ้าหน้าที่", viewer: "ผู้อ่าน" })[authState.user?.role] ??
+    ({ admin: t("ผู้ดูแลระบบ"), staff: t("เจ้าหน้าที่"), viewer: t("ผู้อ่าน") })[authState.user?.role] ??
     authState.user?.role ??
     ""
 );
 
 const MODE_OPTIONS = [
-  { value: "light", label: "สว่าง", icon: Sun },
-  { value: "dark", label: "มืด", icon: Moon },
-  { value: "system", label: "ตามเครื่อง", icon: Monitor },
+  { value: "light", label: t("สว่าง"), icon: Sun },
+  { value: "dark", label: t("มืด"), icon: Moon },
+  { value: "system", label: t("ตามเครื่อง"), icon: Monitor },
 ];
 
 const DENSITY_OPTIONS = [
-  { value: "compact", label: "แน่น" },
-  { value: "default", label: "ปกติ" },
-  { value: "relaxed", label: "โปร่ง" },
+  { value: "compact", label: t("แน่น") },
+  { value: "default", label: t("ปกติ") },
+  { value: "relaxed", label: t("โปร่ง") },
 ];
 
 // แถบบนเป็นเจ้าของตัวเลือกปีงบแล้ว จึงเป็นที่ที่โหลดรายการปีงบด้วย
@@ -90,14 +95,14 @@ async function logout() {
       variant="ghost"
       size="sm"
       icon-only
-      label="เปิดเมนู"
+      :label="t(&quot;เปิดเมนู&quot;)"
       @click="openMobileNav"
     >
       <Menu :size="18" />
     </UiButton>
 
     <!-- ตำแหน่งปัจจุบัน — บอกว่าอยู่กลุ่มไหนและหน้าอะไร -->
-    <nav class="min-w-0 flex items-center gap-1.5 text-sm" aria-label="ตำแหน่งปัจจุบัน">
+    <nav class="min-w-0 flex items-center gap-1.5 text-sm" :aria-label="t(&quot;ตำแหน่งปัจจุบัน&quot;)">
       <span class="hidden sm:inline text-ink-mute truncate">
         {{ activeItem?.groupLabel ?? APP_NAME_SHORT }}
       </span>
@@ -131,7 +136,7 @@ async function logout() {
         @click="openCommandPalette"
       >
         <Search :size="15" aria-hidden="true" />
-        <span class="pr-6">ค้นหาหน้า…</span>
+        <span class="pr-6"> {{ t("ค้นหาหน้า…") }} </span>
         <kbd
           class="font-mono text-2xs px-1.5 py-0.5 rounded-xs bg-surface-2 border border-line-soft text-ink-mute"
         >
@@ -144,14 +149,14 @@ async function logout() {
         variant="ghost"
         size="sm"
         icon-only
-        label="ค้นหาหน้า"
+        :label="t(&quot;ค้นหาหน้า&quot;)"
         @click="openCommandPalette"
       >
         <Search :size="17" />
       </UiButton>
 
       <!-- ปีงบประมาณ -->
-      <UiMenu label="ปีงบประมาณที่กำลังดู">
+      <UiMenu :label="t(&quot;ปีงบประมาณที่กำลังดู&quot;)">
         <template #trigger>
           <button
             type="button"
@@ -160,12 +165,12 @@ async function logout() {
                    hover:bg-brand-soft-hover transition-colors"
           >
             <CalendarRange :size="15" class="shrink-0" aria-hidden="true" />
-            <span class="hidden sm:inline text-2xs font-medium opacity-80">ปีงบ</span>
+            <span class="hidden sm:inline text-2xs font-medium opacity-80"> {{ t("ปีงบ") }} </span>
             <UiSkeleton v-if="fiscalYearState.loading" width="2.5rem" height="0.9rem" />
             <span v-else-if="activeFiscalYear" class="numeral">
-              {{ Number(activeFiscalYear.year) }}
+              {{ yearLabel(activeFiscalYear.year) }}
             </span>
-            <span v-else class="text-2xs font-medium">ยังไม่มี</span>
+            <span v-else class="text-2xs font-medium"> {{ t("ยังไม่มี") }} </span>
           </button>
         </template>
 
@@ -182,15 +187,12 @@ async function logout() {
                 aria-hidden="true"
               ></span>
             </template>
-            <span class="numeral">{{ Number(fy.year) }}</span>
+            <span class="numeral">{{ yearLabel(fy.year) }}</span>
           </UiMenuItem>
         </template>
 
-        <p v-else class="px-2.5 py-3 text-xs text-ink-mute">
-          ยังไม่มีปีงบในระบบ<br />
-          <RouterLink to="/admin/fiscal-years" class="text-brand-ink hover:underline">
-            ไปสร้างปีงบใหม่
-          </RouterLink>
+        <p v-else class="px-2.5 py-3 text-xs text-ink-mute"> {{ t("ยังไม่มีปีงบในระบบ") }} <br />
+          <RouterLink to="/admin/fiscal-years" class="text-brand-ink hover:underline"> {{ t("ไปสร้างปีงบใหม่") }} </RouterLink>
         </p>
       </UiMenu>
 
@@ -200,7 +202,7 @@ async function logout() {
           <button
             type="button"
             class="flex items-center gap-2 h-8 pl-1 pr-2 rounded-lg hover:bg-surface-3 transition-colors"
-            :aria-label="`บัญชีของ ${authState.user?.username ?? ''}`"
+            :aria-label="t(&quot;บัญชีของ {0}&quot;, [authState.user?.username ?? ''])"
           >
             <span
               class="grid place-items-center shrink-0 w-7 h-7 rounded-lg bg-brand-soft text-brand-ink"
@@ -226,12 +228,12 @@ async function logout() {
         </div>
 
         <div class="px-2.5 py-2">
-          <p class="text-2xs text-ink-mute mb-1.5">โทนสี</p>
+          <p class="text-2xs text-ink-mute mb-1.5"> {{ t("โทนสี") }} </p>
           <UiSegmented
             :model-value="modeState.pref"
             :options="MODE_OPTIONS"
             size="sm"
-            label="เลือกโทนสีของระบบ"
+            :label="t(&quot;เลือกโทนสีของระบบ&quot;)"
             block
             @update:model-value="setMode"
           />
@@ -239,23 +241,24 @@ async function logout() {
 
         <div class="px-2.5 pb-2">
           <p class="flex items-center gap-1.5 text-2xs text-ink-mute mb-1.5">
-            <Rows3 :size="12" aria-hidden="true" />
-            ความหนาแน่นของตาราง
-          </p>
+            <Rows3 :size="12" aria-hidden="true" /> {{ t("ความหนาแน่นของตาราง") }} </p>
           <UiSegmented
             :model-value="modeState.density"
             :options="DENSITY_OPTIONS"
             size="sm"
-            label="เลือกความหนาแน่นของข้อมูล"
+            :label="t(&quot;เลือกความหนาแน่นของข้อมูล&quot;)"
             block
             @update:model-value="setDensity"
           />
         </div>
 
+        <div class="px-2.5 pb-2">
+          <p class="text-2xs text-ink-mute mb-1.5">Language / ภาษา</p>
+          <UiSegmented :model-value="locale" :options="[{ value: 'th', label: 'ไทย' }, { value: 'en', label: 'English' }]" label="Language / ภาษา" block @update:model-value="changeLanguage" />
+          <p class="text-2xs text-ink-mute mt-1">{{ t("เปลี่ยนภาษาแล้วโหลดหน้านี้ใหม่") }}</p>
+        </div>
         <UiMenuItem tone="danger" separated @select="logout">
-          <template #icon><LogOut :size="15" /></template>
-          ออกจากระบบ
-        </UiMenuItem>
+          <template #icon><LogOut :size="15" /></template> {{ t("ออกจากระบบ") }} </UiMenuItem>
       </UiMenu>
     </div>
   </header>

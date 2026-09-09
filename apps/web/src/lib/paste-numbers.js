@@ -1,3 +1,4 @@
+import { t } from "./locale";
 /**
  * paste-numbers.js — อ่านตัวเลขที่ผู้ใช้คัดลอกมาจากตารางคำนวณ
  *
@@ -113,8 +114,8 @@ export function applyPaste(target, values, startIndex = 0) {
  * @returns {string}
  */
 export function describePaste({ filled, skipped, overflow }) {
-  const parts = [`วาง ${filled} เดือน`];
-  if (skipped) parts.push(`ข้าม ${skipped} ค่าที่ไม่ใช่ตัวเลข`);
-  if (overflow) parts.push(`เกินมา ${overflow} ค่าไม่ถูกใช้`);
+  const parts = [t("วาง {0} เดือน", [filled])];
+  if (skipped) parts.push(t("ข้าม {0} ค่าที่ไม่ใช่ตัวเลข", [skipped]));
+  if (overflow) parts.push(t("เกินมา {0} ค่าไม่ถูกใช้", [overflow]));
   return parts.join(" · ");
 }

@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiAlert — กล่องข้อความแจ้งสถานะที่อยู่ติดกับเนื้อหา (ไม่ใช่ toast ที่ลอยแล้วหาย)
  *
@@ -53,7 +55,7 @@ const tone = computed(() => TONES[props.tone] ?? TONES.info);
       v-if="dismissible"
       type="button"
       class="shrink-0 -mr-1 -mt-1 p-1 rounded-sm opacity-60 hover:opacity-100 transition-opacity"
-      aria-label="ปิดข้อความนี้"
+      :aria-label="t(&quot;ปิดข้อความนี้&quot;)"
       @click="$emit('close')"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
