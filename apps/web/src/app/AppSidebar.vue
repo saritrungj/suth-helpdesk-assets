@@ -4,39 +4,50 @@ import { t } from "../lib/locale";
 /**
  * AppSidebar — แถบเมนูหลักด้านซ้าย
  *
- * โครงสร้างต่างจากเดิมสามเรื่อง และแต่ละเรื่องมาจากพฤติกรรมการใช้งานจริง
- *
- *   1. เมนูไม่พับเป็นกลุ่มอีกแล้ว — ทั้งระบบมีหน้าไม่ถึงสิบห้าหน้า การพับกลุ่ม
- *      ทำให้ต้องกดสองครั้งเพื่อไปหน้าที่ใช้ทุกวัน แลกกับพื้นที่ที่ประหยัดได้
- *      ไม่กี่บรรทัด ตอนนี้ทุกหน้าอยู่ในสายตาและกดครั้งเดียวถึง
- *
- *   2. บริบทงาน (ปีงบ) และบัญชีผู้ใช้ย้ายขึ้นไปอยู่แถบบนแทน เพราะเป็นของที่
- *      "อยู่เหนือทุกหน้า" ไม่ใช่รายการหนึ่งในเมนู และการวางไว้บนสุดของเมนูเดิม
- *      ทำให้เมนูจริงถูกดันลงไปจนบางหน้าจอต้องเลื่อนถึงจะเห็นครบ
- *
- *   3. พับเหลือเฉพาะไอคอนได้ — หน้าตารางในระบบนี้กว้างมาก คนที่ทำงานกับตาราง
- *      ทั้งวันจะได้พื้นที่คืน 10rem (224px -> 64px) โดยยังกดเมนูได้ผ่าน tooltip
+ * แบ่งเมนูเป็นสี่หมวดตามจังหวะงานจริง งานประจำเปิดไว้เสมอ และหมวดของ route
+ * ปัจจุบันจะเปิดอัตโนมัติเมื่อเข้าผ่าน direct link เมื่อย่อเป็น rail รายการทุกอันยังคงเห็น
+ * ผ่านไอคอน และมีทั้ง accessible name กับ tooltip ที่เปิดได้ด้วย hover/focus
  *
  * บนจอเล็กแถบนี้กลายเป็นลิ้นชักที่เลื่อนเข้ามาทับเนื้อหา และปิดเองทุกครั้งที่
  * เปลี่ยนหน้า
  */
-import { watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { PanelLeftClose, PanelLeftOpen, X } from "lucide-vue-next";
-import { ADMIN_GROUPS, ADMIN_ICON, NAV_GROUPS, isActiveNav } from "./navigation";
-import { APP_NAME, APP_NAME_SHORT, ORG_NAME_SHORT } from "./brand";
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-vue-next";
+import { ALL_NAV_GROUPS, ADMIN_GROUPS, NAV_GROUPS, findActiveGroup, isActiveNav } from "./navigation";
+import { APP_NAME, APP_NAME_SHORT, BRAND_ASSETS, ORG_NAME_SHORT } from "./brand";
 import { authState } from "../store/auth";
 import { closeMobileNav, toggleNavCollapsed, uiState } from "../store/ui";
 import { UiTooltip } from "../ui";
 
-// โลโก้อยู่ใน public/ จึงอ้างด้วย URL ตรงๆ ไม่ผ่าน import — ไฟล์ใน public
-// ถูกคัดลอกไปที่รากของ build ตามเดิมโดยไม่ผ่านการ hash ชื่อ
-const logoUrl = "/logo-suthnews.png";
-
 const route = useRoute();
 
+const openGroups = ref(
+  Object.fromEntries(ALL_NAV_GROUPS.filter((group) => group.defaultOpen).map((group) => [group.key, true]))
+);
+const visibleGroups = computed(() => [
+  ...NAV_GROUPS,
+  ...(authState.user?.role === "admin" ? ADMIN_GROUPS : []),
+]);
+
+function openActiveGroup() {
+  const group = findActiveGroup(route);
+  if (group) openGroups.value[group.key] = true;
+}
+
+function toggleGroup(key) {
+  openGroups.value[key] = !openGroups.value[key];
+}
+
 // ปิดลิ้นชักทุกครั้งที่เปลี่ยนหน้า — กดเมนูแล้วลิ้นชักต้องหุบเอง
-watch(() => route.fullPath, closeMobileNav);
+watch(
+  () => route.fullPath,
+  () => {
+    closeMobileNav();
+    openActiveGroup();
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
@@ -55,33 +66,46 @@ watch(() => route.fullPath, closeMobileNav);
            transition-[width,transform] duration-200 ease-out-quart
            lg:translate-x-0"
     :class="[
-      uiState.navCollapsed ? 'w-16' : 'w-56',
+      uiState.navCollapsed ? 'w-[var(--shell-sidebar-rail-width)]' : 'w-[var(--shell-sidebar-width)]',
       uiState.mobileNavOpen ? 'translate-x-0 shadow-e3' : '-translate-x-full',
     ]"
     :aria-label="t(&quot;เมนูหลัก&quot;)"
   >
     <!-- ตราสัญลักษณ์ -->
-    <div class="flex items-center gap-2.5 h-14 px-3 shrink-0 border-b border-line-soft">
-      <RouterLink
-        to="/dashboard"
-        class="flex items-center gap-2.5 min-w-0 rounded-md p-1 -m-1 hover:bg-surface-2 transition-colors"
-        :title="uiState.navCollapsed ? `${APP_NAME} · ${ORG_NAME_SHORT}` : undefined"
+    <div class="flex items-center gap-2 h-[var(--shell-topbar-height)] px-2.5 shrink-0 border-b border-line-soft">
+      <UiTooltip
+        :content="uiState.navCollapsed ? `${APP_NAME} · ${ORG_NAME_SHORT}` : ''"
+        side="right"
       >
-        <!-- โลโก้ต้นฉบับเป็นภาพพื้นขาวทึบ จึงต้องวางบนแผ่นขาวเสมอ ไม่ใช่พื้นตามธีม
-             (ดู brand/README.md) — ที่นี่ใช้แผ่นขาวมุมมนคุมขนาดไว้ให้พอดี -->
-        <span class="grid place-items-center shrink-0 w-9 h-9 rounded-lg bg-white border border-line-soft overflow-hidden">
-          <img :src="logoUrl" alt="" class="w-7" />
-        </span>
+        <RouterLink
+          to="/dashboard"
+          class="flex items-center gap-2 min-w-0 rounded-md p-1 -m-1 hover:bg-surface-2 transition-colors"
+          :aria-label="uiState.navCollapsed ? `${APP_NAME} · ${ORG_NAME_SHORT}` : undefined"
+        >
+          <span
+            class="grid place-items-center shrink-0 h-9 rounded-md bg-brand-backdrop border border-line-soft overflow-hidden"
+            :class="uiState.navCollapsed ? 'w-10 px-1' : 'w-[4.5rem] px-1.5'"
+          >
+            <img
+              :src="BRAND_ASSETS.wordmark"
+              alt=""
+              class="block w-full h-auto"
+              width="568"
+              height="138"
+              decoding="async"
+            />
+          </span>
 
-        <span v-if="!uiState.navCollapsed" class="min-w-0">
-          <span class="block text-sm font-semibold text-ink leading-tight truncate">
-            {{ APP_NAME_SHORT }}
+          <span v-if="!uiState.navCollapsed" class="min-w-0">
+            <span class="block text-sm font-semibold text-ink leading-tight truncate">
+              {{ APP_NAME_SHORT }}
+            </span>
+            <span class="block text-2xs text-ink-mute leading-tight truncate">
+              {{ ORG_NAME_SHORT }}
+            </span>
           </span>
-          <span class="block text-2xs text-ink-mute leading-tight truncate">
-            {{ ORG_NAME_SHORT }}
-          </span>
-        </span>
-      </RouterLink>
+        </RouterLink>
+      </UiTooltip>
 
       <button
         type="button"
@@ -94,30 +118,51 @@ watch(() => route.fullPath, closeMobileNav);
     </div>
 
     <!-- รายการเมนู -->
-    <nav class="flex-1 overflow-y-auto overscroll-contain px-2.5 py-3 flex flex-col gap-4">
-      <section v-for="group in NAV_GROUPS" :key="group.key">
-        <p
+    <nav class="flex-1 overflow-y-auto overscroll-contain px-2.5 py-3 flex flex-col gap-2">
+      <section
+        v-for="group in visibleGroups"
+        :key="group.key"
+        :class="group.admin ? 'border-t border-line-soft pt-2' : ''"
+      >
+        <button
           v-if="!uiState.navCollapsed"
-          class="eyebrow px-2 mb-1"
+          type="button"
+          class="group flex items-center w-full h-8 px-2 rounded-md text-xs font-semibold text-ink-mute
+                 hover:bg-surface-3 hover:text-ink transition-colors"
+          :aria-expanded="Boolean(openGroups[group.key])"
+          :aria-controls="`nav-group-${group.key}`"
+          @click="toggleGroup(group.key)"
         >
-          {{ group.label }}
-        </p>
+          <span class="truncate">{{ group.label }}</span>
+          <ChevronDown
+            :size="15"
+            class="ml-auto shrink-0 transition-transform duration-150"
+            :class="openGroups[group.key] ? 'rotate-0' : '-rotate-90'"
+            aria-hidden="true"
+          />
+        </button>
 
-        <ul class="flex flex-col gap-0.5 list-none">
+        <ul
+          v-show="uiState.navCollapsed || openGroups[group.key]"
+          :id="`nav-group-${group.key}`"
+          class="flex flex-col gap-0.5 list-none"
+          :class="!uiState.navCollapsed && 'mt-0.5'"
+        >
           <li v-for="item in group.items" :key="item.label">
             <UiTooltip :content="uiState.navCollapsed ? item.label : ''" side="right">
               <RouterLink
                 :to="item.to"
-                class="group relative flex items-center gap-2.5 rounded-lg px-2.5 h-9 text-sm font-medium transition-colors"
+                class="group relative flex items-center gap-2.5 rounded-lg px-2.5 h-9 text-sm transition-colors"
                 :class="[
                   uiState.navCollapsed ? 'justify-center' : '',
                   isActiveNav(item, route)
-                    ? 'bg-brand-soft text-brand-ink'
+                    ? 'bg-brand-soft text-brand-ink font-medium'
                     : 'text-ink-mute hover:bg-surface-3 hover:text-ink',
                 ]"
                 :aria-current="isActiveNav(item, route) ? 'page' : undefined"
+                :aria-label="uiState.navCollapsed ? item.label : undefined"
               >
-                <!-- ขีดสีด้านซ้ายของรายการที่เปิดอยู่ — อ่านออกแม้ในโหมดพับ -->
+                <!-- สถานะ active มีทั้งรูปทรง, aria-current และสี -->
                 <span
                   v-if="isActiveNav(item, route)"
                   class="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand"
@@ -131,67 +176,31 @@ watch(() => route.fullPath, closeMobileNav);
           </li>
         </ul>
       </section>
-
-      <!-- ส่วนของผู้ดูแลระบบ — คั่นด้วยเส้นให้ชัดว่าคนละระดับความรับผิดชอบ
-           แบนเป็นชั้นเดียว ไม่มีหัวข้อย่อยอีกแล้ว (ดูเหตุผลใน navigation.js) -->
-      <template v-if="authState.user?.role === 'admin'">
-        <section v-for="group in ADMIN_GROUPS" :key="group.key" class="border-t border-line-soft pt-3">
-          <p
-            v-if="!uiState.navCollapsed"
-            class="eyebrow flex items-center gap-1.5 px-2 mb-1"
-          >
-            <component :is="ADMIN_ICON" :size="12" aria-hidden="true" />
-            {{ group.label }}
-          </p>
-
-          <ul class="flex flex-col gap-0.5 list-none">
-            <li v-for="item in group.items" :key="item.label">
-              <UiTooltip :content="uiState.navCollapsed ? item.label : ''" side="right">
-                <RouterLink
-                  :to="item.to"
-                  class="group relative flex items-center gap-2.5 rounded-lg px-2.5 h-8 text-sm transition-colors"
-                  :class="[
-                    uiState.navCollapsed ? 'justify-center' : '',
-                    isActiveNav(item, route)
-                      ? 'bg-brand-soft text-brand-ink font-medium'
-                      : 'text-ink-mute hover:bg-surface-3 hover:text-ink',
-                  ]"
-                  :aria-current="isActiveNav(item, route) ? 'page' : undefined"
-                >
-                  <span
-                    v-if="isActiveNav(item, route)"
-                    class="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand"
-                    aria-hidden="true"
-                  ></span>
-
-                  <component :is="item.icon" :size="16" class="shrink-0" aria-hidden="true" />
-                  <span v-if="!uiState.navCollapsed" class="truncate">{{ item.label }}</span>
-                </RouterLink>
-              </UiTooltip>
-            </li>
-          </ul>
-        </section>
-      </template>
     </nav>
 
     <!-- ปุ่มพับ — เฉพาะจอใหญ่ที่แถบเมนูอยู่ประจำที่ -->
     <div class="hidden lg:block shrink-0 border-t border-line-soft p-2">
-      <button
-        type="button"
-        class="flex items-center gap-2.5 w-full h-9 px-2.5 rounded-lg text-sm text-ink-mute
-               hover:bg-surface-3 hover:text-ink transition-colors"
-        :aria-pressed="uiState.navCollapsed"
-        :title="uiState.navCollapsed ? t(&quot;กางแถบเมนู&quot;) : t(&quot;พับแถบเมนูให้เหลือไอคอน&quot;)"
-        @click="toggleNavCollapsed"
+      <UiTooltip
+        :content="uiState.navCollapsed ? t(&quot;กางแถบเมนู&quot;) : t(&quot;พับแถบเมนูให้เหลือไอคอน&quot;)"
+        side="right"
       >
-        <component
-          :is="uiState.navCollapsed ? PanelLeftOpen : PanelLeftClose"
-          :size="17"
-          class="shrink-0"
-          aria-hidden="true"
-        />
-        <span v-if="!uiState.navCollapsed" class="truncate"> {{ t("พับเมนู") }} </span>
-      </button>
+        <button
+          type="button"
+          class="flex items-center gap-2.5 w-full h-9 px-2.5 rounded-lg text-sm text-ink-mute
+                 hover:bg-surface-3 hover:text-ink transition-colors"
+          :aria-pressed="uiState.navCollapsed"
+          :aria-label="uiState.navCollapsed ? t(&quot;กางแถบเมนู&quot;) : undefined"
+          @click="toggleNavCollapsed"
+        >
+          <component
+            :is="uiState.navCollapsed ? PanelLeftOpen : PanelLeftClose"
+            :size="17"
+            class="shrink-0"
+            aria-hidden="true"
+          />
+          <span v-if="!uiState.navCollapsed" class="truncate"> {{ t("พับเมนู") }} </span>
+        </button>
+      </UiTooltip>
     </div>
   </aside>
 </template>
