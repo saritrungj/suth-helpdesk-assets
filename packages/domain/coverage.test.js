@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { computeCoverage, fiscalYearMonths } = require("./index.cjs");
+const { computeCoverage, fiscalYearMonths, formatMonth, formatFiscalYear, formatDate } = require("./index.cjs");
 const fyMonths = fiscalYearMonths({ startMonth: "2025-10", endMonth: "2026-09" });
 
 test("annual completion and overdue work have distinct denominators", () => {
@@ -25,4 +25,11 @@ test("October boundary makes September overdue; no devices is not completion", (
   assert.equal(empty.applicable, false);
   assert.equal(empty.annual_complete_months, 0);
   assert.equal(empty.incomplete_months, 0);
+});
+
+test("English dates use Gregorian years without changing fiscal periods", () => {
+  assert.equal(formatMonth("2568-10", { locale: "en" }), "Oct 2025");
+  assert.equal(formatFiscalYear(2569, "en"), "2026 (B.E. 2569)");
+  assert.equal(formatMonth("2025-10"), "ต.ค. 2568");
+  assert.equal(formatDate("2026-09-08", "en"), "8 Sept 2026");
 });
