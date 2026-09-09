@@ -414,9 +414,13 @@ test("3.1.1 + 2.4.2 + 1.1.1 ภาษาของหน้า ชื่อหน
   await expect(page.locator(".aurora--hero")).toHaveCSS("pointer-events", "none");
   await expect(page.locator(".aurora__layer").first()).toHaveCSS("animation-name", "none");
   await expect(page.locator("canvas")).toHaveCount(0);
+  const main = await page.locator(".login__main").boundingBox();
+  const brand = await page.locator(".login__brand").boundingBox();
   const logo = await page.locator(".login__logo").boundingBox();
-  const panel = await page.locator(".login__panel").boundingBox();
-  expect(Math.abs(logo.x + logo.width / 2 - panel.x - panel.width / 2)).toBeLessThan(1);
+  expect(brand.width / main.width).toBeCloseTo(0.55, 2);
+  expect(logo.width / logo.height).toBeCloseTo(1200 / 676, 2);
+  const brandSurface = await page.locator(".login__brand").evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(brandSurface).toBe("oklch(1 0 0)");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("เข้าสู่ระบบ");
 });
 

@@ -8,7 +8,15 @@ import { ArrowRight, Eye, EyeOff, ExternalLink, Mail, Phone } from "lucide-vue-n
 import api from "../services/api";
 import { errorMessage } from "../lib/api-error";
 import { setAuth } from "../store/auth";
-import { APP_NAME, APP_TAGLINE, ORG_NAME, OWNER_TEAM, SUPPORT_CHANNELS, supportHref } from "../app/brand";
+import {
+  APP_NAME,
+  APP_TAGLINE,
+  BRAND_ASSETS,
+  ORG_NAME,
+  OWNER_TEAM,
+  SUPPORT_CHANNELS,
+  supportHref,
+} from "../app/brand";
 import { UiAlert, UiButton, UiField, UiInput } from "../ui";
 import AuroraCanvas from "../components/AuroraCanvas.vue";
 
@@ -58,15 +66,25 @@ async function login() {
   <div class="login">
     <AuroraCanvas variant="hero" />
     <main class="login__main">
-      <section class="login__panel" aria-labelledby="login-heading">
-        <header class="login__masthead">
-          <img class="login__logo" src="/logo-suthnews.png" :alt="ORG_NAME" width="120" height="48" />
+      <section class="login__brand" :aria-label="ORG_NAME">
+        <div class="login__brand-inner">
+          <img
+            class="login__logo"
+            :src="BRAND_ASSETS.horizontal"
+            :alt="ORG_NAME"
+            width="1200"
+            height="676"
+            fetchpriority="high"
+            decoding="async"
+          />
           <div class="login__identity">
             <p class="login__name">{{ APP_NAME }}</p>
             <p class="login__tagline">{{ APP_TAGLINE }}</p>
           </div>
-        </header>
+        </div>
+      </section>
 
+      <section class="login__panel" aria-labelledby="login-heading">
         <div class="login__form">
           <header class="login__intro">
             <h1 id="login-heading"> {{ t("เข้าสู่ระบบ") }} </h1>
@@ -155,7 +173,7 @@ async function login() {
   isolation: isolate;
   min-height: 100dvh;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   /* Same base surface and theme-aware artwork as DashboardHero. */
   background: var(--surface);
   color: var(--ink);
@@ -163,59 +181,47 @@ async function login() {
 .login > :deep(.aurora) { z-index: -1; }
 /* Static artwork: no ongoing GPU animation, including reduced-motion users. */
 .login :deep(.aurora__layer) { animation: none; will-change: auto; }
-.login__masthead {
-  margin-inline: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.75rem;
-  text-align: center;
-}
-.login__logo {
-  width: 9rem;
-  height: 3.6rem;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-.login__identity {
-  min-width: 0;
-}
-.login__name {
-  font-size: 0.9375rem;
-  font-weight: 650;
-  line-height: 1.5;
-}
-.login__tagline {
-  font-size: 0.8125rem;
-  color: var(--ink-mute);
-  line-height: 1.6;
-}
 .login__main {
   display: grid;
-  align-content: center;
-  justify-items: center;
-  padding: 2rem 1.25rem;
+  grid-template-columns: minmax(0, 55fr) minmax(24rem, 45fr);
+  min-height: 0;
+}
+.login__brand {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: clamp(2rem, 5vw, 5rem);
+  background: var(--brand-backdrop);
+  border-right: 1px solid var(--line-soft);
+}
+.login__brand-inner { width: min(100%, 46rem); text-align: center; }
+.login__logo { display: block; width: 100%; height: auto; object-fit: contain; }
+.login__identity { margin-top: 1rem; color: var(--brand-backdrop-ink); }
+.login__name { font-size: var(--text-lg); font-weight: 600; line-height: 1.5; }
+.login__tagline {
+  margin-top: 0.25rem;
+  font-size: var(--text-sm);
+  color: var(--brand-backdrop-ink-soft);
+  line-height: 1.6;
 }
 .login__panel {
-  width: min(100%, 28rem);
-  padding: 2rem 2.5rem;
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  padding: clamp(2rem, 4vw, 4rem);
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--elev-2);
 }
-.login__form { min-width: 0; }
-.login__intro { margin-bottom: 1.5rem; text-align: center; }
+.login__form { width: min(100%, 28rem); min-width: 0; margin-inline: auto; }
+.login__intro { margin-bottom: 1.5rem; }
 .login__intro h1 {
-  font-size: 1.875rem;
+  font-size: var(--text-2xl);
   line-height: 1.3;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: -0.025em;
 }
 .login__intro p {
   margin-top: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-base);
   line-height: 1.7;
   color: var(--ink-mute);
 }
@@ -242,7 +248,7 @@ async function login() {
 .login__access summary {
   min-height: 2.75rem;
   padding-block: 0.75rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
   font-weight: 500;
   color: var(--ink-soft);
@@ -250,8 +256,8 @@ async function login() {
 }
 .login__access summary::marker { color: var(--ink-mute); }
 .login__help { padding-top: 0.5rem; }
-.login__help h2 { font-size: 0.8125rem; font-weight: 600; line-height: 1.7; }
-.login__help p { margin-top: 0.25rem; color: var(--ink-mute); font-size: 0.8125rem; line-height: 1.7; }
+.login__help h2 { font-size: var(--text-sm); font-weight: 600; line-height: 1.7; }
+.login__help p { margin-top: 0.25rem; color: var(--ink-mute); font-size: var(--text-sm); line-height: 1.7; }
 .login__channels { list-style: none; padding: 0; margin-top: 0.75rem; }
 .login__channel {
   display: flex;
@@ -259,7 +265,7 @@ async function login() {
   align-items: center;
   gap: 0.5rem;
   min-height: 2.75rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--brand-ink);
   text-underline-offset: 0.2em;
 }
@@ -269,16 +275,30 @@ async function login() {
   background: var(--surface);
   border-top: 1px solid var(--line-soft);
   text-align: center;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   line-height: 1.7;
   color: var(--ink-mute);
 }
+/* ต่ำกว่า 768px แบรนด์กับฟอร์มเรียงลงมาเป็นแถวเดียว — ส่วนที่เหมือนกันอยู่ก้อนนี้ก้อนเดียว */
+@media (max-width: 767px) {
+  .login__main { grid-template-columns: 1fr; align-content: start; }
+  .login__brand { border-right: 0; border-bottom: 1px solid var(--line-soft); }
+  .login__identity { display: none; }
+  .login__panel { align-items: start; }
+}
 @media (max-width: 639px) {
-  .login__masthead { margin-bottom: 1.25rem; gap: 0.5rem; }
-  .login__logo { width: 7.5rem; height: 3rem; }
-  .login__name { font-size: 0.8125rem; }
-  .login__tagline { font-size: 0.75rem; }
-  .login__main { padding: 1rem 1rem 2rem; align-content: start; }
-  .login__panel { padding: 1.75rem 1.25rem; border-radius: var(--radius-xl); }
+  .login__brand { padding: 0.5rem 1rem; }
+  .login__brand-inner { width: min(100%, 13rem); }
+  .login__panel { padding: 1.25rem 1rem 1.5rem; }
+  .login__intro { margin-bottom: 1rem; }
+  .login__intro h1 { font-size: var(--text-xl); }
+  .login__intro p { margin-top: 0.25rem; }
+  .login__fields { gap: 1rem; }
+  .login__access { margin-top: 1.25rem; }
+}
+@media (min-width: 640px) and (max-width: 767px) {
+  .login__brand { padding: 1rem 2rem; }
+  .login__brand-inner { width: min(100%, 20rem); }
+  .login__panel { padding: 2rem; }
 }
 </style>
