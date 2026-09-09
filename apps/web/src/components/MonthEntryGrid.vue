@@ -1,4 +1,8 @@
 <script setup>
+import { formatMonth } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+
 /**
  * MonthEntryGrid — กรอกยอดพิมพ์ของ "หนึ่งเดือน หลายเครื่อง"
  *
@@ -26,7 +30,7 @@
 import { computed, ref, watch } from "vue";
 import { onBeforeRouteLeave } from "vue-router";
 import { Save, Undo2, TriangleAlert } from "lucide-vue-next";
-import { formatMonthTH, MAX_PAGES_PER_MONTH } from "@suth/domain";
+import { MAX_PAGES_PER_MONTH } from "@suth/domain";
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateAfterWrite } from "../api/invalidate";
@@ -202,9 +206,9 @@ watch(
     }
 
     const ok = await askConfirm(
-      `มียอดพิมพ์ของเดือน${formatMonthTH(previous, { long: true })} ที่แก้ไว้ ${dirtyCount.value} รายการแต่ยังไม่ได้บันทึก ` +
-        `ถ้าเปลี่ยนไปเดือนอื่นตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด`,
-      { title: "ยังมีข้อมูลที่ยังไม่ได้บันทึก", confirmText: "เปลี่ยนเดือนโดยไม่บันทึก", danger: true }
+      t("มียอดพิมพ์ของเดือน{0} ที่แก้ไว้ {1} รายการแต่ยังไม่ได้บันทึก ", [formatMonth(previous, { long: true }), dirtyCount.value]) +
+        t("ถ้าเปลี่ยนไปเดือนอื่นตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", []),
+      { title: t("ยังมีข้อมูลที่ยังไม่ได้บันทึก"), confirmText: t("เปลี่ยนเดือนโดยไม่บันทึก"), danger: true }
     );
 
     if (ok) {
@@ -221,16 +225,16 @@ async function save() {
   if (!isDirty.value || saving.value) return;
 
   if (invalidCount.value > 0) {
-    saveError.value = `มี ${invalidCount.value} รายการที่เกิน ${formatCount(MAX_PAGES_PER_MONTH)} หน้า กรุณาตรวจก่อนบันทึก`;
+    saveError.value = t("มี {0} รายการที่เกิน {1} หน้า กรุณาตรวจก่อนบันทึก", [invalidCount.value, formatCount(MAX_PAGES_PER_MONTH)]);
     return;
   }
 
   // ถามก่อนลบเสมอ และบอกจำนวนที่จะหายไปให้ชัด
   if (clearingCount.value > 0) {
     const ok = await askConfirm(
-      `จะลบยอดพิมพ์ที่เคยบันทึกไว้ของ ${clearingCount.value} เครื่องในเดือน` +
-        `${formatMonthTH(props.month, { long: true })} ข้อมูลเดิมจะหายไปและรายงานจะเปลี่ยนตาม`,
-      { title: "ยืนยันการลบยอดที่บันทึกไว้", confirmText: "ลบและบันทึก", danger: true }
+      t("จะลบยอดพิมพ์ที่เคยบันทึกไว้ของ {0} เครื่องในเดือน", [clearingCount.value]) +
+        t("{0} ข้อมูลเดิมจะหายไปและรายงานจะเปลี่ยนตาม", [formatMonth(props.month, { long: true })]),
+      { title: t("ยืนยันการลบยอดที่บันทึกไว้"), confirmText: t("ลบและบันทึก"), danger: true }
     );
     if (!ok) return;
   }
@@ -247,9 +251,9 @@ async function save() {
 
   try {
     const items = [...sending].map(([device_id, pages]) => ({ device_id, pages }));
-    const res = await api.post("/print-transactions/bulk", { month: props.month, items });
+    await api.post("/print-transactions/bulk", { month: props.month, items });
 
-    toastSuccess(res.data.message || "บันทึกยอดพิมพ์เรียบร้อย");
+    toastSuccess(t("บันทึกยอดพิมพ์เรียบร้อย"));
 
     // ยอดพิมพ์เป็นฐานของทุกบาทในรายงาน — แดชบอร์ดต้องไม่ค้างตัวเลขเก่า
     await invalidateAfterWrite(queryClient, "usage");
@@ -275,7 +279,7 @@ async function save() {
   } catch (err) {
     // ⚠️ ห้ามล้าง draft เมื่อบันทึกไม่สำเร็จ — ผู้ใช้เพิ่งพิมพ์ตัวเลขไปหลายสิบช่อง
     // การล้างทิ้งเพราะเน็ตสะดุดคือการทำให้เขาต้องทำงานใหม่ทั้งหมด
-    saveError.value = errorMessage(err, "บันทึกไม่สำเร็จ กรุณาลองใหม่");
+    saveError.value = errorMessage(err, t("บันทึกไม่สำเร็จ กรุณาลองใหม่"));
     toastError(saveError.value);
 
     // บันทึกไม่สำเร็จ ค่าที่ส่งไปจึงไม่เคยกลายเป็นของจริง — คืนกลับเป็นของค้าง
@@ -356,8 +360,8 @@ onBeforeRouteLeave(async () => {
   if (!isDirty.value) return true;
 
   return askConfirm(
-    `มียอดพิมพ์ที่แก้ไว้ ${dirtyCount.value} รายการแต่ยังไม่ได้บันทึก ถ้าออกจากหน้านี้ตอนนี้ค่าที่กรอกไว้จะหายทั้งหมด`,
-    { title: "ยังมีข้อมูลที่ยังไม่ได้บันทึก", confirmText: "ออกโดยไม่บันทึก", danger: true }
+    t("มียอดพิมพ์ที่แก้ไว้ {0} รายการแต่ยังไม่ได้บันทึก ถ้าออกจากหน้านี้ตอนนี้ค่าที่กรอกไว้จะหายทั้งหมด", [dirtyCount.value]),
+    { title: t("ยังมีข้อมูลที่ยังไม่ได้บันทึก"), confirmText: t("ออกโดยไม่บันทึก"), danger: true }
   );
 });
 
@@ -386,7 +390,7 @@ defineExpose({ isDirty, dirtyCount, discard });
     <UiAlert v-if="saveError" tone="danger" class="mb-3">
       {{ saveError }}
       <template #actions>
-        <UiButton size="sm" variant="secondary" :loading="saving" @click="save">ลองบันทึกใหม่</UiButton>
+        <UiButton size="sm" variant="secondary" :loading="saving" @click="save"> {{ t("ลองบันทึกใหม่") }} </UiButton>
       </template>
     </UiAlert>
 
@@ -395,24 +399,21 @@ defineExpose({ isDirty, dirtyCount, discard });
       v-if="pastePreview"
       class="mb-3 rounded-xl border border-brand-line bg-brand-soft/40 p-4"
       role="dialog"
-      aria-label="ตัวอย่างก่อนวางตัวเลข"
+      :aria-label="t(&quot;ตัวอย่างก่อนวางตัวเลข&quot;)"
     >
-      <p class="text-sm font-medium text-ink mb-1">
-        จะวาง {{ pastePreview.filled }} ค่า เริ่มจากแถวที่ {{ pastePreview.startIndex + 1 }}
+      <p class="text-sm font-medium text-ink mb-1"> {{ t("จะวาง") }} {{ pastePreview.filled }} {{ t("ค่า เริ่มจากแถวที่") }} {{ pastePreview.startIndex + 1 }}
       </p>
       <p class="text-xs text-ink-mute mb-3">
-        <span v-if="pastePreview.skipped">ข้าม {{ pastePreview.skipped }} ค่าที่ไม่ใช่ตัวเลข · </span>
-        <span v-if="pastePreview.overflow">เกินจำนวนแถว {{ pastePreview.overflow }} ค่า จะไม่ถูกใช้ · </span>
-        ตรวจว่าตรงเครื่องก่อนกดยืนยัน
-      </p>
+        <span v-if="pastePreview.skipped"> {{ t("ข้าม") }} {{ pastePreview.skipped }} {{ t("ค่าที่ไม่ใช่ตัวเลข ·") }} </span>
+        <span v-if="pastePreview.overflow"> {{ t("เกินจำนวนแถว") }} {{ pastePreview.overflow }} {{ t("ค่า จะไม่ถูกใช้ ·") }} </span> {{ t("ตรวจว่าตรงเครื่องก่อนกดยืนยัน") }} </p>
 
       <div class="max-h-56 overflow-auto rounded-lg border border-line-soft bg-surface">
         <table class="w-full text-sm">
           <thead class="sticky top-0 bg-surface-2 text-xs text-ink-mute">
             <tr>
               <th class="text-left font-medium px-3 py-1.5">Serial</th>
-              <th class="text-right font-medium px-3 py-1.5">เดิม</th>
-              <th class="text-right font-medium px-3 py-1.5">จะกลายเป็น</th>
+              <th class="text-right font-medium px-3 py-1.5"> {{ t("เดิม") }} </th>
+              <th class="text-right font-medium px-3 py-1.5"> {{ t("จะกลายเป็น") }} </th>
             </tr>
           </thead>
           <tbody>
@@ -427,7 +428,7 @@ defineExpose({ isDirty, dirtyCount, discard });
                 {{ entry.previous === null ? "—" : formatCount(entry.previous) }}
               </td>
               <td class="px-3 py-1.5 text-right numeral font-medium">
-                <span v-if="entry.value === undefined" class="text-ink-mute text-xs">ข้าม</span>
+                <span v-if="entry.value === undefined" class="text-ink-mute text-xs"> {{ t("ข้าม") }} </span>
                 <span v-else-if="entry.value === null" class="text-ink-mute">—</span>
                 <span v-else class="text-brand-ink">{{ formatCount(entry.value) }}</span>
               </td>
@@ -437,8 +438,8 @@ defineExpose({ isDirty, dirtyCount, discard });
       </div>
 
       <div class="flex items-center gap-2 mt-3">
-        <UiButton size="sm" variant="primary" @click="applyPastePreview">ยืนยันการวาง</UiButton>
-        <UiButton size="sm" variant="ghost" @click="pastePreview = null">ยกเลิก</UiButton>
+        <UiButton size="sm" variant="primary" @click="applyPastePreview"> {{ t("ยืนยันการวาง") }} </UiButton>
+        <UiButton size="sm" variant="ghost" @click="pastePreview = null"> {{ t("ยกเลิก") }} </UiButton>
       </div>
     </div>
 
@@ -458,24 +459,16 @@ defineExpose({ isDirty, dirtyCount, discard });
                flex flex-wrap items-center gap-3 shadow-e3"
         data-print="hide"
       >
-        <p class="text-sm text-ink flex-1 min-w-0">
-          แก้ไว้ <span class="numeral font-semibold">{{ dirtyCount }}</span> รายการ
-          <span class="text-ink-mute">· เดือน{{ formatMonthTH(month, { long: true }) }}</span>
+        <p class="text-sm text-ink flex-1 min-w-0"> {{ t("แก้ไว้") }} <span class="numeral font-semibold">{{ dirtyCount }}</span> {{ t("รายการ") }} <span class="text-ink-mute"> {{ t("· เดือน") }} {{ formatMonth(month, { long: true }) }}</span>
           <span v-if="clearingCount" class="block text-xs text-danger-ink mt-0.5">
-            <TriangleAlert :size="12" class="inline align-[-1px]" aria-hidden="true" />
-            ในนั้นมี {{ clearingCount }} รายการที่จะถูกลบยอดเดิมทิ้ง
-          </span>
+            <TriangleAlert :size="12" class="inline align-[-1px]" aria-hidden="true" /> {{ t("ในนั้นมี") }} {{ clearingCount }} {{ t("รายการที่จะถูกลบยอดเดิมทิ้ง") }} </span>
         </p>
 
         <UiButton variant="ghost" :disabled="saving" @click="discard">
-          <template #icon><Undo2 :size="15" /></template>
-          ทิ้งที่แก้ไว้
-        </UiButton>
+          <template #icon><Undo2 :size="15" /></template> {{ t("ทิ้งที่แก้ไว้") }} </UiButton>
 
         <UiButton variant="primary" :loading="saving" @click="save">
-          <template #icon><Save :size="15" /></template>
-          บันทึก {{ dirtyCount }} รายการ
-        </UiButton>
+          <template #icon><Save :size="15" /></template> {{ t("บันทึก") }} {{ dirtyCount }} {{ t("รายการ") }} </UiButton>
       </div>
     </Transition>
   </div>

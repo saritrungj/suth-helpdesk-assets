@@ -1,4 +1,9 @@
 <script setup>
+import { yearLabel } from "../lib/locale-format";
+import { formatMonth } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+
 /**
  * AssetDetail — หน้ารายละเอียดของเครื่องหนึ่งเครื่อง
  *
@@ -25,7 +30,7 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { ArrowLeft, MapPin, Move, Pencil } from "lucide-vue-next";
-import { formatMonthTH } from "@suth/domain";
+
 import { errorMessage } from "../lib/api-error";
 import { useQueryClient } from "@tanstack/vue-query";
 import { keys, useDevice, useDeviceHistory, useDeviceUsage } from "../api/queries";
@@ -112,16 +117,16 @@ const stalled = computed(
  */
 const loadError = computed(() => {
   if (stalled.value) {
-    return "ต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจการเชื่อมต่อแล้วกดลองใหม่";
+    return t("ต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจการเชื่อมต่อแล้วกดลองใหม่");
   }
   if (deviceQuery.isError.value) {
-    return errorMessage(deviceQuery.error.value, "โหลดข้อมูลเครื่องไม่สำเร็จ");
+    return errorMessage(deviceQuery.error.value, t("โหลดข้อมูลเครื่องไม่สำเร็จ"));
   }
   if (historyQuery.isError.value) {
-    return errorMessage(historyQuery.error.value, "โหลดประวัติการย้ายไม่สำเร็จ");
+    return errorMessage(historyQuery.error.value, t("โหลดประวัติการย้ายไม่สำเร็จ"));
   }
   if (usageQuery.isError.value) {
-    return errorMessage(usageQuery.error.value, "โหลดยอดพิมพ์ของเครื่องนี้ไม่สำเร็จ");
+    return errorMessage(usageQuery.error.value, t("โหลดยอดพิมพ์ของเครื่องนี้ไม่สำเร็จ"));
   }
   return "";
 });
@@ -151,9 +156,9 @@ function reload() {
 
 /** ป้ายและโทนสีของสถานะ — ชุดเดียวกับที่ทะเบียนใช้ */
 const STATUS_META = {
-  active: { label: "ใช้งานอยู่", tone: "ok" },
-  repair: { label: "ซ่อมบำรุง", tone: "warn" },
-  retired: { label: "ปลดระวาง", tone: "neutral" },
+  active: { label: t("ใช้งานอยู่"), tone: "ok" },
+  repair: { label: t("ซ่อมบำรุง"), tone: "warn" },
+  retired: { label: t("ปลดระวาง"), tone: "neutral" },
 };
 
 const statusMeta = computed(
@@ -170,10 +175,10 @@ const statusMeta = computed(
 const effectivePrice = computed(() => {
   if (!device.value) return null;
   if (device.value.price_override != null) {
-    return { value: Number(device.value.price_override), source: "ราคาเฉพาะเครื่อง" };
+    return { value: Number(device.value.price_override), source: t("ราคาเฉพาะเครื่อง") };
   }
   if (device.value.price_per_page != null) {
-    return { value: Number(device.value.price_per_page), source: `สัญญา ${device.value.contract_no}` };
+    return { value: Number(device.value.price_per_page), source: t("สัญญา {0}", [device.value.contract_no]) };
   }
   return null;
 });
@@ -187,12 +192,12 @@ const estimatedCost = computed(() => {
   return totalPages.value * price;
 });
 
-const usageLabels = computed(() => usage.value.map((row) => formatMonthTH(row.month)));
+const usageLabels = computed(() => usage.value.map((row) => formatMonth(row.month)));
 
 const usageSeries = computed(() => [
   {
     key: "pages",
-    label: "จำนวนหน้า",
+    label: t("จำนวนหน้า"),
     data: usage.value.map((row) => Number(row.pages || 0)),
   },
 ]);
@@ -201,14 +206,12 @@ const usageSeries = computed(() => [
 <template>
   <div>
     <UiButton to="/assets" variant="ghost" size="sm" class="mb-3 -ml-2">
-      <template #icon><ArrowLeft :size="15" /></template>
-      กลับไปทะเบียน
-    </UiButton>
+      <template #icon><ArrowLeft :size="15" /></template> {{ t("กลับไปทะเบียน") }} </UiButton>
 
     <UiAlert v-if="loadError" tone="danger" class="mb-4">
       {{ loadError }}
       <template #actions>
-        <UiButton size="sm" variant="secondary" @click="reload">ลองใหม่</UiButton>
+        <UiButton size="sm" variant="secondary" @click="reload"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
 
@@ -228,34 +231,30 @@ const usageSeries = computed(() => [
                rounded-xl border border-line-soft bg-surface"
       >
         <div class="min-w-0">
-          <p class="eyebrow mb-1.5">ทะเบียนทรัพย์สิน</p>
+          <p class="eyebrow mb-1.5"> {{ t("ทะเบียนทรัพย์สิน") }} </p>
 
           <h1 class="font-mono text-2xl font-semibold text-ink tracking-tight break-all">
             {{ device.serial_number || "—" }}
           </h1>
 
           <p class="text-sm text-ink-mute mt-1.5">
-            {{ device.brand_name || "ไม่ระบุยี่ห้อ" }}
+            {{ device.brand_name || t("ไม่ระบุยี่ห้อ") }}
             <span v-if="device.model"> · {{ device.model }}</span>
           </p>
 
           <div class="flex flex-wrap items-center gap-2 mt-3">
             <UiBadge :tone="statusMeta.tone">{{ statusMeta.label }}</UiBadge>
 
-            <UiBadge v-if="!device.contract_id" tone="warn">ยังไม่ผูกสัญญา</UiBadge>
+            <UiBadge v-if="!device.contract_id" tone="warn"> {{ t("ยังไม่ผูกสัญญา") }} </UiBadge>
           </div>
         </div>
 
         <div v-if="isAdmin" class="flex flex-wrap items-center gap-2">
           <UiButton :to="`/assets?edit=${device.id}`" variant="secondary">
-            <template #icon><Pencil :size="15" /></template>
-            แก้ไข
-          </UiButton>
+            <template #icon><Pencil :size="15" /></template> {{ t("แก้ไข") }} </UiButton>
 
           <UiButton :to="`/assets?move=${device.id}`" variant="secondary">
-            <template #icon><Move :size="15" /></template>
-            ย้ายเครื่อง
-          </UiButton>
+            <template #icon><Move :size="15" /></template> {{ t("ย้ายเครื่อง") }} </UiButton>
         </div>
       </header>
 
@@ -263,22 +262,21 @@ const usageSeries = computed(() => [
         <!-- ยอดพิมพ์ — ใหญ่ที่สุดเพราะเป็นสิ่งที่คนเปิดหน้านี้มาดูบ่อยที่สุด -->
         <UiCard
           class="lg:col-span-2"
-          eyebrow="ยอดพิมพ์รายเดือน"
+          :eyebrow="t(&quot;ยอดพิมพ์รายเดือน&quot;)"
           :title="
             activeFiscalYear
-              ? `ปีงบประมาณ ${Number(activeFiscalYear.year)}`
-              : 'ยอดพิมพ์ที่บันทึกไว้'
+              ? t(&quot;ปีงบประมาณ {0}&quot;, [yearLabel(activeFiscalYear.year)])
+              : t(&quot;ยอดพิมพ์ที่บันทึกไว้&quot;)
           "
         >
           <template #actions>
             <div class="text-right">
               <p class="numeral text-lg font-semibold text-ink">
                 {{ formatCount(totalPages) }}
-                <span class="text-xs text-ink-mute font-normal">หน้า</span>
+                <span class="text-xs text-ink-mute font-normal"> {{ t("หน้า") }} </span>
               </p>
               <p v-if="estimatedCost != null" class="text-2xs text-ink-mute">
-                ≈ {{ formatBahtValue(estimatedCost) }} บาท (ก่อนหักส่วนลด)
-              </p>
+                ≈ {{ formatBahtValue(estimatedCost) }} {{ t("บาท (ก่อนหักส่วนลด)") }} </p>
             </div>
           </template>
 
@@ -287,30 +285,28 @@ const usageSeries = computed(() => [
             kind="bar"
             :labels="usageLabels"
             :series="usageSeries"
-            unit="หน้า"
+            :unit="t(&quot;หน้า&quot;)"
             height="15rem"
-            category-label="เดือน"
+            :category-label="t(&quot;เดือน&quot;)"
           />
 
           <UiEmpty
             v-else
-            title="ยังไม่มียอดพิมพ์ในปีงบนี้"
-            description="ยอดพิมพ์บันทึกจากหน้า “บันทึกยอดพิมพ์” — เดือนที่ยังไม่กรอกจะไม่ถูกนับเป็นศูนย์"
+            :title="t(&quot;ยังไม่มียอดพิมพ์ในปีงบนี้&quot;)"
+            :description="t(&quot;ยอดพิมพ์บันทึกจากหน้า “บันทึกยอดพิมพ์” — เดือนที่ยังไม่กรอกจะไม่ถูกนับเป็นศูนย์&quot;)"
             compact
           >
             <template #actions>
-              <UiButton to="/print-transactions" variant="secondary" size="sm">
-                ไปกรอกยอดพิมพ์
-              </UiButton>
+              <UiButton to="/print-transactions" variant="secondary" size="sm"> {{ t("ไปกรอกยอดพิมพ์") }} </UiButton>
             </template>
           </UiEmpty>
         </UiCard>
 
         <!-- ข้อมูลประจำเครื่อง -->
-        <UiCard eyebrow="ข้อมูลประจำ" title="ที่ตั้งและสัญญา">
+        <UiCard :eyebrow="t(&quot;ข้อมูลประจำ&quot;)" :title="t(&quot;ที่ตั้งและสัญญา&quot;)">
           <dl class="grid gap-3.5 text-sm">
             <div>
-              <dt class="text-xs text-ink-mute mb-0.5">ที่ตั้ง</dt>
+              <dt class="text-xs text-ink-mute mb-0.5"> {{ t("ที่ตั้ง") }} </dt>
               <dd class="text-ink-soft">
                 {{ device.building_name || "—" }}
                 <span v-if="device.floor_name"> · {{ device.floor_name }}</span>
@@ -321,7 +317,7 @@ const usageSeries = computed(() => [
             </div>
 
             <div>
-              <dt class="text-xs text-ink-mute mb-0.5">หน่วยงาน</dt>
+              <dt class="text-xs text-ink-mute mb-0.5"> {{ t("หน่วยงาน") }} </dt>
               <dd class="text-ink-soft">
                 {{ device.division_name || "—" }}
                 <span v-if="device.department_name"> · {{ device.department_name }}</span>
@@ -329,44 +325,38 @@ const usageSeries = computed(() => [
             </div>
 
             <div class="pt-3 border-t border-line-soft">
-              <dt class="text-xs text-ink-mute mb-0.5">สัญญา</dt>
+              <dt class="text-xs text-ink-mute mb-0.5"> {{ t("สัญญา") }} </dt>
               <dd class="text-ink-soft">
                 <template v-if="device.contract_no">
                   {{ device.contract_no }}
-                  <span v-if="device.fiscal_year" class="text-xs text-ink-mute">
-                    · ปีงบ {{ Number(device.fiscal_year) }}
+                  <span v-if="device.fiscal_year" class="text-xs text-ink-mute"> {{ t("· ปีงบ") }} {{ yearLabel(device.fiscal_year) }}
                   </span>
                 </template>
-                <span v-else class="text-warn-ink">ยังไม่ผูกสัญญา</span>
+                <span v-else class="text-warn-ink"> {{ t("ยังไม่ผูกสัญญา") }} </span>
               </dd>
             </div>
 
             <div>
-              <dt class="text-xs text-ink-mute mb-0.5">ราคาต่อแผ่นที่ใช้จริง</dt>
+              <dt class="text-xs text-ink-mute mb-0.5"> {{ t("ราคาต่อแผ่นที่ใช้จริง") }} </dt>
               <dd v-if="effectivePrice" class="text-ink-soft">
                 <span class="numeral font-semibold text-ink">
                   {{ effectivePrice.value.toFixed(2) }}
-                </span>
-                บาท
-                <!-- บอกที่มาเสมอ ไม่งั้นคนเห็นเลขไม่ตรงกับสัญญาแล้วคิดว่าระบบคิดผิด -->
-                <span class="block text-xs text-ink-mute mt-0.5">
-                  จาก{{ effectivePrice.source }}
+                </span> {{ t("บาท") }} <!-- บอกที่มาเสมอ ไม่งั้นคนเห็นเลขไม่ตรงกับสัญญาแล้วคิดว่าระบบคิดผิด -->
+                <span class="block text-xs text-ink-mute mt-0.5"> {{ t("จาก") }} {{ effectivePrice.source }}
                 </span>
               </dd>
-              <dd v-else class="text-danger-ink text-sm">
-                ไม่มีราคา — ยอดพิมพ์ของเครื่องนี้คิดเป็นค่าใช้จ่ายไม่ได้
-              </dd>
+              <dd v-else class="text-danger-ink text-sm"> {{ t("ไม่มีราคา — ยอดพิมพ์ของเครื่องนี้คิดเป็นค่าใช้จ่ายไม่ได้") }} </dd>
             </div>
           </dl>
         </UiCard>
       </div>
 
       <!-- ประวัติการย้าย -->
-      <UiCard class="mt-4" eyebrow="ประวัติ" title="การย้ายที่ตั้ง">
+      <UiCard class="mt-4" :eyebrow="t(&quot;ประวัติ&quot;)" :title="t(&quot;การย้ายที่ตั้ง&quot;)">
         <UiEmpty
           v-if="!history.length"
-          title="ยังไม่มีประวัติการย้าย"
-          description="เครื่องนี้อยู่ที่เดิมตั้งแต่บันทึกเข้าระบบ"
+          :title="t(&quot;ยังไม่มีประวัติการย้าย&quot;)"
+          :description="t(&quot;เครื่องนี้อยู่ที่เดิมตั้งแต่บันทึกเข้าระบบ&quot;)"
           compact
         />
 
@@ -401,10 +391,9 @@ const usageSeries = computed(() => [
             </p>
 
             <p class="text-2xs text-ink-mute mt-1">
-              <MapPin :size="11" class="inline align-[-1px]" aria-hidden="true" />
-              ตั้งแต่ {{ entry.effective_from }}
-              <template v-if="entry.effective_to"> ถึง {{ entry.effective_to }}</template>
-              <span v-else class="text-brand-ink font-medium"> · ที่ตั้งปัจจุบัน</span>
+              <MapPin :size="11" class="inline align-[-1px]" aria-hidden="true" /> {{ t("ตั้งแต่") }} {{ entry.effective_from }}
+              <template v-if="entry.effective_to"> {{ t("ถึง") }} {{ entry.effective_to }}</template>
+              <span v-else class="text-brand-ink font-medium"> {{ t("· ที่ตั้งปัจจุบัน") }} </span>
             </p>
           </li>
         </ol>
@@ -413,11 +402,11 @@ const usageSeries = computed(() => [
 
     <UiEmpty
       v-else-if="!loadError"
-      title="ไม่พบเครื่องนี้"
-      description="อาจถูกลบออกจากทะเบียนไปแล้ว"
+      :title="t(&quot;ไม่พบเครื่องนี้&quot;)"
+      :description="t(&quot;อาจถูกลบออกจากทะเบียนไปแล้ว&quot;)"
     >
       <template #actions>
-        <UiButton to="/assets" variant="secondary" size="sm">กลับไปทะเบียน</UiButton>
+        <UiButton to="/assets" variant="secondary" size="sm"> {{ t("กลับไปทะเบียน") }} </UiButton>
       </template>
     </UiEmpty>
   </div>

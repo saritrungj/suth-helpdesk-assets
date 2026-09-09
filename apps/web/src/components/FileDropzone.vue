@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * FileDropzone — ช่องรับไฟล์แบบลากมาวางหรือกดเลือก
  *
@@ -18,7 +20,7 @@ import { FileSpreadsheet, Upload, X } from "lucide-vue-next";
 const props = defineProps({
   modelValue: { type: [Object, null], default: null },
   accept: { type: String, default: ".csv,.xlsx,.xls" },
-  hint: { type: String, default: "รองรับไฟล์ .csv, .xlsx และ .xls" },
+  hint: { type: String, default: t("รองรับไฟล์ .csv, .xlsx และ .xls") },
   disabled: { type: Boolean, default: false },
 });
 
@@ -28,7 +30,7 @@ const dragging = ref(false);
 
 const sizeLabel = computed(() => {
   const bytes = props.modelValue?.size ?? 0;
-  if (bytes < 1024) return `${bytes} ไบต์`;
+  if (bytes < 1024) return t("{0} ไบต์", [bytes]);
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 });
@@ -69,8 +71,7 @@ function onDrop(event) {
         <Upload :size="20" />
       </span>
 
-      <span class="text-sm text-ink-soft">
-        ลากไฟล์มาวางที่นี่ หรือ <span class="text-brand-ink font-medium underline">เลือกไฟล์จากเครื่อง</span>
+      <span class="text-sm text-ink-soft"> {{ t("ลากไฟล์มาวางที่นี่ หรือ") }} <span class="text-brand-ink font-medium underline"> {{ t("เลือกไฟล์จากเครื่อง") }} </span>
       </span>
 
       <span class="text-xs text-ink-mute">{{ hint }}</span>
@@ -92,7 +93,7 @@ function onDrop(event) {
       <button
         type="button"
         class="shrink-0 grid place-items-center w-7 h-7 rounded-md text-ink-mute hover:text-ink hover:bg-surface-3 transition-colors"
-        aria-label="เอาไฟล์นี้ออก"
+        :aria-label="t(&quot;เอาไฟล์นี้ออก&quot;)"
         :disabled="disabled"
         @click="emit('update:modelValue', null)"
       >

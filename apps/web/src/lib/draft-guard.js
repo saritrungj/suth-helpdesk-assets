@@ -1,3 +1,4 @@
+import { t } from "./locale";
 import { askConfirm } from "../store/confirmDialog";
 
 /**
@@ -36,7 +37,7 @@ export function createDraftGuard({
   dirtyCount,
   discard,
   describe,
-  title = "ยังมีข้อมูลที่ยังไม่ได้บันทึก",
+  title = t("ยังมีข้อมูลที่ยังไม่ได้บันทึก"),
   confirm = askConfirm,
 }) {
   // กันเปิดกล่องถามซ้อนกัน — เช่นเปลี่ยนปีงบระหว่างที่กล่องของการเปลี่ยนเดือนยังค้างอยู่
@@ -54,7 +55,7 @@ export function createDraftGuard({
     try {
       ok = await confirm(describe(count, consequence), {
         title,
-        confirmText: options.confirmText ?? "ทำต่อโดยไม่บันทึก",
+        confirmText: options.confirmText ?? t("ทำต่อโดยไม่บันทึก"),
         danger: true,
       });
     } finally {

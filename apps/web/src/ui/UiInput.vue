@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiInput — ช่องกรอกข้อความ/ตัวเลข/วันที่
  *
@@ -144,7 +146,7 @@ defineExpose({ focus: () => el.value?.focus() });
       v-if="clearable && String(modelValue).length && !disabled && !readonly"
       type="button"
       class="absolute right-2 grid place-items-center w-6 h-6 rounded-sm text-ink-faint hover:text-ink hover:bg-surface-3 transition-colors"
-      aria-label="ล้างค่าในช่องนี้"
+      :aria-label="t(&quot;ล้างค่าในช่องนี้&quot;)"
       @click="clear"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">

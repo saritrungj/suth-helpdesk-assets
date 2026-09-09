@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * MasterDataPage — หน้าจัดการข้อมูลอ้างอิงหนึ่งชุด (ยี่ห้อ อาคาร ชั้น ฝ่าย แผนก ปีงบ สัญญา)
  *
@@ -25,6 +27,7 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { askConfirm } from "../store/confirmDialog";
 import { invalidateAfterWrite, changeKindForEndpoint } from "../api/invalidate";
 import { toastError, toastSuccess } from "../store/toast";
+import { errorMessage } from "../lib/api-error";
 import {
   UiAlert,
   UiButton,
@@ -39,7 +42,7 @@ import {
 
 const props = defineProps({
   title: { type: String, required: true },
-  eyebrow: { type: String, default: "ข้อมูลอ้างอิง" },
+  eyebrow: { type: String, default: t("ข้อมูลอ้างอิง") },
   description: { type: String, default: "" },
   /** เส้น API ของชุดข้อมูลนี้ เช่น "/brands" — ใช้ทั้ง GET/POST/PUT/DELETE */
   endpoint: { type: String, required: true },
@@ -101,7 +104,7 @@ async function load() {
     rows.value = res.data ?? [];
   } catch (err) {
     console.error(`Load ${props.endpoint} error:`, err);
-    loadError.value = `โหลดรายการ${props.itemNoun}ไม่สำเร็จ`;
+    loadError.value = t("โหลดรายการ{0}ไม่สำเร็จ", [props.itemNoun]);
   } finally {
     loading.value = false;
   }
@@ -150,15 +153,15 @@ function validate() {
     const value = typeof raw === "string" ? raw.trim() : raw;
 
     if (field.required && (value === "" || value === null || value === undefined)) {
-      return `กรอก${field.label}ก่อน`;
+      return t("กรอก{0}ก่อน", [field.label]);
     }
 
     if (field.maxlength && String(value ?? "").length > field.maxlength) {
-      return `${field.label}ยาวเกิน ${field.maxlength} ตัวอักษร`;
+      return t("{0}ยาวเกิน {1} ตัวอักษร", [field.label, field.maxlength]);
     }
 
     if (field.type === "number" && value !== "" && Number.isNaN(Number(value))) {
-      return `${field.label}ต้องเป็นตัวเลข`;
+      return t("{0}ต้องเป็นตัวเลข", [field.label]);
     }
 
     // ชื่อซ้ำ — เทียบแบบไม่สนตัวพิมพ์ใหญ่เล็กและตัดช่องว่างหัวท้าย เพราะ
@@ -169,7 +172,7 @@ function validate() {
           row.id !== editingId.value &&
           String(row[field.key] ?? "").trim().toLowerCase() === String(value).toLowerCase()
       );
-      if (duplicate) return `มี${field.label} "${value}" อยู่แล้ว`;
+      if (duplicate) return t("มี{0} \"{1}\" อยู่แล้ว", [field.label, value]);
     }
   }
 
@@ -198,10 +201,10 @@ async function submit() {
   try {
     if (isEditing.value) {
       await api.put(`${props.endpoint}/${editingId.value}`, payload());
-      toastSuccess(`แก้ไข${props.itemNoun}เรียบร้อย`);
+      toastSuccess(t("แก้ไข{0}เรียบร้อย", [props.itemNoun]));
     } else {
       await api.post(props.endpoint, payload());
-      toastSuccess(`เพิ่ม${props.itemNoun}เรียบร้อย`);
+      toastSuccess(t("เพิ่ม{0}เรียบร้อย", [props.itemNoun]));
     }
 
     dialogOpen.value = false;
@@ -209,10 +212,7 @@ async function submit() {
     await props.onChanged?.();
   } catch (err) {
     console.error(err);
-    formError.value =
-      err.response?.data?.error ||
-      err.response?.data?.message ||
-      `บันทึก${props.itemNoun}ไม่สำเร็จ`;
+    formError.value = errorMessage(err, t("บันทึก{0}ไม่สำเร็จ", [props.itemNoun]));
   } finally {
     saving.value = false;
   }
@@ -237,10 +237,10 @@ async function remove(row) {
   const label = row[props.fields[0].key] ?? row.id;
 
   const confirmed = await askConfirm(
-    `“${label}” จะถูกลบออกจากระบบ และรายการที่อ้างถึงอยู่อาจแสดงผลไม่ครบ`,
+    t("“{0}” จะถูกลบออกจากระบบ และรายการที่อ้างถึงอยู่อาจแสดงผลไม่ครบ", [label]),
     {
-      title: `ลบ${props.itemNoun}นี้`,
-      confirmText: `ลบ${props.itemNoun}`,
+      title: t("ลบ{0}นี้", [props.itemNoun]),
+      confirmText: t("ลบ{0}", [props.itemNoun]),
       danger: true,
     }
   );
@@ -248,14 +248,12 @@ async function remove(row) {
 
   try {
     await api.delete(`${props.endpoint}/${row.id}`);
-    toastSuccess(`ลบ${props.itemNoun}เรียบร้อย`);
+    toastSuccess(t("ลบ{0}เรียบร้อย", [props.itemNoun]));
     await Promise.all([load(), invalidateRelatedCaches()]);
     await props.onChanged?.();
   } catch (err) {
     console.error(err);
-    toastError(
-      err.response?.data?.error || `ลบไม่สำเร็จ — อาจมีข้อมูลอื่นอ้างถึง${props.itemNoun}นี้อยู่`
-    );
+    toastError(errorMessage(err, t("ลบไม่สำเร็จ — อาจมีข้อมูลอื่นอ้างถึง{0}นี้อยู่", [props.itemNoun])));
   }
 }
 
@@ -269,8 +267,7 @@ onMounted(async () => {
     <UiPageHeader :eyebrow="eyebrow" :title="title" :description="description">
       <template #actions>
         <UiButton variant="primary" @click="openCreate">
-          <template #icon><Plus :size="16" /></template>
-          เพิ่ม{{ itemNoun }}
+          <template #icon><Plus :size="16" /></template> {{ t("เพิ่ม") }} {{ itemNoun }}
         </UiButton>
       </template>
     </UiPageHeader>
@@ -278,7 +275,7 @@ onMounted(async () => {
     <UiAlert v-if="loadError" tone="danger" class="mb-4">
       {{ loadError }}
       <template #actions>
-        <UiButton size="sm" variant="secondary" @click="load">ลองใหม่</UiButton>
+        <UiButton size="sm" variant="secondary" @click="load"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
 
@@ -287,24 +284,24 @@ onMounted(async () => {
       :columns="tableColumns"
       :loading="loading"
       :export-filename="exportFilename"
-      :empty-text="`ยังไม่มี${itemNoun}ในระบบ`"
+      :empty-text="t(&quot;ยังไม่มี{0}ในระบบ&quot;, [itemNoun])"
       :empty-hint="emptyHint"
-      :search-placeholder="`ค้นหา${itemNoun}…`"
+      :search-placeholder="t(&quot;ค้นหา{0}…&quot;, [itemNoun])"
       row-key="id"
     >
       <template #actions="{ row }">
-        <UiTooltip :content="`แก้ไข${itemNoun}`">
-          <UiButton size="sm" variant="ghost" icon-only :label="`แก้ไข ${row[fields[0].key]}`" @click="openEdit(row)">
+        <UiTooltip :content="t(&quot;แก้ไข{0}&quot;, [itemNoun])">
+          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;แก้ไข {0}&quot;, [row[fields[0].key]])" @click="openEdit(row)">
             <Pencil :size="15" />
           </UiButton>
         </UiTooltip>
 
-        <UiTooltip :content="`ลบ${itemNoun}`">
+        <UiTooltip :content="t(&quot;ลบ{0}&quot;, [itemNoun])">
           <UiButton
             size="sm"
             variant="danger-ghost"
             icon-only
-            :label="`ลบ ${row[fields[0].key]}`"
+            :label="t(&quot;ลบ {0}&quot;, [row[fields[0].key]])"
             @click="remove(row)"
           >
             <Trash2 :size="15" />
@@ -315,12 +312,10 @@ onMounted(async () => {
       <template #empty>
         <div class="py-12">
           <div class="text-center">
-            <p class="text-md font-semibold text-ink">ยังไม่มี{{ itemNoun }}ในระบบ</p>
+            <p class="text-md font-semibold text-ink"> {{ t("ยังไม่มี") }} {{ itemNoun }} {{ t("ในระบบ") }} </p>
             <p v-if="emptyHint" class="text-sm text-ink-mute mt-1">{{ emptyHint }}</p>
             <UiButton variant="primary" size="sm" class="mt-4" @click="openCreate">
-              <template #icon><Plus :size="15" /></template>
-              เพิ่ม{{ itemNoun }}แรก
-            </UiButton>
+              <template #icon><Plus :size="15" /></template> {{ t("เพิ่ม") }} {{ itemNoun }} {{ t("แรก") }} </UiButton>
           </div>
         </div>
       </template>
@@ -328,7 +323,7 @@ onMounted(async () => {
 
     <UiModal
       v-model:open="dialogOpen"
-      :title="isEditing ? `แก้ไข${itemNoun}` : `เพิ่ม${itemNoun}`"
+      :title="isEditing ? t(&quot;แก้ไข{0}&quot;, [itemNoun]) : t(&quot;เพิ่ม{0}&quot;, [itemNoun])"
       size="sm"
     >
       <form class="flex flex-col gap-4" @submit.prevent="submit">
@@ -345,7 +340,7 @@ onMounted(async () => {
             :options="optionSets[field.key] ?? []"
             value-key="value"
             label-key="label"
-            :placeholder="field.placeholder || `เลือก${field.label}`"
+            :placeholder="field.placeholder || t(&quot;เลือก{0}&quot;, [field.label])"
           />
 
           <UiInput
@@ -366,9 +361,9 @@ onMounted(async () => {
       </form>
 
       <template #footer>
-        <UiButton variant="secondary" :disabled="saving" @click="dialogOpen = false">ยกเลิก</UiButton>
+        <UiButton variant="secondary" :disabled="saving" @click="dialogOpen = false"> {{ t("ยกเลิก") }} </UiButton>
         <UiButton variant="primary" :loading="saving" @click="submit">
-          {{ isEditing ? "บันทึกการแก้ไข" : `เพิ่ม${itemNoun}` }}
+          {{ isEditing ? t("บันทึกการแก้ไข") : t("เพิ่ม{0}", [itemNoun]) }}
         </UiButton>
       </template>
     </UiModal>

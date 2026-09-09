@@ -1,3 +1,4 @@
+import { installLocale } from "./lib/locale";
 import { createApp } from "vue";
 import { VueQueryPlugin } from "@tanstack/vue-query";
 import { queryClient } from "./api/query-client";
@@ -9,6 +10,7 @@ import { restoreSession } from "./store/session";
 import { startFiscalYearRouterSync } from "./store/fiscalYear";
 
 const app = createApp(App);
+installLocale(app);
 
 // ใช้ client ที่สร้างไว้ใน api/query-client.js ไม่ให้ plugin สร้างเอง เพราะ
 // store/auth.js ต้องถือ reference ไว้ล้าง cache ตอนเปลี่ยนบัญชี ซึ่งอยู่นอก

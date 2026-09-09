@@ -1,3 +1,4 @@
+import { t } from "../lib/locale";
 import axios from "axios";
 import router from "../router";
 import { toastInfo } from "../store/toast";
@@ -36,7 +37,7 @@ api.interceptors.response.use(
       if (window.location.pathname !== "/login" && !isHandlingSessionExpiry) {
         isHandlingSessionExpiry = true;
 
-        toastInfo("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่");
+        toastInfo(t("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่"));
 
         // ใช้ router แทน window.location.href เพื่อไม่ให้ reload ทั้งหน้า (คง SPA state)
         // หน่วงเล็กน้อยให้ผู้ใช้เห็น toast ก่อนเปลี่ยนหน้า

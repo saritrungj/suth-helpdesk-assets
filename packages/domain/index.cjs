@@ -13,6 +13,7 @@ const money = require("./money.cjs");
 const constraints = require("./constraints.cjs");
 
 module.exports = {
+  ...require("./locale-format.cjs"),
   ...month,
   ...fiscalYear,
   ...format,

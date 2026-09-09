@@ -1,4 +1,8 @@
 <script setup>
+import { yearLabel } from "../lib/locale-format";
+import { t } from "../lib/locale";
+import { errorMessage } from "../lib/api-error";
+
 /**
  * DeviceFormFields — ช่องกรอกข้อมูลเครื่องหนึ่งเครื่อง พร้อมการบันทึก
  *
@@ -34,9 +38,9 @@ const queryClient = useQueryClient();
 const isEdit = computed(() => props.assetId !== null && props.assetId !== undefined);
 
 const STATUS_OPTIONS = [
-  { value: "active", label: "ใช้งานอยู่" },
-  { value: "repair", label: "ซ่อมบำรุง" },
-  { value: "retired", label: "ปลดระวาง" },
+  { value: "active", label: t("ใช้งานอยู่") },
+  { value: "repair", label: t("ซ่อมบำรุง") },
+  { value: "retired", label: t("ปลดระวาง") },
 ];
 
 const emptyForm = () => ({
@@ -90,24 +94,24 @@ const contractOptions = computed(() =>
   contracts.value.map((c) => ({
     value: c.id,
     label: c.contract_no,
-    hint: c.fiscal_year ? `ปีงบ ${Number(c.fiscal_year)}` : "",
+    hint: c.fiscal_year ? t("ปีงบ {0}", [yearLabel(c.fiscal_year)]) : "",
   }))
 );
 
 /** ราคาที่จะถูกใช้จริงถ้าบันทึกตามที่กรอกอยู่ตอนนี้ — แสดงให้เห็นก่อนกดบันทึก */
 const effectivePriceHint = computed(() => {
   if (form.value.price_override !== "" && form.value.price_override !== null) {
-    return `จะใช้ราคาเฉพาะเครื่อง ${Number(form.value.price_override).toLocaleString("th-TH", {
+    return t("จะใช้ราคาเฉพาะเครื่อง {0} บาท/แผ่น แทนราคาตามสัญญา", [Number(form.value.price_override).toLocaleString("th-TH", {
       minimumFractionDigits: 2,
-    })} บาท/แผ่น แทนราคาตามสัญญา`;
+    })]);
   }
   const contract = contracts.value.find((c) => Number(c.id) === Number(form.value.contract_id));
   if (contract?.price_per_page !== undefined && contract?.price_per_page !== null) {
-    return `เว้นว่างไว้ = ใช้ราคาตามสัญญา ${Number(contract.price_per_page).toLocaleString("th-TH", {
+    return t("เว้นว่างไว้ = ใช้ราคาตามสัญญา {0} บาท/แผ่น", [Number(contract.price_per_page).toLocaleString("th-TH", {
       minimumFractionDigits: 2,
-    })} บาท/แผ่น`;
+    })]);
   }
-  return "เว้นว่างไว้ = ใช้ราคาตามสัญญาที่เลือก";
+  return t("เว้นว่างไว้ = ใช้ราคาตามสัญญาที่เลือก");
 });
 
 watch(
@@ -146,7 +150,7 @@ async function loadMasterData() {
     masterLoaded.value = true;
   } catch (err) {
     console.error("Load master data error:", err);
-    formError.value = "โหลดข้อมูลอ้างอิงไม่สำเร็จ ลองรีเฟรชหน้าอีกครั้ง";
+    formError.value = t("โหลดข้อมูลอ้างอิงไม่สำเร็จ ลองรีเฟรชหน้าอีกครั้ง");
   }
 }
 
@@ -174,7 +178,7 @@ async function loadAsset(id) {
     };
   } catch (err) {
     console.error("Load device error:", err);
-    formError.value = "โหลดข้อมูลเครื่องไม่สำเร็จ";
+    formError.value = t("โหลดข้อมูลเครื่องไม่สำเร็จ");
   } finally {
     loading.value = false;
   }
@@ -190,10 +194,10 @@ async function reset() {
 }
 
 function validate() {
-  if (!form.value.serial_number.trim()) return "กรอกหมายเลข Serial ของเครื่องก่อน";
-  if (!form.value.brand_id) return "เลือกยี่ห้อของเครื่องก่อน";
+  if (!form.value.serial_number.trim()) return t("กรอกหมายเลข Serial ของเครื่องก่อน");
+  if (!form.value.brand_id) return t("เลือกยี่ห้อของเครื่องก่อน");
   if (form.value.price_override !== "" && Number(form.value.price_override) < 0) {
-    return "ราคาต่อแผ่นติดลบไม่ได้";
+    return t("ราคาต่อแผ่นติดลบไม่ได้");
   }
   return "";
 }
@@ -235,10 +239,10 @@ async function submit() {
     if (isEdit.value) {
       res = await api.put(`/devices/${props.assetId}`, core);
       await api.put(`/devices/${props.assetId}/move`, placement);
-      toastSuccess("บันทึกการแก้ไขเรียบร้อย");
+      toastSuccess(t("บันทึกการแก้ไขเรียบร้อย"));
     } else {
       res = await api.post("/devices", { ...core, ...placement });
-      toastSuccess("เพิ่มเครื่องเข้าทะเบียนเรียบร้อย");
+      toastSuccess(t("เพิ่มเครื่องเข้าทะเบียนเรียบร้อย"));
     }
 
     // ทะเบียนเครื่อง แดชบอร์ด และความครบถ้วนรายเดือนใช้ข้อมูลชุดนี้ทั้งหมด
@@ -248,7 +252,7 @@ async function submit() {
     return true;
   } catch (err) {
     console.error("Save device error:", err);
-    const message = err.response?.data?.error || "บันทึกไม่สำเร็จ";
+    const message = errorMessage(err, t("บันทึกไม่สำเร็จ"));
     formError.value = message;
     toastError(message);
     return false;
@@ -269,103 +273,103 @@ defineExpose({ reset, submit, saving, loading });
     <form v-else class="flex flex-col gap-5" @submit.prevent="submit">
       <!-- ตัวเครื่อง -->
       <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <legend class="eyebrow mb-2">ข้อมูลเครื่อง</legend>
+        <legend class="eyebrow mb-2"> {{ t("ข้อมูลเครื่อง") }} </legend>
 
         <UiField
-          label="หมายเลข Serial"
+          :label="t(&quot;หมายเลข Serial&quot;)"
           required
-          hint="เลขที่พิมพ์อยู่บนตัวเครื่อง ใช้เป็นตัวระบุหลักของทุกรายงาน"
+          :hint="t(&quot;เลขที่พิมพ์อยู่บนตัวเครื่อง ใช้เป็นตัวระบุหลักของทุกรายงาน&quot;)"
         >
-          <UiInput v-model="form.serial_number" mono placeholder="เช่น SN2446179" />
+          <UiInput v-model="form.serial_number" mono :placeholder="t(&quot;เช่น SN2446179&quot;)" />
         </UiField>
 
-        <UiField label="รหัสครุภัณฑ์" hint="ถ้ามีรหัสจากงานพัสดุ ให้กรอกไว้เพื่อใช้ตรวจสอบข้ามระบบ">
-          <UiInput v-model="form.asset_code" mono placeholder="เช่น IT-PR-1024" />
+        <UiField :label="t(&quot;รหัสครุภัณฑ์&quot;)" :hint="t(&quot;ถ้ามีรหัสจากงานพัสดุ ให้กรอกไว้เพื่อใช้ตรวจสอบข้ามระบบ&quot;)">
+          <UiInput v-model="form.asset_code" mono :placeholder="t(&quot;เช่น IT-PR-1024&quot;)" />
         </UiField>
 
-        <UiField label="ยี่ห้อ" required>
-          <UiCombobox v-model="form.brand_id" :options="brandOptions" placeholder="เลือกยี่ห้อ" />
+        <UiField :label="t(&quot;ยี่ห้อ&quot;)" required>
+          <UiCombobox v-model="form.brand_id" :options="brandOptions" :placeholder="t(&quot;เลือกยี่ห้อ&quot;)" />
         </UiField>
 
-        <UiField label="รุ่น">
-          <UiInput v-model="form.model" placeholder="เช่น LaserJet M404dn" />
+        <UiField :label="t(&quot;รุ่น&quot;)">
+          <UiInput v-model="form.model" :placeholder="t(&quot;เช่น LaserJet M404dn&quot;)" />
         </UiField>
 
-        <UiField label="สถานะเครื่อง" class="sm:col-span-2">
-          <UiSegmented v-model="form.status" :options="STATUS_OPTIONS" label="สถานะของเครื่อง" />
+        <UiField :label="t(&quot;สถานะเครื่อง&quot;)" class="sm:col-span-2">
+          <UiSegmented v-model="form.status" :options="STATUS_OPTIONS" :label="t(&quot;สถานะของเครื่อง&quot;)" />
         </UiField>
       </fieldset>
 
       <!-- ที่ตั้ง -->
       <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-5 border-t border-line-soft">
-        <legend class="eyebrow mb-2">ที่ตั้งและหน่วยงานที่ดูแล</legend>
+        <legend class="eyebrow mb-2"> {{ t("ที่ตั้งและหน่วยงานที่ดูแล") }} </legend>
 
-        <UiField label="อาคาร">
+        <UiField :label="t(&quot;อาคาร&quot;)">
           <UiCombobox
             v-model="form.building_id"
             :options="buildingOptions"
-            placeholder="เลือกอาคาร"
-            any-label="ยังไม่ระบุ"
+            :placeholder="t(&quot;เลือกอาคาร&quot;)"
+            :any-label="t(&quot;ยังไม่ระบุ&quot;)"
           />
         </UiField>
 
         <UiField
-          label="ชั้น"
-          :hint="form.building_id ? '' : 'เลือกอาคารก่อนถึงจะเลือกชั้นได้'"
+          :label="t(&quot;ชั้น&quot;)"
+          :hint="form.building_id ? '' : t(&quot;เลือกอาคารก่อนถึงจะเลือกชั้นได้&quot;)"
         >
           <UiCombobox
             v-model="form.floor_id"
             :options="floorOptions"
             :disabled="!form.building_id"
-            placeholder="เลือกชั้น"
-            any-label="ยังไม่ระบุ"
-            empty-text="อาคารนี้ยังไม่มีชั้นในระบบ"
+            :placeholder="t(&quot;เลือกชั้น&quot;)"
+            :any-label="t(&quot;ยังไม่ระบุ&quot;)"
+            :empty-text="t(&quot;อาคารนี้ยังไม่มีชั้นในระบบ&quot;)"
           />
         </UiField>
 
-        <UiField label="ตำแหน่งที่ตั้ง" class="sm:col-span-2" hint="จุดที่เครื่องตั้งอยู่จริง เพื่อให้คนไปหาเจอ">
-          <UiInput v-model="form.location" placeholder="เช่น เคาน์เตอร์พยาบาล ฝั่งตะวันออก" />
+        <UiField :label="t(&quot;ตำแหน่งที่ตั้ง&quot;)" class="sm:col-span-2" :hint="t(&quot;จุดที่เครื่องตั้งอยู่จริง เพื่อให้คนไปหาเจอ&quot;)">
+          <UiInput v-model="form.location" :placeholder="t(&quot;เช่น เคาน์เตอร์พยาบาล ฝั่งตะวันออก&quot;)" />
         </UiField>
 
-        <UiField label="ฝ่าย">
+        <UiField :label="t(&quot;ฝ่าย&quot;)">
           <UiCombobox
             v-model="form.division_id"
             :options="divisionOptions"
-            placeholder="เลือกฝ่าย"
-            any-label="ยังไม่ระบุ"
+            :placeholder="t(&quot;เลือกฝ่าย&quot;)"
+            :any-label="t(&quot;ยังไม่ระบุ&quot;)"
           />
         </UiField>
 
         <UiField
-          label="แผนก"
-          :hint="form.division_id ? 'แผนกนี้จะเป็นผู้รับผิดชอบค่าใช้จ่ายของเครื่อง' : 'เลือกฝ่ายก่อนถึงจะเลือกแผนกได้'"
+          :label="t(&quot;แผนก&quot;)"
+          :hint="form.division_id ? t(&quot;แผนกนี้จะเป็นผู้รับผิดชอบค่าใช้จ่ายของเครื่อง&quot;) : t(&quot;เลือกฝ่ายก่อนถึงจะเลือกแผนกได้&quot;)"
         >
           <UiCombobox
             v-model="form.department_id"
             :options="departmentOptions"
             :disabled="!form.division_id"
-            placeholder="เลือกแผนก"
-            any-label="ยังไม่ระบุ"
-            empty-text="ฝ่ายนี้ยังไม่มีแผนกในระบบ"
+            :placeholder="t(&quot;เลือกแผนก&quot;)"
+            :any-label="t(&quot;ยังไม่ระบุ&quot;)"
+            :empty-text="t(&quot;ฝ่ายนี้ยังไม่มีแผนกในระบบ&quot;)"
           />
         </UiField>
       </fieldset>
 
       <!-- สัญญาและราคา -->
       <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-5 border-t border-line-soft">
-        <legend class="eyebrow mb-2">สัญญาและราคา</legend>
+        <legend class="eyebrow mb-2"> {{ t("สัญญาและราคา") }} </legend>
 
-        <UiField label="สัญญาที่ผูกอยู่">
+        <UiField :label="t(&quot;สัญญาที่ผูกอยู่&quot;)">
           <UiCombobox
             v-model="form.contract_id"
             :options="contractOptions"
-            placeholder="เลือกสัญญา"
-            any-label="ไม่ผูกกับสัญญา"
+            :placeholder="t(&quot;เลือกสัญญา&quot;)"
+            :any-label="t(&quot;ไม่ผูกกับสัญญา&quot;)"
           />
         </UiField>
 
-        <UiField label="ราคาต่อแผ่นเฉพาะเครื่อง" :hint="effectivePriceHint">
-          <UiInput v-model="form.price_override" type="number" step="0.0001" min="0" suffix="บาท" />
+        <UiField :label="t(&quot;ราคาต่อแผ่นเฉพาะเครื่อง&quot;)" :hint="effectivePriceHint">
+          <UiInput v-model="form.price_override" type="number" step="0.0001" min="0" :suffix="t(&quot;บาท&quot;)" />
         </UiField>
       </fieldset>
 

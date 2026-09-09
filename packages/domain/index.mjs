@@ -6,6 +6,10 @@
 import domain from "./index.cjs";
 
 export const {
+  formatMonth,
+  formatDate,
+  formatFiscalYear,
+  formatFiscalYearRange,
   BE_OFFSET,
   BE_YEAR_THRESHOLD,
   CE_YEAR_MIN,

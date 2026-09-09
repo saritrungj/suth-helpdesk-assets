@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiTabs — แถบแท็บสลับแผงเนื้อหาในหน้าเดียว
  *
@@ -17,7 +19,7 @@ defineProps({
   modelValue: { type: String, required: true },
   /** [{ value, label, icon?, count? }] */
   tabs: { type: Array, required: true },
-  label: { type: String, default: "แท็บเนื้อหา" },
+  label: { type: String, default: t("แท็บเนื้อหา") },
 });
 
 defineEmits(["update:modelValue"]);

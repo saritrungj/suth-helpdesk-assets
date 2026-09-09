@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../../lib/locale";
+
 /**
  * Department — แผนก (หน่วยที่รับผิดชอบค่าใช้จ่ายจริง)
  *
@@ -8,39 +10,39 @@
 import MasterDataPage from "../../components/MasterDataPage.vue";
 
 const columns = [
-  { key: "name", label: "ชื่อแผนก" },
-  { key: "division_id", label: "ฝ่ายที่สังกัด", optionKey: "division_id" },
-  { key: "id", label: "รหัส", align: "right", width: "6rem" },
+  { key: "name", label: t("ชื่อแผนก") },
+  { key: "division_id", label: t("ฝ่ายที่สังกัด"), optionKey: "division_id" },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
 ];
 
 const fields = [
   {
     key: "division_id",
-    label: "ฝ่ายที่สังกัด",
+    label: t("ฝ่ายที่สังกัด"),
     type: "select",
     required: true,
     optionsFrom: "/divisions",
   },
   {
     key: "name",
-    label: "ชื่อแผนก",
+    label: t("ชื่อแผนก"),
     type: "text",
     required: true,
     maxlength: 100,
-    placeholder: "เช่น งานผู้ป่วยนอก",
+    placeholder: t("เช่น งานผู้ป่วยนอก"),
   },
 ];
 </script>
 
 <template>
   <MasterDataPage
-    title="แผนก"
-    eyebrow="ข้อมูลอ้างอิง · หน่วยงาน"
-    description="แผนกที่เครื่องพิมพ์แต่ละเครื่องสังกัด และเป็นหน่วยที่รายงานค่าใช้จ่ายลงไปถึง"
+    :title="t(&quot;แผนก&quot;)"
+    :eyebrow="t(&quot;ข้อมูลอ้างอิง · หน่วยงาน&quot;)"
+    :description="t(&quot;แผนกที่เครื่องพิมพ์แต่ละเครื่องสังกัด และเป็นหน่วยที่รายงานค่าใช้จ่ายลงไปถึง&quot;)"
     endpoint="/departments"
-    item-noun="แผนก"
+    :item-noun="t(&quot;แผนก&quot;)"
     export-filename="departments"
-    empty-hint="เลือกฝ่ายแล้วเพิ่มแผนกที่อยู่ใต้ฝ่ายนั้น"
+    :empty-hint="t(&quot;เลือกฝ่ายแล้วเพิ่มแผนกที่อยู่ใต้ฝ่ายนั้น&quot;)"
     :columns="columns"
     :fields="fields"
   />

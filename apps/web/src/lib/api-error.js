@@ -1,3 +1,4 @@
+import { t, locale } from "./locale";
 /**
  * api-error.js — อ่านข้อผิดพลาดจาก API ให้ได้ข้อความที่เอาไปโชว์ผู้ใช้ได้ทันที
  *
@@ -36,9 +37,21 @@
  * @param {string} [fallback] ข้อความสำรองที่เจาะจงกับงานตรงนั้น
  * @returns {string}
  */
-export function errorMessage(error, fallback = "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง") {
+export function errorMessage(error, fallback = t("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง")) {
   const data = error?.response?.data;
 
+  if (locale.value === "en" && error?.response) {
+    const messages = {
+      unauthorized: t("กรุณาเข้าสู่ระบบอีกครั้ง"),
+      forbidden: t("บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้"),
+      not_found: t("ไม่พบข้อมูลที่ต้องการ"),
+      conflict: t("ข้อมูลนี้มีอยู่แล้วหรือขัดแย้งกับข้อมูลเดิม"),
+      still_referenced: t("ยังมีข้อมูลอื่นอ้างถึงรายการนี้อยู่"),
+      bad_request: t("ตรวจสอบข้อมูลที่กรอกแล้วลองใหม่"),
+      validation_error: t("ตรวจสอบช่องที่ระบุแล้วลองใหม่"),
+    };
+    return messages[data?.code] ?? fallback;
+  }
   if (data?.title) return data.title;
 
   // เผื่อ endpoint ที่ยังไม่ได้ย้ายมาใช้รูปแบบใหม่ (การนำเข้าไฟล์บางส่วน)
@@ -47,7 +60,7 @@ export function errorMessage(error, fallback = "เกิดข้อผิด�
 
   // ไม่มีคำตอบจากเซิร์ฟเวอร์เลย = ต่อไม่ติด ซึ่งเป็นคนละปัญหากับ "ทำรายการไม่สำเร็จ"
   // และมีวิธีแก้คนละแบบ (เช็คเน็ต/VPN ไม่ใช่แก้ข้อมูลที่กรอก)
-  if (error?.code === "ERR_NETWORK") return "ติดต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่าย";
+  if (error?.code === "ERR_NETWORK") return t("ติดต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่าย");
 
   return fallback;
 }
@@ -61,6 +74,7 @@ export function errorMessage(error, fallback = "เกิดข้อผิด�
  */
 export function errorDetail(error) {
   const data = error?.response?.data;
+  if (locale.value === "en") return "";
   // ไม่ซ้ำกับข้อความหลัก — บางกรณี API ส่ง detail เท่ากับ title
   return data?.detail && data.detail !== data.title ? data.detail : "";
 }
@@ -79,7 +93,7 @@ export function fieldErrors(error) {
   const errors = error?.response?.data?.errors;
   if (!Array.isArray(errors)) return {};
 
-  return Object.fromEntries(errors.map((entry) => [entry.field, entry.message]));
+  return Object.fromEntries(errors.map((entry) => [entry.field, locale.value === "en" ? t("กรอกข้อมูลที่ถูกต้องในช่องนี้") : entry.message]));
 }
 
 /**

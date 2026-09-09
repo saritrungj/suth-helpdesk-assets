@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiButton — ปุ่มเดียวของทั้งระบบ
  *
@@ -39,7 +41,7 @@ const props = defineProps({
 });
 
 if (import.meta.env.DEV && props.iconOnly && !props.label) {
-  console.warn("[UiButton] ปุ่มไอคอนล้วนต้องมี prop label เพื่อให้โปรแกรมอ่านหน้าจออ่านออก");
+  console.warn(t("[UiButton] ปุ่มไอคอนล้วนต้องมี prop label เพื่อให้โปรแกรมอ่านหน้าจออ่านออก"));
 }
 
 const tag = computed(() => {

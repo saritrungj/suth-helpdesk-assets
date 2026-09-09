@@ -1,4 +1,7 @@
 <script setup>
+import { yearLabel } from "../lib/locale-format";
+import { t } from "../lib/locale";
+
 /**
  * UsageReport — หน้ารายงานค่าใช้จ่าย มีสองมุมมองในหน้าเดียว
  *
@@ -22,8 +25,8 @@ const route = useRoute();
 const router = useRouter();
 
 const TABS = [
-  { value: "expense", label: "ตามสัญญา", icon: ReceiptText },
-  { value: "department", label: "ตามฝ่าย / แผนก", icon: Building2 },
+  { value: "expense", label: t("ตามสัญญา"), icon: ReceiptText },
+  { value: "department", label: t("ตามฝ่าย / แผนก"), icon: Building2 },
 ];
 
 const tab = computed({
@@ -41,12 +44,12 @@ const tab = computed({
       ในระบบที่หน้าตาไม่เข้าชุดกับหน้าอื่นที่ใช้ UiPageHeader ทั้งหมด
     -->
     <UiPageHeader
-      :eyebrow="activeFiscalYear?.year ? `วิเคราะห์ · ปีงบประมาณ ${Number(activeFiscalYear.year)}` : 'วิเคราะห์'"
-      title="ค่าใช้จ่าย"
-      description="ข้อมูลชุดเดียวกันสองมุมมอง — ตามสัญญาไว้ตรวจใบแจ้งหนี้ ตามหน่วยงานไว้ทำเรื่องเบิกภายใน"
+      :eyebrow="activeFiscalYear?.year ? t(&quot;วิเคราะห์ · ปีงบประมาณ {0}&quot;, [yearLabel(activeFiscalYear.year)]) : t(&quot;วิเคราะห์&quot;)"
+      :title="t(&quot;ค่าใช้จ่าย&quot;)"
+      :description="t(&quot;ข้อมูลชุดเดียวกันสองมุมมอง — ตามสัญญาไว้ตรวจใบแจ้งหนี้ ตามหน่วยงานไว้ทำเรื่องเบิกภายใน&quot;)"
     />
 
-    <UiTabs v-model="tab" :tabs="TABS" label="มุมมองของรายงานค่าใช้จ่าย">
+    <UiTabs v-model="tab" :tabs="TABS" :label="t(&quot;มุมมองของรายงานค่าใช้จ่าย&quot;)">
       <template #expense>
         <KeepAlive>
           <Expense />

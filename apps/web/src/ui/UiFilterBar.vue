@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiFilterBar — แถบตัวกรองที่เปิดเผยข้อมูลทีละชั้น
  *
@@ -37,7 +39,7 @@ const props = defineProps({
   chips: { type: Array, default: () => [] },
   /** ซ่อนปุ่มเปิด/ปิด เมื่อหน้านั้นไม่มีตัวกรองขั้นสูง */
   collapsible: { type: Boolean, default: true },
-  toggleLabel: { type: String, default: "ตัวกรอง" },
+  toggleLabel: { type: String, default: t("ตัวกรอง") },
 });
 
 const emit = defineEmits(["remove", "clear"]);
@@ -97,12 +99,12 @@ watch(
         >
           {{ chip.label }}
           <X :size="13" class="text-ink-faint group-hover:text-ink" aria-hidden="true" />
-          <span class="sr-only">เอาตัวกรองนี้ออก</span>
+          <span class="sr-only"> {{ t("เอาตัวกรองนี้ออก") }} </span>
         </button>
       </li>
 
       <li>
-        <UiButton size="xs" variant="ghost" @click="emit('clear')">ล้างทั้งหมด</UiButton>
+        <UiButton size="xs" variant="ghost" @click="emit('clear')"> {{ t("ล้างทั้งหมด") }} </UiButton>
       </li>
     </ul>
 

@@ -1,4 +1,8 @@
 <script setup>
+import { yearLabel } from "../lib/locale-format";
+import { t } from "../lib/locale";
+import { errorMessage } from "../lib/api-error";
+
 /**
  * AssetList — ทะเบียนเครื่องพิมพ์ทั้งหมด
  *
@@ -77,21 +81,21 @@ function emptyFilters() {
 const filters = ref(emptyFilters());
 
 const STATUS_META = {
-  active: { label: "ใช้งานอยู่", tone: "ok" },
-  repair: { label: "ซ่อมบำรุง", tone: "warn" },
-  retired: { label: "ปลดระวาง", tone: "neutral" },
+  active: { label: t("ใช้งานอยู่"), tone: "ok" },
+  repair: { label: t("ซ่อมบำรุง"), tone: "warn" },
+  retired: { label: t("ปลดระวาง"), tone: "neutral" },
 };
 
 const STATUS_OPTIONS = [
-  { value: "", label: "ทั้งหมด" },
-  { value: "active", label: "ใช้งานอยู่" },
-  { value: "repair", label: "ซ่อมบำรุง" },
-  { value: "retired", label: "ปลดระวาง" },
+  { value: "", label: t("ทั้งหมด") },
+  { value: "active", label: t("ใช้งานอยู่") },
+  { value: "repair", label: t("ซ่อมบำรุง") },
+  { value: "retired", label: t("ปลดระวาง") },
 ];
 
 const CONTRACT_OPTIONS = [
-  { value: "", label: "ทั้งหมด" },
-  { value: "1", label: "ยังไม่ผูกสัญญา" },
+  { value: "", label: t("ทั้งหมด") },
+  { value: "1", label: t("ยังไม่ผูกสัญญา") },
 ];
 
 /* --------------------------------------------------------------------------
@@ -104,7 +108,7 @@ const buildingOptions = computed(() => toOptions(buildings.value));
 const divisionOptions = computed(() => toOptions(divisions.value));
 
 const fiscalYearOptions = computed(() =>
-  fiscalYears.value.map((f) => ({ value: String(f.year), label: `ปีงบ ${Number(f.year)}` }))
+  fiscalYears.value.map((f) => ({ value: String(f.year), label: t("ปีงบ {0}", [yearLabel(f.year)]) }))
 );
 
 /** ชั้นที่เลือกได้ = เฉพาะชั้นในอาคารที่เลือกไว้ และตัดชื่อซ้ำออก */
@@ -132,14 +136,14 @@ const departmentOptions = computed(() => {
    ชิปสรุปเงื่อนไขที่ใช้อยู่ — เห็นได้ตลอดแม้พับแผงตัวกรองแล้ว
    -------------------------------------------------------------------------- */
 const FILTER_LABELS = {
-  brand: "ยี่ห้อ",
-  building: "อาคาร",
-  floor: "ชั้น",
-  division: "ฝ่าย",
-  department: "แผนก",
-  fiscalYear: "ปีงบ",
-  status: "สถานะ",
-  unassigned: "สัญญา",
+  brand: t("ยี่ห้อ"),
+  building: t("อาคาร"),
+  floor: t("ชั้น"),
+  division: t("ฝ่าย"),
+  department: t("แผนก"),
+  fiscalYear: t("ปีงบ"),
+  status: t("สถานะ"),
+  unassigned: t("สัญญา"),
 };
 
 const activeFilters = computed(() =>
@@ -152,7 +156,7 @@ const activeFilters = computed(() =>
         key === "status"
           ? (STATUS_META[value]?.label ?? value)
           : key === "unassigned"
-            ? "ยังไม่ผูกสัญญา"
+            ? t("ยังไม่ผูกสัญญา")
             : value,
     }))
 );
@@ -254,25 +258,25 @@ const columns = [
   { key: "serial_number", label: "Serial", width: "11rem" },
   {
     key: "brand_name",
-    label: "ยี่ห้อ / รุ่น",
+    label: t("ยี่ห้อ / รุ่น"),
     value: (a) => `${a.brand_name || ""} ${a.model || ""}`.trim(),
   },
-  { key: "building_name", label: "อาคาร" },
-  { key: "floor_name", label: "ชั้น" },
-  { key: "location", label: "ตำแหน่งที่ตั้ง" },
-  { key: "division_name", label: "ฝ่าย", hidden: true },
-  { key: "department_name", label: "แผนก" },
-  { key: "contract_no", label: "สัญญา" },
+  { key: "building_name", label: t("อาคาร") },
+  { key: "floor_name", label: t("ชั้น") },
+  { key: "location", label: t("ตำแหน่งที่ตั้ง") },
+  { key: "division_name", label: t("ฝ่าย"), hidden: true },
+  { key: "department_name", label: t("แผนก") },
+  { key: "contract_no", label: t("สัญญา") },
   {
     key: "effective_price",
-    label: "ราคา/แผ่น",
+    label: t("ราคา/แผ่น"),
     align: "right",
     value: (a) => effectivePrice(a),
     csv: (a) => effectivePrice(a) ?? "",
   },
   {
     key: "status",
-    label: "สถานะ",
+    label: t("สถานะ"),
     align: "center",
     value: (a) => STATUS_META[a.status]?.label ?? a.status,
   },
@@ -287,7 +291,7 @@ async function loadAssets() {
     assets.value = res.data ?? [];
   } catch (err) {
     console.error("Load assets error:", err);
-    loadError.value = "โหลดทะเบียนทรัพย์สินไม่สำเร็จ";
+    loadError.value = t("โหลดทะเบียนทรัพย์สินไม่สำเร็จ");
   } finally {
     loading.value = false;
   }
@@ -335,18 +339,18 @@ function openMove(id) {
 
 async function remove(asset) {
   const confirmed = await askConfirm(
-    `เครื่อง Serial “${asset.serial_number}” จะถูกลบออกจากทะเบียน ยอดพิมพ์ที่เคยบันทึกไว้จะไม่ถูกนำมาคิดในรายงานอีก`,
-    { title: "ลบเครื่องนี้ออกจากทะเบียน", confirmText: "ลบเครื่องนี้", danger: true }
+    t("เครื่อง Serial “{0}” จะถูกลบออกจากทะเบียน ยอดพิมพ์ที่เคยบันทึกไว้จะไม่ถูกนำมาคิดในรายงานอีก", [asset.serial_number]),
+    { title: t("ลบเครื่องนี้ออกจากทะเบียน"), confirmText: t("ลบเครื่องนี้"), danger: true }
   );
   if (!confirmed) return;
 
   try {
     await api.delete(`/devices/${asset.id}`);
-    toastSuccess("ลบเครื่องออกจากทะเบียนเรียบร้อย");
+    toastSuccess(t("ลบเครื่องออกจากทะเบียนเรียบร้อย"));
     await Promise.all([loadAssets(), invalidateAfterWrite(queryClient, "device")]);
   } catch (err) {
     console.error(err);
-    toastError(err.response?.data?.error || "ลบไม่สำเร็จ — อาจมียอดพิมพ์ที่อ้างถึงเครื่องนี้อยู่");
+    toastError(errorMessage(err, t("ลบไม่สำเร็จ — อาจมียอดพิมพ์ที่อ้างถึงเครื่องนี้อยู่")));
   }
 }
 
@@ -359,32 +363,27 @@ onMounted(async () => {
 <template>
   <div>
     <UiPageHeader
-      eyebrow="ทรัพย์สิน"
-      title="ทะเบียนเครื่องพิมพ์"
-      description="เครื่องพิมพ์และเครื่องถ่ายเอกสารทั้งหมดที่อยู่ในความดูแล พร้อมที่ตั้งและสัญญาที่ผูกอยู่"
+      :eyebrow="t(&quot;ทรัพย์สิน&quot;)"
+      :title="t(&quot;ทะเบียนเครื่องพิมพ์&quot;)"
+      :description="t(&quot;เครื่องพิมพ์และเครื่องถ่ายเอกสารทั้งหมดที่อยู่ในความดูแล พร้อมที่ตั้งและสัญญาที่ผูกอยู่&quot;)"
     >
       <template #meta>
         <p class="text-xs text-ink-mute mt-2">
-          <span class="numeral font-semibold text-ink-soft">{{ formatCount(filteredAssets.length) }}</span>
-          เครื่องที่ตรงกับเงื่อนไข
-          <span v-if="filteredAssets.length !== assets.length" class="text-ink-mute">
-            (จากทั้งหมด {{ formatCount(assets.length) }})
+          <span class="numeral font-semibold text-ink-soft">{{ formatCount(filteredAssets.length) }}</span> {{ t("เครื่องที่ตรงกับเงื่อนไข") }} <span v-if="filteredAssets.length !== assets.length" class="text-ink-mute"> {{ t("(จากทั้งหมด") }} {{ formatCount(assets.length) }})
           </span>
         </p>
       </template>
 
       <template #actions>
         <UiButton v-if="isAdmin" to="/admin/add-asset" variant="primary">
-          <template #icon><CirclePlus :size="16" /></template>
-          เพิ่มเครื่อง
-        </UiButton>
+          <template #icon><CirclePlus :size="16" /></template> {{ t("เพิ่มเครื่อง") }} </UiButton>
       </template>
     </UiPageHeader>
 
     <UiAlert v-if="loadError" tone="danger" class="mb-4">
       {{ loadError }}
       <template #actions>
-        <UiButton size="sm" variant="secondary" @click="loadAssets">ลองใหม่</UiButton>
+        <UiButton size="sm" variant="secondary" @click="loadAssets"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
 
@@ -393,8 +392,8 @@ onMounted(async () => {
          เหมือนกันหน้าตาไม่เหมือนกัน และเวลาแก้พฤติกรรมต้องแก้สองที่ -->
     <UiFilterBar :chips="filterChips" @remove="clearFilter" @clear="resetFilters">
       <template #primary>
-        <UiField label="สถานะเครื่อง">
-          <UiSegmented v-model="filters.status" :options="STATUS_OPTIONS" size="sm" label="กรองตามสถานะเครื่อง" />
+        <UiField :label="t(&quot;สถานะเครื่อง&quot;)">
+          <UiSegmented v-model="filters.status" :options="STATUS_OPTIONS" size="sm" :label="t(&quot;กรองตามสถานะเครื่อง&quot;)" />
         </UiField>
 
         <!--
@@ -402,47 +401,47 @@ onMounted(async () => {
           ยอดพิมพ์ของมันหายไปจากงบเงียบๆ จึงต้องมีทางกรองดูได้โดยตรง ไม่ใช่ต้อง
           ไล่กวาดสายตาหาช่องสัญญาที่ว่างในตารางเป็นร้อยแถว
         -->
-        <UiField label="สัญญา">
+        <UiField :label="t(&quot;สัญญา&quot;)">
           <UiSegmented
             v-model="filters.unassigned"
             :options="CONTRACT_OPTIONS"
             size="sm"
-            label="กรองตามการผูกสัญญา"
+            :label="t(&quot;กรองตามการผูกสัญญา&quot;)"
           />
         </UiField>
       </template>
 
-      <UiField label="ยี่ห้อ">
-        <UiCombobox v-model="filters.brand" :options="brandOptions" placeholder="ทุกยี่ห้อ" any-label="ทุกยี่ห้อ" />
+      <UiField :label="t(&quot;ยี่ห้อ&quot;)">
+        <UiCombobox v-model="filters.brand" :options="brandOptions" :placeholder="t(&quot;ทุกยี่ห้อ&quot;)" :any-label="t(&quot;ทุกยี่ห้อ&quot;)" />
       </UiField>
 
-      <UiField label="อาคาร">
-        <UiCombobox v-model="filters.building" :options="buildingOptions" placeholder="ทุกอาคาร" any-label="ทุกอาคาร" />
+      <UiField :label="t(&quot;อาคาร&quot;)">
+        <UiCombobox v-model="filters.building" :options="buildingOptions" :placeholder="t(&quot;ทุกอาคาร&quot;)" :any-label="t(&quot;ทุกอาคาร&quot;)" />
       </UiField>
 
-      <UiField label="ชั้น">
-        <UiCombobox v-model="filters.floor" :options="floorOptions" placeholder="ทุกชั้น" any-label="ทุกชั้น" />
+      <UiField :label="t(&quot;ชั้น&quot;)">
+        <UiCombobox v-model="filters.floor" :options="floorOptions" :placeholder="t(&quot;ทุกชั้น&quot;)" :any-label="t(&quot;ทุกชั้น&quot;)" />
       </UiField>
 
-      <UiField label="ฝ่าย">
-        <UiCombobox v-model="filters.division" :options="divisionOptions" placeholder="ทุกฝ่าย" any-label="ทุกฝ่าย" />
+      <UiField :label="t(&quot;ฝ่าย&quot;)">
+        <UiCombobox v-model="filters.division" :options="divisionOptions" :placeholder="t(&quot;ทุกฝ่าย&quot;)" :any-label="t(&quot;ทุกฝ่าย&quot;)" />
       </UiField>
 
-      <UiField label="แผนก">
+      <UiField :label="t(&quot;แผนก&quot;)">
         <UiCombobox
           v-model="filters.department"
           :options="departmentOptions"
-          placeholder="ทุกแผนก"
-          any-label="ทุกแผนก"
+          :placeholder="t(&quot;ทุกแผนก&quot;)"
+          :any-label="t(&quot;ทุกแผนก&quot;)"
         />
       </UiField>
 
-      <UiField label="ปีงบประมาณ">
+      <UiField :label="t(&quot;ปีงบประมาณ&quot;)">
         <UiCombobox
           v-model="filters.fiscalYear"
           :options="fiscalYearOptions"
-          placeholder="ทุกปีงบ"
-          any-label="ทุกปีงบ"
+          :placeholder="t(&quot;ทุกปีงบ&quot;)"
+          :any-label="t(&quot;ทุกปีงบ&quot;)"
         />
       </UiField>
     </UiFilterBar>
@@ -453,9 +452,10 @@ onMounted(async () => {
       :loading="loading"
       row-key="id"
       export-filename="assets"
-      search-placeholder="ค้นหา Serial, รุ่น, ตำแหน่ง…"
-      empty-text="ยังไม่มีเครื่องในทะเบียน"
-      empty-hint="เพิ่มทีละเครื่อง หรือนำเข้าทั้งหมดจากไฟล์ Excel ในครั้งเดียว"
+      :export-context="activeFilters.map((f) => [f.label, f.value])"
+      :search-placeholder="t(&quot;ค้นหา Serial, รุ่น, ตำแหน่ง…&quot;)"
+      :empty-text="t(&quot;ยังไม่มีเครื่องในทะเบียน&quot;)"
+      :empty-hint="t(&quot;เพิ่มทีละเครื่อง หรือนำเข้าทั้งหมดจากไฟล์ Excel ในครั้งเดียว&quot;)"
       max-height="70vh"
       sticky-first
     >
@@ -488,8 +488,7 @@ onMounted(async () => {
 
       <template #cell-contract_no="{ row }">
         <span>{{ row.contract_no || "—" }}</span>
-        <span v-if="row.fiscal_year" class="block text-2xs text-ink-mute numeral">
-          ปีงบ {{ Number(row.fiscal_year) }}
+        <span v-if="row.fiscal_year" class="block text-2xs text-ink-mute numeral"> {{ t("ปีงบ") }} {{ yearLabel(row.fiscal_year) }}
         </span>
       </template>
 
@@ -497,9 +496,9 @@ onMounted(async () => {
         <span>{{ effectivePrice(row) === null ? "—" : formatBahtValue(effectivePrice(row)) }}</span>
         <UiTooltip
           v-if="row.price_override !== null && row.price_override !== undefined"
-          content="เครื่องนี้ตั้งราคาต่อแผ่นเฉพาะตัว ไม่ได้ใช้ราคาตามสัญญา"
+          :content="t(&quot;เครื่องนี้ตั้งราคาต่อแผ่นเฉพาะตัว ไม่ได้ใช้ราคาตามสัญญา&quot;)"
         >
-          <span class="block text-2xs text-accent-ink cursor-help">ราคาเฉพาะเครื่อง</span>
+          <span class="block text-2xs text-accent-ink cursor-help"> {{ t("ราคาเฉพาะเครื่อง") }} </span>
         </UiTooltip>
       </template>
 
@@ -512,18 +511,14 @@ onMounted(async () => {
       <template #empty="{ search }">
         <div class="py-12 text-center">
           <template v-if="search || activeFilters.length">
-            <p class="text-md font-semibold text-ink">ไม่มีเครื่องที่ตรงกับเงื่อนไข</p>
-            <p class="text-sm text-ink-mute mt-1">ลองเอาตัวกรองบางอันออก แล้วดูใหม่อีกครั้ง</p>
-            <UiButton v-if="activeFilters.length" size="sm" variant="secondary" class="mt-4" @click="resetFilters">
-              ล้างตัวกรองทั้งหมด
-            </UiButton>
+            <p class="text-md font-semibold text-ink"> {{ t("ไม่มีเครื่องที่ตรงกับเงื่อนไข") }} </p>
+            <p class="text-sm text-ink-mute mt-1"> {{ t("ลองเอาตัวกรองบางอันออก แล้วดูใหม่อีกครั้ง") }} </p>
+            <UiButton v-if="activeFilters.length" size="sm" variant="secondary" class="mt-4" @click="resetFilters"> {{ t("ล้างตัวกรองทั้งหมด") }} </UiButton>
           </template>
 
           <template v-else>
-            <p class="text-md font-semibold text-ink">ยังไม่มีเครื่องในทะเบียน</p>
-            <p class="text-sm text-ink-mute mt-1">
-              เริ่มจากนำเข้าไฟล์ Excel ที่มีอยู่แล้ว จะเร็วกว่าพิมพ์ทีละเครื่องมาก
-            </p>
+            <p class="text-md font-semibold text-ink"> {{ t("ยังไม่มีเครื่องในทะเบียน") }} </p>
+            <p class="text-sm text-ink-mute mt-1"> {{ t("เริ่มจากนำเข้าไฟล์ Excel ที่มีอยู่แล้ว จะเร็วกว่าพิมพ์ทีละเครื่องมาก") }} </p>
             <UiButton
               v-if="isAdmin"
               variant="primary"
@@ -531,32 +526,30 @@ onMounted(async () => {
               class="mt-4"
               :to="{ path: '/admin/add-asset', query: { tab: 'import' } }"
             >
-              <template #icon><FileSpreadsheet :size="15" /></template>
-              นำเข้าจากไฟล์ CSV / Excel
-            </UiButton>
+              <template #icon><FileSpreadsheet :size="15" /></template> {{ t("นำเข้าจากไฟล์ CSV / Excel") }} </UiButton>
           </template>
         </div>
       </template>
 
       <template v-if="isAdmin" #actions="{ row }">
-        <UiTooltip content="แก้ไขข้อมูลเครื่อง">
-          <UiButton size="sm" variant="ghost" icon-only :label="`แก้ไข ${row.serial_number}`" @click="openEdit(row.id)">
+        <UiTooltip :content="t(&quot;แก้ไขข้อมูลเครื่อง&quot;)">
+          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;แก้ไข {0}&quot;, [row.serial_number])" @click="openEdit(row.id)">
             <Pencil :size="15" />
           </UiButton>
         </UiTooltip>
 
-        <UiTooltip content="ย้ายที่ตั้งหรือเปลี่ยนแผนก">
-          <UiButton size="sm" variant="ghost" icon-only :label="`ย้าย ${row.serial_number}`" @click="openMove(row.id)">
+        <UiTooltip :content="t(&quot;ย้ายที่ตั้งหรือเปลี่ยนแผนก&quot;)">
+          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;ย้าย {0}&quot;, [row.serial_number])" @click="openMove(row.id)">
             <Move :size="15" />
           </UiButton>
         </UiTooltip>
 
-        <UiTooltip content="ลบออกจากทะเบียน">
+        <UiTooltip :content="t(&quot;ลบออกจากทะเบียน&quot;)">
           <UiButton
             size="sm"
             variant="danger-ghost"
             icon-only
-            :label="`ลบ ${row.serial_number}`"
+            :label="t(&quot;ลบ {0}&quot;, [row.serial_number])"
             @click="remove(row)"
           >
             <Trash2 :size="15" />

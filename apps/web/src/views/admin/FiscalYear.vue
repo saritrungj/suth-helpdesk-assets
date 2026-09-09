@@ -1,4 +1,8 @@
 <script setup>
+import { formatMonth } from "../../lib/locale-format";
+
+import { t } from "../../lib/locale";
+
 /**
  * FiscalYear — ปีงบประมาณ
  *
@@ -11,46 +15,46 @@
  */
 import MasterDataPage from "../../components/MasterDataPage.vue";
 import { refreshFiscalYears } from "../../store/fiscalYear";
-import { formatMonthTH } from "@suth/domain";
+
 
 const columns = [
-  { key: "year", label: "ปีงบประมาณ (พ.ศ.)", align: "right", width: "12rem" },
+  { key: "year", label: t("ปีงบประมาณ (พ.ศ.)"), align: "right", width: "12rem" },
   {
     key: "start_month",
-    label: "เริ่ม",
-    value: (row) => (row.start_month ? formatMonthTH(row.start_month) : "—"),
+    label: t("เริ่ม"),
+    value: (row) => (row.start_month ? formatMonth(row.start_month) : "—"),
   },
   {
     key: "end_month",
-    label: "สิ้นสุด",
-    value: (row) => (row.end_month ? formatMonthTH(row.end_month) : "—"),
+    label: t("สิ้นสุด"),
+    value: (row) => (row.end_month ? formatMonth(row.end_month) : "—"),
   },
-  { key: "id", label: "รหัส", align: "right", width: "6rem" },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
 ];
 
 const fields = [
   {
     key: "year",
-    label: "ปีงบประมาณ",
+    label: t("ปีงบประมาณ"),
     type: "text",
     required: true,
     unique: true,
     maxlength: 4,
-    placeholder: "เช่น 2568",
-    hint: "กรอกเป็น พ.ศ. ระบบจะคำนวณช่วง ต.ค. ปีก่อนหน้า ถึง ก.ย. ของปีนั้นให้เอง",
+    placeholder: t("เช่น 2568"),
+    hint: t("กรอกเป็น พ.ศ. ระบบจะคำนวณช่วง ต.ค. ปีก่อนหน้า ถึง ก.ย. ของปีนั้นให้เอง"),
   },
 ];
 </script>
 
 <template>
   <MasterDataPage
-    title="ปีงบประมาณ"
-    eyebrow="ข้อมูลอ้างอิง · สัญญาและงบประมาณ"
-    description="ปีงบที่เลือกได้จากแถบด้านบน และเป็นตัวกำหนดช่วงเดือนของทุกรายงาน"
+    :title="t(&quot;ปีงบประมาณ&quot;)"
+    :eyebrow="t(&quot;ข้อมูลอ้างอิง · สัญญาและงบประมาณ&quot;)"
+    :description="t(&quot;ปีงบที่เลือกได้จากแถบด้านบน และเป็นตัวกำหนดช่วงเดือนของทุกรายงาน&quot;)"
     endpoint="/fiscal-years"
-    item-noun="ปีงบประมาณ"
+    :item-noun="t(&quot;ปีงบประมาณ&quot;)"
     export-filename="fiscal-years"
-    empty-hint="ต้องมีปีงบอย่างน้อยหนึ่งปี ระบบถึงจะแสดงยอดและค่าใช้จ่ายได้"
+    :empty-hint="t(&quot;ต้องมีปีงบอย่างน้อยหนึ่งปี ระบบถึงจะแสดงยอดและค่าใช้จ่ายได้&quot;)"
     :columns="columns"
     :fields="fields"
     :on-changed="refreshFiscalYears"

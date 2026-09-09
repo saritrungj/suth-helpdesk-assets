@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 // Presentation only. Session, API errors and redirect behavior remain unchanged.
 import { ref, useTemplateRef, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -45,7 +47,7 @@ async function login() {
     // อ่านผ่าน lib/api-error เสมอ ห้ามไล่ .response.data เอง — API ตอบตามรูปแบบ
     // Problem Details (ดู ADR-0010) และการอ่านเองเคยทำให้ผู้ใช้เห็นข้อความอังกฤษ
     // ของ axios แทนข้อความจริงที่ API ตั้งใจส่งมา
-    error.value = errorMessage(err, "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+    error.value = errorMessage(err, t("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"));
   } finally {
     loading.value = false;
   }
@@ -67,12 +69,12 @@ async function login() {
 
         <div class="login__form">
           <header class="login__intro">
-            <h1 id="login-heading">เข้าสู่ระบบ</h1>
-            <p>ใช้บัญชีที่ได้รับจาก{{ OWNER_TEAM }}</p>
+            <h1 id="login-heading"> {{ t("เข้าสู่ระบบ") }} </h1>
+            <p> {{ t("ใช้บัญชีที่ได้รับจาก") }} {{ OWNER_TEAM }}</p>
           </header>
 
           <form class="login__fields" :aria-busy="loading" @submit.prevent="login">
-            <UiField label="ชื่อผู้ใช้" field-id="login-username">
+            <UiField :label="t(&quot;ชื่อผู้ใช้&quot;)" field-id="login-username">
               <UiInput
                 ref="usernameEl"
                 v-model="username"
@@ -81,13 +83,13 @@ async function login() {
                 autocapitalize="none"
                 :spellcheck="false"
                 required
-                placeholder="กรอกชื่อผู้ใช้"
+                :placeholder="t(&quot;กรอกชื่อผู้ใช้&quot;)"
                 input-class="min-h-12 text-base"
                 :disabled="loading"
               />
             </UiField>
 
-            <UiField label="รหัสผ่าน" field-id="current-password">
+            <UiField :label="t(&quot;รหัสผ่าน&quot;)" field-id="current-password">
               <div class="relative">
                 <UiInput
                   v-model="password"
@@ -97,14 +99,14 @@ async function login() {
                   autocapitalize="none"
                   :spellcheck="false"
                   required
-                  placeholder="กรอกรหัสผ่าน"
+                  :placeholder="t(&quot;กรอกรหัสผ่าน&quot;)"
                   input-class="min-h-12 text-base pr-12"
                   :disabled="loading"
                 />
                 <button
                   type="button"
                   class="login__password-toggle"
-                  :aria-label="showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน — คำเตือน: รหัสผ่านจะปรากฏบนหน้าจอ'"
+                  :aria-label="showPassword ? t(&quot;ซ่อนรหัสผ่าน&quot;) : t(&quot;แสดงรหัสผ่าน — คำเตือน: รหัสผ่านจะปรากฏบนหน้าจอ&quot;)"
                   :aria-pressed="showPassword"
                   aria-controls="current-password"
                   :disabled="loading"
@@ -118,16 +120,16 @@ async function login() {
             <UiAlert v-if="error" tone="danger">{{ error }}</UiAlert>
 
             <UiButton type="submit" variant="primary" size="lg" block :loading="loading" class="login__submit">
-              {{ loading ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ" }}
+              {{ loading ? t("กำลังเข้าสู่ระบบ…") : t("เข้าสู่ระบบ") }}
               <ArrowRight v-if="!loading" :size="18" aria-hidden="true" />
             </UiButton>
           </form>
 
           <details class="login__access">
-            <summary>ยังไม่มีบัญชี หรือเข้าใช้งานไม่ได้</summary>
+            <summary> {{ t("ยังไม่มีบัญชี หรือเข้าใช้งานไม่ได้") }} </summary>
             <div class="login__help">
-              <h2 id="login-access-heading">ติดต่อ{{ OWNER_TEAM }}</h2>
-              <p>เพื่อขอบัญชีหรือขอความช่วยเหลือในการเข้าสู่ระบบ</p>
+              <h2 id="login-access-heading"> {{ t("ติดต่อ{0}", [OWNER_TEAM]) }}</h2>
+              <p> {{ t("เพื่อขอบัญชีหรือขอความช่วยเหลือในการเข้าสู่ระบบ") }} </p>
               <ul v-if="SUPPORT_CHANNELS.length" class="login__channels">
                 <li v-for="channel in SUPPORT_CHANNELS" :key="channel.label">
                   <a :href="supportHref(channel)" class="login__channel">

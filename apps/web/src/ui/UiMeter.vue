@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiMeter — แถบบอกสัดส่วนที่ใช้ไปเทียบกับเพดาน (งบที่ใช้ไป, โควตายอดพิมพ์)
  *
@@ -58,7 +60,7 @@ const height = computed(() => (props.size === "sm" ? "h-1.5" : props.size === "l
       :aria-valuenow="Math.round(pct)"
       aria-valuemin="0"
       aria-valuemax="100"
-      :aria-label="label || 'สัดส่วนที่ใช้ไป'"
+      :aria-label="label || t(&quot;สัดส่วนที่ใช้ไป&quot;)"
     >
       <div
         class="h-full rounded-full transition-[width,background-color] duration-500 ease-out-quart"
