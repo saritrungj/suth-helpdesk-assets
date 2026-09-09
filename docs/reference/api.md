@@ -55,9 +55,13 @@ Master Data ใช้ prefix แยกกันแต่อยู่ในโฟ
 มาแสดงใต้ป้ายนั้น ทำให้หน้าแรกขึ้นว่า "18/18 กรอกครบแล้ว" พร้อมกับแผงที่อยู่ห่างไป
 ไม่ถึงสองนิ้วบอกว่า "ยังกรอกยอดพิมพ์ไม่ครบ 5 เดือน"
 
-`coverage` ไม่นับเดือนปัจจุบัน เพราะมิเตอร์อ่านปิดยอดได้ก็ต่อเมื่อเดือนจบแล้ว
-(ตรรกะอยู่ที่ `computeCoverage` ใน `src/dashboard/overview.js` และมีเทสครอบไว้ที่
-`test/dashboard-coverage.test.js`)
+`coverage.total_months` เท่ากับ 12 และ `annual_complete_months` นับเดือนที่กรอกครบตลอดปีงบ รวมเดือนปัจจุบันที่กรอกครบแล้ว หน้าเว็บใช้คู่นี้เป็นความครบถ้วนทั้งปี
+
+`complete_months` / `elapsed_months` ยังคงนับเฉพาะเดือนที่จบแล้วเพื่อรักษาสัญญา API เดิม ส่วน `incomplete_months` คือเดือนที่จบแล้วแต่กรอกไม่ครบ และ `not_due_months` คือเดือนที่ยังไม่จบและกรอกไม่ครบ ดังนั้นกรอกครบ 6 เดือนในเดือนกันยายนอาจแสดง 6/12 พร้อมงานค้าง 5 เดือนและยังไม่ถึงกำหนด 1 เดือน
+
+`months` แจกแจง `month`, `filled_devices`, `missing_devices`, `status` (`complete`, `overdue`, `not_due`, `not_applicable`) ทั้ง 12 เดือน หากไม่มีเครื่อง active จะได้ `applicable: false` และแสดงว่าไม่มีเครื่องในขอบเขตนี้ ตรรกะอยู่ที่ `packages/domain/coverage.cjs` และทดสอบที่ `packages/domain/coverage.test.js` กับ `apps/api/test/dashboard-coverage.test.js`
+
+รายงานที่คืนยอดรายเดือน (`monthly-kpi`, `compare`, `summary-by-building`, `expense`, `highlights` และ `overview`) ใช้อาคาร ชั้น ตำแหน่ง ฝ่าย และแผนกจาก `device_location_history` ที่มีผลในเดือนนั้น หากช่วงประวัติซ้อนกันจะเลือกช่วงตาม [ADR-0014](../decisions/0014-resolve-overlapping-location-history.md) เพื่อไม่ให้ยอดหนึ่งรายการถูกบวกซ้ำ
 
 ### ข้อจำกัดที่ต้องรู้ก่อนเอา `coverage` ไปใช้ตัดสินใจ
 

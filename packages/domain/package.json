@@ -20,6 +20,7 @@
     "format.cjs",
     "money.cjs",
     "constraints.cjs",
+    "coverage.cjs",
     "locale-format.cjs"
   ],
   "scripts": {

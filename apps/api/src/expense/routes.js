@@ -37,6 +37,7 @@ const requireAuth = require("../auth/require-auth");
 const { validate, monthListQuery } = require("../shared/validate");
 const { notFound } = require("../shared/http-error");
 const cache = require("../shared/cache");
+const { effectiveLocationJoin } = require("../shared/effective-location-sql");
 const { costSatangAt, effectivePriceSatang, fromSatang, sumSatang } = require("@suth/domain");
 
 router.use(requireAuth);
@@ -50,7 +51,7 @@ router.use(requireAuth);
 function summarise(transactions, priceSatang) {
   const monthly = transactions.map((row) => {
     const satang = costSatangAt(row.pages, priceSatang);
-    return { month: row.month, pages: row.pages, cost_satang: satang, cost: fromSatang(satang) };
+    return { ...row, month: row.month, pages: row.pages, cost_satang: satang, cost: fromSatang(satang) };
   });
 
   const total_cost_satang = sumSatang(monthly.map((m) => m.cost_satang));
@@ -77,25 +78,31 @@ async function readingsByDevice(deviceIds, startMonth, endMonth, monthsFilter) {
 
   const params = [deviceIds, startMonth, endMonth];
   let sql = `
-    SELECT device_id, month, pages
-    FROM print_transactions
-    WHERE device_id IN (?) AND month BETWEEN ? AND ?
+    SELECT pt.device_id, pt.month, pt.pages,
+      eb.name AS building_name, ef.name AS floor_name,
+      CASE WHEN h.id IS NOT NULL THEN h.location ELSE d.location END AS location
+    FROM print_transactions pt
+    JOIN devices d ON d.id = pt.device_id
+    ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "pt.month", historyAlias: "h" })}
+    LEFT JOIN building eb ON eb.id = CASE WHEN h.id IS NOT NULL THEN h.building_id ELSE d.building_id END
+    LEFT JOIN floor ef ON ef.id = CASE WHEN h.id IS NOT NULL THEN h.floor_id ELSE d.floor_id END
+    WHERE pt.device_id IN (?) AND pt.month BETWEEN ? AND ?
   `;
 
   // ตัวกรองเดือนซ้อนอยู่ใน "ช่วงปีงบ" อีกชั้นเสมอ — เผื่อผู้ใช้ส่งเดือนนอกปีงบมา
   // ยอดของปีอื่นจะได้ไม่หลุดเข้ามาปนในหน้าที่พาดหัวว่าเป็นปีงบนี้
   if (monthsFilter.length) {
-    sql += " AND month IN (?)";
+    sql += " AND pt.month IN (?)";
     params.push(monthsFilter);
   }
 
-  sql += " ORDER BY month";
+  sql += " ORDER BY pt.month";
 
   const [rows] = await db.query(sql, params);
 
   const grouped = new Map(deviceIds.map((id) => [id, []]));
   for (const row of rows) {
-    grouped.get(row.device_id)?.push({ month: row.month, pages: row.pages });
+    grouped.get(row.device_id)?.push({ month: row.month, pages: row.pages, building_name: row.building_name, floor_name: row.floor_name, location: row.location });
   }
 
   return grouped;
@@ -115,9 +122,11 @@ router.get(
   "/unassigned-devices",
   asyncHandler(async (req, res) => {
     const [devices] = await db.query(`
-      SELECT d.id, d.serial_number, d.model, d.price_override, b.name AS brand_name
+      SELECT d.id, d.serial_number, d.model, d.price_override, b.name AS brand_name, d.location, eb.name AS building_name, ef.name AS floor_name
       FROM devices d
       LEFT JOIN brand b ON d.brand_id = b.id
+      LEFT JOIN building eb ON eb.id = d.building_id
+      LEFT JOIN floor ef ON ef.id = d.floor_id
       WHERE d.contract_id IS NULL
       ORDER BY d.serial_number
     `);

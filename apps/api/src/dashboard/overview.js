@@ -36,88 +36,16 @@ const asyncHandler = require("../shared/async-handler");
 const { validate } = require("../shared/validate");
 const cache = require("../shared/cache");
 const { notFound } = require("../shared/http-error");
+const { effectiveLocationJoin } = require("../shared/effective-location-sql");
 const { reportQuery } = require("./filters");
-const { fiscalYearMonths, formatMonthTH, fromSatang, toSatang, sumSatang } = require("@suth/domain");
+const { fiscalYearMonths, formatMonthTH, fromSatang, toSatang, sumSatang, computeCoverage } = require("@suth/domain");
 
 /** เดือนปัจจุบัน "YYYY-MM" (ค.ศ.) — ใช้ตัดเดือนอนาคตออกจากงานที่ "ค้าง" */
 function currentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
-
-/**
- * ความครบถ้วนของข้อมูล และรายชื่อเดือนที่ยังกรอกไม่ครบ
- *
- * นับเป็น "เดือนที่กรอกครบทุกเครื่องแล้ว" เทียบกับ "เดือนที่ผ่านไปแล้วในปีงบนี้"
- *
- * ⚠️ อย่าสับสนกับ `reporting_active_devices` ซึ่งนับ *จำนวนเครื่องที่มียอดอย่าง
- * น้อยหนึ่งเดือน* — สองอย่างนี้ตอบคนละคำถาม และเคยถูกเอาไปแสดงใต้ป้ายเดียวกันว่า
- * "ความครบถ้วนของข้อมูล" จนหน้าเว็บขึ้นว่า "18/18 กรอกครบแล้ว" พร้อมกับ
- * "ยังกรอกไม่ครบ 5 เดือน" อยู่ห่างกันไม่ถึงสองนิ้วบนจอเดียวกัน
- *
- * ตัวที่ผู้ใช้หมายถึงเวลาถามว่า "ข้อมูลครบหรือยัง" คือตัวนี้เสมอ
- *
- * **เดือนปัจจุบันไม่นับ** — มิเตอร์ของเดือนนี้อ่านได้ก็ต่อเมื่อเดือนจบแล้ว
- * การนับรวมทำให้ระบบขึ้นคำเตือนทุกวันตลอดทั้งเดือนสำหรับงานที่ยังไม่ถึงเวลาทำ
- * ซึ่งเป็นวิธีที่เร็วที่สุดในการสอนให้ผู้ใช้เมินคำเตือน
- *
- * แยกออกมาเป็นฟังก์ชันเพราะเป็นตรรกะที่ผิดแล้วเงียบ — ผลลัพธ์ที่ผิดยังเป็นตัวเลข
- * ที่ดูสมเหตุสมผลอยู่ดี จึงต้องมีเทสจับ ไม่ใช่รอให้คนสังเกตเห็น
- *
- * ## เงื่อนไขบังคับ 1: ตัวเศษกับตัวส่วนต้องมาจากขอบเขตเดียวกัน
- *
- * `filledByMonth` และ `activeDevices` **ต้องถูกกรองด้วยเงื่อนไขชุดเดียวกัน**
- * (อาคารเดียวกัน สถานะเดียวกัน) ฟังก์ชันนี้ตรวจสอบเองไม่ได้เพราะได้รับมาแค่ตัวเลข
- * ที่นับเสร็จแล้ว — ผู้เรียกเป็นคนรับผิดชอบ
- *
- * เคยผิดมาแล้ว: คิวรี่ที่นับ `filled` ไม่มีตัวกรองอาคาร แต่คิวรี่ที่นับ
- * `activeDevices` มี พอเลือกอาคารที่มี 3 เครื่อง ได้ `18 < 3` เป็นเท็จ ทุกเดือน
- * จึงถูกรายงานว่า "ครบแล้ว" ทั้งที่อาคารนั้นยังไม่ได้กรอกเลย
- *
- * ## เงื่อนไขบังคับ 2 (ข้อจำกัดที่รู้อยู่): ตัวส่วนคือจำนวนเครื่อง ณ "ตอนนี้"
- *
- * `activeDevices` คือจำนวนเครื่องที่สถานะเป็น `active` **ในขณะที่เรียกดู** แล้ว
- * ถูกเอาไปเทียบกับเดือนย้อนหลังทุกเดือนเท่ากันหมด ซึ่ง **ไม่ตรงกับความจริง**
- * ถ้ามีเครื่องเข้า/ออกระบบระหว่างปี
- *
- *   - ซื้อเครื่องใหม่เดือน มี.ค. -> เดือน ต.ค.–ก.พ. ที่เคยกรอกครบแล้ว จะกลาย
- *     เป็น "ไม่ครบ" ย้อนหลัง ทั้งที่ตอนนั้นไม่มีเครื่องนั้นให้กรอก
- *   - ปลดระวางเครื่องเดือน มี.ค. -> เดือนก่อนหน้าจะดู "ครบ" ง่ายกว่าความจริง
- *
- * **ตารางในฐานข้อมูลตอบเรื่องนี้ไม่ได้** — `devices` มีแค่ `status` ปัจจุบัน
- * ไม่มีคอลัมน์บอกว่าเครื่องเข้าระบบหรือถูกปลดเมื่อไหร่ การจะคิดให้ถูกต้องจริงต้อง
- * เพิ่มคอลัมน์ (เปลี่ยน schema = ต้องขออนุมัติ) หรือใช้ `device_location_history`
- * เป็นตัวแทนวันเริ่มใช้งาน ซึ่งเป็นการ **ตั้งกฎธุรกิจใหม่** ที่ต้องมีคนตัดสินใจ
- * ไม่ใช่สิ่งที่ควรเดาเอาเองในโค้ด
- *
- * จนกว่าจะมีการตัดสินใจนั้น ค่านี้จึงเป็น "ค่าประมาณที่ดีที่สุดเท่าที่ข้อมูลมี"
- * และถูกเขียนกำกับไว้ใน `docs/reference/api.md` ให้คนอ่านรายงานรู้ตัว
- *
- * @param {object} input
- * @param {string[]} input.fyMonths        เดือนทั้งหมดของปีงบ เรียงจากต้นปี "YYYY-MM"
- * @param {Map<string, number>} input.filledByMonth  เดือน -> จำนวนเครื่องที่กรอกแล้ว (ขอบเขตเดียวกับ activeDevices)
- * @param {number} input.activeDevices     จำนวนเครื่องที่ใช้งานอยู่ตอนนี้ (ขอบเขตเดียวกับ filledByMonth)
- * @param {string} input.today             เดือนปัจจุบัน "YYYY-MM"
- */
-function computeCoverage({ fyMonths, filledByMonth, activeDevices, today }) {
-  const elapsedMonths = fyMonths.filter((month) => month < today);
-
-  // ไม่มีเครื่องที่ใช้งานอยู่เลย = ไม่มีอะไรให้กรอก จึงไม่ถือว่าเดือนไหน "ค้าง"
-  // ถ้าไม่กันไว้ ทุกเดือนจะเข้าเงื่อนไข 0 < 0 เป็นเท็จพอดี แต่พอ activeDevices
-  // เป็น 0 การบอกว่า "กรอกครบทุกเดือน" ก็ยังเข้าใจผิดได้ จึงเขียนให้ชัด
-  const incompleteMonths =
-    activeDevices > 0
-      ? elapsedMonths.filter((month) => (filledByMonth.get(month) || 0) < activeDevices)
-      : [];
-
-  return {
-    incompleteMonths,
-    coverage: {
-      elapsed_months: elapsedMonths.length,
-      complete_months: elapsedMonths.length - incompleteMonths.length,
-      incomplete_months: incompleteMonths.length,
-    },
-  };
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit",
+  }).formatToParts(new Date());
+  return `${parts.find((p) => p.type === "year").value}-${parts.find((p) => p.type === "month").value}`;
 }
 
 /** จำนวนรายการเตือนสูงสุดที่ส่งกลับไป */
@@ -151,6 +79,9 @@ router.get(
     const months = selectedMonths.length ? selectedMonths : fyMonths;
 
     const buildingClause = building_name ? " AND b.name = ? " : "";
+    const usageBuildingClause = building_name
+      ? " AND CASE WHEN h.id IS NOT NULL THEN hb.name ELSE b.name END = ? "
+      : "";
     const buildingParam = building_name ? [building_name] : [];
     const monthClause = months.length ? " AND v.month IN (?) " : "";
     const monthParam = months.length ? [months] : [];
@@ -174,7 +105,9 @@ router.get(
            FROM v_monthly_kpi v
            JOIN devices d ON v.device_id = d.id
            LEFT JOIN building b ON d.building_id = b.id
-           WHERE 1=1 ${monthClause} ${buildingClause}`,
+           ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
+           LEFT JOIN building hb ON h.building_id = hb.id
+           WHERE 1=1 ${monthClause} ${usageBuildingClause}`,
           [...monthParam, ...buildingParam]
         )
         .then(([rows]) => rows[0]),
@@ -193,7 +126,9 @@ router.get(
                FROM v_monthly_kpi v
                JOIN devices d ON v.device_id = d.id
                LEFT JOIN building b ON d.building_id = b.id
-               WHERE v.month BETWEEN ? AND ? ${buildingClause}
+               ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
+               LEFT JOIN building hb ON h.building_id = hb.id
+               WHERE v.month BETWEEN ? AND ? ${usageBuildingClause}
                GROUP BY v.month
                ORDER BY v.month`,
               [range.start_month, range.end_month, ...buildingParam]
@@ -217,18 +152,20 @@ router.get(
       db
         .query(
           `SELECT
-             dept.id AS department_id,
+             CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END AS department_id,
              dept.name AS department_name,
              divi.name AS division_name,
              SUM(v.net_pages) AS total_pages,
              SUM(v.total_cost) AS total_cost
            FROM v_monthly_kpi v
            JOIN devices d ON v.device_id = d.id
-           JOIN department dept ON d.department_id = dept.id
-           LEFT JOIN division divi ON dept.division_id = divi.id
+           ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
+           JOIN department dept ON CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END = dept.id
+           LEFT JOIN division divi ON CASE WHEN h.id IS NOT NULL THEN h.division_id ELSE d.division_id END = divi.id
            LEFT JOIN building b ON d.building_id = b.id
-           WHERE 1=1 ${monthClause} ${buildingClause}
-           GROUP BY dept.id, dept.name, divi.name
+           LEFT JOIN building hb ON h.building_id = hb.id
+           WHERE 1=1 ${monthClause} ${usageBuildingClause}
+           GROUP BY CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END, dept.name, divi.name
            ORDER BY total_cost DESC
            LIMIT 8`,
           [...monthParam, ...buildingParam]
@@ -351,10 +288,11 @@ router.get(
             : `ยังกรอกยอดพิมพ์ไม่ครบ ${incompleteMonths.length} เดือน`,
         detail: `เดือนที่ค้างนานที่สุดคือ${formatMonthTH(oldest, { long: true })} ขาดอีก ${missing} เครื่อง`,
         count: incompleteMonths.length,
+        params: { month: oldest, missing_devices: missing },
         // ส่งเดือนที่ค้างไปด้วย เพื่อให้ปุ่มบนหน้าเว็บพาไปที่เดือนนั้นเลย
         // ไม่ใช่พาไปหน้าเปล่าแล้วให้ผู้ใช้ไล่หาเองว่าเดือนไหนขาด
         months: incompleteMonths,
-        action: { label: "ไปกรอกยอดพิมพ์", to: "/print-transactions", query: { month: oldest } },
+        action: { label: "ไปกรอกยอดพิมพ์", to: "/print-transactions", query: { month: oldest, building: building_name || undefined, fill: "empty", fy: fiscal_year_id || undefined } },
       });
     }
 
@@ -366,6 +304,7 @@ router.get(
         title: `มี ${unbilled.device_count} เครื่องที่พิมพ์แล้วแต่คิดค่าใช้จ่ายไม่ได้`,
         detail: `รวม ${Number(unbilled.unbilled_pages).toLocaleString("th-TH")} แผ่นที่ไม่ได้ถูกนับเป็นค่าใช้จ่าย เพราะเครื่องไม่มีสัญญาและไม่มีราคาเฉพาะเครื่อง`,
         count: Number(unbilled.device_count),
+        params: { pages: Number(unbilled.unbilled_pages) },
         action: { label: "ดูเครื่องที่ยังไม่มีสัญญา", to: "/assets", query: { unassigned: "1" } },
       });
     }
