@@ -39,6 +39,14 @@ export const ORG_NAME_SHORT = t("โรงพยาบาล มทส.");
 /** ฝ่ายที่ดูแลระบบ — ใช้ในข้อความติดต่อเมื่อเข้าใช้งานไม่ได้ */
 export const OWNER_TEAM = t("ฝ่ายเทคโนโลยีสารสนเทศ");
 
+/** Brand assets — ทุกจุดอ้างผ่านที่นี่ ห้ามกระจาย path ไปตาม component */
+export const BRAND_ASSETS = Object.freeze({
+  /** ภาพเต็มสำหรับ Login — derivative ขนาดเว็บจากต้นฉบับของผู้ใช้ */
+  horizontal: "/brand/suth-horizontal.webp",
+  /** ตัดเฉพาะตัวอักษร SUTH จากต้นฉบับเดียวกัน ใช้ใน shell */
+  wordmark: "/brand/suth-wordmark.png",
+});
+
 /**
  * ชื่อแท็บเบราว์เซอร์
  * @param {string} [page] ชื่อหน้าปัจจุบัน — ไม่ส่งมา = หน้าแรก/ยังไม่รู้ว่าหน้าไหน

@@ -36,3 +36,4 @@
 | [0012](0012-remove-mcp-server.md) | ถอดเซิร์ฟเวอร์ MCP ออกจาก repository | Accepted |
 | [0013](0013-localized-reporting.md) | แยกภาษาแสดงผลออกจากข้อมูลรายงาน | Accepted |
 | [0014](0014-resolve-overlapping-location-history.md) | เลือกประวัติตำแหน่งที่มีผลเพียงช่วงเดียวต่อเดือน | Accepted |
+| [0015](0015-brand-assets-in-repository.md) | เก็บ brand asset ของเจ้าของระบบไว้ใน repository | Accepted |
