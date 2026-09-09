@@ -34,3 +34,5 @@
 | [0010](0010-problem-details-and-api-conventions.md) | ข้อผิดพลาดแบบ Problem Details และข้อตกลงร่วมของ API | Accepted |
 | [0011](0011-read-only-mcp-server.md) | เซิร์ฟเวอร์ MCP แบบอ่านอย่างเดียว | Superseded by ADR-0012 |
 | [0012](0012-remove-mcp-server.md) | ถอดเซิร์ฟเวอร์ MCP ออกจาก repository | Accepted |
+| [0013](0013-localized-reporting.md) | แยกภาษาแสดงผลออกจากข้อมูลรายงาน | Accepted |
+| [0014](0014-resolve-overlapping-location-history.md) | เลือกประวัติตำแหน่งที่มีผลเพียงช่วงเดียวต่อเดือน | Accepted |
