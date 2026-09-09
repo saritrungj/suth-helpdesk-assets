@@ -42,6 +42,9 @@ apps/web/e2e/screens/
 # ภาพที่ .claude/skills/run-web/driver.mjs ถ่ายไว้ตอน agent สั่งรันแอป
 apps/web/e2e/.driver-shots/
 
+# หลักฐานชั่วคราวจาก browser automation — เก็บไว้ให้ผู้ review ใน working tree แต่สร้างใหม่ได้
+output/
+
 # รายงานการตรวจของแต่ละรอบ — เป็นบันทึก ณ จุดเวลาหนึ่ง ไม่ใช่เอกสารระบบ
 # ข้อพบที่ต้องตามต่อถูกเปิดเป็น GitHub issue แทน
 docs/reference/review-*.md

@@ -85,11 +85,11 @@ export async function reasonToSkip() {
 }
 
 /** วาง cookie เข้าสู่ระบบลงใน context — ต้องเรียกก่อน goto ครั้งแรกเสมอ */
-export async function signIn(context) {
+export async function signIn(context, role = "admin") {
   await context.addCookies([
     {
       name: "suth_session",
-      value: issueToken(),
+      value: issueToken(role),
       domain: "localhost",
       path: "/",
       httpOnly: false,
