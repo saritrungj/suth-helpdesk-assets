@@ -1,4 +1,10 @@
 <script setup>
+import { reportContext } from "../components/report-context";
+import { yearLabel } from "../lib/locale-format";
+import { formatDate, formatMonth } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+
 /**
  * Report — รายงานยอดพิมพ์รายเดือน หนึ่งแถวต่อหนึ่งเครื่อง หนึ่งคอลัมน์ต่อหนึ่งเดือน
  *
@@ -15,7 +21,7 @@
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { ChevronDown, ChevronUp, CornerDownRight, Repeat2, Search } from "lucide-vue-next";
-import { formatDateTH, formatMonthTH } from "@suth/domain";
+
 import api from "../services/api";
 import {
   activeFiscalYear,
@@ -68,20 +74,20 @@ const filters = ref({
 });
 
 const FILL_STATUS_OPTIONS = [
-  { value: "", label: "ทั้งหมด" },
-  { value: "done", label: "กรอกครบทุกเดือน" },
-  { value: "partial", label: "กรอกบางเดือน" },
-  { value: "none", label: "ยังไม่ได้กรอกเลย" },
+  { value: "", label: t("ทั้งหมด") },
+  { value: "done", label: t("กรอกครบทุกเดือน") },
+  { value: "partial", label: t("กรอกบางเดือน") },
+  { value: "none", label: t("ยังไม่ได้กรอกเลย") },
 ];
 
 const DEVICE_STATUS_OPTIONS = [
-  { value: "", label: "ทุกสถานะ" },
-  { value: "active", label: "ใช้งานอยู่" },
-  { value: "repair", label: "ซ่อมบำรุง" },
-  { value: "retired", label: "ปลดระวาง" },
+  { value: "", label: t("ทุกสถานะ") },
+  { value: "active", label: t("ใช้งานอยู่") },
+  { value: "repair", label: t("ซ่อมบำรุง") },
+  { value: "retired", label: t("ปลดระวาง") },
 ];
 
-const displayYearBE = computed(() => activeFiscalYear.value?.year ?? "—");
+const displayYearBE = computed(() => yearLabel(activeFiscalYear.value?.year));
 const fyMonths = computed(() => fiscalYearMonths(activeFiscalYearRange.value));
 
 /** เดือนที่ใช้สร้างคอลัมน์: เจาะจงไว้ใช้ตามนั้น ไม่ได้เจาะจง = ทั้งปีงบ */
@@ -190,7 +196,7 @@ async function loadReport() {
     locationHistory.value = historyRes.data ?? [];
   } catch (err) {
     console.error("Load report error:", err);
-    loadError.value = "โหลดข้อมูลรายงานไม่สำเร็จ";
+    loadError.value = t("โหลดข้อมูลรายงานไม่สำเร็จ");
     devices.value = [];
     monthlyMap.value = {};
     locationHistory.value = [];
@@ -233,11 +239,11 @@ function monthsInPeriod(months, period) {
 }
 
 function formatDateShort(value) {
-  return value ? formatDateTH(String(value).split("T")[0]) : "—";
+  return value ? formatDate(String(value).split("T")[0]) : "—";
 }
 
 function periodRange(period) {
-  if (!period.effective_to) return `ตั้งแต่ ${formatDateShort(period.effective_from)} ถึงปัจจุบัน`;
+  if (!period.effective_to) return t("ตั้งแต่ {0} ถึงปัจจุบัน", [formatDateShort(period.effective_from)]);
   return `${formatDateShort(period.effective_from)} – ${formatDateShort(period.effective_to)}`;
 }
 
@@ -306,6 +312,7 @@ function devicePeriodRow(device, period, monthly, months, periodIndex, periodCou
     // ที่ตั้งของ "ช่วงนี้" ไม่ใช่ที่ตั้งปัจจุบัน แถวของช่วงเก่าจึงแสดงที่เก่าจริงๆ
     building_name: period.building_name,
     floor_name: period.floor_name,
+    location: period.location,
     division_name: period.division_name,
     department_name: period.department_name,
     _monthly: periodMonthly,
@@ -361,35 +368,35 @@ const columns = computed(() => [
   { key: "serial_number", label: "Serial", width: "13rem" },
   {
     key: "brand_model",
-    label: "ยี่ห้อ / รุ่น",
+    label: t("ยี่ห้อ / รุ่น"),
     value: (r) => `${r.brand_name || ""} ${r.model || ""}`.trim() || "—",
   },
   {
     key: "building_floor",
-    label: "อาคาร / ชั้น",
-    value: (r) => (r.floor_name ? `${r.building_name || "—"} / ${r.floor_name}` : r.building_name || "—"),
+    label: t("อาคาร / ชั้น"),
+    value: (r) => (r.floor_name ? `${r.building_name || "—"} / ${r.floor_name} / ${r.location || t("ไม่ระบุ")}` : [r.building_name, r.location].filter(Boolean).join(" / ") || t("ไม่ระบุ")),
   },
   {
     key: "division_department",
-    label: "ฝ่าย / แผนก",
+    label: t("ฝ่าย / แผนก"),
     value: (r) =>
       r.division_name ? `${r.division_name} / ${r.department_name || "—"}` : r.department_name || "—",
   },
   {
     key: "period_label",
-    label: "ช่วงที่ตั้ง",
+    label: t("ช่วงที่ตั้ง"),
     value: (r) => r._period_label || "—",
   },
   ...displayMonths.value.map((m) => ({
     key: `m_${m}`,
-    label: formatMonthTH(m, { shortYear: true }),
+    label: formatMonth(m, { shortYear: true }),
     align: "right",
     value: (r) => r._monthly[m] || 0,
     csv: (r) => r._monthly[m] || 0,
   })),
   {
     key: "total_pages",
-    label: reportMonths.value.length ? "รวมเดือนที่เลือก" : "รวมทั้งปีงบ",
+    label: reportMonths.value.length ? t("รวมเดือนที่เลือก") : t("รวมทั้งปีงบ"),
     align: "right",
     value: (r) => r._total,
     csv: (r) => r._total,
@@ -414,32 +421,30 @@ onMounted(async () => {
 <template>
   <div>
     <UiPageHeader
-      eyebrow="รายงาน"
-      title="ยอดพิมพ์รายเดือนตามเครื่อง"
-      :description="`ยอดมิเตอร์ดิบของแต่ละเครื่องในปีงบ ${displayYearBE} — เครื่องที่ย้ายที่ตั้งกลางปีจะถูกแยกเป็นคนละแถวตามช่วงที่ตั้ง`"
+      :eyebrow="t(&quot;รายงาน&quot;)"
+      :title="t(&quot;ยอดพิมพ์รายเดือนตามเครื่อง&quot;)"
+      :description="t(&quot;ยอดมิเตอร์ดิบของแต่ละเครื่องในปีงบ {0} — เครื่องที่ย้ายที่ตั้งกลางปีจะถูกแยกเป็นคนละแถวตามช่วงที่ตั้ง&quot;, [displayYearBE])"
     />
 
-    <UiCard class="mb-4" title="ตัวกรองรายงาน" data-print="hide">
+    <UiCard class="mb-4" :title="t(&quot;ตัวกรองรายงาน&quot;)" data-print="hide">
       <template #actions>
-        <UiButton v-if="hasActiveFilter" size="sm" variant="ghost" @click="resetFilters">
-          ล้างตัวกรองทั้งหมด
-        </UiButton>
+        <UiButton v-if="hasActiveFilter" size="sm" variant="ghost" @click="resetFilters"> {{ t("ล้างตัวกรองทั้งหมด") }} </UiButton>
       </template>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <UiField label="เดือนที่แสดงในตาราง" hint="ไม่เลือก = แสดงครบทั้งปีงบ">
+        <UiField :label="t(&quot;เดือนที่แสดงในตาราง&quot;)" :hint="t(&quot;ไม่เลือก = แสดงครบทั้งปีงบ&quot;)">
           <PeriodPicker v-model="reportMonths" :options="fyMonths" />
         </UiField>
 
-        <UiField label="ค้นหา" class="lg:col-span-2">
-          <UiInput v-model="search" clearable placeholder="Serial, รุ่น, แผนก หรือเลขที่สัญญา…">
+        <UiField :label="t(&quot;ค้นหา&quot;)" class="lg:col-span-2">
+          <UiInput v-model="search" clearable :placeholder="t(&quot;Serial, รุ่น, แผนก หรือเลขที่สัญญา…&quot;)">
             <template #icon><Search :size="15" /></template>
           </UiInput>
         </UiField>
       </div>
 
       <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mt-4 pt-4 border-t border-line-soft">
-        <UiField :label="`สถานะการกรอก (ปีงบ ${displayYearBE})`">
+        <UiField :label="t(&quot;สถานะการกรอก (ปีงบ {0})&quot;, [displayYearBE])">
           <UiSelect
             v-model="filters.fillStatus"
             :options="FILL_STATUS_OPTIONS"
@@ -448,7 +453,7 @@ onMounted(async () => {
           />
         </UiField>
 
-        <UiField label="สถานะเครื่อง">
+        <UiField :label="t(&quot;สถานะเครื่อง&quot;)">
           <UiSelect
             v-model="filters.deviceStatus"
             :options="DEVICE_STATUS_OPTIONS"
@@ -457,28 +462,28 @@ onMounted(async () => {
           />
         </UiField>
 
-        <UiField label="ยี่ห้อ">
-          <UiCombobox v-model="filters.brand" :options="brandOptions" placeholder="ทุกยี่ห้อ" any-label="ทุกยี่ห้อ" />
+        <UiField :label="t(&quot;ยี่ห้อ&quot;)">
+          <UiCombobox v-model="filters.brand" :options="brandOptions" :placeholder="t(&quot;ทุกยี่ห้อ&quot;)" :any-label="t(&quot;ทุกยี่ห้อ&quot;)" />
         </UiField>
 
-        <UiField label="อาคาร">
-          <UiCombobox v-model="filters.building" :options="buildingOptions" placeholder="ทุกอาคาร" any-label="ทุกอาคาร" />
+        <UiField :label="t(&quot;อาคาร&quot;)">
+          <UiCombobox v-model="filters.building" :options="buildingOptions" :placeholder="t(&quot;ทุกอาคาร&quot;)" :any-label="t(&quot;ทุกอาคาร&quot;)" />
         </UiField>
 
-        <UiField label="ชั้น">
-          <UiCombobox v-model="filters.floor" :options="floorOptions" placeholder="ทุกชั้น" any-label="ทุกชั้น" />
+        <UiField :label="t(&quot;ชั้น&quot;)">
+          <UiCombobox v-model="filters.floor" :options="floorOptions" :placeholder="t(&quot;ทุกชั้น&quot;)" :any-label="t(&quot;ทุกชั้น&quot;)" />
         </UiField>
 
-        <UiField label="ฝ่าย">
-          <UiCombobox v-model="filters.division" :options="divisionOptions" placeholder="ทุกฝ่าย" any-label="ทุกฝ่าย" />
+        <UiField :label="t(&quot;ฝ่าย&quot;)">
+          <UiCombobox v-model="filters.division" :options="divisionOptions" :placeholder="t(&quot;ทุกฝ่าย&quot;)" :any-label="t(&quot;ทุกฝ่าย&quot;)" />
         </UiField>
 
-        <UiField label="แผนก" class="lg:col-span-1">
+        <UiField :label="t(&quot;แผนก&quot;)" class="lg:col-span-1">
           <UiCombobox
             v-model="filters.department"
             :options="departmentOptions"
-            placeholder="ทุกแผนก"
-            any-label="ทุกแผนก"
+            :placeholder="t(&quot;ทุกแผนก&quot;)"
+            :any-label="t(&quot;ทุกแผนก&quot;)"
           />
         </UiField>
       </div>
@@ -486,8 +491,8 @@ onMounted(async () => {
 
     <UiCard v-if="!fiscalYearState.activeId">
       <UiEmpty
-        title="ยังไม่ได้เลือกปีงบประมาณ"
-        description="เลือกปีงบจากแถบด้านบน รายงานจะสร้างคอลัมน์เดือนให้ตามปีงบนั้น"
+        :title="t(&quot;ยังไม่ได้เลือกปีงบประมาณ&quot;)"
+        :description="t(&quot;เลือกปีงบจากแถบด้านบน รายงานจะสร้างคอลัมน์เดือนให้ตามปีงบนั้น&quot;)"
       />
     </UiCard>
 
@@ -495,7 +500,7 @@ onMounted(async () => {
       <UiAlert v-if="loadError" tone="danger" class="mb-4">
         {{ loadError }}
         <template #actions>
-          <UiButton size="sm" variant="secondary" @click="loadReport">ลองใหม่</UiButton>
+          <UiButton size="sm" variant="secondary" @click="loadReport"> {{ t("ลองใหม่") }} </UiButton>
         </template>
       </UiAlert>
 
@@ -505,8 +510,9 @@ onMounted(async () => {
         :loading="loading"
         row-key="_row_key"
         export-filename="report-print-by-device"
-        search-placeholder="ค้นหาในตาราง…"
-        empty-text="ไม่มีเครื่องที่ตรงกับตัวกรอง"
+        :export-context="reportContext({ months: displayMonths, filters })"
+        :search-placeholder="t(&quot;ค้นหาในตาราง…&quot;)"
+        :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับตัวกรอง&quot;)"
         max-height="68vh"
         sticky-first
         :row-class="rowClass"
@@ -519,16 +525,20 @@ onMounted(async () => {
               class="shrink-0 text-brand-ink opacity-60"
               aria-hidden="true"
             />
-            <span class="font-mono text-sm text-ink">{{ row.serial_number }}</span>
+            <RouterLink
+              :to="`/assets/${row.id}`"
+              class="inline-flex min-h-6 items-center font-mono text-sm text-ink hover:text-brand-ink hover:underline"
+            >
+              {{ row.serial_number }}
+            </RouterLink>
 
             <UiBadge
               v-if="row._is_moved_group"
               tone="brand"
               size="sm"
-              :title="`เครื่องนี้ย้ายที่ตั้งระหว่างปีงบ จึงถูกแยกเป็น ${row._period_count} แถว`"
+              :title="t(&quot;เครื่องนี้ย้ายที่ตั้งระหว่างปีงบ จึงถูกแยกเป็น {0} แถว&quot;, [row._period_count])"
             >
-              <Repeat2 :size="11" aria-hidden="true" />
-              ช่วงที่ {{ row._period_index }}/{{ row._period_count }}
+              <Repeat2 :size="11" aria-hidden="true" /> {{ t("ช่วงที่") }} {{ row._period_index }}/{{ row._period_count }}
             </UiBadge>
           </span>
         </template>
@@ -543,7 +553,7 @@ onMounted(async () => {
               class="inline-flex items-center gap-0.5 text-2xs text-brand-ink hover:underline whitespace-nowrap"
               @click="toggleHistory(row.id)"
             >
-              {{ expandedDeviceIds.has(row.id) ? "ซ่อน" : "ดูประวัติ" }}
+              {{ expandedDeviceIds.has(row.id) ? t("ซ่อน") : t("ดูประวัติ") }}
               <component
                 :is="expandedDeviceIds.has(row.id) ? ChevronUp : ChevronDown"
                 :size="11"
@@ -564,11 +574,11 @@ onMounted(async () => {
         v-for="deviceId in [...expandedDeviceIds]"
         :key="`history-${deviceId}`"
         class="mt-3"
-        eyebrow="ประวัติการย้าย"
+        :eyebrow="t(&quot;ประวัติการย้าย&quot;)"
         :title="devices.find((d) => d.id === deviceId)?.serial_number ?? ''"
       >
         <template #actions>
-          <UiButton size="sm" variant="ghost" @click="toggleHistory(deviceId)">ปิด</UiButton>
+          <UiButton size="sm" variant="ghost" @click="toggleHistory(deviceId)"> {{ t("ปิด") }} </UiButton>
         </template>
 
         <ol class="flex flex-col gap-2 list-none">
@@ -579,7 +589,7 @@ onMounted(async () => {
           >
             <span class="text-xs text-ink-mute whitespace-nowrap numeral">{{ periodRange(period) }}</span>
             <span class="text-ink-soft">
-              {{ period.division_name || "ไม่ระบุฝ่าย" }} / {{ period.department_name || "ไม่ระบุแผนก" }}
+              {{ period.division_name || t("ไม่ระบุฝ่าย") }} / {{ period.department_name || t("ไม่ระบุแผนก") }}
             </span>
             <span class="text-xs text-ink-mute">
               {{ period.building_name || "—" }}{{ period.floor_name ? ` · ${period.floor_name}` : "" }}

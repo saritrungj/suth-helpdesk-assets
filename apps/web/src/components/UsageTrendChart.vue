@@ -1,4 +1,8 @@
 <script setup>
+import { t } from "../lib/locale";
+
+import { formatMonth } from "../lib/locale-format";
+
 /**
  * UsageTrendChart — แนวโน้มรายเดือนตลอดปีงบ
  *
@@ -12,8 +16,9 @@
  * เติมเดือนที่ไม่มีข้อมูลเป็นช่องว่าง (null) ไม่ใช่ 0 และไม่ใช่ข้ามไป — ศูนย์แปลว่า
  * "เดือนนั้นไม่ได้พิมพ์เลย" ซึ่งคนละเรื่องกับ "ยังไม่ได้บันทึกยอดของเดือนนั้น"
  */
+import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
 import { computed } from "vue";
-import { formatMonthTH } from "@suth/domain";
+
 import { useMonthlyKpi } from "../api/queries";
 import { formatBahtValue, formatCompact, formatCount } from "../lib/format";
 import { UiAlert, UiButton, UiChart, UiEmpty, UiSkeleton } from "../ui";
@@ -25,13 +30,14 @@ const props = defineProps({
   height: { type: String, default: "18rem" },
 });
 
+const emit = defineEmits(["select-month"]);
 const isCost = computed(() => props.metric === "cost");
 
 // พารามิเตอร์เป็น computed จึงกลายเป็นส่วนหนึ่งของ cache key — เปลี่ยนตัวกรองแล้ว
 // ดึงชุดใหม่เอง และถ้าเคยดึงชุดนี้ไปแล้วก็ได้ของจาก cache ทันทีโดยไม่ยิงซ้ำ
 const params = computed(() => ({
   building_name: props.filter.building_name || undefined,
-  month: props.filter.month || undefined,
+  month: activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value).join(",") : undefined,
 }));
 
 const { data, isPending, isFetching, isError, refetch } = useMonthlyKpi(params);
@@ -46,10 +52,11 @@ const series = computed(() => {
     byMonth.set(row.month, current);
   }
 
-  const months = [...byMonth.keys()].sort();
+  const months = activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value) : [...byMonth.keys()].sort();
   return {
-    labels: months.map((m) => formatMonthTH(m)),
-    values: months.map((m) => byMonth.get(m)[isCost.value ? "cost" : "pages"]),
+    months,
+    labels: months.map((m) => formatMonth(m)),
+    values: months.map((m) => byMonth.get(m)?.[isCost.value ? "cost" : "pages"] ?? null),
   };
 });
 </script>
@@ -57,17 +64,15 @@ const series = computed(() => {
 <template>
   <UiSkeleton v-if="isPending" width="100%" :height="height" />
 
-  <UiAlert v-else-if="isError" tone="danger">
-    โหลดกราฟแนวโน้มรายเดือนไม่สำเร็จ
-    <template #actions>
-      <UiButton size="sm" variant="secondary" @click="refetch()">ลองใหม่</UiButton>
+  <UiAlert v-else-if="isError" tone="danger"> {{ t("โหลดกราฟแนวโน้มรายเดือนไม่สำเร็จ") }} <template #actions>
+      <UiButton size="sm" variant="secondary" @click="refetch()"> {{ t("ลองใหม่") }} </UiButton>
     </template>
   </UiAlert>
 
   <UiEmpty
     v-else-if="!series.labels.length"
-    title="ยังไม่มียอดพิมพ์ในช่วงที่เลือก"
-    description="ลองขยายช่วงเดือน หรือไปบันทึกยอดพิมพ์ของเดือนนี้ก่อน"
+    :title="t(&quot;ยังไม่มียอดพิมพ์ในช่วงที่เลือก&quot;)"
+    :description="t(&quot;ลองขยายช่วงเดือน หรือไปบันทึกยอดพิมพ์ของเดือนนี้ก่อน&quot;)"
     compact
   />
 
@@ -78,16 +83,19 @@ const series = computed(() => {
     :series="[
       {
         key: metric,
-        label: isCost ? 'ค่าใช้จ่ายสุทธิ' : 'จำนวนหน้าที่พิมพ์',
+        label: isCost ? t(&quot;ค่าใช้จ่ายสุทธิ&quot;) : t(&quot;จำนวนหน้าที่พิมพ์&quot;),
         data: series.values,
         slot: isCost ? 2 : 1,
       },
     ]"
     :height="height"
     :loading="isFetching"
-    :unit="isCost ? 'บาท' : 'หน้า'"
+    :unit="isCost ? t(&quot;บาท&quot;) : t(&quot;หน้า&quot;)"
     :format-value="isCost ? formatBahtValue : formatCount"
     :format-axis="formatCompact"
-    category-label="เดือน"
+    :selected-index="series.months.indexOf(filter.month)"
+    selectable
+    @select="emit('select-month', series.months[$event.index])"
+    :category-label="t(&quot;เดือน&quot;)"
   />
 </template>

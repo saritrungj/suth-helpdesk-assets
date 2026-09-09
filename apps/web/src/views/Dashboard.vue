@@ -1,4 +1,10 @@
 <script setup>
+import { deviceLocationLabel } from "../lib/device-location";
+import { yearLabel } from "../lib/locale-format";
+import { formatMonth } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+
 /**
  * Dashboard — หน้าแรกหลังเข้าระบบ
  *
@@ -27,7 +33,7 @@ import {
   RefreshCw,
   Wallet,
 } from "lucide-vue-next";
-import { formatMonthTH, fromSatang, sumSatang, toSatang } from "@suth/domain";
+import { fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
 import { errorMessage } from "../lib/api-error";
 import { useOverview } from "../api/queries";
@@ -53,6 +59,7 @@ import {
 /* --------------------------------------------------------------------------
    สถานะ
    -------------------------------------------------------------------------- */
+const dashboardFilter = ref(null);
 const filter = ref({ building_name: "", month: "" });
 
 const highlightsLoading = ref(true);
@@ -64,15 +71,15 @@ const deviceOrder = ref("desc");
 const chartMetric = ref("pages");
 
 const ORDER_OPTIONS = [
-  { value: "desc", label: "มากสุด" },
-  { value: "asc", label: "น้อยสุด" },
+  { value: "desc", label: t("มากสุด") },
+  { value: "asc", label: t("น้อยสุด") },
 ];
 
 /** สถานะของเครื่อง — ป้ายภาษาไทยและโทนสี กำหนดรวมไว้ที่เดียวเพื่อให้ทุกหน้าตรงกัน */
 const STATUS_META = {
-  active: { label: "ใช้งานอยู่", tone: "ok", bar: "bg-ok" },
-  repair: { label: "ซ่อมบำรุง", tone: "warn", bar: "bg-warn" },
-  retired: { label: "ปลดระวาง", tone: "neutral", bar: "bg-ink-faint" },
+  active: { label: t("ใช้งานอยู่"), tone: "ok", bar: "bg-ok" },
+  repair: { label: t("ซ่อมบำรุง"), tone: "warn", bar: "bg-warn" },
+  retired: { label: t("ปลดระวาง"), tone: "neutral", bar: "bg-ink-faint" },
 };
 
 /* --------------------------------------------------------------------------
@@ -143,11 +150,11 @@ const coverage = computed(() => overview.value?.coverage ?? null);
  */
 const comparisonHint = computed(() => {
   const months = comparison.value?.previous_months;
-  if (!months?.length) return "รวมทุกเครื่องในช่วงที่เลือก";
+  if (!months?.length) return t("รวมทุกเครื่องในช่วงที่เลือก");
 
-  const first = formatMonthTH(months[0]);
-  const last = formatMonthTH(months[months.length - 1]);
-  return months.length === 1 ? `เทียบกับ ${first}` : `เทียบกับ ${first} – ${last}`;
+  const first = formatMonth(months[0]);
+  const last = formatMonth(months[months.length - 1]);
+  return months.length === 1 ? t("เทียบกับ {0}", [first]) : t("เทียบกับ {0} – {1}", [first, last]);
 });
 
 /**
@@ -162,9 +169,9 @@ const comparisonHint = computed(() => {
  * "18/18" ทั้งที่ยังกรอกไม่ครบ 5 เดือน
  */
 const dataCompletenessTone = computed(() => {
-  const elapsed = Number(coverage.value?.elapsed_months || 0);
-  const complete = Number(coverage.value?.complete_months || 0);
-  if (!elapsed) return "ink";
+  const elapsed = Number(coverage.value?.total_months || 0);
+  const complete = Number(coverage.value?.annual_complete_months || 0);
+  if (!elapsed || !coverage.value?.applicable) return "ink";
   if (complete >= elapsed) return "ok";
   return complete >= elapsed * 0.8 ? "warn" : "danger";
 });
@@ -205,7 +212,7 @@ async function loadHighlights() {
     };
   } catch (err) {
     console.error("Dashboard highlights error:", err);
-    highlightsError.value = "โหลดข้อมูลสรุปเชิงลึกไม่สำเร็จ";
+    highlightsError.value = t("โหลดข้อมูลสรุปเชิงลึกไม่สำเร็จ");
   } finally {
     highlightsLoading.value = false;
   }
@@ -243,13 +250,13 @@ onMounted(loadHighlights);
 
     <!-- ปุ่มรีเฟรชอยู่ติดแถบตัวกรอง เพราะสิ่งที่มันโหลดใหม่คือข้อมูล "ของตัวกรอง
          ชุดที่ตั้งอยู่ตอนนี้" ไม่ใช่ทั้งหน้าแบบไม่มีเงื่อนไข -->
-    <div class="flex items-start gap-3">
-      <DashboardFilter v-model:metric="chartMetric" class="flex-1 min-w-0" @filter="onFilter" />
+    <div class="flex items-start gap-3 mb-5">
+      <DashboardFilter ref="dashboardFilter" v-model:metric="chartMetric" class="flex-1 min-w-0" @filter="onFilter" />
 
       <UiButton
         variant="secondary"
         icon-only
-        label="โหลดข้อมูลใหม่"
+        :label="t(&quot;โหลดข้อมูลใหม่&quot;)"
         :loading="loading"
         class="mt-px shrink-0"
         @click="reload"
@@ -259,20 +266,19 @@ onMounted(loadHighlights);
     </div>
 
     <UiAlert v-if="overviewIsError" tone="danger" class="mb-4">
-      {{ errorMessage(overviewError, "โหลดภาพรวมไม่สำเร็จ") }}
+      {{ errorMessage(overviewError, t("โหลดภาพรวมไม่สำเร็จ")) }}
       <template #actions>
-        <UiButton size="sm" variant="secondary" @click="refetchOverview">ลองใหม่</UiButton>
+        <UiButton size="sm" variant="secondary" @click="refetchOverview"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
 
     <!-- ตัวเลขสรุป — ค่าใช้จ่ายสุทธิเป็นใบที่เน้น เพราะเป็นตัวเลขที่ผู้บริหารถามถึงก่อนเสมอ -->
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
       <UiStat
-        label="ค่าใช้จ่ายสุทธิรวม"
-        unit="บาท"
-        hint="ทุกสัญญา หลังหักส่วนลด 20%"
-        tone="brand"
-        emphasis
+        :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
+        :unit="t(&quot;บาท&quot;)"
+        :hint="t(&quot;ทุกสัญญา หลังหักส่วนลด 20%&quot;)"
+        tone="ink"
         :loading="overviewLoading"
         :trend="trend.cost"
         :delta="comparison?.cost_change_percent ?? null"
@@ -283,8 +289,8 @@ onMounted(loadHighlights);
       </UiStat>
 
       <UiStat
-        label="จำนวนหน้าที่พิมพ์"
-        unit="หน้า"
+        :label="t(&quot;จำนวนหน้าที่พิมพ์&quot;)"
+        :unit="t(&quot;หน้า&quot;)"
         :hint="comparisonHint"
         tone="ink"
         :loading="overviewLoading"
@@ -297,9 +303,9 @@ onMounted(loadHighlights);
       </UiStat>
 
       <UiStat
-        label="อุปกรณ์ในทะเบียน"
-        unit="เครื่อง"
-        :hint="`ใช้งานอยู่ ${formatCount(totals.active_devices)} เครื่อง`"
+        :label="t(&quot;อุปกรณ์ในทะเบียน&quot;)"
+        :unit="t(&quot;เครื่อง&quot;)"
+        :hint="t(&quot;ใช้งานอยู่ {0} เครื่อง&quot;, [formatCount(totals.active_devices)])"
         tone="ink"
         :loading="overviewLoading"
       >
@@ -313,35 +319,42 @@ onMounted(loadHighlights);
         ซึ่งบอกได้ทันทีว่าตัวเลขทั้งหน้านี้เชื่อถือได้แค่ไหน
       -->
       <UiStat
-        label="ความครบถ้วนของข้อมูล"
-        unit="เดือน"
-        :hint="`กรอกยอดพิมพ์ครบทุกเครื่องแล้ว จาก ${formatCount(coverage?.elapsed_months)} เดือนที่ผ่านไปในปีงบนี้`"
+        :label="t(&quot;ความครบถ้วนของข้อมูล&quot;)"
+        :unit="t(&quot;เดือน&quot;)"
+        :hint="t(&quot;ทั้งปีงบ · ค้าง {0} เดือน · ยังไม่ถึงกำหนด {1} เดือน&quot;, [formatCount(coverage?.incomplete_months), formatCount(coverage?.not_due_months)])"
         :tone="dataCompletenessTone"
         :loading="overviewLoading"
       >
-        {{ formatCount(coverage?.complete_months) }}
+        {{ formatCount(coverage?.annual_complete_months) }}/{{ formatCount(coverage?.total_months) }}
         <template #icon><FileText :size="16" class="text-ink-faint" /></template>
       </UiStat>
     </div>
 
     <!-- แนวโน้มรายเดือน + สถานะเครื่อง -->
-    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
       <UiCard
-        class="xl:col-span-2"
-        eyebrow="แนวโน้มตลอดปีงบ"
-        :title="chartMetric === 'cost' ? 'ค่าใช้จ่ายรายเดือน' : 'ยอดพิมพ์รายเดือน'"
+        :eyebrow="t(&quot;แนวโน้มตลอดปีงบ&quot;)"
+        :title="chartMetric === 'cost' ? t(&quot;ค่าใช้จ่ายรายเดือน&quot;) : t(&quot;ยอดพิมพ์รายเดือน&quot;)"
       >
-        <UsageTrendChart :filter="filter" :metric="chartMetric" height="19rem" />
+        <UsageTrendChart :filter="filter" :metric="chartMetric" height="19rem" @select-month="dashboardFilter?.selectMonth($event)" />
       </UiCard>
 
-      <UiCard eyebrow="ทะเบียนอุปกรณ์" title="สถานะเครื่องพิมพ์">
+      <UiCard
+        :eyebrow="t(&quot;เปรียบเทียบรายอาคาร&quot;)"
+        :title="chartMetric === 'cost' ? t(&quot;ค่าใช้จ่ายสุทธิรายอาคาร&quot;) : t(&quot;ยอดพิมพ์รายอาคาร&quot;)"
+      >
+        <BuildingBreakdownChart :filter="filter" :metric="chartMetric" height="19rem" />
+      </UiCard>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
+      <UiCard :eyebrow="t(&quot;ทะเบียนอุปกรณ์&quot;)" :title="t(&quot;สถานะเครื่องพิมพ์&quot;)">
         <div v-if="highlightsLoading" class="flex flex-col gap-3">
           <UiSkeleton height="0.75rem" />
           <UiSkeleton v-for="n in 3" :key="n" height="2.5rem" />
         </div>
 
         <div v-else-if="!totalDeviceStatus">
-          <UiEmpty title="ยังไม่มีเครื่องในทะเบียน" compact />
+          <UiEmpty :title="t(&quot;ยังไม่มีเครื่องในทะเบียน&quot;)" compact />
         </div>
 
         <div v-else class="flex flex-col gap-4">
@@ -384,33 +397,20 @@ onMounted(loadHighlights);
             </li>
           </ul>
 
-          <UiButton to="/assets" variant="secondary" size="sm" block>
-            เปิดทะเบียนทรัพย์สิน
-            <template #trailing><ArrowUpRight :size="14" /></template>
+          <UiButton to="/assets" variant="secondary" size="sm" block> {{ t("เปิดทะเบียนทรัพย์สิน") }} <template #trailing><ArrowUpRight :size="14" /></template>
           </UiButton>
         </div>
       </UiCard>
-    </div>
-
-    <UiAlert v-if="highlightsError" tone="danger" class="mb-4">
-      {{ highlightsError }}
-      <template #actions>
-        <UiButton size="sm" variant="secondary" @click="loadHighlights">ลองใหม่</UiButton>
-      </template>
-    </UiAlert>
-
-    <!-- อันดับแผนก + รายอาคาร -->
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
       <UiCard
-        eyebrow="ค่าใช้จ่ายสุทธิ (หัก 20%)"
-        :title="departmentOrder === 'desc' ? 'แผนกที่ใช้งบสูงสุด' : 'แผนกที่ใช้งบน้อยสุด'"
+        :eyebrow="t(&quot;ค่าใช้จ่ายสุทธิ (หัก 20%)&quot;)"
+        :title="departmentOrder === 'desc' ? t(&quot;แผนกที่ใช้งบสูงสุด&quot;) : t(&quot;แผนกที่ใช้งบน้อยสุด&quot;)"
       >
         <template #actions>
           <UiSegmented
             v-model="departmentOrder"
             :options="ORDER_OPTIONS"
             size="sm"
-            label="เรียงลำดับแผนก"
+            :label="t(&quot;เรียงลำดับแผนก&quot;)"
             @update:model-value="loadHighlights"
           />
         </template>
@@ -421,8 +421,8 @@ onMounted(loadHighlights);
 
         <UiEmpty
           v-else-if="!highlights.top_departments.length"
-          title="ไม่มีข้อมูลในช่วงที่เลือก"
-          description="ลองขยายช่วงเดือน หรือเลือกทุกอาคาร"
+          :title="t(&quot;ไม่มีข้อมูลในช่วงที่เลือก&quot;)"
+          :description="t(&quot;ลองขยายช่วงเดือน หรือเลือกทุกอาคาร&quot;)"
           variant="search"
           compact
         />
@@ -440,7 +440,7 @@ onMounted(loadHighlights);
             <div class="min-w-0 flex-1">
               <div class="flex items-baseline justify-between gap-3">
                 <p class="text-sm text-ink-soft truncate">
-                  {{ dept.department_name || "ไม่ระบุแผนก" }}
+                  {{ dept.department_name || t("ไม่ระบุแผนก") }}
                   <span v-if="dept.division_name" class="text-ink-mute">· {{ dept.division_name }}</span>
                 </p>
                 <p class="text-sm font-semibold text-ink numeral shrink-0">
@@ -457,40 +457,45 @@ onMounted(loadHighlights);
                 tone="brand"
                 hide-value
                 class="mt-1.5"
-                :label="`สัดส่วนของ ${dept.department_name || 'แผนก'}`"
+                :label="t(&quot;สัดส่วนของ {0}&quot;, [dept.department_name || 'แผนก'])"
               />
             </div>
           </li>
         </ol>
 
         <template #footer>
-          <UiButton to="/expense" variant="ghost" size="sm">
-            ดูรายละเอียดทุกแผนก
-            <template #trailing><ArrowUpRight :size="14" /></template>
+          <UiButton :to="{ path: '/expense', query: { tab: 'department' } }" variant="ghost" size="sm"> {{ t("ดูรายละเอียดทุกแผนก") }} <template #trailing><ArrowUpRight :size="14" /></template>
           </UiButton>
         </template>
       </UiCard>
+    </div>
 
-      <UiCard
-        eyebrow="เปรียบเทียบรายอาคาร"
-        :title="chartMetric === 'cost' ? 'ค่าใช้จ่ายสุทธิรายอาคาร' : 'ยอดพิมพ์รายอาคาร'"
-      >
-        <BuildingBreakdownChart :filter="filter" :metric="chartMetric" height="21rem" />
-      </UiCard>
+    <UiAlert v-if="highlightsError" tone="danger" class="mb-4">
+      {{ highlightsError }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="loadHighlights"> {{ t("ลองใหม่") }} </UiButton>
+      </template>
+    </UiAlert>
+
+    <!-- อันดับแผนก + รายอาคาร -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
+
+
+
     </div>
 
     <!-- เครื่องที่ใช้งานหนัก + สัญญา -->
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <UiCard
-        eyebrow="รายเครื่อง"
-        :title="deviceOrder === 'desc' ? 'เครื่องที่พิมพ์มากที่สุด' : 'เครื่องที่พิมพ์น้อยที่สุด'"
+        :eyebrow="t(&quot;รายเครื่อง&quot;)"
+        :title="deviceOrder === 'desc' ? t(&quot;เครื่องที่พิมพ์มากที่สุด&quot;) : t(&quot;เครื่องที่พิมพ์น้อยที่สุด&quot;)"
       >
         <template #actions>
           <UiSegmented
             v-model="deviceOrder"
             :options="ORDER_OPTIONS"
             size="sm"
-            label="เรียงลำดับเครื่อง"
+            :label="t(&quot;เรียงลำดับเครื่อง&quot;)"
             @update:model-value="loadHighlights"
           />
         </template>
@@ -501,7 +506,7 @@ onMounted(loadHighlights);
 
         <UiEmpty
           v-else-if="!highlights.top_devices.length"
-          title="ไม่มีข้อมูลการพิมพ์ในช่วงที่เลือก"
+          :title="t(&quot;ไม่มีข้อมูลการพิมพ์ในช่วงที่เลือก&quot;)"
           variant="search"
           compact
         />
@@ -520,17 +525,18 @@ onMounted(loadHighlights);
 
             <div class="min-w-0 flex-1">
               <p class="text-sm font-medium text-ink-soft font-mono truncate">
-                {{ device.serial_number || device.asset_code || "—" }}
+                <RouterLink :to="{ path: `/assets/${device.device_id}`, query: { fy: activeFiscalYear?.id } }" class="inline-flex items-center min-h-6 underline">{{ device.serial_number || device.asset_code || "—" }}</RouterLink>
               </p>
               <p class="text-2xs text-ink-mute truncate">
-                {{ device.department_name || "ไม่ระบุแผนก" }}
+                {{ device.department_name || t("ไม่ระบุแผนก") }}
+                <span class="block whitespace-normal">{{ deviceLocationLabel(device.locations) }}</span>
               </p>
             </div>
 
             <div class="shrink-0 text-right">
               <p class="text-sm font-semibold text-ink numeral">
                 {{ formatCount(device.total_pages) }}
-                <span class="text-2xs font-normal text-ink-mute">หน้า</span>
+                <span class="text-2xs font-normal text-ink-mute"> {{ t("หน้า") }} </span>
               </p>
               <div class="w-16 h-1 mt-1 rounded-full bg-surface-3 overflow-hidden ml-auto">
                 <div
@@ -544,19 +550,19 @@ onMounted(loadHighlights);
         </ol>
       </UiCard>
 
-      <UiCard eyebrow="สัญญาเช่า" title="ค่าใช้จ่ายแยกตามสัญญา">
+      <UiCard :eyebrow="t(&quot;สัญญาเช่า&quot;)" :title="t(&quot;ค่าใช้จ่ายแยกตามสัญญา&quot;)">
         <div v-if="highlightsLoading" class="flex flex-col gap-2">
           <UiSkeleton v-for="n in 3" :key="n" height="2.75rem" />
         </div>
 
         <UiEmpty
           v-else-if="!highlights.contracts.length"
-          title="ยังไม่มีสัญญาในระบบ"
-          description="สร้างสัญญาก่อนเพื่อให้ระบบคิดค่าใช้จ่ายต่อแผ่นได้"
+          :title="t(&quot;ยังไม่มีสัญญาในระบบ&quot;)"
+          :description="t(&quot;สร้างสัญญาก่อนเพื่อให้ระบบคิดค่าใช้จ่ายต่อแผ่นได้&quot;)"
           compact
         >
           <template #actions>
-            <UiButton to="/admin/contracts" variant="primary" size="sm">ไปสร้างสัญญา</UiButton>
+            <UiButton to="/admin/contracts" variant="primary" size="sm"> {{ t("ไปสร้างสัญญา") }} </UiButton>
           </template>
         </UiEmpty>
 
@@ -576,24 +582,21 @@ onMounted(loadHighlights);
             <div class="min-w-0 flex-1">
               <p class="text-sm font-medium text-ink-soft truncate">{{ contract.contract_no }}</p>
               <p class="flex items-center gap-1.5 text-2xs text-ink-mute">
-                <UiBadge v-if="contract.fiscal_year" size="sm" tone="neutral">
-                  ปีงบ {{ Number(contract.fiscal_year) }}
+                <UiBadge v-if="contract.fiscal_year" size="sm" tone="neutral"> {{ t("ปีงบ") }} {{ yearLabel(contract.fiscal_year) }}
                 </UiBadge>
-                <span class="numeral">{{ formatCount(contract.device_count) }} เครื่อง</span>
+                <span class="numeral">{{ formatCount(contract.device_count) }} {{ t("เครื่อง") }} </span>
               </p>
             </div>
 
             <p class="shrink-0 text-sm font-semibold text-ink numeral">
               {{ formatBahtValue(contract.total_cost) }}
-              <span class="text-2xs font-normal text-ink-mute">บาท</span>
+              <span class="text-2xs font-normal text-ink-mute"> {{ t("บาท") }} </span>
             </p>
           </li>
         </ul>
 
         <template #footer>
-          <UiButton to="/expense" variant="ghost" size="sm">
-            ดูรายละเอียดค่าใช้จ่าย
-            <template #trailing><ArrowUpRight :size="14" /></template>
+          <UiButton to="/expense" variant="ghost" size="sm"> {{ t("ดูรายละเอียดค่าใช้จ่าย") }} <template #trailing><ArrowUpRight :size="14" /></template>
           </UiButton>
         </template>
       </UiCard>

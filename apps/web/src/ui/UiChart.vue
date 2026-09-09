@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * UiChart — กราฟทุกกราฟในระบบผ่านตัวนี้ตัวเดียว
  *
@@ -55,7 +57,10 @@ import UiSegmented from "./UiSegmented.vue";
 
 ChartJS.register(BarElement, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Tooltip);
 
+const emit = defineEmits(["select"]);
 const props = defineProps({
+  selectedIndex: { type: Number, default: -1 },
+  selectable: { type: Boolean, default: false },
   labels: { type: Array, default: () => [] },
   /** [{ key, label, data, slot? }] */
   series: { type: Array, default: () => [] },
@@ -69,7 +74,7 @@ const props = defineProps({
   formatAxis: { type: Function, default: null },
   unit: { type: String, default: "" },
   /** หัวคอลัมน์แรกของมุมมองตาราง */
-  categoryLabel: { type: String, default: "ช่วงเวลา" },
+  categoryLabel: { type: String, default: t("ช่วงเวลา") },
   loading: { type: Boolean, default: false },
 });
 
@@ -77,8 +82,8 @@ const { baseChartOptions, colors } = useChartTheme();
 
 const view = ref("chart");
 const VIEW_OPTIONS = [
-  { value: "chart", label: "กราฟ", icon: ChartColumnBig },
-  { value: "table", label: "ตาราง", icon: Table2 },
+  { value: "chart", label: t("กราฟ"), icon: ChartColumnBig },
+  { value: "table", label: t("ตาราง"), icon: Table2 },
 ];
 
 /** สลอตสีผูกกับ key ของชุดข้อมูล ไม่ใช่ตำแหน่งในอาเรย์ */
@@ -99,7 +104,7 @@ const chartData = computed(() => ({
       data: s.data,
       borderColor: s.color,
       backgroundColor: s.color,
-      spanGaps: true,
+      spanGaps: false,
     };
 
     if (props.kind === "bar") {
@@ -120,7 +125,7 @@ const chartData = computed(() => ({
       ...base,
       borderWidth: 2,
       tension: 0.3,
-      pointRadius: 4,
+      pointRadius: s.data.map((_, i) => i === props.selectedIndex ? 7 : 4),
       pointHoverRadius: 6,
       pointBackgroundColor: s.color,
       // วงแหวนสีพื้นรอบจุด ทำให้จุดยังอ่านออกตรงที่เส้นทับกัน
@@ -150,6 +155,9 @@ const chartOptions = computed(() => {
 
   return {
     ...base,
+    onClick: (_event, elements) => {
+      if (props.selectable && elements.length) emit("select", { index: elements[0].index });
+    },
     indexAxis: props.horizontal ? "y" : "x",
     plugins: {
       ...base.plugins,
@@ -161,7 +169,7 @@ const chartOptions = computed(() => {
         callbacks: {
           label: (ctx) =>
             ctx.raw === null || ctx.raw === undefined
-              ? `${ctx.dataset.label}: ไม่มีข้อมูล`
+              ? t("{0}: ไม่มีข้อมูล", [ctx.dataset.label])
               : `${ctx.dataset.label}: ${value(ctx.raw)}`,
         },
       },
@@ -236,7 +244,7 @@ onBeforeUnmount(() => sizeWatcher?.disconnect());
         v-model="view"
         :options="VIEW_OPTIONS"
         size="sm"
-        label="สลับระหว่างกราฟกับตาราง"
+        :label="t(&quot;สลับระหว่างกราฟกับตาราง&quot;)"
         class="shrink-0"
       />
     </div>
@@ -256,7 +264,7 @@ onBeforeUnmount(() => sizeWatcher?.disconnect());
     <!-- มุมมองตาราง — ช่องทางอ่านค่าที่ไม่ต้องพึ่งสีและไม่ต้องชี้เมาส์ -->
     <div v-show="view === 'table'" class="overflow-auto rounded-lg border border-line-soft" :style="{ maxHeight: height }">
       <table class="w-full text-sm">
-        <caption class="sr-only">ค่าตัวเลขของกราฟด้านบน</caption>
+        <caption class="sr-only"> {{ t("ค่าตัวเลขของกราฟด้านบน") }} </caption>
         <thead class="sticky top-0 bg-surface-2">
           <tr>
             <th scope="col" class="text-left text-xs font-semibold text-ink-mute px-3 py-2 border-b border-line-soft">
@@ -276,9 +284,9 @@ onBeforeUnmount(() => sizeWatcher?.disconnect());
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in tableRows" :key="row.label" class="border-b border-line-soft last:border-0">
+          <tr v-for="(row, index) in tableRows" :key="row.label" class="border-b border-line-soft last:border-0">
             <th scope="row" class="text-left font-normal text-ink-soft px-3 py-1.5 whitespace-nowrap">
-              {{ row.label }}
+              <button v-if="selectable" type="button" class="underline" :aria-pressed="index === selectedIndex" @click="emit('select', { index })">{{ row.label }}</button><template v-else>{{ row.label }}</template>
             </th>
             <td
               v-for="(v, i) in row.values"
