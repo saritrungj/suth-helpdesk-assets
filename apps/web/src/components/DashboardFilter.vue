@@ -1,4 +1,8 @@
 <script setup>
+import { formatFiscalYearRange } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+
 /**
  * DashboardFilter — แถบตัวกรองของหน้าแรก
  *
@@ -13,9 +17,10 @@
  * useMonthlyKpi แบบไม่กรอง) ไม่ใช่เปิดให้เลือกทั้ง 12 เดือนเสมอไป — ป้องกันคนเลือก
  * เดือนที่ยังไม่มีใครกรอกยอดแล้วเห็นกราฟว่างโดยไม่รู้สาเหตุ
  */
+import { useRoute, useRouter } from "vue-router";
 import { computed, ref, watch } from "vue";
 import { Printer, Wallet } from "lucide-vue-next";
-import { fiscalYearLabel } from "@suth/domain";
+
 import { useBuildings, useMonthlyKpi } from "../api/queries";
 import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
 import PeriodPicker from "./PeriodPicker.vue";
@@ -29,12 +34,18 @@ defineProps({
 const emit = defineEmits(["update:metric", "filter"]);
 
 const METRIC_OPTIONS = [
-  { value: "pages", label: "จำนวนหน้า", icon: Printer },
-  { value: "cost", label: "ค่าใช้จ่าย", icon: Wallet },
+  { value: "pages", label: t("จำนวนหน้า"), icon: Printer },
+  { value: "cost", label: t("ค่าใช้จ่าย"), icon: Wallet },
 ];
 
-const buildingName = ref("");
-const monthSelection = ref([]);
+const route = useRoute();
+const router = useRouter();
+const buildingName = ref(typeof route.query.building === "string" ? route.query.building : "");
+const monthSelection = ref(String(route.query.months || "").split(",").filter((m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m)));
+watch([buildingName, monthSelection], () => {
+  router.replace({ query: { ...route.query, building: buildingName.value || undefined, months: monthSelection.value.length ? monthSelection.value.join(",") : undefined } });
+});
+defineExpose({ selectMonth: (month) => { monthSelection.value = [month]; } });
 
 // ช่วงเดือนตามปีงบที่ active อยู่ตอนนี้เสมอ (global, เลือกที่ Navbar)
 const range = computed(() => activeFiscalYearRange.value);
@@ -75,30 +86,30 @@ watch([buildingName, month], sendFilter, { immediate: true });
 // ปีงบเปลี่ยน (จาก Navbar) → เดือนที่เคยเลือกไว้อาจเป็นของปีงบเก่า ใช้ต่อไม่ได้แล้ว
 // ล้างทิ้งให้เริ่มเลือกใหม่ (PeriodPicker เองก็ watch ปีงบแล้วเคลียร์ตัวเองอยู่แล้ว
 // แต่กันไว้เผื่อ options ยังไม่ทันอัปเดต)
-watch(range, () => {
-  if (monthSelection.value.length) monthSelection.value = [];
+watch(range, (value, previous) => {
+  if (previous && monthSelection.value.length) monthSelection.value = [];
 });
 </script>
 
 <template>
   <div class="card p-3 flex flex-wrap items-end gap-3" data-print="hide">
-    <UiField label="อาคาร" class="w-48">
+    <UiField :label="t(&quot;อาคาร&quot;)" class="w-48">
       <UiCombobox
         v-model="buildingName"
         :options="buildingOptions"
-        placeholder="ทุกอาคาร"
-        any-label="ทุกอาคาร"
+        :placeholder="t(&quot;ทุกอาคาร&quot;)"
+        :any-label="t(&quot;ทุกอาคาร&quot;)"
       />
     </UiField>
 
-    <UiField :label="`เดือน (ปีงบ ${fiscalYearLabel(range)})`" class="w-56">
+    <UiField :label="t(&quot;เดือน (ปีงบ {0})&quot;, [formatFiscalYearRange(range)])" class="w-56">
       <PeriodPicker v-model="monthSelection" :options="monthOptions" />
     </UiField>
 
     <UiSegmented
       :model-value="metric"
       :options="METRIC_OPTIONS"
-      label="หน่วยของกราฟ"
+      :label="t(&quot;หน่วยของกราฟ&quot;)"
       class="ml-auto"
       @update:model-value="emit('update:metric', $event)"
     />

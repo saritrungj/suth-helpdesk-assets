@@ -8,6 +8,15 @@ export default defineConfig({
     tailwindcss(),
   ],
 
+  server: {
+    // Playwright writes downloads and traces here while Vite is running. On
+    // Windows, watching a temporary .crdownload file can raise EBUSY and stop
+    // the development server in the middle of the E2E suite.
+    watch: {
+      ignored: ['**/e2e/.artifacts/**'],
+    },
+  },
+
   test: {
     // เทสของ store ไม่ต้องใช้ DOM — ใช้ environment node ให้รันเร็ว
     // ถ้าจะเทส component ค่อยตั้ง environment: "jsdom" เฉพาะไฟล์นั้นด้วย

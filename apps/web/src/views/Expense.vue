@@ -1,4 +1,10 @@
 <script setup>
+import { reportContext } from "../components/report-context";
+import { deviceLocationLabel } from "../lib/device-location";
+import { formatMonth } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+
 /**
  * Expense — ค่าใช้จ่ายแยกตามสัญญา (แท็บหนึ่งของหน้ารายงานค่าใช้จ่าย)
  *
@@ -16,7 +22,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { exportSheet } from "../lib/export-xlsx";
 import { ChevronRight, Download, Printer, ReceiptText, Search, TriangleAlert } from "lucide-vue-next";
-import { formatMonthTH, fromSatang, sumSatang, toSatang } from "@suth/domain";
+import { fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
 import { fiscalYearState } from "../store/fiscalYear";
 import { formatBahtValue, formatCount } from "../lib/format";
@@ -25,6 +31,7 @@ import {
   UiAlert,
   UiBadge,
   UiButton,
+  UiExpandable,
   UiCard,
   UiEmpty,
   UiField,
@@ -163,7 +170,7 @@ async function loadExpense() {
     collapseAll();
   } catch (err) {
     console.error("Load expense error:", err);
-    loadError.value = "โหลดข้อมูลค่าใช้จ่ายไม่สำเร็จ";
+    loadError.value = t("โหลดข้อมูลค่าใช้จ่ายไม่สำเร็จ");
     contracts.value = [];
   } finally {
     loading.value = false;
@@ -176,16 +183,16 @@ async function loadExpense() {
  */
 async function exportExcel() {
   const header = [
-    "เลขที่สัญญา",
-    "ราคาต่อแผ่น (บาท)",
+    t("เลขที่สัญญา"),
+    t("ราคาต่อแผ่น (บาท)"),
     "Serial",
-    "ยี่ห้อ",
-    "รุ่น",
-    "จำนวนหน้ารวม",
-    "ค่าใช้จ่ายสุทธิ (หัก 20%)",
+    t("ยี่ห้อ"),
+    t("รุ่น"),
+    t("จำนวนหน้ารวม"),
+    t("ค่าใช้จ่ายสุทธิ (หัก 20%)"),
   ];
 
-  const rows = contracts.value.flatMap((contract) =>
+  const rows = filteredContracts.value.flatMap((contract) =>
     (contract.devices ?? []).map((device) => [
       contract.contract_no,
       Number(contract.price_per_page || 0),
@@ -202,9 +209,10 @@ async function exportExcel() {
   await exportSheet({
     header,
     rows,
-    sheetName: "ค่าใช้จ่ายตามสัญญา",
+    sheetName: t("ค่าใช้จ่ายตามสัญญา"),
     filename: `expense-by-contract${suffix}`,
     columnWidths: [22, 14, 16, 12, 22, 14, 20],
+    context: reportContext({ months: monthSelection.value, filters: { search: search.value }, labels: { search: t("ค้นหา") } }),
   });
 }
 
@@ -222,19 +230,19 @@ onMounted(() => {
   <div>
     <!-- แถบเครื่องมือ -->
     <div class="card p-3 mb-4 flex flex-wrap items-end gap-3" data-print="hide">
-      <UiField label="เดือน" class="w-56">
+      <UiField :label="t(&quot;เดือน&quot;)" class="w-56">
         <PeriodPicker v-model="monthSelection" :options="monthsWithData" />
       </UiField>
 
-      <UiField label="ค้นหาสัญญาหรือเครื่อง" class="flex-1 min-w-[14rem] max-w-sm">
-        <UiInput v-model="search" clearable placeholder="เลขที่สัญญา, Serial, รุ่น…">
+      <UiField :label="t(&quot;ค้นหาสัญญาหรือเครื่อง&quot;)" class="flex-1 min-w-[14rem] max-w-sm">
+        <UiInput v-model="search" clearable :placeholder="t(&quot;เลขที่สัญญา, Serial, รุ่น…&quot;)">
           <template #icon><Search :size="15" /></template>
         </UiInput>
       </UiField>
 
       <div class="flex items-center gap-2 ml-auto">
-        <UiButton size="sm" variant="ghost" @click="expandAll">กางทั้งหมด</UiButton>
-        <UiButton size="sm" variant="ghost" @click="collapseAll">พับทั้งหมด</UiButton>
+        <UiButton size="sm" variant="ghost" @click="expandAll"> {{ t("กางทั้งหมด") }} </UiButton>
+        <UiButton size="sm" variant="ghost" @click="collapseAll"> {{ t("พับทั้งหมด") }} </UiButton>
         <UiButton size="sm" variant="secondary" :disabled="!contracts.length" @click="exportExcel">
           <template #icon><Download :size="15" /></template>
           Excel
@@ -245,23 +253,22 @@ onMounted(() => {
     <!-- ยอดรวม -->
     <div class="grid-fit mb-4">
       <UiStat
-        label="ค่าใช้จ่ายสุทธิรวม"
-        unit="บาท"
-        :hint="month ? 'เฉพาะเดือนที่เลือก · หัก 20% แล้ว' : 'ทั้งปีงบ · หัก 20% แล้ว'"
-        emphasis
+        :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
+        :unit="t(&quot;บาท&quot;)"
+        :hint="month ? t(&quot;เฉพาะเดือนที่เลือก · หัก 20% แล้ว&quot;) : t(&quot;ทั้งปีงบ · หัก 20% แล้ว&quot;)"
         :loading="loading"
       >
         {{ formatBahtValue(grandTotal) }}
       </UiStat>
 
-      <UiStat label="จำนวนหน้ารวม" unit="หน้า" tone="ink" :loading="loading">
+      <UiStat :label="t(&quot;จำนวนหน้ารวม&quot;)" :unit="t(&quot;หน้า&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 
       <UiStat
-        label="เครื่องในสัญญา"
-        unit="เครื่อง"
-        :hint="`${formatCount(contracts.length)} สัญญา`"
+        :label="t(&quot;เครื่องในสัญญา&quot;)"
+        :unit="t(&quot;เครื่อง&quot;)"
+        :hint="t(&quot;{0} สัญญา&quot;, [formatCount(contracts.length)])"
         tone="ink"
         :loading="loading"
       >
@@ -272,7 +279,7 @@ onMounted(() => {
     <UiAlert v-if="loadError" tone="danger" class="mb-4">
       {{ loadError }}
       <template #actions>
-        <UiButton size="sm" variant="secondary" @click="loadExpense">ลองใหม่</UiButton>
+        <UiButton size="sm" variant="secondary" @click="loadExpense"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
 
@@ -282,11 +289,11 @@ onMounted(() => {
 
     <UiCard v-else-if="!contracts.length">
       <UiEmpty
-        title="ยังไม่มีสัญญาในปีงบนี้"
-        description="เพิ่มสัญญาและผูกเครื่องเข้ากับสัญญา ระบบจึงจะคิดค่าใช้จ่ายให้ได้"
+        :title="t(&quot;ยังไม่มีสัญญาในปีงบนี้&quot;)"
+        :description="t(&quot;เพิ่มสัญญาและผูกเครื่องเข้ากับสัญญา ระบบจึงจะคิดค่าใช้จ่ายให้ได้&quot;)"
       >
         <template #actions>
-          <UiButton to="/admin/contracts" variant="primary" size="sm">ไปหน้าจัดการสัญญา</UiButton>
+          <UiButton to="/admin/contracts" variant="primary" size="sm"> {{ t("ไปหน้าจัดการสัญญา") }} </UiButton>
         </template>
       </UiEmpty>
     </UiCard>
@@ -294,17 +301,18 @@ onMounted(() => {
     <UiCard v-else-if="!filteredContracts.length">
       <UiEmpty
         variant="search"
-        :title="`ไม่พบรายการที่ตรงกับ “${search}”`"
-        description="ลองใช้คำที่สั้นลง หรือค้นด้วยเลข Serial เพียงบางส่วน"
+        :title="t(&quot;ไม่พบรายการที่ตรงกับ “{0}”&quot;, [search])"
+        :description="t(&quot;ลองใช้คำที่สั้นลง หรือค้นด้วยเลข Serial เพียงบางส่วน&quot;)"
       >
         <template #actions>
-          <UiButton size="sm" variant="secondary" @click="search = ''">ล้างคำค้นหา</UiButton>
+          <UiButton size="sm" variant="secondary" @click="search = ''"> {{ t("ล้างคำค้นหา") }} </UiButton>
         </template>
       </UiEmpty>
     </UiCard>
 
     <!-- โครงสร้างสามชั้น: สัญญา -> เครื่อง -> ยอดรายเดือน -->
-    <div v-else class="flex flex-col gap-2">
+    <UiExpandable v-else>
+    <div class="flex flex-col gap-2">
       <section
         v-for="contract in filteredContracts"
         :key="contract.id"
@@ -332,15 +340,13 @@ onMounted(() => {
             <span class="min-w-0 flex-1">
               <span class="block font-medium text-ink truncate">{{ contract.contract_no }}</span>
               <span class="block text-2xs text-ink-mute numeral">
-                {{ formatCount((contract.devices ?? []).length) }} เครื่อง ·
-                {{ formatBahtValue(contract.price_per_page) }} บาท/แผ่น
-              </span>
+                {{ formatCount((contract.devices ?? []).length) }} {{ t("เครื่อง ·") }} {{ formatBahtValue(contract.price_per_page) }} {{ t("บาท/แผ่น") }} </span>
             </span>
 
             <span class="shrink-0 text-right">
               <span class="block font-semibold text-brand-ink numeral">
                 {{ formatBahtValue(contract.total_cost) }}
-                <span class="text-2xs font-normal text-ink-mute">บาท</span>
+                <span class="text-2xs font-normal text-ink-mute"> {{ t("บาท") }} </span>
               </span>
             </span>
           </button>
@@ -351,9 +357,7 @@ onMounted(() => {
           :id="`contract-${contract.id}`"
           class="border-t border-line-soft"
         >
-          <p v-if="!(contract.devices ?? []).length" class="px-4 py-6 text-sm text-ink-mute text-center">
-            ยังไม่มีเครื่องผูกกับสัญญานี้
-          </p>
+          <p v-if="!(contract.devices ?? []).length" class="px-4 py-6 text-sm text-ink-mute text-center"> {{ t("ยังไม่มีเครื่องผูกกับสัญญานี้") }} </p>
 
           <div
             v-for="device in contract.devices"
@@ -382,6 +386,7 @@ onMounted(() => {
                 </span>
                 <span class="block text-2xs text-ink-mute font-mono truncate">
                   {{ device.serial_number }}
+                <span class="block text-xs text-ink-mute font-sans">{{ deviceLocationLabel(device.monthly) }}</span>
                 </span>
               </span>
 
@@ -390,35 +395,42 @@ onMounted(() => {
                   {{ formatBahtValue(device.total_cost) }}
                 </span>
                 <span class="block text-2xs text-ink-mute numeral">
-                  {{ formatCount(devicePages(device)) }} หน้า
-                </span>
+                  {{ formatCount(devicePages(device)) }} {{ t("หน้า") }} </span>
               </span>
             </button>
 
             <div v-if="openDevices.has(device.id)" :id="`device-${device.id}`" class="pl-16 pr-4 pb-3">
+              <RouterLink
+                :to="`/assets/${device.id}`"
+                class="inline-flex min-h-6 items-center text-xs text-brand-ink hover:underline"
+              >
+                {{ t("เปิดรายละเอียดเครื่อง") }} · {{ device.serial_number }}
+              </RouterLink>
               <table v-if="(device.monthly ?? []).length" class="w-full text-sm">
                 <thead>
                   <tr class="text-xs text-ink-mute">
-                    <th class="text-left font-medium py-1.5">เดือน</th>
-                    <th class="text-right font-medium py-1.5">จำนวนหน้า</th>
-                    <th class="text-right font-medium py-1.5">ค่าใช้จ่ายสุทธิ</th>
+                    <th class="text-left font-medium py-1.5"> {{ t("เดือน") }} </th>
+                    <th class="text-right font-medium py-1.5"> {{ t("จำนวนหน้า") }} </th>
+                    <th class="text-right font-medium py-1.5"> {{ t("ค่าใช้จ่ายสุทธิ") }} </th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="row in device.monthly" :key="row.month" class="border-t border-line-soft">
-                    <td class="py-1.5 text-ink-soft">{{ formatMonthTH(row.month, { long: true }) }}</td>
+                    <td class="py-1.5 text-ink-soft">{{ formatMonth(row.month, { long: true }) }}</td>
                     <td class="py-1.5 text-right numeral text-ink-soft">{{ formatCount(row.pages) }}</td>
                     <td class="py-1.5 text-right numeral text-ink">{{ formatBahtValue(row.cost) }}</td>
                   </tr>
                 </tbody>
               </table>
 
-              <p v-else class="text-sm text-ink-mute py-2">ยังไม่มีการบันทึกยอดพิมพ์ของเครื่องนี้</p>
+              <p v-else class="text-sm text-ink-mute py-2"> {{ t("ยังไม่มีการบันทึกยอดพิมพ์ของเครื่องนี้") }} </p>
             </div>
           </div>
         </div>
       </section>
     </div>
+
+    </UiExpandable>
 
     <!-- เครื่องที่ยังไม่ผูกสัญญา — เดิมมองไม่เห็นจากหน้านี้เลย ทั้งที่เป็นสาเหตุ
          อันดับหนึ่งที่ยอดรวมไม่ตรงกับใบแจ้งหนี้ -->
@@ -441,17 +453,12 @@ onMounted(() => {
           <TriangleAlert :size="16" class="shrink-0 text-warn-ink" aria-hidden="true" />
 
           <span class="min-w-0 flex-1">
-            <span class="block font-medium text-warn-ink">
-              เครื่องที่ยังไม่ได้ผูกสัญญา
-            </span>
-            <span class="block text-2xs text-warn-ink opacity-80">
-              ยอดของเครื่องเหล่านี้ไม่ถูกนับรวมในค่าใช้จ่ายตามสัญญาด้านบน
-            </span>
+            <span class="block font-medium text-warn-ink"> {{ t("เครื่องที่ยังไม่ได้ผูกสัญญา") }} </span>
+            <span class="block text-2xs text-warn-ink opacity-80"> {{ t("ยอดของเครื่องเหล่านี้ไม่ถูกนับรวมในค่าใช้จ่ายตามสัญญาด้านบน") }} </span>
           </span>
 
           <UiBadge tone="warn" size="lg">
-            {{ formatCount(unassignedDevices.length) }} เครื่อง
-          </UiBadge>
+            {{ formatCount(unassignedDevices.length) }} {{ t("เครื่อง") }} </UiBadge>
         </button>
       </h2>
 
@@ -465,12 +472,12 @@ onMounted(() => {
             <span class="block text-sm text-ink-soft truncate">
               {{ device.brand_name || "—" }} {{ device.model || "" }}
             </span>
-            <span class="block text-2xs text-ink-mute font-mono">{{ device.serial_number }}</span>
+            <span class="block text-2xs text-ink-mute font-mono">{{ device.serial_number }}
+                <span class="block text-xs text-ink-mute font-sans">{{ t("ที่ตั้งปัจจุบัน") + ": " + deviceLocationLabel([device]) }}</span></span>
           </span>
 
           <span class="shrink-0 text-sm numeral text-ink">
-            {{ formatBahtValue(device.total_cost) }} บาท
-          </span>
+            {{ formatBahtValue(device.total_cost) }} {{ t("บาท") }} </span>
         </li>
       </ul>
     </section>

@@ -1,4 +1,9 @@
 <script setup>
+import { reportContext } from "../components/report-context";
+import { formatFiscalYearRange, formatMonth } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+
 /**
  * PrintTransactions — บันทึกยอดพิมพ์รายเดือนของแต่ละเครื่อง
  *
@@ -20,7 +25,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { CircleCheck, ClipboardList, ClipboardPaste, Pencil, Search, Undo2 } from "lucide-vue-next";
-import { fiscalYearLabel, formatMonthTH } from "@suth/domain";
+
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateAfterWrite } from "../api/invalidate";
@@ -94,8 +99,8 @@ const brands = ref([]);
 const mode = ref("overview");
 
 const MODE_OPTIONS = [
-  { value: "overview", label: "ภาพรวมทั้งปี" },
-  { value: "month", label: "กรอกรายเดือน" },
+  { value: "overview", label: t("ภาพรวมทั้งปี") },
+  { value: "month", label: t("กรอกรายเดือน") },
 ];
 
 const search = ref("");
@@ -104,13 +109,13 @@ const filters = ref({
   // ของ "ทั้งปีงบ" รอบหนึ่งก่อนแล้วค่อยโหลดใหม่ตามเดือนที่ระบุ ซึ่งเป็นการยิง
   // คำขอทิ้งเปล่าและทำให้เห็นข้อมูลผิดแวบหนึ่ง
   month: typeof route.query.month === "string" ? route.query.month : "",
-  building: "",
+  building: typeof route.query.building === "string" ? route.query.building : "",
   floor: "",
   division: "",
   department: "",
   brand: "",
-  deviceStatus: "",
-  fillStatus: "",
+  deviceStatus: route.query.fill === "empty" ? "active" : "",
+  fillStatus: route.query.fill === "empty" ? "none" : "",
 });
 
 const fiscalYearId = computed(() => fiscalYearState.activeId);
@@ -119,33 +124,33 @@ const fiscalYearId = computed(() => fiscalYearState.activeId);
 // และใช้ cache ก้อนเดียวกับหน้าแรก จึงไม่ยิงซ้ำเมื่อเปิดสลับกัน
 const { data: coverage, refetch: refetchCoverage } = useCoverage(fiscalYearId);
 const range = computed(() => activeFiscalYearRange.value);
-const displayYearBE = computed(() => fiscalYearLabel(range.value));
+const displayYearBE = computed(() => formatFiscalYearRange(range.value));
 const fyMonths = computed(() => fiscalYearMonths(range.value));
 const monthsPerYear = computed(() => fyMonths.value.length || 12);
 
 const STATUS_META = {
-  active: { label: "ใช้งานอยู่", tone: "ok" },
-  repair: { label: "ซ่อมบำรุง", tone: "warn" },
-  retired: { label: "ปลดระวาง", tone: "neutral" },
+  active: { label: t("ใช้งานอยู่"), tone: "ok" },
+  repair: { label: t("ซ่อมบำรุง"), tone: "warn" },
+  retired: { label: t("ปลดระวาง"), tone: "neutral" },
 };
 
 const DEVICE_STATUS_OPTIONS = [
-  { value: "", label: "ทุกสถานะ" },
-  { value: "active", label: "ใช้งานอยู่" },
-  { value: "repair", label: "ซ่อมบำรุง" },
-  { value: "retired", label: "ปลดระวาง" },
+  { value: "", label: t("ทุกสถานะ") },
+  { value: "active", label: t("ใช้งานอยู่") },
+  { value: "repair", label: t("ซ่อมบำรุง") },
+  { value: "retired", label: t("ปลดระวาง") },
 ];
 
 const FILL_STATUS_OPTIONS = [
-  { value: "", label: "ทั้งหมด" },
-  { value: "none", label: "ยังไม่กรอก" },
-  { value: "partial", label: "กรอกบางเดือน" },
-  { value: "done", label: "ครบแล้ว" },
+  { value: "", label: t("ทั้งหมด") },
+  { value: "none", label: t("ยังไม่กรอก") },
+  { value: "partial", label: t("กรอกบางเดือน") },
+  { value: "done", label: t("ครบแล้ว") },
 ];
 
 const monthOptions = computed(() => [
-  { value: "", label: "ทั้งปีงบ" },
-  ...fyMonths.value.map((m) => ({ value: m, label: formatMonthTH(m, { long: true }) })),
+  { value: "", label: t("ทั้งปีงบ") },
+  ...fyMonths.value.map((m) => ({ value: m, label: formatMonth(m, { long: true }) })),
 ]);
 
 /* --------------------------------------------------------------------------
@@ -238,7 +243,7 @@ const monthPagesReady = computed(
 
 const monthPagesError = computed(() =>
   monthPagesQuery.isError.value
-    ? errorMessage(monthPagesQuery.error.value, "โหลดยอดพิมพ์ของเดือนนี้ไม่สำเร็จ")
+    ? errorMessage(monthPagesQuery.error.value, t("โหลดยอดพิมพ์ของเดือนนี้ไม่สำเร็จ"))
     : ""
 );
 
@@ -268,7 +273,7 @@ function onDirtyChange(count) {
 const confirmDiscardDraft = createDraftGuard({
   dirtyCount: () => (mode.value === "month" ? monthDirtyCount.value : 0),
   describe: (count, consequence) =>
-    `มียอดพิมพ์ที่แก้ไว้ ${count} รายการแต่ยังไม่ได้บันทึก ${consequence}`,
+    t("มียอดพิมพ์ที่แก้ไว้ {0} รายการแต่ยังไม่ได้บันทึก {1}", [count, consequence]),
   discard: () => {
     monthDirty.value = false;
     monthDirtyCount.value = 0;
@@ -292,8 +297,8 @@ async function changeMonth(next) {
   if (next === filters.value.month) return;
 
   // ด่านล้าง draft ให้เองเมื่อผู้ใช้ยืนยัน เพื่อไม่ให้ watch ในตารางถามซ้ำอีกรอบ
-  const ok = await confirmDiscardDraft("ถ้าเปลี่ยนเดือนตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", {
-    confirmText: "เปลี่ยนเดือนโดยไม่บันทึก",
+  const ok = await confirmDiscardDraft(t("ถ้าเปลี่ยนเดือนตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด"), {
+    confirmText: t("เปลี่ยนเดือนโดยไม่บันทึก"),
   });
   if (!ok) return;
 
@@ -327,8 +332,8 @@ function defaultEntryMonth() {
 async function setMode(next) {
   if (next === mode.value) return;
 
-  const ok = await confirmDiscardDraft("ถ้าออกจากโหมดกรอกตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", {
-    confirmText: "ออกโดยไม่บันทึก",
+  const ok = await confirmDiscardDraft(t("ถ้าออกจากโหมดกรอกตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด"), {
+    confirmText: t("ออกโดยไม่บันทึก"),
   });
   if (!ok) return;
 
@@ -356,19 +361,19 @@ const entryColumns = computed(() => [
   { key: "serial_number", label: "Serial", width: "11rem" },
   {
     key: "location",
-    label: "ที่ตั้ง / แผนก",
-    value: (d) => [d.building_name, d.floor_name, d.department_name].filter(Boolean).join(" · ") || "—",
+    label: t("ที่ตั้ง / แผนก"),
+    value: (d) => [d.building_name, d.floor_name, d.location, d.department_name].filter(Boolean).join(" · ") || "—",
   },
   {
     key: "previous_month",
-    label: previousMonth.value ? `ยอด${formatMonthTH(previousMonth.value)}` : "เดือนก่อนหน้า",
+    label: previousMonth.value ? t("ยอด{0}", [formatMonth(previousMonth.value)]) : t("เดือนก่อนหน้า"),
     align: "right",
     width: "9rem",
     value: (d) => previousPages.value[d.id] ?? null,
   },
   {
     key: "entry",
-    label: filters.value.month ? `ยอด${formatMonthTH(filters.value.month)}` : "ยอดพิมพ์",
+    label: filters.value.month ? t("ยอด{0}", [formatMonth(filters.value.month)]) : t("ยอดพิมพ์"),
     align: "right",
     width: "9rem",
     sortable: false,
@@ -383,7 +388,7 @@ async function init() {
     await Promise.all([loadDevices(), loadMasterData(), loadSummary()]);
   } catch (err) {
     console.error("Init print transactions error:", err);
-    toastError("โหลดข้อมูลไม่สำเร็จ");
+    toastError(t("โหลดข้อมูลไม่สำเร็จ"));
   } finally {
     loading.value = false;
   }
@@ -450,13 +455,13 @@ const hasActiveFilter = computed(() => search.value !== "" || Object.values(filt
  * ซ้ำอีกทำให้มีสองที่ที่เอาเดือนออกได้ ซึ่งชวนสับสนมากกว่าช่วย
  */
 const FILTER_LABELS = {
-  fillStatus: "สถานะการกรอก",
-  building: "อาคาร",
-  floor: "ชั้น",
-  division: "ฝ่าย",
-  department: "แผนก",
-  brand: "ยี่ห้อ",
-  deviceStatus: "สถานะเครื่อง",
+  fillStatus: t("สถานะการกรอก"),
+  building: t("อาคาร"),
+  floor: t("ชั้น"),
+  division: t("ฝ่าย"),
+  department: t("แผนก"),
+  brand: t("ยี่ห้อ"),
+  deviceStatus: t("สถานะเครื่อง"),
 };
 
 function optionLabel(options, value, key = "value", labelKey = "label") {
@@ -471,7 +476,7 @@ const filterChips = computed(() => {
   const chips = [];
 
   if (search.value) {
-    chips.push({ key: "search", label: `ค้นหา: ${search.value}` });
+    chips.push({ key: "search", label: t("ค้นหา: {0}", [search.value]) });
   }
 
   for (const [key, label] of Object.entries(FILTER_LABELS)) {
@@ -501,8 +506,8 @@ function removeFilter(key) {
  * จึงต้องผ่านด่านเดียวกับการเปลี่ยนเดือน ไม่ใช่ล้างทันที
  */
 async function resetFilters() {
-  const ok = await confirmDiscardDraft("ถ้าล้างตัวกรองตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", {
-    confirmText: "ล้างตัวกรองโดยไม่บันทึก",
+  const ok = await confirmDiscardDraft(t("ถ้าล้างตัวกรองตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด"), {
+    confirmText: t("ล้างตัวกรองโดยไม่บันทึก"),
   });
   if (!ok) return;
 
@@ -561,7 +566,7 @@ const filteredDevices = computed(() => {
       (!f.department || d.department_name === f.department) &&
       (!f.brand || d.brand_name === f.brand) &&
       (!f.deviceStatus || d.status === f.deviceStatus) &&
-      (!f.fillStatus || fillStatusOf(d.id) === f.fillStatus) &&
+      (!f.fillStatus || (mode.value === "month" && f.fillStatus === "none" ? !Object.hasOwn(monthPages.value, d.id) : fillStatusOf(d.id) === f.fillStatus)) &&
       // ⚠️ ตัวกรอง "เลือกเดือนแล้วเหลือเฉพาะเครื่องที่กรอกเดือนนั้นแล้ว" ใช้ได้
       // เฉพาะโหมดภาพรวม ซึ่งเป็นการ *ดู* ว่าเดือนนั้นใครกรอกไปแล้วบ้าง
       //
@@ -577,7 +582,7 @@ const columns = computed(() => [
   { key: "serial_number", label: "Serial", width: "12rem" },
   {
     key: "fill_status",
-    label: "ความคืบหน้า",
+    label: t("ความคืบหน้า"),
     align: "center",
     width: "10rem",
     value: (d) => fillInfo(d.id).filled,
@@ -586,35 +591,35 @@ const columns = computed(() => [
   {
     key: "total_pages",
     label: filters.value.month
-      ? `ยอดเดือน ${formatMonthTH(filters.value.month)}`
-      : "ยอดรวมทั้งปีงบ",
+      ? t("ยอดเดือน {0}", [formatMonth(filters.value.month)])
+      : t("ยอดรวมทั้งปีงบ"),
     align: "right",
     value: (d) => (filters.value.month ? (monthPages.value[d.id] ?? 0) : fillInfo(d.id).totalPages),
   },
   {
     key: "latest_transaction",
-    label: "ยอดล่าสุดที่กรอก",
+    label: t("ยอดล่าสุดที่กรอก"),
     align: "right",
     value: (d) => {
       const info = fillInfo(d.id);
-      return info.latestMonth ? `${formatMonthTH(info.latestMonth)} · ${formatCount(info.latestPages)} หน้า` : "—";
+      return info.latestMonth ? t("{0} · {1} หน้า", [formatMonth(info.latestMonth), formatCount(info.latestPages)]) : "—";
     },
   },
-  { key: "brand_name", label: "ยี่ห้อ / รุ่น", value: (d) => `${d.brand_name || ""} ${d.model || ""}`.trim() || "—" },
+  { key: "brand_name", label: t("ยี่ห้อ / รุ่น"), value: (d) => `${d.brand_name || ""} ${d.model || ""}`.trim() || "—" },
   {
     key: "building_name",
-    label: "อาคาร / ชั้น",
+    label: t("อาคาร / ชั้น"),
     value: (d) => [d.building_name, d.floor_name].filter(Boolean).join(" / ") || "—",
   },
-  { key: "location", label: "ตำแหน่งที่ตั้ง", hidden: true },
+  { key: "location", label: t("ตำแหน่งที่ตั้ง") },
   {
     key: "division_name",
-    label: "ฝ่าย / แผนก",
+    label: t("ฝ่าย / แผนก"),
     value: (d) => [d.division_name, d.department_name].filter(Boolean).join(" / ") || "—",
   },
   {
     key: "status",
-    label: "สถานะเครื่อง",
+    label: t("สถานะเครื่อง"),
     align: "center",
     value: (d) => STATUS_META[d.status]?.label ?? d.status,
   },
@@ -638,7 +643,7 @@ function isFilled(value) {
 
 async function openDialog(device) {
   if (!fiscalYearId.value || !range.value) {
-    toastError("เลือกปีงบประมาณจากแถบด้านบนก่อน");
+    toastError(t("เลือกปีงบประมาณจากแถบด้านบนก่อน"));
     return;
   }
 
@@ -648,7 +653,7 @@ async function openDialog(device) {
   // ต่อท้ายด้วยปีเสมอ เพราะปีงบไทยคร่อมสองปีปฏิทิน ชื่อเดือนเปล่าๆ จึงกำกวม
   monthRows.value = fyMonths.value.map((month) => ({
     month,
-    label: formatMonthTH(month, { long: true }),
+    label: formatMonth(month, { long: true }),
     pages: null,
   }));
   dialogOpen.value = true;
@@ -663,7 +668,7 @@ async function openDialog(device) {
     monthRows.value = monthRows.value.map((row) => ({ ...row, pages: byMonth[row.month] ?? null }));
   } catch (err) {
     console.error("Load device months error:", err);
-    dialogError.value = "โหลดยอดที่เคยกรอกไว้ไม่สำเร็จ";
+    dialogError.value = t("โหลดยอดที่เคยกรอกไว้ไม่สำเร็จ");
   } finally {
     dialogLoading.value = false;
   }
@@ -713,7 +718,7 @@ function onPasteMonths(event) {
     row.pages = result.values[index];
   });
 
-  toastSuccess(`${describePaste(result)} — กด "เลิกทำ" ถ้าไม่ถูกต้อง`);
+  toastSuccess(t("{0} — กด \"เลิกทำ\" ถ้าไม่ถูกต้อง", [describePaste(result)]));
 }
 
 /** คืนค่าทั้งกริดกลับไปเป็นก่อนวางครั้งล่าสุด */
@@ -751,7 +756,7 @@ async function save() {
 
   const invalid = monthRows.value.find((row) => isFilled(row.pages) && Number(row.pages) < 0);
   if (invalid) {
-    dialogError.value = `จำนวนหน้าของ${invalid.label}ติดลบไม่ได้`;
+    dialogError.value = t("จำนวนหน้าของ{0}ติดลบไม่ได้", [invalid.label]);
     return;
   }
 
@@ -768,12 +773,12 @@ async function save() {
       items,
     });
 
-    toastSuccess(`บันทึกยอดพิมพ์ของ ${dialogDevice.value.serial_number} เรียบร้อย`);
+    toastSuccess(t("บันทึกยอดพิมพ์ของ {0} เรียบร้อย", [dialogDevice.value.serial_number]));
     await Promise.all([loadSummary(), invalidateAfterWrite(queryClient, "usage")]);
     dialogOpen.value = false;
   } catch (err) {
     console.error("Save print transactions error:", err);
-    dialogError.value = errorMessage(err, "บันทึกไม่สำเร็จ กรุณาลองใหม่");
+    dialogError.value = errorMessage(err, t("บันทึกไม่สำเร็จ กรุณาลองใหม่"));
   } finally {
     dialogSaving.value = false;
   }
@@ -788,8 +793,8 @@ onMounted(init);
 // ด้วย เพราะ onUnmounted จะไม่ยิงตอน deactivate แล้วด่านจะค้างบล็อกการเปลี่ยนปีงบ
 // ของทั้งแอปทั้งที่ผู้ใช้ออกจากหน้านี้ไปแล้ว
 const unregisterFiscalYearGuard = registerFiscalYearGuard(() =>
-  confirmDiscardDraft("ถ้าเปลี่ยนปีงบตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", {
-    confirmText: "เปลี่ยนปีงบโดยไม่บันทึก",
+  confirmDiscardDraft(t("ถ้าเปลี่ยนปีงบตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด"), {
+    confirmText: t("เปลี่ยนปีงบโดยไม่บันทึก"),
   })
 );
 
@@ -799,13 +804,13 @@ onUnmounted(unregisterFiscalYearGuard);
 <template>
   <div>
     <UiPageHeader
-      eyebrow="บันทึกข้อมูล"
-      title="บันทึกยอดพิมพ์รายเดือน"
-      :description="`กรอกยอดมิเตอร์ของแต่ละเครื่องสำหรับปีงบ ${displayYearBE} — เปิดเครื่องหนึ่งครั้งกรอกได้ครบทั้งปี`"
+      :eyebrow="t(&quot;บันทึกข้อมูล&quot;)"
+      :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
+      :description="t(&quot;กรอกยอดมิเตอร์ของแต่ละเครื่องสำหรับปีงบ {0} — เปิดเครื่องหนึ่งครั้งกรอกได้ครบทั้งปี&quot;, [displayYearBE])"
     />
 
     <!-- ความคืบหน้าของทั้งปีงบ -->
-    <UiCard class="mb-4" eyebrow="ความคืบหน้าของปีงบนี้" :title="`กรอกครบแล้ว ${formatCount(progress.done)} จาก ${formatCount(progress.total)} เครื่อง`">
+    <UiCard class="mb-4" :eyebrow="t(&quot;ความคืบหน้าของปีงบนี้&quot;)" :title="t(&quot;กรอกครบแล้ว {0} จาก {1} เครื่อง&quot;, [formatCount(progress.done), formatCount(progress.total)])">
       <template #actions>
         <UiButton
           v-if="progress.total - progress.done > 0"
@@ -814,7 +819,7 @@ onUnmounted(unregisterFiscalYearGuard);
           @click="filters.fillStatus = filters.fillStatus === 'partial' ? '' : 'partial'"
         >
           <template #icon><ClipboardList :size="15" /></template>
-          {{ filters.fillStatus === "partial" ? "แสดงทุกเครื่อง" : "ดูเฉพาะที่ยังไม่ครบ" }}
+          {{ filters.fillStatus === "partial" ? t("แสดงทุกเครื่อง") : t("ดูเฉพาะที่ยังไม่ครบ") }}
         </UiButton>
       </template>
 
@@ -826,23 +831,23 @@ onUnmounted(unregisterFiscalYearGuard);
           :max="progress.total || 1"
           tone="brand"
           size="lg"
-          label="สัดส่วนเครื่องที่กรอกครบแล้ว"
+          :label="t(&quot;สัดส่วนเครื่องที่กรอกครบแล้ว&quot;)"
         />
 
         <ul class="flex flex-wrap gap-x-6 gap-y-1.5 list-none text-sm">
           <li class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-brand shrink-0" aria-hidden="true"></span>
-            <span class="text-ink-mute">ครบแล้ว</span>
+            <span class="text-ink-mute"> {{ t("ครบแล้ว") }} </span>
             <span class="numeral font-semibold text-ink">{{ formatCount(progress.done) }}</span>
           </li>
           <li class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-warn shrink-0" aria-hidden="true"></span>
-            <span class="text-ink-mute">กรอกบางเดือน</span>
+            <span class="text-ink-mute"> {{ t("กรอกบางเดือน") }} </span>
             <span class="numeral font-semibold text-ink">{{ formatCount(progress.started) }}</span>
           </li>
           <li class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-line-strong shrink-0" aria-hidden="true"></span>
-            <span class="text-ink-mute">ยังไม่เริ่ม</span>
+            <span class="text-ink-mute"> {{ t("ยังไม่เริ่ม") }} </span>
             <span class="numeral font-semibold text-ink">{{ formatCount(progress.pending) }}</span>
           </li>
         </ul>
@@ -853,27 +858,25 @@ onUnmounted(unregisterFiscalYearGuard);
     <UiSegmented
       :model-value="mode"
       :options="MODE_OPTIONS"
-      label="โหมดการทำงาน"
+      :label="t(&quot;โหมดการทำงาน&quot;)"
       class="mb-4"
       @update:model-value="setMode"
     />
 
-    <UiAlert v-if="!canEdit" tone="info" class="mb-4">
-      บัญชีของคุณมีสิทธิ์ดูอย่างเดียว จึงเปิดดูยอดที่บันทึกไว้ได้ แต่แก้ไขไม่ได้
-    </UiAlert>
+    <UiAlert v-if="!canEdit" tone="info" class="mb-4"> {{ t("บัญชีของคุณมีสิทธิ์ดูอย่างเดียว จึงเปิดดูยอดที่บันทึกไว้ได้ แต่แก้ไขไม่ได้") }} </UiAlert>
 
     <!-- ตัวกรอง — ค้นหากับเดือนอยู่ในสายตาเสมอ ที่เหลือซ่อนอยู่หลังปุ่ม
          เพราะจากตัวกรองเก้าช่อง มีสองช่องที่คนแตะเกือบทุกครั้ง ส่วนอีกเจ็ดช่อง
          แทบไม่ถูกแตะเลย แต่กินความสูงจนตารางที่คนมากรอกหลุดใต้เส้นพับ -->
     <UiFilterBar :chips="filterChips" @remove="removeFilter" @clear="resetFilters">
       <template #primary>
-        <UiField label="ค้นหา" class="flex-1 min-w-[16rem]">
-          <UiInput v-model="search" clearable placeholder="Serial, รุ่น, ตำแหน่ง, แผนก…">
+        <UiField :label="t(&quot;ค้นหา&quot;)" class="flex-1 min-w-[16rem]">
+          <UiInput v-model="search" clearable :placeholder="t(&quot;Serial, รุ่น, ตำแหน่ง, แผนก…&quot;)">
             <template #icon><Search :size="15" /></template>
           </UiInput>
         </UiField>
 
-        <UiField label="ดูยอดของเดือน" class="w-full sm:w-56">
+        <UiField :label="t(&quot;ดูยอดของเดือน&quot;)" class="w-full sm:w-56">
           <UiSelect
             :model-value="filters.month"
             :options="monthOptions"
@@ -884,37 +887,37 @@ onUnmounted(unregisterFiscalYearGuard);
         </UiField>
       </template>
 
-      <UiField label="สถานะการกรอก">
+      <UiField :label="t(&quot;สถานะการกรอก&quot;)">
         <UiSegmented
           v-model="filters.fillStatus"
           :options="FILL_STATUS_OPTIONS"
           size="sm"
-          label="กรองตามสถานะการกรอก"
+          :label="t(&quot;กรองตามสถานะการกรอก&quot;)"
           block
         />
       </UiField>
 
-      <UiField label="อาคาร">
-        <UiCombobox v-model="filters.building" :options="buildingOptions" placeholder="ทุกอาคาร" any-label="ทุกอาคาร" />
+      <UiField :label="t(&quot;อาคาร&quot;)">
+        <UiCombobox v-model="filters.building" :options="buildingOptions" :placeholder="t(&quot;ทุกอาคาร&quot;)" :any-label="t(&quot;ทุกอาคาร&quot;)" />
       </UiField>
 
-      <UiField label="ชั้น">
-        <UiCombobox v-model="filters.floor" :options="floorOptions" placeholder="ทุกชั้น" any-label="ทุกชั้น" />
+      <UiField :label="t(&quot;ชั้น&quot;)">
+        <UiCombobox v-model="filters.floor" :options="floorOptions" :placeholder="t(&quot;ทุกชั้น&quot;)" :any-label="t(&quot;ทุกชั้น&quot;)" />
       </UiField>
 
-      <UiField label="ฝ่าย">
-        <UiCombobox v-model="filters.division" :options="divisionOptions" placeholder="ทุกฝ่าย" any-label="ทุกฝ่าย" />
+      <UiField :label="t(&quot;ฝ่าย&quot;)">
+        <UiCombobox v-model="filters.division" :options="divisionOptions" :placeholder="t(&quot;ทุกฝ่าย&quot;)" :any-label="t(&quot;ทุกฝ่าย&quot;)" />
       </UiField>
 
-      <UiField label="แผนก">
-        <UiCombobox v-model="filters.department" :options="departmentOptions" placeholder="ทุกแผนก" any-label="ทุกแผนก" />
+      <UiField :label="t(&quot;แผนก&quot;)">
+        <UiCombobox v-model="filters.department" :options="departmentOptions" :placeholder="t(&quot;ทุกแผนก&quot;)" :any-label="t(&quot;ทุกแผนก&quot;)" />
       </UiField>
 
-      <UiField label="ยี่ห้อ">
-        <UiCombobox v-model="filters.brand" :options="brandOptions" placeholder="ทุกยี่ห้อ" any-label="ทุกยี่ห้อ" />
+      <UiField :label="t(&quot;ยี่ห้อ&quot;)">
+        <UiCombobox v-model="filters.brand" :options="brandOptions" :placeholder="t(&quot;ทุกยี่ห้อ&quot;)" :any-label="t(&quot;ทุกยี่ห้อ&quot;)" />
       </UiField>
 
-      <UiField label="สถานะเครื่อง">
+      <UiField :label="t(&quot;สถานะเครื่อง&quot;)">
         <UiSelect
           v-model="filters.deviceStatus"
           :options="DEVICE_STATUS_OPTIONS"
@@ -930,7 +933,7 @@ onUnmounted(unregisterFiscalYearGuard);
     <UiAlert v-if="mode === 'month' && monthPagesError" tone="danger" class="mb-4">
       {{ monthPagesError }}
       <template #actions>
-        <UiButton size="sm" variant="secondary" @click="monthPagesQuery.refetch()">ลองใหม่</UiButton>
+        <UiButton size="sm" variant="secondary" @click="monthPagesQuery.refetch()"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
 
@@ -953,9 +956,10 @@ onUnmounted(unregisterFiscalYearGuard);
           :loading="loading"
           row-key="id"
           export-filename="print-transactions-month"
+          :export-context="reportContext({ months: filters.month ? [filters.month] : [], filters, labels: FILTER_LABELS })"
           :searchable="false"
-          empty-text="ไม่มีเครื่องที่ตรงกับเงื่อนไข"
-          empty-hint="ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน"
+          :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
+          :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
           max-height="60vh"
           sticky-first
         >
@@ -975,7 +979,7 @@ onUnmounted(unregisterFiscalYearGuard);
               inputmode="numeric"
               class="w-28 text-right"
               :disabled="!canEdit || !monthPagesReady"
-              :aria-label="`ยอดพิมพ์ของ ${row.serial_number}`"
+              :aria-label="t(&quot;ยอดพิมพ์ของ {0}&quot;, [row.serial_number])"
               :class="draft.has(row.id) ? 'ring-1 ring-brand-line' : ''"
               @update:model-value="(v) => onInput(row.id, v)"
               @paste="(e) => onPaste(e, index, rows)"
@@ -989,9 +993,7 @@ onUnmounted(unregisterFiscalYearGuard);
       </template>
     </MonthEntryGrid>
 
-    <UiAlert v-else-if="mode === 'month'" tone="warn" class="mb-4">
-      เลือกเดือนที่จะกรอกก่อน แล้วตารางกรอกจะขึ้นมา
-    </UiAlert>
+    <UiAlert v-else-if="mode === 'month'" tone="warn" class="mb-4"> {{ t("เลือกเดือนที่จะกรอกก่อน แล้วตารางกรอกจะขึ้นมา") }} </UiAlert>
 
     <!-- ================= โหมดภาพรวมทั้งปี ================= -->
     <UiDataTable
@@ -1001,9 +1003,10 @@ onUnmounted(unregisterFiscalYearGuard);
       :loading="loading"
       row-key="id"
       export-filename="print-transactions"
+      :export-context="reportContext({ months: filters.month ? [filters.month] : [], filters, labels: FILTER_LABELS })"
       :searchable="false"
-      empty-text="ไม่มีเครื่องที่ตรงกับเงื่อนไข"
-      empty-hint="ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน"
+      :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
+      :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
       max-height="68vh"
       sticky-first
     >
@@ -1022,8 +1025,7 @@ onUnmounted(unregisterFiscalYearGuard);
               aria-hidden="true"
             />
             <span :class="fillStatusOf(row.id) === 'done' ? 'text-ok-ink font-medium' : 'text-ink-mute'">
-              {{ fillInfo(row.id).filled }}/{{ monthsPerYear }} เดือน
-            </span>
+              {{ fillInfo(row.id).filled }}/{{ monthsPerYear }} {{ t("เดือน") }} </span>
           </span>
 
           <span class="w-full h-1 rounded-full bg-surface-3 overflow-hidden" aria-hidden="true">
@@ -1047,11 +1049,9 @@ onUnmounted(unregisterFiscalYearGuard);
       </template>
 
       <template v-if="canEdit" #actions="{ row }">
-        <UiTooltip content="กรอกยอดพิมพ์ทั้งปีของเครื่องนี้">
+        <UiTooltip :content="t(&quot;กรอกยอดพิมพ์ทั้งปีของเครื่องนี้&quot;)">
           <UiButton size="sm" variant="secondary" @click="openDialog(row)">
-            <template #icon><Pencil :size="14" /></template>
-            กรอกยอด
-          </UiButton>
+            <template #icon><Pencil :size="14" /></template> {{ t("กรอกยอด") }} </UiButton>
         </UiTooltip>
       </template>
     </UiDataTable>
@@ -1059,8 +1059,8 @@ onUnmounted(unregisterFiscalYearGuard);
     <!-- หน้าต่างกรอกยอดทั้งปี -->
     <UiModal
       v-model:open="dialogOpen"
-      :title="`กรอกยอดพิมพ์ · ${dialogDevice?.serial_number ?? ''}`"
-      :description="`ปีงบ ${displayYearBE} — เว้นเดือนที่ยังไม่มีข้อมูลไว้ว่างได้ ระบบจะไม่นับเป็นศูนย์`"
+      :title="t(&quot;กรอกยอดพิมพ์ · {0}&quot;, [dialogDevice?.serial_number ?? ''])"
+      :description="t(&quot;ปีงบ {0} — เว้นเดือนที่ยังไม่มีข้อมูลไว้ว่างได้ ระบบจะไม่นับเป็นศูนย์&quot;, [displayYearBE])"
       size="lg"
     >
       <div v-if="dialogLoading" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1069,15 +1069,11 @@ onUnmounted(unregisterFiscalYearGuard);
 
       <div v-else class="flex flex-col gap-4">
         <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
-          <p class="text-ink-mute">
-            กรอกแล้ว
-            <span class="numeral font-semibold text-ink">{{ filledInDialog }}/{{ monthsPerYear }}</span>
-            เดือน
-          </p>
+          <p class="text-ink-mute"> {{ t("กรอกแล้ว") }} <span class="numeral font-semibold text-ink">{{ filledInDialog }}/{{ monthsPerYear }}</span> {{ t("เดือน") }} </p>
 
           <p v-if="dialogDevice" class="text-xs text-ink-mute truncate">
             {{ dialogDevice.brand_name }} {{ dialogDevice.model }} ·
-            {{ dialogDevice.department_name || "ไม่ระบุแผนก" }}
+            {{ dialogDevice.department_name || t("ไม่ระบุแผนก") }}
           </p>
         </div>
 
@@ -1088,16 +1084,10 @@ onUnmounted(unregisterFiscalYearGuard);
         -->
         <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2">
           <p class="flex items-center gap-2 text-xs text-ink-soft">
-            <ClipboardPaste :size="14" class="shrink-0 text-ink-mute" aria-hidden="true" />
-            คัดลอกตัวเลขจาก Excel มาวางในช่องแรกได้เลย ระบบจะเติมเดือนถัดไปให้เอง ·
-            <kbd class="rounded border border-line bg-surface px-1 font-sans text-2xs">Enter</kbd>
-            เลื่อนไปเดือนถัดไป
-          </p>
+            <ClipboardPaste :size="14" class="shrink-0 text-ink-mute" aria-hidden="true" /> {{ t("คัดลอกตัวเลขจาก Excel มาวางในช่องแรกได้เลย ระบบจะเติมเดือนถัดไปให้เอง ·") }} <kbd class="rounded border border-line bg-surface px-1 font-sans text-2xs">Enter</kbd> {{ t("เลื่อนไปเดือนถัดไป") }} </p>
 
           <UiButton v-if="beforePaste" size="sm" variant="ghost" @click="undoPaste">
-            <template #icon><Undo2 :size="14" /></template>
-            เลิกทำการวาง
-          </UiButton>
+            <template #icon><Undo2 :size="14" /></template> {{ t("เลิกทำการวาง") }} </UiButton>
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" @paste="onPasteMonths">
@@ -1111,7 +1101,7 @@ onUnmounted(unregisterFiscalYearGuard);
               v-model="row.pages"
               type="number"
               min="0"
-              suffix="หน้า"
+              :suffix="t(&quot;หน้า&quot;)"
               placeholder="—"
               @keydown="onMonthKeydown($event, index)"
             />
@@ -1122,8 +1112,8 @@ onUnmounted(unregisterFiscalYearGuard);
       </div>
 
       <template #footer>
-        <UiButton variant="secondary" :disabled="dialogSaving" @click="dialogOpen = false">ยกเลิก</UiButton>
-        <UiButton variant="primary" :loading="dialogSaving" @click="save">บันทึกยอดทั้งปี</UiButton>
+        <UiButton variant="secondary" :disabled="dialogSaving" @click="dialogOpen = false"> {{ t("ยกเลิก") }} </UiButton>
+        <UiButton variant="primary" :loading="dialogSaving" @click="save"> {{ t("บันทึกยอดทั้งปี") }} </UiButton>
       </template>
     </UiModal>
   </div>

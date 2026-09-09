@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * BuildingBreakdownChart — เปรียบเทียบยอดระหว่างอาคาร
  *
@@ -40,17 +42,15 @@ const sorted = computed(() => {
 <template>
   <UiSkeleton v-if="isPending" width="100%" :height="height" />
 
-  <UiAlert v-else-if="isError" tone="danger">
-    โหลดกราฟรายอาคารไม่สำเร็จ
-    <template #actions>
-      <UiButton size="sm" variant="secondary" @click="refetch()">ลองใหม่</UiButton>
+  <UiAlert v-else-if="isError" tone="danger"> {{ t("โหลดกราฟรายอาคารไม่สำเร็จ") }} <template #actions>
+      <UiButton size="sm" variant="secondary" @click="refetch()"> {{ t("ลองใหม่") }} </UiButton>
     </template>
   </UiAlert>
 
   <UiEmpty
     v-else-if="!sorted.length"
-    title="ยังไม่มีข้อมูลรายอาคาร"
-    description="ลองเปลี่ยนช่วงเดือนที่เลือกไว้ด้านบน"
+    :title="t(&quot;ยังไม่มีข้อมูลรายอาคาร&quot;)"
+    :description="t(&quot;ลองเปลี่ยนช่วงเดือนที่เลือกไว้ด้านบน&quot;)"
     variant="search"
     compact
   />
@@ -63,16 +63,16 @@ const sorted = computed(() => {
     :series="[
       {
         key: metric,
-        label: isCost ? 'ค่าใช้จ่ายสุทธิ' : 'จำนวนหน้าที่พิมพ์',
+        label: isCost ? t(&quot;ค่าใช้จ่ายสุทธิ&quot;) : t(&quot;จำนวนหน้าที่พิมพ์&quot;),
         data: sorted.map((row) => Number((isCost ? row.total_building_cost : row.total_net_pages) || 0)),
         slot: isCost ? 2 : 1,
       },
     ]"
     :height="height"
     :loading="isFetching"
-    :unit="isCost ? 'บาท' : 'หน้า'"
+    :unit="isCost ? t(&quot;บาท&quot;) : t(&quot;หน้า&quot;)"
     :format-value="isCost ? formatBahtValue : formatCount"
     :format-axis="formatCompact"
-    category-label="อาคาร"
+    :category-label="t(&quot;อาคาร&quot;)"
   />
 </template>

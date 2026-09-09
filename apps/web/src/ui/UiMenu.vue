@@ -1,4 +1,6 @@
 <script setup>
+import { usePortalTarget } from "./portal-target";
+const portalTarget = usePortalTarget();
 /**
  * UiMenu — เมนูที่กางออกจากปุ่ม (บัญชีผู้ใช้, การกระทำเพิ่มเติมในแถวตาราง)
  *
@@ -32,7 +34,7 @@ defineProps({
       <slot name="trigger" />
     </DropdownMenuTrigger>
 
-    <DropdownMenuPortal>
+    <DropdownMenuPortal :to="portalTarget">
       <DropdownMenuContent
         :align="align"
         :side="side"

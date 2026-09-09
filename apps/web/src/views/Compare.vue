@@ -1,4 +1,8 @@
 <script setup>
+import { formatMonth } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+
 /**
  * Compare — เปรียบเทียบตัวชี้วัดระหว่างเดือน
  *
@@ -18,13 +22,16 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Minus, TrendingDown, TrendingUp } from "lucide-vue-next";
-import { formatMonthTH, fromSatang, sumSatang, toSatang } from "@suth/domain";
+import { fiscalYearMonths, fromSatang, sumSatang, toSatang } from "@suth/domain";
+import { activeFiscalYear, activeFiscalYearRange } from "../store/fiscalYear";
 import api from "../services/api";
+import { useMonthlyKpi } from "../api/queries";
 import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
 import {
   UiAlert,
   UiButton,
+  UiExpandable,
   UiCard,
   UiChart,
   UiCombobox,
@@ -45,12 +52,7 @@ function sumCost(rows) {
 /* --------------------------------------------------------------------------
    ข้อมูลและตัวกรอง
    -------------------------------------------------------------------------- */
-const loading = ref(true);
-const loadError = ref("");
-
-const rawRows = ref([]);
-const monthsWithData = ref([]);
-const selectedMonths = ref([]);
+const selectedMonths = ref(monthsFromQuery());
 
 const filters = ref({
   building: "",
@@ -66,13 +68,12 @@ const floors = ref([]);
 const divisions = ref([]);
 const departments = ref([]);
 const brands = ref([]);
-const devices = ref([]);
 
 const STATUS_OPTIONS = [
-  { value: "", label: "ทุกสถานะ" },
-  { value: "active", label: "ใช้งานอยู่" },
-  { value: "repair", label: "ซ่อมบำรุง" },
-  { value: "retired", label: "ปลดระวาง" },
+  { value: "", label: t("ทุกสถานะ") },
+  { value: "active", label: t("ใช้งานอยู่") },
+  { value: "repair", label: t("ซ่อมบำรุง") },
+  { value: "retired", label: t("ปลดระวาง") },
 ];
 
 const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.name }));
@@ -108,35 +109,27 @@ function resetFilters() {
   filters.value = { building: "", floor: "", division: "", department: "", brand: "", status: "" };
 }
 
-const deviceById = computed(() => new Map(devices.value.map((d) => [d.id, d])));
-
-/**
- * เครื่องนี้ผ่านตัวกรองไหม — ถ้าหาข้อมูลเครื่องไม่เจอ (เช่นถูกลบไปแล้วแต่ยังมี
- * ยอดพิมพ์ในประวัติ) ให้ผ่าน ไม่กรองออก มิฉะนั้นยอดรวมจะหายไปเงียบๆ
- */
-function deviceMatches(deviceId) {
-  const device = deviceById.value.get(deviceId);
-  if (!device) return true;
-
+/** มิติของแต่ละแถวมาจากประวัติที่มีผลในเดือนนั้นแล้ว */
+function rowMatches(row) {
   const f = filters.value;
   return (
-    (!f.floor || device.floor_name === f.floor) &&
-    (!f.division || device.division_name === f.division) &&
-    (!f.department || device.department_name === f.department) &&
-    (!f.brand || device.brand_name === f.brand) &&
-    (!f.status || device.status === f.status)
+    (!f.building || row.building_name === f.building) &&
+    (!f.floor || row.floor_name === f.floor) &&
+    (!f.division || row.division_name === f.division) &&
+    (!f.department || row.department_name === f.department) &&
+    (!f.brand || row.brand_name === f.brand) &&
+    (!f.status || row.device_status === f.status)
   );
 }
 
 async function loadMasterData() {
   try {
-    const [building, floor, division, department, brand, device] = await Promise.all([
+    const [building, floor, division, department, brand] = await Promise.all([
       api.get("/buildings"),
       api.get("/floors"),
       api.get("/divisions"),
       api.get("/departments"),
       api.get("/brands"),
-      api.get("/devices"),
     ]);
 
     buildings.value = building.data ?? [];
@@ -144,7 +137,6 @@ async function loadMasterData() {
     divisions.value = division.data ?? [];
     departments.value = department.data ?? [];
     brands.value = brand.data ?? [];
-    devices.value = device.data ?? [];
   } catch (err) {
     console.error("Load master data error:", err);
   }
@@ -154,63 +146,50 @@ async function loadMasterData() {
    sync เดือนที่เลือกกับ ?months= ใน URL
    -------------------------------------------------------------------------- */
 let syncingFromRoute = false;
-let firstLoad = true;
-
 watch(selectedMonths, (value) => {
   if (syncingFromRoute) return;
   router.replace({
     query: { ...route.query, months: value.length ? value.join(",") : undefined },
   });
-});
+}, { flush: "sync" });
 
-function monthsFromQuery(available) {
+function monthsFromQuery() {
   const raw = route.query.months;
   if (!raw) return [];
   return String(raw)
     .split(",")
     .map((s) => s.trim())
-    .filter((m) => available.includes(m))
+    .filter((m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m))
     .sort();
 }
 
-async function loadData() {
-  loading.value = true;
-  loadError.value = "";
+watch(activeFiscalYear, (year, previous) => {
+  if (previous && year?.id !== previous.id) selectedMonths.value = [];
+});
+watch(() => route.query.months, () => {
+  syncingFromRoute = true;
+  selectedMonths.value = monthsFromQuery();
+  syncingFromRoute = false;
+});
 
-  try {
-    const res = await api.get("/dashboard/monthly-kpi", {
-      params: filters.value.building ? { building_name: filters.value.building } : {},
-    });
-
-    rawRows.value = res.data ?? [];
-    const unique = [...new Set(rawRows.value.map((r) => r.month))].sort();
-    monthsWithData.value = unique;
-
-    syncingFromRoute = true;
-    if (firstLoad) {
-      selectedMonths.value = monthsFromQuery(unique);
-      firstLoad = false;
-    } else {
-      // เปลี่ยนอาคารแล้วเดือนบางเดือนอาจไม่มีข้อมูลในอาคารใหม่ — ตัดเฉพาะเดือนที่
-      // ไม่มีจริงออก ไม่ล้างทั้งหมด ผู้ใช้จะได้ไม่ต้องเลือกเดือนใหม่ทุกครั้งที่สลับอาคาร
-      selectedMonths.value = selectedMonths.value.filter((m) => unique.includes(m));
-    }
-    syncingFromRoute = false;
-  } catch (err) {
-    console.error("Load compare data error:", err);
-    loadError.value = "โหลดข้อมูลเปรียบเทียบไม่สำเร็จ";
-  } finally {
-    loading.value = false;
-  }
-}
-
-watch(() => filters.value.building, loadData);
+const monthlyParams = computed(() => ({
+  building_name: filters.value.building || undefined,
+  month: activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value).join(",") : undefined,
+}));
+const monthlyQuery = useMonthlyKpi(monthlyParams);
+const rawRows = computed(() => (monthlyQuery.data.value ?? []).filter((row) =>
+  !activeFiscalYearRange.value
+  || (row.month >= activeFiscalYearRange.value.startMonth && row.month <= activeFiscalYearRange.value.endMonth)
+));
+const loading = computed(() => monthlyQuery.isPending.value);
+const loadError = computed(() => monthlyQuery.isError.value ? t("โหลดข้อมูลเปรียบเทียบไม่สำเร็จ") : "");
+const monthsWithData = computed(() => [...new Set(rawRows.value.filter(rowMatches).map((row) => row.month))].sort());
 
 /* --------------------------------------------------------------------------
    ตัวชี้วัดและการคำนวณ
    -------------------------------------------------------------------------- */
 function aggregate(month) {
-  const rows = rawRows.value.filter((r) => r.month === month && deviceMatches(r.device_id));
+  const rows = rawRows.value.filter((row) => row.month === month && rowMatches(row));
   if (!rows.length) return null;
 
   const totalPages = rows.reduce((s, r) => s + Number(r.pages_printed || 0), 0);
@@ -227,9 +206,9 @@ function aggregate(month) {
 }
 
 const monthStats = computed(() =>
-  selectedMonths.value.map((m) => ({
+  (selectedMonths.value.length ? selectedMonths.value : monthsWithData.value).map((m) => ({
     month: m,
-    label: formatMonthTH(m, { long: true }),
+    label: formatMonth(m, { long: true }),
     stats: aggregate(m),
   }))
 );
@@ -243,37 +222,37 @@ const monthStats = computed(() =>
 const METRICS = [
   {
     key: "totalPages",
-    label: "จำนวนหน้าพิมพ์รวม",
-    unit: "หน้า",
-    hint: "ยอดดิบตามที่กรอก ยังไม่หัก 20%",
+    label: t("จำนวนหน้าพิมพ์รวม"),
+    unit: t("หน้า"),
+    hint: t("ยอดดิบตามที่กรอก ยังไม่หัก 20%"),
     format: formatCount,
   },
   {
     key: "netPages",
-    label: "จำนวนหน้าพิมพ์สุทธิ",
-    unit: "หน้า",
-    hint: "หลังหัก 20% แล้ว",
+    label: t("จำนวนหน้าพิมพ์สุทธิ"),
+    unit: t("หน้า"),
+    hint: t("หลังหัก 20% แล้ว"),
     format: formatCount,
   },
   {
     key: "totalCost",
-    label: "ค่าใช้จ่ายสุทธิ",
-    unit: "บาท",
-    hint: "หลังหัก 20% แล้ว",
+    label: t("ค่าใช้จ่ายสุทธิ"),
+    unit: t("บาท"),
+    hint: t("หลังหัก 20% แล้ว"),
     format: formatBahtValue,
   },
   {
     key: "activeDevices",
-    label: "เครื่องที่มีการใช้งาน",
-    unit: "เครื่อง",
-    hint: "นับเฉพาะเครื่องที่มียอดในเดือนนั้น",
+    label: t("เครื่องที่มีการใช้งาน"),
+    unit: t("เครื่อง"),
+    hint: t("นับเฉพาะเครื่องที่มียอดในเดือนนั้น"),
     format: formatCount,
   },
   {
     key: "costPerPage",
-    label: "ต้นทุนเฉลี่ยต่อหน้า",
-    unit: "บาท/หน้า",
-    hint: "ค่าใช้จ่ายสุทธิ หารด้วยจำนวนหน้าดิบ",
+    label: t("ต้นทุนเฉลี่ยต่อหน้า"),
+    unit: t("บาท/หน้า"),
+    hint: t("ค่าใช้จ่ายสุทธิ หารด้วยจำนวนหน้าดิบ"),
     format: (v) => Number(v).toFixed(3),
   },
 ];
@@ -308,77 +287,74 @@ const summaryLines = computed(() => {
     if (Math.abs(percent) < 0.05) {
       return {
         trend: null,
-        text: `${metric.label}แทบไม่เปลี่ยน (${metric.format(before)} → ${metric.format(after)} ${metric.unit})`,
+        text: t("{0}แทบไม่เปลี่ยน ({1} → {2} {3})", [metric.label, metric.format(before), metric.format(after), metric.unit]),
       };
     }
 
     return {
       trend: percent > 0 ? "up" : "down",
       text:
-        `${metric.label}${percent > 0 ? "เพิ่มขึ้น" : "ลดลง"} ${Math.abs(percent).toFixed(1)}% ` +
-        `(จาก ${metric.format(before)} เป็น ${metric.format(after)} ${metric.unit})`,
+        `${metric.label}${percent > 0 ? t("เพิ่มขึ้น") : t("ลดลง")} ${Math.abs(percent).toFixed(1)}% ` +
+        t("(จาก {0} เป็น {1} {2})", [metric.format(before), metric.format(after), metric.unit]),
     };
   });
 });
 
 onMounted(async () => {
   await loadMasterData();
-  await loadData();
 });
 </script>
 
 <template>
   <div>
     <UiPageHeader
-      eyebrow="รายงาน"
-      title="เปรียบเทียบข้อมูลรายเดือน"
-      description="เลือกเดือนที่ต้องการวางเทียบกัน ระบบจะสรุปให้ว่าตัวเลขไหนขยับไปทางไหนและกี่เปอร์เซ็นต์"
+      :eyebrow="t(&quot;รายงาน&quot;)"
+      :title="t(&quot;เปรียบเทียบข้อมูลรายเดือน&quot;)"
+      :description="t(&quot;เลือกเดือนที่ต้องการวางเทียบกัน ระบบจะสรุปให้ว่าตัวเลขไหนขยับไปทางไหนและกี่เปอร์เซ็นต์&quot;)"
     />
 
     <!-- ตัวกรอง -->
-    <UiCard class="mb-4" title="เลือกช่วงที่จะเปรียบเทียบ">
+    <UiCard class="mb-4" :title="t(&quot;เลือกช่วงที่จะเปรียบเทียบ&quot;)">
       <template #actions>
-        <UiButton v-if="hasActiveFilter" size="sm" variant="ghost" @click="resetFilters">
-          ล้างตัวกรอง
-        </UiButton>
+        <UiButton v-if="hasActiveFilter" size="sm" variant="ghost" @click="resetFilters"> {{ t("ล้างตัวกรอง") }} </UiButton>
       </template>
 
       <UiField
-        label="เดือนที่จะเปรียบเทียบ"
-        hint="เลือกได้หลายเดือน — ระบบจะเรียงตามเวลาและเทียบกับเดือนก่อนหน้าในรายการให้เอง"
+        :label="t(&quot;เดือนที่จะเปรียบเทียบ&quot;)"
+        :hint="t(&quot;เลือกได้หลายเดือน — ระบบจะเรียงตามเวลาและเทียบกับเดือนก่อนหน้าในรายการให้เอง&quot;)"
         class="max-w-sm mb-4"
       >
         <PeriodPicker
           v-model="selectedMonths"
           :options="monthsWithData"
           mode="multi"
-          all-label="ทุกเดือนที่มีข้อมูล"
+          :all-label="t(&quot;ทุกเดือนที่มีข้อมูล&quot;)"
           :all-emits-empty="false"
         />
       </UiField>
 
       <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 pt-4 border-t border-line-soft">
-        <UiField label="อาคาร">
-          <UiCombobox v-model="filters.building" :options="buildingOptions" placeholder="ทุกอาคาร" any-label="ทุกอาคาร" />
+        <UiField :label="t(&quot;อาคาร&quot;)">
+          <UiCombobox v-model="filters.building" :options="buildingOptions" :placeholder="t(&quot;ทุกอาคาร&quot;)" :any-label="t(&quot;ทุกอาคาร&quot;)" />
         </UiField>
 
-        <UiField label="ชั้น">
-          <UiCombobox v-model="filters.floor" :options="floorOptions" placeholder="ทุกชั้น" any-label="ทุกชั้น" />
+        <UiField :label="t(&quot;ชั้น&quot;)">
+          <UiCombobox v-model="filters.floor" :options="floorOptions" :placeholder="t(&quot;ทุกชั้น&quot;)" :any-label="t(&quot;ทุกชั้น&quot;)" />
         </UiField>
 
-        <UiField label="ยี่ห้อ">
-          <UiCombobox v-model="filters.brand" :options="brandOptions" placeholder="ทุกยี่ห้อ" any-label="ทุกยี่ห้อ" />
+        <UiField :label="t(&quot;ยี่ห้อ&quot;)">
+          <UiCombobox v-model="filters.brand" :options="brandOptions" :placeholder="t(&quot;ทุกยี่ห้อ&quot;)" :any-label="t(&quot;ทุกยี่ห้อ&quot;)" />
         </UiField>
 
-        <UiField label="ฝ่าย">
-          <UiCombobox v-model="filters.division" :options="divisionOptions" placeholder="ทุกฝ่าย" any-label="ทุกฝ่าย" />
+        <UiField :label="t(&quot;ฝ่าย&quot;)">
+          <UiCombobox v-model="filters.division" :options="divisionOptions" :placeholder="t(&quot;ทุกฝ่าย&quot;)" :any-label="t(&quot;ทุกฝ่าย&quot;)" />
         </UiField>
 
-        <UiField label="แผนก">
-          <UiCombobox v-model="filters.department" :options="departmentOptions" placeholder="ทุกแผนก" any-label="ทุกแผนก" />
+        <UiField :label="t(&quot;แผนก&quot;)">
+          <UiCombobox v-model="filters.department" :options="departmentOptions" :placeholder="t(&quot;ทุกแผนก&quot;)" :any-label="t(&quot;ทุกแผนก&quot;)" />
         </UiField>
 
-        <UiField label="สถานะเครื่อง">
+        <UiField :label="t(&quot;สถานะเครื่อง&quot;)">
           <UiSelect v-model="filters.status" :options="STATUS_OPTIONS" value-key="value" label-key="label" />
         </UiField>
       </div>
@@ -387,7 +363,7 @@ onMounted(async () => {
     <UiAlert v-if="loadError" tone="danger" class="mb-4">
       {{ loadError }}
       <template #actions>
-        <UiButton size="sm" variant="secondary" @click="loadData">ลองใหม่</UiButton>
+        <UiButton size="sm" variant="secondary" @click="monthlyQuery.refetch()"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
 
@@ -396,10 +372,10 @@ onMounted(async () => {
       <UiSkeleton height="14rem" />
     </div>
 
-    <UiCard v-else-if="!monthStats.length">
+    <UiCard v-else-if="!monthStats.some((month) => month.stats)">
       <UiEmpty
-        title="ยังไม่ได้เลือกเดือน"
-        description="เลือกอย่างน้อยหนึ่งเดือนด้านบน หรือสองเดือนขึ้นไปเพื่อให้ระบบสรุปความเปลี่ยนแปลงให้"
+        :title="t(&quot;ยังไม่มีข้อมูลในช่วงที่เลือก&quot;)"
+        :description="t(&quot;ยังไม่มียอดพิมพ์สำหรับปีงบและตัวกรองนี้&quot;)"
       />
     </UiCard>
 
@@ -408,9 +384,9 @@ onMounted(async () => {
       <UiCard
         v-if="summaryFirst && summaryLast"
         class="mb-4"
-        eyebrow="สรุปอัตโนมัติ"
-        :title="`${summaryFirst.label} เทียบกับ ${summaryLast.label}`"
-        :description="monthStats.length > 2 ? `จากทั้งหมด ${monthStats.length} เดือนที่เลือก` : ''"
+        :eyebrow="t(&quot;สรุปอัตโนมัติ&quot;)"
+        :title="t(&quot;{0} เทียบกับ {1}&quot;, [summaryFirst.label, summaryLast.label])"
+        :description="monthStats.length > 2 ? t(&quot;จากทั้งหมด {0} เดือนที่เลือก&quot;, [monthStats.length]) : ''"
       >
         <ul class="flex flex-col gap-2 list-none">
           <li v-for="(line, index) in summaryLines" :key="index" class="flex items-start gap-2 text-sm">
@@ -428,12 +404,11 @@ onMounted(async () => {
         </ul>
       </UiCard>
 
-      <UiAlert v-else tone="warn" class="mb-4">
-        ตอนนี้เลือกไว้เดือนเดียว ({{ summaryFirst?.label }}) — เลือกอีกเดือนเพื่อให้ระบบเทียบให้
-      </UiAlert>
+      <UiAlert v-else tone="warn" class="mb-4"> {{ t("ตอนนี้เลือกไว้เดือนเดียว (") }} {{ summaryFirst?.label }} {{ t(") — เลือกอีกเดือนเพื่อให้ระบบเทียบให้") }} </UiAlert>
 
       <!-- ตารางเปรียบเทียบ -->
-      <UiCard flush class="mb-4" title="ตารางเปรียบเทียบ">
+      <UiExpandable>
+      <UiCard flush class="mb-4" :title="t(&quot;ตารางเปรียบเทียบ&quot;)">
         <div class="overflow-x-auto scroll-hint-x">
           <table class="w-full text-sm min-w-max">
             <thead>
@@ -441,9 +416,7 @@ onMounted(async () => {
                 <th
                   scope="col"
                   class="sticky left-0 z-[1] bg-surface-2 text-left text-xs font-semibold text-ink-mute px-4 py-2.5 border-b border-line-soft shadow-[1px_0_0_var(--line-soft)]"
-                >
-                  ตัวชี้วัด
-                </th>
+                > {{ t("ตัวชี้วัด") }} </th>
                 <th
                   v-for="stat in monthStats"
                   :key="stat.month"
@@ -489,6 +462,7 @@ onMounted(async () => {
         </div>
       </UiCard>
 
+      </UiExpandable>
       <!-- กราฟรายตัวชี้วัด -->
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <!-- กราฟย่อยชุดเดียวกันหลายใบ (small multiples) — ทุกใบมีชุดข้อมูลเดียว
@@ -510,7 +484,7 @@ onMounted(async () => {
             :loading="loading"
             :unit="metric.unit"
             :format-value="metric.format"
-            category-label="เดือน"
+            :category-label="t(&quot;เดือน&quot;)"
           />
         </UiCard>
       </div>

@@ -1,4 +1,8 @@
 <script setup>
+import { t } from "../lib/locale";
+
+import { formatMonth, yearLabel } from "../lib/locale-format";
+
 /**
  * DashboardHero — แผงสรุปบนสุดของแดชบอร์ด
  *
@@ -11,7 +15,7 @@
  *
  * ทำไมข้อ 2 มาก่อนข้อ 4: ตัวเลขค่าใช้จ่ายที่คำนวณจากข้อมูลที่กรอกไม่ครบ **คือ
  * ตัวเลขที่ผิด** ถ้าเอาแผงนี้ไปโชว์เงินก้อนใหญ่ก่อน คนจะจดตัวเลขไปใช้ต่อโดยไม่รู้
- * ว่ามันคิดจากข้อมูลแค่ 6 เดือนจาก 11 เดือน — ความครบถ้วนจึงต้องมาก่อนเสมอ
+ * ว่ามันคิดจากข้อมูลแค่ 6 เดือนจาก 12 เดือน — ความครบถ้วนจึงต้องมาก่อนเสมอ
  *
  * เป็นหนึ่งในสองที่เดียวในระบบที่ใช้ artwork ได้ (อีกที่คือหน้าล็อกอิน) เพราะ
  * ไม่มีตัวเลขที่ต้องอ่านเทียบกันอยู่บนพื้นนี้ — ตัวหนังสือทุกตัวบนแผงนี้เป็น
@@ -19,7 +23,7 @@
  */
 import { computed } from "vue";
 import { CalendarRange, CircleCheckBig } from "lucide-vue-next";
-import { formatMonthTH } from "@suth/domain";
+
 import AuroraCanvas from "./AuroraCanvas.vue";
 import { UiSkeleton } from "../ui";
 
@@ -28,7 +32,7 @@ const props = defineProps({
   /** ช่วงเดือนจริงของปีงบ { startMonth, endMonth } */
   range: { type: Object, default: null },
   /**
-   * ความครบถ้วนจาก /dashboard/overview — { elapsed_months, complete_months }
+   * ความครบถ้วนจาก /dashboard/overview — { total_months, annual_complete_months }
    *
    * ⚠️ ต้องเป็นค่านี้เท่านั้น ห้ามเอา reporting_active_devices/active_devices
    * มาใส่แทน สองอย่างนั้นนับ "จำนวนเครื่องที่เคยมียอด" ไม่ใช่ "เดือนที่กรอกครบ"
@@ -41,11 +45,11 @@ const props = defineProps({
 
 const periodLabel = computed(() => {
   if (!props.range) return "";
-  return `${formatMonthTH(props.range.startMonth)} – ${formatMonthTH(props.range.endMonth)}`;
+  return `${formatMonth(props.range.startMonth)} – ${formatMonth(props.range.endMonth)}`;
 });
 
-const elapsed = computed(() => Number(props.coverage?.elapsed_months || 0));
-const complete = computed(() => Number(props.coverage?.complete_months || 0));
+const elapsed = computed(() => Number(props.coverage?.total_months || 0));
+const complete = computed(() => Number(props.coverage?.annual_complete_months || 0));
 
 /** สัดส่วนความครบถ้วน 0–100 — ปัดลงเสมอ ไม่ให้ 99.6% กลายเป็น "100%" ที่ยังไม่จริง */
 const completeness = computed(() => {
@@ -66,20 +70,15 @@ const isComplete = computed(() => elapsed.value > 0 && complete.value >= elapsed
     <div class="relative flex flex-wrap items-end justify-between gap-x-8 gap-y-5 p-5 sm:p-6">
       <div class="min-w-0">
         <p v-if="fiscalYear" class="flex items-center gap-1.5 eyebrow mb-1.5">
-          <CalendarRange :size="13" aria-hidden="true" />
-          ปีงบประมาณ {{ Number(fiscalYear.year) }}
+          <CalendarRange :size="13" aria-hidden="true" /> {{ t("ปีงบประมาณ") }} {{ yearLabel(fiscalYear.year) }}
           <span v-if="periodLabel" class="text-ink-mute font-normal normal-case tracking-normal">
             · {{ periodLabel }}
           </span>
         </p>
 
-        <h1 class="text-2xl sm:text-3xl font-semibold text-ink tracking-tight">
-          ภาพรวมเครื่องพิมพ์และค่าใช้จ่าย
-        </h1>
+        <h1 class="text-2xl sm:text-3xl font-semibold text-ink tracking-tight"> {{ t("ภาพรวมเครื่องพิมพ์และค่าใช้จ่าย") }} </h1>
 
-        <p class="text-sm text-ink-mute mt-1.5 max-w-xl">
-          ยอดพิมพ์ ค่าใช้จ่ายตามสัญญา และหน่วยงานที่ใช้งานมากที่สุดในช่วงที่เลือก
-        </p>
+        <p class="text-sm text-ink-mute mt-1.5 max-w-xl"> {{ t("ยอดพิมพ์ ค่าใช้จ่ายตามสัญญา และหน่วยงานที่ใช้งานมากที่สุดในช่วงที่เลือก") }} </p>
       </div>
 
       <!-- ความครบถ้วน + งานถัดไป — จัดชิดขวาให้เป็นก้อนเดียวที่สายตาไปหยุด -->
@@ -88,10 +87,10 @@ const isComplete = computed(() => elapsed.value > 0 && complete.value >= elapsed
 
         <div v-else class="rounded-xl border border-line-soft bg-surface/80 p-3.5 backdrop-blur-[2px]">
           <div class="flex items-baseline justify-between gap-3 mb-2">
-            <span class="text-xs font-medium text-ink-soft">กรอกยอดพิมพ์ครบแล้ว</span>
+            <span class="text-xs font-medium text-ink-soft"> {{ t("กรอกยอดพิมพ์ครบทั้งปีงบ") }} </span>
             <span class="numeral text-sm font-semibold text-ink">
               {{ complete }}<span class="text-ink-mute">/{{ elapsed }}</span>
-              <span class="text-2xs text-ink-mute font-normal ml-1">เดือน</span>
+              <span class="text-2xs text-ink-mute font-normal ml-1"> {{ t("เดือน") }} </span>
             </span>
           </div>
 
@@ -109,9 +108,7 @@ const isComplete = computed(() => elapsed.value > 0 && complete.value >= elapsed
             v-if="isComplete"
             class="flex items-center gap-1.5 text-xs text-ok-ink mt-2.5"
           >
-            <CircleCheckBig :size="14" aria-hidden="true" />
-            กรอกครบทุกเดือนแล้ว
-          </p>
+            <CircleCheckBig :size="14" aria-hidden="true" /> {{ t("กรอกครบทุกเดือนแล้ว") }} </p>
 
           <!-- ตั้งใจ "ไม่มี" ปุ่มตรงนี้
                แผง "สิ่งที่ต้องจัดการ" ที่อยู่ถัดลงไปไม่ถึงหนึ่งนิ้วมีปุ่มพาไป
@@ -121,13 +118,9 @@ const isComplete = computed(() => elapsed.value > 0 && complete.value >= elapsed
 
                หน้าที่ของบล็อกนี้คือบอกว่า "ตัวเลขทั้งหน้านี้เชื่อได้แค่ไหน"
                ส่วนหน้าที่สั่งงานเป็นของแผงข้างล่าง -->
-          <p v-else-if="elapsed" class="text-xs text-warn-ink mt-2.5">
-            ยังขาดอีก {{ elapsed - complete }} เดือน — ตัวเลขค่าใช้จ่ายด้านล่างจึงยังไม่ครบทั้งปีงบ
-          </p>
+          <p v-else-if="elapsed && coverage?.applicable" class="text-xs text-warn-ink mt-2.5"> {{ t("เดือนที่ค้าง: {0} · ยังไม่ถึงกำหนด: {1}", [coverage.incomplete_months, coverage.not_due_months]) }} </p>
 
-          <p v-else class="text-xs text-ink-mute mt-2.5">
-            ยังไม่มีข้อมูลพอจะบอกว่าครบหรือไม่
-          </p>
+          <p v-else class="text-xs text-ink-mute mt-2.5"> {{ t("ไม่มีเครื่องที่ใช้งานอยู่ในขอบเขตนี้ หรือยังไม่ได้เลือกปีงบ") }} </p>
         </div>
       </div>
     </div>

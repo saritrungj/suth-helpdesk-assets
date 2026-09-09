@@ -1,4 +1,10 @@
 <script setup>
+import { usePortalTarget } from "../ui/portal-target";
+const portalTarget = usePortalTarget();
+import { formatFiscalYearRange, formatMonth, MONTH_NAMES } from "../lib/locale-format";
+
+import { t } from "../lib/locale";
+
 /**
  * PeriodPicker — เลือกช่วงเดือนภายในปีงบประมาณ
  *
@@ -29,7 +35,7 @@
 import { computed, ref, watch } from "vue";
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui";
 import { CalendarRange, Check, ChevronDown, X } from "lucide-vue-next";
-import { fiscalYearLabel, formatMonthTH, MONTHS_TH } from "@suth/domain";
+
 import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
 
 const props = defineProps({
@@ -39,7 +45,7 @@ const props = defineProps({
   options: { type: Array, default: () => [] },
   mode: { type: String, default: "range" },
   /** ข้อความบนปุ่มเมื่อยังไม่ได้เจาะจงช่วง */
-  allLabel: { type: String, default: "ทั้งปีงบ" },
+  allLabel: { type: String, default: t("ทั้งปีงบ") },
   /**
    * เลือก "ทั้งปีงบ" แล้วส่งอาเรย์ว่างกลับไปหรือไม่
    *
@@ -59,15 +65,15 @@ const pendingStart = ref(null);
 const hoverMonth = ref(null);
 
 const range = computed(() => activeFiscalYearRange.value);
-const yearLabel = computed(() => fiscalYearLabel(range.value));
+const yearLabel = computed(() => formatFiscalYearRange(range.value));
 
 /** 12 เดือนของปีงบ เรียงตามลำดับปีงบจริง (ต.ค. -> ก.ย.) ไม่ใช่ ม.ค. -> ธ.ค. */
 const cells = computed(() =>
   fiscalYearMonths(range.value).map((value, index) => ({
     value,
     index,
-    short: MONTHS_TH[Number(value.slice(5, 7)) - 1],
-    full: formatMonthTH(value),
+    short: MONTH_NAMES[Number(value.slice(5, 7)) - 1],
+    full: formatMonth(value),
     hasData: props.options.includes(value),
   }))
 );
@@ -86,21 +92,21 @@ const summary = computed(() => {
   }
 
   if (months.length === 1) {
-    return { text: formatMonthTH(months[0]), detail: "1 เดือน", isAll: false };
+    return { text: formatMonth(months[0]), detail: t("1 เดือน"), isAll: false };
   }
 
   const contiguous = isContiguous(months);
   if (contiguous) {
     return {
-      text: `${formatMonthTH(months[0])} – ${formatMonthTH(months[months.length - 1])}`,
-      detail: `${months.length} เดือน`,
+      text: `${formatMonth(months[0])} – ${formatMonth(months[months.length - 1])}`,
+      detail: t("{0} เดือน", [months.length]),
       isAll: false,
     };
   }
 
   return {
-    text: months.map((m) => formatMonthTH(m, { shortYear: true })).join(", "),
-    detail: `${months.length} เดือน`,
+    text: months.map((m) => formatMonth(m, { shortYear: true })).join(", "),
+    detail: t("{0} เดือน", [months.length]),
     isAll: false,
   };
 });
@@ -132,15 +138,15 @@ const presets = computed(() => {
 
   const list = [
     { key: "all", label: props.allLabel, months: all.map((c) => c.value) },
-    { key: "last1", label: "เดือนล่าสุดที่มีข้อมูล", months: lastN(1) },
-    { key: "last3", label: "3 เดือนล่าสุด", months: lastN(3) },
-    { key: "last6", label: "6 เดือนล่าสุด", months: lastN(6) },
-    { key: "h1", label: "ครึ่งปีแรก", months: slice(0, 6) },
-    { key: "h2", label: "ครึ่งปีหลัง", months: slice(6, 12) },
-    { key: "q1", label: "ไตรมาส 1", months: slice(0, 3) },
-    { key: "q2", label: "ไตรมาส 2", months: slice(3, 6) },
-    { key: "q3", label: "ไตรมาส 3", months: slice(6, 9) },
-    { key: "q4", label: "ไตรมาส 4", months: slice(9, 12) },
+    { key: "last1", label: t("เดือนล่าสุดที่มีข้อมูล"), months: lastN(1) },
+    { key: "last3", label: t("3 เดือนล่าสุด"), months: lastN(3) },
+    { key: "last6", label: t("6 เดือนล่าสุด"), months: lastN(6) },
+    { key: "h1", label: t("ครึ่งปีแรก"), months: slice(0, 6) },
+    { key: "h2", label: t("ครึ่งปีหลัง"), months: slice(6, 12) },
+    { key: "q1", label: t("ไตรมาส 1"), months: slice(0, 3) },
+    { key: "q2", label: t("ไตรมาส 2"), months: slice(3, 6) },
+    { key: "q3", label: t("ไตรมาส 3"), months: slice(6, 9) },
+    { key: "q4", label: t("ไตรมาส 4"), months: slice(9, 12) },
   ];
 
   return list
@@ -159,14 +165,14 @@ const presets = computed(() => {
 
 function rangeHint(months, usable) {
   if (!months.length) return "";
-  if (!usable.length) return "ยังไม่มีข้อมูล";
+  if (!usable.length) return t("ยังไม่มีข้อมูล");
 
-  const first = formatMonthTH(usable[0], { shortYear: true });
-  const last = formatMonthTH(usable[usable.length - 1], { shortYear: true });
+  const first = formatMonth(usable[0], { shortYear: true });
+  const last = formatMonth(usable[usable.length - 1], { shortYear: true });
   const span = usable.length === 1 ? first : `${first} – ${last}`;
 
   // บอกตรงๆ เมื่อช่วงที่เลือกได้ไม่เต็มกลุ่ม เพื่อไม่ให้เข้าใจว่ายอดที่เห็นคือทั้งไตรมาส
-  return usable.length < months.length ? `${span} (${usable.length}/${months.length} เดือน)` : span;
+  return usable.length < months.length ? t("{0} ({1}/{2} เดือน)", [span, usable.length, months.length]) : span;
 }
 
 function isPresetActive(preset) {
@@ -243,8 +249,8 @@ function clearAll() {
 }
 
 // เปลี่ยนปีงบแล้วเดือนที่เลือกไว้เป็นของปีเก่า ใช้ต่อไม่ได้ ล้างทิ้ง
-watch(range, () => {
-  if (props.modelValue.length) emit("update:modelValue", []);
+watch(range, (value, previous) => {
+  if (previous && props.modelValue.length) emit("update:modelValue", []);
   pendingStart.value = null;
 });
 
@@ -274,7 +280,7 @@ watch(open, (isOpen) => {
       <ChevronDown :size="15" class="shrink-0 text-ink-faint" aria-hidden="true" />
     </PopoverTrigger>
 
-    <PopoverPortal>
+    <PopoverPortal :to="portalTarget">
       <PopoverContent
         align="start"
         :side-offset="6"
@@ -283,7 +289,7 @@ watch(open, (isOpen) => {
       >
         <header class="flex items-baseline justify-between gap-2 px-4 py-3 border-b border-line-soft">
           <div class="min-w-0">
-            <p class="text-sm font-semibold text-ink">ปีงบประมาณ {{ yearLabel }}</p>
+            <p class="text-sm font-semibold text-ink"> {{ t("ปีงบประมาณ") }} {{ yearLabel }}</p>
             <p class="text-2xs text-ink-mute truncate">{{ fullRangeText }}</p>
           </div>
 
@@ -293,18 +299,14 @@ watch(open, (isOpen) => {
             class="shrink-0 inline-flex items-center gap-1 text-xs text-ink-mute hover:text-ink"
             @click="clearAll"
           >
-            <X :size="12" aria-hidden="true" />
-            ล้าง
-          </button>
+            <X :size="12" aria-hidden="true" /> {{ t("ล้าง") }} </button>
         </header>
 
-        <p v-if="!range" class="px-4 py-10 text-center text-sm text-ink-mute">
-          เลือกปีงบประมาณจากแถบด้านบนก่อน
-        </p>
+        <p v-if="!range" class="px-4 py-10 text-center text-sm text-ink-mute"> {{ t("เลือกปีงบประมาณจากแถบด้านบนก่อน") }} </p>
 
         <template v-else>
           <!-- ตัวเลือกสำเร็จรูปเป็นรายการแนวตั้ง — สิ่งที่คนกดจริงเกือบทุกครั้ง -->
-          <ul class="max-h-[17rem] overflow-y-auto p-1.5 list-none" role="listbox" aria-label="ช่วงเวลาสำเร็จรูป">
+          <ul class="max-h-[17rem] overflow-y-auto p-1.5 list-none" role="listbox" :aria-label="t(&quot;ช่วงเวลาสำเร็จรูป&quot;)">
             <li v-for="preset in presets" :key="preset.key">
               <button
                 type="button"
@@ -335,11 +337,11 @@ watch(open, (isOpen) => {
           <!-- เลือกช่วงเอง — ซ่อนอยู่ใต้เส้นคั่นตามลำดับความถี่ในการใช้จริง -->
           <div class="border-t border-line-soft px-4 py-3">
             <p class="flex items-center justify-between gap-2 mb-2">
-              <span class="eyebrow">เลือกช่วงเอง</span>
+              <span class="eyebrow"> {{ t("เลือกช่วงเอง") }} </span>
               <span class="text-2xs text-ink-mute">
-                <template v-if="mode === 'multi'">กดเลือกทีละเดือน</template>
-                <template v-else-if="pendingStart">เลือกเดือนสุดท้าย</template>
-                <template v-else>กดเดือนเริ่ม แล้วกดเดือนสุดท้าย</template>
+                <template v-if="mode === 'multi'"> {{ t("กดเลือกทีละเดือน") }} </template>
+                <template v-else-if="pendingStart"> {{ t("เลือกเดือนสุดท้าย") }} </template>
+                <template v-else> {{ t("กดเดือนเริ่ม แล้วกดเดือนสุดท้าย") }} </template>
               </span>
             </p>
 
@@ -349,7 +351,7 @@ watch(open, (isOpen) => {
                 :key="cell.value"
                 type="button"
                 :disabled="!cell.hasData"
-                :title="cell.hasData ? cell.full : `${cell.full} — ยังไม่มีข้อมูล`"
+                :title="cell.hasData ? cell.full : t(&quot;{0} — ยังไม่มีข้อมูล&quot;, [cell.full])"
                 :aria-pressed="selected.has(cell.value)"
                 class="h-8 rounded-md text-xs font-medium transition-colors
                        disabled:opacity-25 disabled:cursor-not-allowed"

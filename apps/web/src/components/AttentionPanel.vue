@@ -1,4 +1,6 @@
 <script setup>
+import { t } from "../lib/locale";
+
 /**
  * AttentionPanel — "มีอะไรที่ต้องทำไหม"
  *
@@ -22,6 +24,8 @@
  *    คือข้อมูลที่มีค่าพอๆ กับตัวคำเตือนเอง
  * 4. **สีไม่ใช่ตัวบอกความหมายเพียงอย่างเดียว** ทุกระดับมีไอคอนและคำกำกับของตัวเอง
  */
+import { locale } from "../lib/locale";
+import { formatMonth } from "../lib/locale-format";
 import { computed } from "vue";
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from "lucide-vue-next";
 import { UiButton, UiCard, UiSkeleton } from "../ui";
@@ -40,21 +44,21 @@ const props = defineProps({
  */
 const SEVERITY = {
   critical: {
-    label: "ต้องแก้ทันที",
+    label: t("ต้องแก้ทันที"),
     icon: CircleAlert,
     ring: "ring-danger-line",
     tint: "bg-danger-soft",
     ink: "text-danger-ink",
   },
   warning: {
-    label: "มีงานค้าง",
+    label: t("มีงานค้าง"),
     icon: TriangleAlert,
     ring: "ring-warn-line",
     tint: "bg-warn-soft",
     ink: "text-warn-ink",
   },
   info: {
-    label: "น่าตรวจสอบ",
+    label: t("น่าตรวจสอบ"),
     icon: Info,
     ring: "ring-line",
     tint: "bg-surface-2",
@@ -64,12 +68,33 @@ const SEVERITY = {
 
 const meta = (severity) => SEVERITY[severity] ?? SEVERITY.info;
 
+const localizedItems = computed(() => props.items.map((item) => {
+  if (locale.value !== "en") return item;
+  const copy = {
+    missing_readings: {
+      title: t("ค้างกรอก {0} เดือน", [item.count]),
+      detail: t("เดือนที่ค้างนานที่สุด: {0} ยังขาดอีก {1} เครื่อง", [formatMonth(item.params?.month ?? item.months?.[0]), item.params?.missing_devices ?? "—"]),
+      action: t("บันทึกยอดพิมพ์"),
+    },
+    unbilled_devices: {
+      title: t("มี {0} เครื่องที่มียอดพิมพ์แต่ไม่มีราคา", [item.count]),
+      detail: t("ยังคิดค่าใช้จ่ายไม่ได้ {0} หน้า เพราะไม่มีข้อมูลราคา", [item.params?.pages ?? "—"]),
+      action: t("ตรวจเครื่องที่ไม่มีสัญญา"),
+    },
+    idle_devices: {
+      title: t("มี {0} เครื่องที่ไม่มียอดพิมพ์ในปีงบนี้", [item.count]),
+      detail: t("ตรวจสอบว่ายังจำเป็นต้องใช้เครื่องเหล่านี้ก่อนต่อสัญญา"),
+      action: t("ดูรายการเครื่อง"),
+    },
+  }[item.code];
+  return copy ? { ...item, title: copy.title, detail: copy.detail, action: item.action ? { ...item.action, label: copy.action } : null } : item;
+}));
 const hasItems = computed(() => props.items.length > 0);
 </script>
 
 <template>
   <section aria-labelledby="attention-heading">
-    <h2 id="attention-heading" class="eyebrow mb-2">สิ่งที่ต้องจัดการ</h2>
+    <h2 id="attention-heading" class="eyebrow mb-2"> {{ t("สิ่งที่ต้องจัดการ") }} </h2>
 
     <div v-if="loading" class="grid gap-2">
       <UiSkeleton height="4.5rem" />
@@ -85,17 +110,19 @@ const hasItems = computed(() => props.items.length > 0);
         <CircleCheck class="size-5" aria-hidden="true" />
       </span>
       <div class="min-w-0">
-        <p class="font-medium text-ink">ไม่มีงานค้าง</p>
-        <p class="text-xs text-ink-mute">กรอกยอดพิมพ์ครบทุกเดือนที่ถึงกำหนดแล้ว และไม่พบเครื่องที่คิดค่าใช้จ่ายไม่ได้</p>
+        <p class="font-medium text-ink"> {{ t("ไม่มีงานค้าง") }} </p>
+        <p class="text-xs text-ink-mute"> {{ t("กรอกยอดพิมพ์ครบทุกเดือนที่ถึงกำหนดแล้ว และไม่พบเครื่องที่คิดค่าใช้จ่ายไม่ได้") }} </p>
       </div>
     </UiCard>
 
     <ul v-else class="grid gap-2">
-      <li v-for="item in items" :key="item.code">
+      <li v-for="item in localizedItems" :key="item.code">
         <UiCard
-          class="flex flex-col gap-3 px-4 py-3.5 ring-1 sm:flex-row sm:items-center"
+          flush
+          class="ring-1"
           :class="meta(item.severity).ring"
         >
+          <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center">
           <span
             class="grid size-9 shrink-0 place-items-center rounded-full"
             :class="[meta(item.severity).tint, meta(item.severity).ink]"
@@ -104,7 +131,7 @@ const hasItems = computed(() => props.items.length > 0);
           </span>
 
           <div class="min-w-0 flex-1">
-            <p class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <p class="flex flex-col items-start gap-1">
               <!--
                 คำกำกับระดับความสำคัญเป็นข้อความจริง ไม่ใช่แค่สีของกรอบ — จำเป็นทั้ง
                 กับคนที่แยกสีไม่ออกและกับโปรแกรมอ่านหน้าจอ
@@ -112,9 +139,9 @@ const hasItems = computed(() => props.items.length > 0);
               <span class="text-2xs font-semibold uppercase tracking-wide" :class="meta(item.severity).ink">
                 {{ meta(item.severity).label }}
               </span>
-              <span class="font-medium text-ink">{{ item.title }}</span>
+              <span class="text-base font-semibold text-ink">{{ item.title }}</span>
             </p>
-            <p class="mt-0.5 text-xs text-ink-mute">{{ item.detail }}</p>
+            <p class="mt-2 text-sm text-ink-soft">{{ item.detail }}</p>
           </div>
 
           <!--
@@ -130,6 +157,7 @@ const hasItems = computed(() => props.items.length > 0);
           >
             {{ item.action.label }}
           </UiButton>
+          </div>
         </UiCard>
       </li>
     </ul>

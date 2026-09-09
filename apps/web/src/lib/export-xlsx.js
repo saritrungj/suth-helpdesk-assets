@@ -1,3 +1,4 @@
+import { locale, t } from "./locale";
 /**
  * export-xlsx.js — เขียนไฟล์ Excel โดย **โหลดไลบรารีตอนกดปุ่มเท่านั้น**
  *
@@ -29,7 +30,7 @@
  * @param {number[]} [spec.columnWidths] ความกว้างคอลัมน์ (หน่วยตัวอักษร)
  *   ไม่ระบุ = คำนวณจากความยาวข้อความจริง ไม่งั้นเปิดไฟล์มาเจอ ##### ทุกช่อง
  */
-export async function exportSheet({ header, rows, sheetName, filename, columnWidths }) {
+export async function exportSheet({ header, rows, sheetName, filename, columnWidths, context = [] }) {
   const XLSX = await import("xlsx");
 
   const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
@@ -37,6 +38,14 @@ export async function exportSheet({ header, rows, sheetName, filename, columnWid
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  const en = locale.value === "en";
+  const metadata = [
+    [t("รายงาน"), filename],
+    [t("สร้างเมื่อ (Asia/Bangkok)"), new Intl.DateTimeFormat(en ? "en-GB" : "th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date())],
+    [t("สกุลเงิน"), "THB"],
+    ...context,
+  ];
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(metadata), t("บริบทรายงาน"));
   XLSX.writeFile(workbook, `${filename}.xlsx`);
 }
 

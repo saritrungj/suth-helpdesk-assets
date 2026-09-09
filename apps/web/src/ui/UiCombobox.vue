@@ -1,4 +1,8 @@
 <script setup>
+import { usePortalTarget } from "./portal-target";
+const portalTarget = usePortalTarget();
+import { t } from "../lib/locale";
+
 /**
  * UiCombobox — ช่องเลือกที่พิมพ์ค้นหาได้ รองรับทั้งเลือกเดี่ยวและเลือกหลายรายการ
  *
@@ -33,12 +37,12 @@ const props = defineProps({
   /** [{ value, label, keywords?, hint? }] */
   options: { type: Array, default: () => [] },
   multiple: { type: Boolean, default: false },
-  placeholder: { type: String, default: "เลือกรายการ" },
-  searchPlaceholder: { type: String, default: "พิมพ์เพื่อค้นหา..." },
+  placeholder: { type: String, default: t("เลือกรายการ") },
+  searchPlaceholder: { type: String, default: t("พิมพ์เพื่อค้นหา...") },
   /** ข้อความของตัวเลือก "ไม่เจาะจง" ในโหมดเลือกเดี่ยว ไม่ใส่ = ไม่มีตัวเลือกนี้ */
   anyLabel: { type: String, default: "" },
   disabled: { type: Boolean, default: false },
-  emptyText: { type: String, default: "ไม่มีรายการให้เลือก" },
+  emptyText: { type: String, default: t("ไม่มีรายการให้เลือก") },
 });
 
 const emit = defineEmits(["update:modelValue"]);
@@ -74,7 +78,7 @@ const selectedLabels = computed(() => {
     const picked = normalized.value.filter((o) => innerValue.value.includes(o.value));
     if (!picked.length) return "";
     if (picked.length <= 2) return picked.map((o) => o.label).join(", ");
-    return `เลือกไว้ ${picked.length} รายการ`;
+    return t("เลือกไว้ {0} รายการ", [picked.length]);
   }
   return normalized.value.find((o) => o.value === innerValue.value)?.label ?? "";
 });
@@ -127,7 +131,7 @@ watch(open, (isOpen) => {
       </ComboboxTrigger>
     </ComboboxAnchor>
 
-    <ComboboxPortal>
+    <ComboboxPortal :to="portalTarget">
       <ComboboxContent
         position="popper"
         :side-offset="6"
@@ -152,15 +156,13 @@ watch(open, (isOpen) => {
           v-if="multiple && count"
           class="flex items-center justify-between gap-2 px-3 py-1.5 shrink-0 border-b border-line-soft bg-surface-2"
         >
-          <span class="text-xs text-ink-mute">เลือกไว้ {{ count }} รายการ</span>
+          <span class="text-xs text-ink-mute"> {{ t("เลือกไว้") }} {{ count }} {{ t("รายการ") }} </span>
           <button
             type="button"
             class="inline-flex items-center gap-1 text-xs text-danger-ink hover:underline"
             @click="clearAll"
           >
-            <X :size="12" aria-hidden="true" />
-            ล้างทั้งหมด
-          </button>
+            <X :size="12" aria-hidden="true" /> {{ t("ล้างทั้งหมด") }} </button>
         </div>
 
         <ComboboxViewport class="p-1 overflow-y-auto overscroll-contain">
@@ -201,7 +203,7 @@ watch(open, (isOpen) => {
                ซึ่งนับจากตัวกรองภายในของ Reka ที่ถูกปิดไปแล้ว -->
           <p v-if="!filtered.length" class="px-3 py-6 text-center text-xs text-ink-mute">
             <template v-if="!options.length">{{ emptyText }}</template>
-            <template v-else>ไม่พบรายการที่ตรงกับ &ldquo;{{ search }}&rdquo;</template>
+            <template v-else> {{ t("ไม่พบรายการที่ตรงกับ “") }} {{ search }}&rdquo;</template>
           </p>
         </ComboboxViewport>
       </ComboboxContent>
