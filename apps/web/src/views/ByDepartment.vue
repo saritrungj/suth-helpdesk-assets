@@ -91,12 +91,17 @@ const month = computed(() =>
   trendMonthSelection.value.length ? [...trendMonthSelection.value].sort().join(",") : ""
 );
 
+/* รายการเดือนที่ว่างเพราะโหลดล้ม ทำให้ตัวเลือกช่วงดูเหมือน "ยังไม่มีข้อมูล" — ต้องบอก (#50) */
+const monthsError = ref(false);
+
 async function loadMonths() {
   try {
     const res = await api.get("/dashboard/monthly-kpi");
     monthsWithData.value = [...new Set((res.data ?? []).map((r) => r.month))].sort();
+    monthsError.value = false;
   } catch (err) {
     console.error("Load months error:", err);
+    monthsError.value = true;
   }
 }
 
@@ -181,6 +186,15 @@ function toggle(setRef, id) {
   next.has(id) ? next.delete(id) : next.add(id);
   setRef.value = next;
 }
+
+/*
+ * เรียกจากเทมเพลตผ่านสามตัวนี้เท่านั้น ห้ามส่ง openDivisions ฯลฯ เข้า toggle() ตรงๆ จาก
+ * เทมเพลต — ในเทมเพลต ref ถูกแกะเป็น Set แล้ว toggle จึงเขียน .value ลง Set ที่ไม่มีใคร
+ * ติดตาม แถวทุกชั้นในแท็บนี้เคยคลิกกางไม่ติดเลยตั้งแต่ #22 ด้วยเหตุนี้ (#50)
+ */
+const toggleDivision = (id) => toggle(openDivisions, id);
+const toggleDepartment = (id) => toggle(openDepartments, id);
+const toggleDevice = (id) => toggle(openDevices, id);
 
 function expandAll() {
   openDivisions.value = new Set(filteredDivisions.value.map((d) => d.id));
@@ -663,6 +677,13 @@ onMounted(async () => {
       </template>
     </UiAlert>
 
+    <UiAlert v-if="monthsError" tone="warn">
+      {{ t("โหลดรายการเดือนที่มีข้อมูลไม่สำเร็จ ตัวเลือกช่วงเวลาอาจแสดงว่ายังไม่มีข้อมูลทั้งที่มี") }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="loadMonths"> {{ t("ลองใหม่") }} </UiButton>
+      </template>
+    </UiAlert>
+
     <!-- กราฟเปรียบเทียบ -->
     <UiCard v-if="!loadError" :eyebrow="t(&quot;เปรียบเทียบ&quot;)" :title="t(&quot;แนวโน้มของฝ่าย / แผนกที่เลือก&quot;)">
       <template #actions>
@@ -773,7 +794,7 @@ onMounted(async () => {
             type="button"
             class="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-2 transition-colors"
             :aria-expanded="openDivisions.has(division.id)"
-            @click="toggle(openDivisions, division.id)"
+            @click="toggleDivision(division.id)"
           >
             <ChevronRight
               :size="16"
@@ -809,7 +830,7 @@ onMounted(async () => {
               type="button"
               class="w-full flex items-start gap-3 pl-10 pr-4 py-2.5 text-left hover:bg-surface-2 transition-colors"
               :aria-expanded="openDepartments.has(department.id)"
-              @click="toggle(openDepartments, department.id)"
+              @click="toggleDepartment(department.id)"
             >
               <ChevronRight
                 :size="14"
@@ -871,7 +892,7 @@ onMounted(async () => {
                   type="button"
                   class="w-full flex items-center gap-2.5 py-2 text-left hover:bg-surface-2 transition-colors"
                   :aria-expanded="openDevices.has(device.id)"
-                  @click="toggle(openDevices, device.id)"
+                  @click="toggleDevice(device.id)"
                 >
                   <ChevronRight
                     :size="13"
