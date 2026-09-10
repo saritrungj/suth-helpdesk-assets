@@ -42,23 +42,17 @@ npm run test:e2e --workspace @suth/web
 
 ต้องมีทั้ง API (พอร์ต 3000) และเว็บ (5173) รันอยู่พร้อมฐานข้อมูลจริงก่อน — ถ้าต่อไม่ได้เทสจะ **ข้ามทั้งชุด** ไม่ใช่ล้มเหลว เทสกลุ่มที่เขียนข้อมูลลงฐาน (เช่น `month-entry.spec.js`) ต้องเปิดเองด้วย `SUTH_E2E_ALLOW_WRITES=1` และคืนค่าเดิมกลับเองทุกครั้งในขั้นตอนสุดท้าย (ดู `apps/web/e2e/fixtures.js`)
 
-อยากจำลองงาน `db` ของ CI บนเครื่องตัวเองก่อน push (เช่นตอน GitHub Actions ยังรันไม่ได้)
-ไม่ต้องแตะฐานพัฒนาเลย — สร้างฐานชั่วคราวด้วย Docker แล้วชี้ API ไปที่ฐานนั้นแทน:
+ชุด `db` (ไฟล์ใน `DB_SPECS`) ไม่อยู่ใน pre-push ต้องรันเองก่อน merge งานที่แตะ API หรือฐานข้อมูล
+ด้วยคำสั่งเดียว (ต้องเปิด Docker ไว้):
 
 ```powershell
-docker run -d --name suth-ci-mysql -e MYSQL_ALLOW_EMPTY_PASSWORD=yes -e MYSQL_DATABASE=suth_ci -p 3307:3306 mysql:8.4
-Get-Content database/schema.sql, database/seed_ci.sql | docker exec -i suth-ci-mysql mysql --default-character-set=utf8mb4 -uroot suth_ci
-
-$env:DB_HOST="127.0.0.1"; $env:DB_PORT="3307"; $env:DB_NAME="suth_ci"
-$env:SUTH_E2E_START_API="1"; $env:SUTH_E2E_REQUIRE_SERVICES="1"; $env:SUTH_E2E_ALLOW_WRITES="1"
-npm run test:e2e:db --workspace @suth/web
-
-docker rm -f suth-ci-mysql
+npm run verify:db
 ```
 
-`--default-character-set=utf8mb4` ตอนโหลด seed จำเป็น ไม่ใช่ตัวเลือก — ไม่ใส่แล้ว client
-ต่อด้วย latin1 นับความยาวชื่อภาษาไทยเป็นไบต์แทนตัวอักษร ทำให้ INSERT ที่ตัวอักษรไม่เกิน
-255 จริงล้มด้วย "Data too long"
+สคริปต์ (`scripts/verify-db.cjs`) สร้าง MySQL ชั่วคราวจาก `schema.sql` + `seed_ci.sql` → build เว็บแยก
+→ สตาร์ต API และเว็บของตัวเอง → รันโปรเจกต์ `db` → ลบฐานทิ้งทุกครั้งไม่ว่าผ่านหรือล้ม ใช้พอร์ต
+3317/3310/5310 ของตัวเองทั้งหมด **ไม่แตะฐานพัฒนาและไม่ใช้ API/เว็บที่เปิดค้างอยู่** ถ้ามีอะไรใช้
+พอร์ตเหล่านั้นอยู่จะหยุดแทนการยึดต่อ เพราะชุดนี้เขียนข้อมูลจริงลงฐานที่มันต่ออยู่
 
 ถ้าแก้สี ธีม หรือ layout ของหน้าที่มีอยู่แล้ว ถ่ายภาพหน้าจอไว้เทียบก่อน/หลังด้วย `npm run test:e2e:shots --workspace @suth/web` (ภาพออกที่ `apps/web/e2e/screens/` — ไม่ commit เพราะสร้างใหม่ได้ทุกครั้ง ดู `.gitignore`)
 
@@ -76,69 +70,46 @@ docker rm -f suth-ci-mysql
 | หน้าเว็บที่ดึงข้อมูลอ้างอิงซ้ำ (อาคาร, แผนก, ฝ่าย, ยี่ห้อ, สัญญา) | เปิดหน้าที่เกี่ยวข้องสลับกันแล้วดูใน DevTools Network ว่าไม่ยิงซ้ำภายใน `staleTime` ของ [ADR-0009](../decisions/0009-tanstack-query-as-the-data-layer.md) |
 | UI, สี, หรือ component ใน `apps/web/src/ui` | รัน E2E ด้านบน ทั้งสองธีม (สว่าง/มืด) และตรวจ contrast ผ่านเกณฑ์ AA |
 
-## ด่านก่อน push บนเครื่อง
+## ด่านก่อน push บนเครื่อง — ด่านเดียวของ repo นี้
 
 hook ติดตั้งเองตอน `npm install` หรือ `npm ci` ผ่านสคริปต์ `prepare` ไม่มีขั้นตอนให้จำ
 จากนั้นทุก `git push` จะผ่านสองด่าน
 
 1. **ห้าม push ตรงเข้า `main`** — ต้องเปิด branch แล้วส่งผ่าน PR การ merge บนเว็บไม่ผ่าน
-   hook นี้ เส้นทาง PR จึงใช้ได้ตามปกติ ด่านนี้ทำหน้าที่แทน ruleset ฝั่ง GitHub ที่ยังตั้ง
-   ไม่ได้ระหว่างบัญชีถูกล็อก
-2. **`npm run verify`** — unit ทุก workspace → build → E2E สามไฟล์ที่ไม่ต้องใช้ฐานข้อมูล
-   และตรวจช่องว่างท้ายบรรทัด ใช้เวลาราวสองนาที
+   hook นี้ เส้นทาง PR จึงใช้ได้ตามปกติ
+2. **`npm run verify`** — unit ทุก workspace → build → E2E โปรเจกต์ `fixture` ที่ไม่ต้องใช้
+   ฐานข้อมูล และตรวจช่องว่างท้ายบรรทัด ใช้เวลาราวหนึ่งนาที
 
 ข้ามได้ด้วย `git push --no-verify` เมื่อจำเป็นจริงเท่านั้น หรือข้ามเฉพาะด่านที่ 2 ด้วย
-`SKIP_VERIFY=1` — ทั้งหมดนี้อยู่บนเครื่อง ใครตั้งใจข้ามก็ข้ามได้ มันกันความพลั้งเผลอ ไม่ได้
-กันคนที่ตั้งใจ ซึ่งเป็นเหตุผลที่ยังต้องมี CI ฝั่ง GitHub เมื่อบัญชีใช้ได้
+`SKIP_VERIFY=1` — hook กันความพลั้งเผลอ ไม่ได้กันคนที่ตั้งใจข้าม
 
-hook นี้เป็นคำสั่งชุดเดียวกับที่ CI รัน จึงไม่มีทางเพี้ยนจากกัน และตั้งใจไม่รันชุดที่ต้องมี
-API/ฐานข้อมูล เพราะ push ที่ล้มเพราะเครื่องไม่ได้เปิด MySQL ไม่ได้บอกอะไรเกี่ยวกับโค้ด
+hook ตั้งใจไม่รันชุด `db` เพราะ push ที่ล้มเพราะเครื่องไม่ได้เปิด MySQL ไม่ได้บอกอะไรเกี่ยวกับ
+โค้ด ชุดนั้นรันเองด้วย `npm run verify:db` **ก่อน merge งานที่แตะ API, ฐานข้อมูล หรือหน้าที่อยู่ใน
+`DB_SPECS`**
 
-## CI ทำอะไรให้บ้าง
+## ทำไมไม่มี GitHub Actions
 
-> **ตอนนี้ Actions ยังรันไม่ได้** บัญชี GitHub ถูกล็อกจากปัญหาบิล งานจึงถูกปฏิเสธตั้งแต่ยัง
-> ไม่เริ่ม ด่านที่ทำงานจริงอยู่ตอนนี้คือ hook ด้านบน เมื่อบิลปลดแล้วส่วนนี้จะทำงานเองทันที
-> โดยไม่ต้องแก้อะไร
+เคยมี `.github/workflows/ci.yml` (งาน verify + db) และ `nightly.yml` จาก #62–#65 แต่ไม่เคย
+ได้รันจริงสักครั้ง เพราะบัญชี GitHub ถูกล็อกจากปัญหาบิล จึงตัดออกทั้งหมด ทุกอย่างตรวจบนเครื่อง
+ด้วยคำสั่งชุดเดียวกัน ถ้าวันหนึ่งจะกลับมาใช้ ไฟล์เดิมยังอยู่ในประวัติ git ก่อน commit ที่ลบออก
 
-ทุก PR และทุก push เข้า `main` GitHub Actions (`.github/workflows/ci.yml`) รันสองงานคู่กัน
+## spec ใหม่อยู่ชุดไหน
 
-| งาน | รันอะไร | ต้องมีฐานข้อมูล |
-|---|---|---|
-| `verify` | `npm test` ทุก workspace, `npm run build`, ตรวจช่องว่างท้ายบรรทัด, E2E ที่ fixture intercept `/api/*` ทั้งหมด (`asset-drawer`, `asset-evidence`, `contrast-helper`) | ไม่ต้อง |
-| `db` | E2E ที่เหลือทั้งหมด ยกเว้น `screenshots.spec.js` (ภาพเทียบข้ามรอบ ไม่เหมาะกับ CI) และ `asset-qa48.spec.js` (ใช้ฐาน QA แยกบนเครื่อง ดู [ADR-0016](../decisions/0016-isolated-qa-database-and-bootstrap-harness.md)) | ต้องมี — MySQL service container สร้างใหม่ทุก run จาก `database/schema.sql` + `database/seed_ci.sql` |
+`apps/web/playwright.config.js` แบ่ง spec เป็นสามโปรเจกต์ไว้ที่นั่นที่เดียว ไม่มีรายชื่อไฟล์ใน `package.json`
 
-งาน `db` สตาร์ต API เองด้วย `SUTH_E2E_START_API=1` ต่อฐานที่สร้างใหม่นั้นโดยตรง (ไม่ใช่ฐาน
-พัฒนา) ด้วย `JWT_SECRET` ที่สุ่มใหม่ทุก run ผ่าน `openssl rand` ไม่เก็บเป็น GitHub Secret
-เพราะฐานทิ้งทุกครั้งจบ job ไม่มีอะไรต้องคงอยู่ข้ามรอบ และตั้ง `SUTH_E2E_REQUIRE_SERVICES=1`
-ให้ `reasonToSkip()` โยน error แทนการข้าม — ถ้า service container ต่อไม่ติดเพราะ config ผิด
-งานนี้ต้องแดง ไม่ใช่เขียวแบบ skip ทั้งที่ไม่ได้ตรวจอะไรเลย
+- **`fixture`** — ค่าเริ่มต้น spec ใหม่อยู่ที่นี่เองโดยไม่ต้องเพิ่มชื่อที่ไหน รันใน `npm run verify`
+- **`db`** — ไฟล์ใน `DB_SPECS` ถ้า spec ใหม่ต้องใช้ API/ฐานข้อมูล (เรียก `reasonToSkip()`) ให้เพิ่มชื่อที่นี่
+  ถ้าลืม มันจะแดงใน `npm run verify` พร้อมข้อความบอกให้เพิ่ม ไม่หลุดไปเงียบๆ
+- **`manual`** — ไฟล์ใน `MANUAL_SPECS` รันเองเท่านั้น: `screenshots.spec.js` (ภาพให้คนดู ไม่ได้เทียบกับอะไร)
+  และ `asset-qa48.spec.js` (ใช้ฐาน QA แยกบนเครื่อง ดู [ADR-0016](../decisions/0016-isolated-qa-database-and-bootstrap-harness.md))
 
 `database/seed_ci.sql` ใส่เคสร้ายจงใจ (ชื่อแผนกยาว 102 ตัวอักษร, เครื่องที่มีประวัติย้าย,
 สัญญา 0.45 บาท/แผ่น) เพราะรอบ #48 เจอบั๊ก a11y สองตัวได้ก็เพราะฐาน QA บังเอิญมีข้อมูล
-แบบนี้ — ถ้า seed มีแต่ข้อมูลสวย CI จะตรวจไม่เจอสิ่งเหล่านี้อีกเลย ปีงบและเดือนคำนวณจาก
+แบบนี้ — ถ้า seed มีแต่ข้อมูลสวย ชุด `db` จะตรวจไม่เจอสิ่งเหล่านี้อีกเลย ปีงบและเดือนคำนวณจาก
 วันที่รันจริงด้วย `CURDATE()` ไม่ตรึงวันที่ตายตัว seed จึงไม่มีวัน "หมดอายุ"
 
-เว็บใน CI ถูกสตาร์ตจาก **build จริงแล้ว preview** ผ่าน `webServer` ใน `playwright.config.js`
-ไม่ใช่ dev server เพราะสิ่งที่ต้องทดสอบคือ bundle ที่จะถูกส่งมอบ ตอนรันบนเครื่อง
-`reuseExistingServer` ทำให้ Playwright ใช้ server ที่คุณเปิดค้างไว้เหมือนเดิม ไม่มีขั้นตอนใหม่
-
-ผลที่ล้มดูได้จาก artifact `playwright-report` (งาน `verify`) หรือ `playwright-report-db`
-(งาน `db`) ของ run นั้น เก็บไว้ 14 วัน เปิดด้วย `npx playwright show-report <โฟลเดอร์ที่แตกไฟล์>`
-— CI เขียวไม่ได้แปลว่าตรวจครบ รายการที่ CI ยังไม่ครอบอยู่ในหัวข้อด้านบนทั้งหมด
-
-### รายงานผลขึ้น PR (#65)
-
-ไม่ต้องเปิด artifact ทุกครั้งเพื่อรู้ว่าล้มตรงไหน — `verify` และ `db` แต่ละงานส่งผล
-E2E (junit ที่ `playwright.config.js` สร้างเฉพาะตอน `CI=1`) ให้ [`dorny/test-reporter`](https://github.com/dorny/test-reporter)
-ขึ้น Checks ของ run นั้น พร้อม annotation ชี้บรรทัดที่ล้มตรงในไฟล์เทส แล้วงาน `report`
-(รันหลังสองงานนั้นเสร็จ เฉพาะตอนเป็น PR) สรุปผ่าน/ไม่ผ่านของทั้งสองงานเป็น comment
-เดียวบน PR ที่ **อัปเดตทับของเดิม** ทุกรอบ push ไม่โพสต์ใหม่ซ้ำ
-
-ชุดที่ยาวและไวต่อความเปลี่ยนแปลงของ runner (`screenshots.spec.js` เทียบภาพ, a11y เต็ม
-ชุดอีกรอบ) ไม่ได้อยู่ใน `verify`/`db` แต่รันคืนละครั้งใน `.github/workflows/nightly.yml`
-แทน ไม่บล็อก PR ไหนทั้งสิ้น ผลดูได้จาก Actions tab — **ไม่เปิด issue อัตโนมัติเมื่อล้ม**
-ตัดออกจากขอบเขตเดิมของ #65 เพราะยังมีคนดู repo คนเดียว notification ของ GitHub บน
-scheduled workflow ที่ล้มพอแล้วสำหรับตอนนี้
+`SUTH_E2E_REQUIRE_SERVICES=1` ในคำสั่งชุด `db` ทำให้ `reasonToSkip()` โยน error แทนการข้าม —
+ถ้าต่อฐานชั่วคราวไม่ติดเพราะ config ผิด ต้องแดง ไม่ใช่เขียวแบบ skip ทั้งที่ไม่ได้ตรวจอะไรเลย
 
 ## ก่อนเปิด PR
 

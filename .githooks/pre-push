@@ -1,8 +1,6 @@
 #!/bin/sh
-# ด่านก่อน push — รันชุดเดียวกับ .github/workflows/ci.yml
-#
-# มีไว้เพราะ Actions ของบัญชีนี้ถูกล็อกจากปัญหาบิล จึงยังไม่มีอะไรกั้นฝั่ง GitHub
-# เมื่อบิลปลดแล้ว hook นี้ยังมีประโยชน์ต่อ คือรู้ผลก่อน push แทนที่จะรอ CI
+# ด่านก่อน push — ด่านเดียวของ repo นี้ ไม่มี GitHub Actions
+# (ดูเหตุผลใน docs/how-to/verify-changes.md หัวข้อ "ทำไมไม่มี GitHub Actions")
 #
 # ติดตั้งเองอัตโนมัติตอน `npm install` / `npm ci` ผ่านสคริปต์ prepare ของ package.json
 # ข้ามชั่วคราวเมื่อจำเป็นจริง:    git push --no-verify

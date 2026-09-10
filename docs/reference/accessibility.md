@@ -14,7 +14,7 @@
 | `apps/web/e2e/login-wcag.spec.js` | หน้าล็อกอิน ลงลึกกว่า เพราะเป็นหน้าเดียวที่คนนอกเปิดเจอ และเป็นด่านเดียวที่ถ้าใช้ไม่ได้ก็ใช้ทั้งระบบไม่ได้ |
 | `apps/web/e2e/page-structure.spec.js` | landmark, ปุ่มที่ไม่มีชื่อ, error ใน console |
 | `apps/web/e2e/asset-drawer.spec.js` | ทะเบียนและแผงแก้ไข/ย้าย: โฟกัสในแผง, dirty/pending, สิทธิ์, zoom 200% และ density สามระดับ |
-| `apps/web/e2e/asset-evidence.spec.js` | ภาพหลักฐานของทะเบียนสองภาษา สองธีม สามขนาด ไม่ใช่ pixel regression |
+| `apps/web/e2e/asset-evidence.spec.js` | ภาพหลักฐานของทะเบียน ค่าเริ่มต้นสองชุด (ไทย-สว่าง, อังกฤษ-มืด ที่ 1440) ครบสองภาษา สองธีม สามขนาดเมื่อตั้ง `SUTH_EVIDENCE_FULL=1` ไม่ใช่ pixel regression |
 | `apps/web/e2e/contrast-helper.spec.js` | regression ของตัววัดด้วย CSS จริงใน Chromium โดยไม่ต้องมี API/ฐานข้อมูล |
 | `apps/web/e2e/axe-fixture.spec.js` | axe-core บนสถานะที่ fixture คุม (ทะเบียน, แผงแก้ไข, แผงย้าย) — ไม่ต้องมี API/ฐานข้อมูล เฟส 1 ของ #64 |
 | `apps/web/e2e/axe-pages.spec.js` | axe-core บนทุกหน้าใน `PAGES` (`apps/web/e2e/pages.js`) — ชุดเดียวกับ wcag.spec.js ต้องมี API/ฐานข้อมูลจริง เฟส 2 ของ #64 |
@@ -59,9 +59,9 @@ npm run test:e2e --workspace @suth/web -- wcag.spec.js contrast-helper.spec.js
 **สถานะปัจจุบัน:** ครบทั้งสองเฟสแล้ว
 
 - **เฟส 1** (`axe-fixture.spec.js`) — สถานะที่ fixture คุมอยู่แล้ว (ทะเบียน,
-  แผงแก้ไข, แผงย้ายเครื่อง) ไม่ต้องมี API/ฐานข้อมูล รันในงาน `verify`
+  แผงแก้ไข, แผงย้ายเครื่อง) ไม่ต้องมี API/ฐานข้อมูล อยู่ในโปรเจกต์ `fixture`
 - **เฟส 2** (`axe-pages.spec.js`) — ทุกหน้าใน `PAGES` (`apps/web/e2e/pages.js`
-  — ชุดเดียวกับที่ `wcag.spec.js` ใช้) ต้องมี API/ฐานข้อมูลจริง (#63) รันในงาน `db`
+  — ชุดเดียวกับที่ `wcag.spec.js` ใช้) ต้องมี API/ฐานข้อมูลจริง (#63) อยู่ในโปรเจกต์ `db`
   `PAGES` แยกไว้เป็นโมดูลกลางไม่ใช่ export จากไฟล์ .spec.js ตรงๆ — import ค่าคงที่
   จากไฟล์ .spec.js จะลาก `test()` ทั้งไฟล์นั้นติดมาโดยไม่ตั้งใจ (module side effect
   ของ Playwright) ซึ่งเจอบั๊กนี้จริงตอนเขียน `axe-pages.spec.js` ครั้งแรก

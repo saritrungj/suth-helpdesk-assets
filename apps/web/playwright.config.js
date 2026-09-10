@@ -34,13 +34,53 @@ const webUrl = process.env.SUTH_WEB_URL || "http://localhost:5173";
 const webPort = new URL(webUrl).port || "5173";
 const apiUrl = process.env.SUTH_API_URL || "http://localhost:3000/api";
 
+/*
+ * spec แบ่งเป็นสามโปรเจกต์ตาม "ต้องมีอะไรถึงจะรันได้" — ตัดสินที่นี่ที่เดียว
+ * ไม่มีรายชื่อไฟล์ซ้ำใน package.json หรือ workflow
+ *
+ *   fixture — ทุก spec ที่ไม่ได้อยู่ในสองรายการข้างล่าง intercept /api/* เอง
+ *             จึงไม่ต้องมี API/ฐานข้อมูล (`npm run verify` และ pre-push)
+ *   db      — DB_SPECS ต้องมี API + ฐานข้อมูลจริง (`test:e2e:db`)
+ *   manual  — MANUAL_SPECS รันเองเมื่อต้องการเท่านั้น
+ *
+ * spec ใหม่ตกอยู่ใน fixture เองโดยไม่ต้องจำไปเพิ่มชื่อที่ไหน — ถ้ามันต้องใช้ฐาน
+ * ข้อมูลแต่ลืมเพิ่มใน DB_SPECS reasonToSkip() จะโยน error บอกให้เพิ่ม (ดู
+ * e2e/fixtures.js) แทนที่จะหลุดจากชุดตรวจไปเงียบๆ แบบที่รายชื่อเขียนมือใน
+ * package.json เคยทำกับ prototype.spec.js
+ */
+const DB_SPECS = [
+  "axe-pages.spec.js",
+  "login-wcag.spec.js",
+  "login.spec.js",
+  "month-entry.spec.js",
+  "page-structure.spec.js",
+  "report-workflow.spec.js",
+  "shell.spec.js",
+  "wcag.spec.js",
+];
+
+const MANUAL_SPECS = [
+  // ถ่ายภาพไว้ให้คนดู ไม่ได้เทียบกับอะไร — `npm run test:e2e:shots`
+  "screenshots.spec.js",
+  // ใช้ฐาน QA แยกบนเครื่องผ่าน scripts/qa48 (ADR-0016)
+  "asset-qa48.spec.js",
+];
+
+const anyFolder = (files) => files.map((file) => `**/${file}`);
+
+const desktop = { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } };
+
 /* บนเครื่องคนมักเปิด dev server ค้างไว้อยู่แล้ว `reuseExistingServer` จึงทำให้
    ทุกอย่างเหมือนเดิมทุกประการ ส่วนบน CI ที่ไม่มีใครเปิดอะไรไว้ Playwright จะ
    สตาร์ตเอง และตั้งใจใช้ผลของ `vite build` ผ่าน preview ไม่ใช่ dev server
    เพราะสิ่งที่ต้องทดสอบคือ bundle ที่จะถูกส่งมอบจริง */
+// SUTH_WEB_DIST ให้ preview เสิร์ฟ build ที่แยกไว้ต่างหาก — scripts/verify-db.cjs ใช้
+// build ที่ฝังที่อยู่ API ของตัวเอง โดยไม่ทับ dist ปกติ
+const webDist = process.env.SUTH_WEB_DIST ? ` --outDir ${process.env.SUTH_WEB_DIST}` : "";
+
 const webServers = [
   {
-    command: `npm run preview -- --port ${webPort} --strictPort`,
+    command: `npm run preview -- --port ${webPort} --strictPort${webDist}`,
     url: webUrl,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
@@ -77,12 +117,7 @@ export default defineConfig({
   fullyParallel: false,
 
   // บน CI เก็บ HTML report ไว้เป็น artifact ด้วย เพราะ log อย่างเดียวไล่ไม่ออกว่าพังตรงไหน
-  // junit เพิ่มเฉพาะบน CI ให้ dorny/test-reporter (#65) อ่านไปขึ้น Checks พร้อม
-  // annotation ที่บรรทัดที่ล้ม — ไม่กระทบเทอร์มินัลตอนรันบนเครื่อง (ดู test-results/
-  // ใน .gitignore)
-  reporter: process.env.CI
-    ? [["list"], ["html", { open: "never" }], ["junit", { outputFile: "test-results/e2e-junit.xml" }]]
-    : [["list"]],
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
 
   use: {
     baseURL: webUrl,
@@ -94,9 +129,8 @@ export default defineConfig({
   },
 
   projects: [
-    {
-      name: "desktop-1440",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
-    },
+    { name: "fixture", use: desktop, testIgnore: anyFolder([...DB_SPECS, ...MANUAL_SPECS]) },
+    { name: "db", use: desktop, testMatch: anyFolder(DB_SPECS) },
+    { name: "manual", use: desktop, testMatch: anyFolder(MANUAL_SPECS) },
   ],
 });
