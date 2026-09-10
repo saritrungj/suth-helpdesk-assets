@@ -136,12 +136,22 @@ function collapseAll() {
   openDevices.value = new Set();
 }
 
+/*
+ * ข้อมูลรองสองชุดนี้ล้มแล้วต้องบอก ไม่ใช่เงียบ (#50) — รายการเดือนที่ว่างทำให้ตัวเลือก
+ * ช่วงเวลาดูเหมือน "ยังไม่มีข้อมูล" และแถบเครื่องที่ยังไม่ผูกสัญญาที่หายไปทำให้ดูเหมือน
+ * ทุกเครื่องถูกนับในยอดแล้ว ทั้งที่แค่โหลดไม่สำเร็จ
+ */
+const monthsError = ref(false);
+const unassignedError = ref(false);
+
 async function loadMonths() {
   try {
     const res = await api.get("/dashboard/monthly-kpi");
     monthsWithData.value = [...new Set((res.data ?? []).map((r) => r.month))].sort();
+    monthsError.value = false;
   } catch (err) {
     console.error("Load months error:", err);
+    monthsError.value = true;
   }
 }
 
@@ -150,8 +160,11 @@ async function loadUnassignedDevices() {
   try {
     const res = await api.get("/expense/unassigned-devices");
     unassignedDevices.value = res.data.devices ?? res.data ?? [];
+    unassignedError.value = false;
   } catch (err) {
     console.error("Load unassigned devices error:", err);
+    unassignedDevices.value = [];
+    unassignedError.value = true;
   }
 }
 
@@ -186,8 +199,8 @@ async function loadExpense() {
 }
 
 /**
- * ส่งออก Excel — หนึ่งแถวต่อหนึ่งเครื่อง ตามตัวกรองเดือนที่เลือกอยู่
- * ใช้ข้อมูลทั้งหมดไม่ตัดตามคำค้นหา เพราะคนที่กด export มักต้องการชุดเต็มไปทำต่อ
+ * ส่งออก Excel — หนึ่งแถวต่อหนึ่งเครื่อง ตามเดือนและคำค้นที่แสดงอยู่บนจอ
+ * คำค้นถูกบันทึกไว้ในแผ่น "บริบทรายงาน" ด้วย คนที่เปิดไฟล์ทีหลังจึงรู้ว่าไม่ใช่ชุดเต็ม
  */
 async function exportExcel() {
   const header = [
@@ -295,6 +308,20 @@ onMounted(() => {
       {{ loadError }}
       <template #actions>
         <UiButton size="sm" variant="secondary" @click="loadExpense"> {{ t("ลองใหม่") }} </UiButton>
+      </template>
+    </UiAlert>
+
+    <UiAlert v-if="unassignedError" tone="warn" class="mb-4">
+      {{ t("โหลดรายการเครื่องที่ยังไม่ผูกสัญญาไม่สำเร็จ จึงยังบอกไม่ได้ว่ามีเครื่องที่ไม่ถูกนับในยอดด้านบนหรือไม่") }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="loadUnassignedDevices"> {{ t("ลองใหม่") }} </UiButton>
+      </template>
+    </UiAlert>
+
+    <UiAlert v-if="monthsError" tone="warn" class="mb-4">
+      {{ t("โหลดรายการเดือนที่มีข้อมูลไม่สำเร็จ ตัวเลือกช่วงเวลาอาจแสดงว่ายังไม่มีข้อมูลทั้งที่มี") }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="loadMonths"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
 

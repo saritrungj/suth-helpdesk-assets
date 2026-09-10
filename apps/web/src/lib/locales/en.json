@@ -792,5 +792,7 @@
   "ถ้าปิดตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด": "Closing now will discard your changes.",
   "ถ้าออกจากหน้านี้ ค่าที่กรอกไว้จะหายทั้งหมด": "Leaving this page will discard your changes.",
   "โหลดเดือนที่ค้างไม่สำเร็จ เลือกเดือนเองหรือลองใหม่": "Could not load the pending month. Choose a month or retry.",
-  "โหลดความคืบหน้าปีไม่สำเร็จ": "Could not load yearly progress."
+  "โหลดความคืบหน้าปีไม่สำเร็จ": "Could not load yearly progress.",
+  "โหลดรายการเครื่องที่ยังไม่ผูกสัญญาไม่สำเร็จ จึงยังบอกไม่ได้ว่ามีเครื่องที่ไม่ถูกนับในยอดด้านบนหรือไม่": "Could not load devices without a contract, so it is not yet known whether any device is left out of the totals above.",
+  "โหลดรายการเดือนที่มีข้อมูลไม่สำเร็จ ตัวเลือกช่วงเวลาอาจแสดงว่ายังไม่มีข้อมูลทั้งที่มี": "Could not load the months with data. The period options may show no data even where data exists."
 }
