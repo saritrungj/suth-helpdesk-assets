@@ -25,36 +25,15 @@
 // รัน: npm run test:e2e --workspace @suth/web
 
 import { expect, test } from "@playwright/test";
-import { apiFetch, reasonToSkip, signIn } from "./fixtures.js";
+import { reasonToSkip, resolveAssetDetailUrl, signIn } from "./fixtures.js";
 import { CONTRAST_HELPERS } from "./contrast-helper.js";
+import { PAGES } from "./pages.js";
 
 /** ค่าขั้นต่ำตาม WCAG 2.2 ระดับ AA */
 const AA_TEXT = 4.5;
 const AA_LARGE_TEXT = 3;
 const AA_NON_TEXT = 3;
 const AA_TARGET = 24;
-
-/** ทุกหน้าหลังล็อกอิน — ต้องเพิ่มที่นี่ทุกครั้งที่เพิ่มหน้าใหม่ */
-const PAGES = [
-  { name: "แดชบอร์ด", url: "/dashboard" },
-  { name: "บันทึกยอดพิมพ์", url: "/print-transactions" },
-  { name: "ทะเบียนทรัพย์สิน", url: "/assets" },
-  { name: "รายละเอียดเครื่อง", url: "/assets/:fixture" },
-  { name: "ค่าใช้จ่าย", url: "/expense" },
-  { name: "เปรียบเทียบรายเดือน", url: "/compare" },
-  { name: "รายงานสรุป", url: "/report" },
-  { name: "สัญญา", url: "/admin/contracts" },
-  { name: "จัดการผู้ใช้งาน", url: "/admin/users" },
-  { name: "ยี่ห้อ", url: "/admin/brands" },
-  { name: "อาคาร", url: "/admin/buildings" },
-  { name: "ชั้น", url: "/admin/floors" },
-  { name: "ฝ่าย", url: "/admin/divisions" },
-  { name: "แผนก", url: "/admin/departments" },
-  { name: "ปีงบ", url: "/admin/fiscal-years" },
-  { name: "เพิ่มทรัพย์สิน", url: "/admin/add-asset" },
-  { name: "นำเข้าทรัพย์สิน", url: "/admin/add-asset?tab=import" },
-  { name: "ค่าใช้จ่ายแยกแผนก", url: "/expense?tab=department" },
-];
 
 /**
  * ชุดฟังก์ชันคำนวณสีที่ถูกฉีดเข้าไปทำงานในหน้าเว็บ
@@ -125,11 +104,7 @@ test.beforeAll(async () => {
  * ตั้งแต่ก่อน CSS จะ paint ครั้งแรก การสลับทีหลังได้ค่าที่ต่างจากที่ผู้ใช้เห็นจริง
  */
 async function open(page, url, mode = "light") {
-  if (url === "/assets/:fixture") {
-    const devices = await apiFetch("/devices?per_page=1");
-    test.skip(!devices.length, "ไม่มีเครื่องสำหรับตรวจหน้ารายละเอียด — ไม่สร้างข้อมูลในฐานจริง");
-    url = `/assets/${devices[0].id}`;
-  }
+  url = await resolveAssetDetailUrl(url);
   await page.addInitScript((m) => {
     try {
       localStorage.setItem("suth-ui-mode", m);

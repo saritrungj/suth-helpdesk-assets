@@ -963,10 +963,15 @@ onUnmounted(unregisterFiscalYearGuard);
           max-height="60vh"
           sticky-first
         >
+          <!-- inline-flex + min-h-6: ข้อ 2.5.8 บังคับพื้นที่กด 24x24 ส่วนตัวอักษร
+               บรรทัดเดียวสูงแค่ 17px และลิงก์นี้ไม่เข้าข้อยกเว้น "อยู่ในประโยค"
+               เพราะมันอยู่เดี่ยวๆ ในช่องตาราง ไม่ได้แทรกอยู่ในข้อความ (เจอบั๊กนี้
+               ซ้ำที่นี่ตอนขยาย wcag.spec.js ให้รันกับฐาน CI จริงใน #63 — แก้ไปแล้ว
+               ที่ทะเบียนทรัพย์สิน AssetList.vue แต่ไม่เคยตรวจหน้านี้ด้วยฐานจริงมาก่อน) -->
           <template #cell-serial_number="{ row }">
             <RouterLink
               :to="`/assets/${row.id}`"
-              class="font-mono text-sm text-ink hover:text-brand-ink hover:underline underline-offset-2"
+              class="inline-flex items-center min-h-6 font-mono text-sm text-ink hover:text-brand-ink hover:underline underline-offset-2 rounded-xs"
             >
               {{ row.serial_number || "—" }}
             </RouterLink>

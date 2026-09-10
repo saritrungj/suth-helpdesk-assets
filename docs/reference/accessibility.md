@@ -16,7 +16,8 @@
 | `apps/web/e2e/asset-drawer.spec.js` | ทะเบียนและแผงแก้ไข/ย้าย: โฟกัสในแผง, dirty/pending, สิทธิ์, zoom 200% และ density สามระดับ |
 | `apps/web/e2e/asset-evidence.spec.js` | ภาพหลักฐานของทะเบียนสองภาษา สองธีม สามขนาด ไม่ใช่ pixel regression |
 | `apps/web/e2e/contrast-helper.spec.js` | regression ของตัววัดด้วย CSS จริงใน Chromium โดยไม่ต้องมี API/ฐานข้อมูล |
-| `apps/web/e2e/axe-fixture.spec.js` | axe-core บนสถานะที่ fixture คุม (ทะเบียน, แผงแก้ไข, แผงย้าย) — เฟสแรกของ #64 ยังไม่ครบ PAGES ทั้งหมด |
+| `apps/web/e2e/axe-fixture.spec.js` | axe-core บนสถานะที่ fixture คุม (ทะเบียน, แผงแก้ไข, แผงย้าย) — ไม่ต้องมี API/ฐานข้อมูล เฟส 1 ของ #64 |
+| `apps/web/e2e/axe-pages.spec.js` | axe-core บนทุกหน้าใน `PAGES` (`apps/web/e2e/pages.js`) — ชุดเดียวกับ wcag.spec.js ต้องมี API/ฐานข้อมูลจริง เฟส 2 ของ #64 |
 
 รายการ URL ที่รันจริงอยู่ใน `PAGES` ของ `wcag.spec.js` เป็น source of truth
 หน้ารายละเอียดเลือกเครื่องที่มีจริงจาก API; ถ้าไม่มีเครื่องจะรายงาน skipped ไม่สร้างข้อมูล
@@ -45,8 +46,9 @@ npm run test:e2e --workspace @suth/web -- wcag.spec.js contrast-helper.spec.js
 
 ## axe-core กับตัววัดที่เขียนเอง แบ่งงานกันอย่างไร
 
-`apps/web/e2e/axe-fixture.spec.js` เพิ่ม [`@axe-core/playwright`](https://github.com/dequelabs/axe-core-npm)
-เป็นชั้นพื้นแยกจากตัววัดข้างบน **ไม่ใช่ตัวแทน**:
+`apps/web/e2e/axe-fixture.spec.js` และ `apps/web/e2e/axe-pages.spec.js` เพิ่ม
+[`@axe-core/playwright`](https://github.com/dequelabs/axe-core-npm) เป็นชั้นพื้น
+แยกจากตัววัดข้างบน **ไม่ใช่ตัวแทน**:
 
 | | axe-core | ตัววัดที่เขียนเอง (contrast-helper.js ฯลฯ) |
 | --- | --- | --- |
@@ -54,16 +56,27 @@ npm run test:e2e --workspace @suth/web -- wcag.spec.js contrast-helper.spec.js
 | ทำไมต้องแยก | เขียนเองไม่คุ้ม มีคนดูแล rule set ให้แล้วและอัปเดตตามมาตรฐานเรื่อยๆ | axe ยังจับ contrast ของสีที่ผ่านการ compose/opacity/oklch ได้ไม่แม่นเท่า ตัววัดของเราออกแบบมาเพื่อเคสนี้โดยเฉพาะ |
 | ครอบคลุม | ราว 30–50% ของ WCAG (ดูหมายเหตุใน [#64](https://github.com/saritrungj/suth-helpdesk-assets/issues/64)) | เฉพาะ contrast/reflow/target-size ที่ระบุไว้ในตารางด้านบน ไม่ใช่ทั้งหมด |
 
-**สถานะปัจจุบัน (เฟส 1):** รันเฉพาะสถานะที่ fixture คุมอยู่แล้ว — ทะเบียน, แผงแก้ไข,
-แผงย้ายเครื่อง — ยังไม่ครบ `PAGES` ของ `wcag.spec.js` เพราะหน้าที่เหลือต้องล็อกอิน
-จริงผ่าน API/ฐานข้อมูล ซึ่งชั้น CI นั้นยังไม่มี (#63) เมื่อ #63 เสร็จ เฟส 2 จะขยาย
-ไปรันบน `PAGES` ทั้งชุดโดยใช้กลไก baseline เดียวกัน ไม่ต้องออกแบบใหม่
+**สถานะปัจจุบัน:** ครบทั้งสองเฟสแล้ว
 
-**baseline:** violation ที่มีอยู่ ณ วันเริ่มถูกบันทึกไว้ใน `apps/web/e2e/axe-baseline.json`
-CI แดงเฉพาะตัวใหม่ที่ยังไม่เคยอยู่ในนั้น เพื่อให้ไล่เก็บหนี้เดิมทีละตัวได้โดยไม่ต้อง
-บล็อกทุก PR จนกว่าจะแก้หมด ตอนเริ่มเจอ `color-contrast` หนึ่งจุดบนทะเบียน/แผงแก้ไข/
-แผงย้าย (`.opacity-80`, 4.15:1 จากที่ต้องการ 4.5:1) ซึ่งเป็นหนี้เดิมที่ยังไม่เคยถูก
-ตัววัด contrast ของเราวัด เพราะอยู่นอกขอบเขตปัจจุบันของ `contrast-helper.js`
+- **เฟส 1** (`axe-fixture.spec.js`) — สถานะที่ fixture คุมอยู่แล้ว (ทะเบียน,
+  แผงแก้ไข, แผงย้ายเครื่อง) ไม่ต้องมี API/ฐานข้อมูล รันในงาน `verify`
+- **เฟส 2** (`axe-pages.spec.js`) — ทุกหน้าใน `PAGES` (`apps/web/e2e/pages.js`
+  — ชุดเดียวกับที่ `wcag.spec.js` ใช้) ต้องมี API/ฐานข้อมูลจริง (#63) รันในงาน `db`
+  `PAGES` แยกไว้เป็นโมดูลกลางไม่ใช่ export จากไฟล์ .spec.js ตรงๆ — import ค่าคงที่
+  จากไฟล์ .spec.js จะลาก `test()` ทั้งไฟล์นั้นติดมาโดยไม่ตั้งใจ (module side effect
+  ของ Playwright) ซึ่งเจอบั๊กนี้จริงตอนเขียน `axe-pages.spec.js` ครั้งแรก
+
+**baseline:** violation ที่มีอยู่ ณ วันเริ่มของแต่ละเฟสถูกบันทึกแยกไฟล์กัน —
+`apps/web/e2e/axe-baseline.json` (เฟส 1) และ `apps/web/e2e/axe-baseline-pages.json`
+(เฟส 2) เพราะคนละขอบเขต หน้าเดียวกันอาจมีผลต่างกันได้ระหว่างข้อมูล fixture กับ
+ข้อมูลจริงจากฐาน CI CI แดงเฉพาะตัวใหม่ที่ยังไม่เคยอยู่ในไฟล์ของเฟสนั้น เพื่อให้ไล่
+เก็บหนี้เดิมทีละตัวได้โดยไม่ต้องบล็อกทุก PR จนกว่าจะแก้หมด
+
+เฟส 1 เจอ `color-contrast` หนึ่งจุดบนทะเบียน/แผงแก้ไข/แผงย้าย (`.opacity-80`,
+4.15:1 จากที่ต้องการ 4.5:1) เฟส 2 เจอ `color-contrast` บนเกือบทุกหน้า (จุดเดียวกัน)
+และ `role-img-alt` เพิ่มบนแดชบอร์ด/รายละเอียดเครื่อง/เปรียบเทียบรายเดือน (กราฟ
+chart.js ที่ยังไม่มี accessible name) ทั้งหมดเป็นหนี้เดิมที่ยังไม่เคยถูกตัววัด
+contrast ของเราจับ เพราะอยู่นอกขอบเขตปัจจุบันของ `contrast-helper.js`
 
 ---
 
