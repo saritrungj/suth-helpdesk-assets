@@ -15,7 +15,7 @@
 -- normalize ให้ตั้งแต่ขาเข้า) แต่ในฐานข้อมูลเก็บเป็น ค.ศ. แบบเดียว
 --
 -- วิธีรัน:
---   mysql -u root -p your_database < database/migration_normalize_month_to_ce.sql
+--   mysql -u root -p your_database < database/migrations/migration_normalize_month_to_ce.sql
 --
 -- migration นี้จะ "หยุดและไม่แก้อะไรเลย" ถ้าพบว่าเครื่องเดียวกันมีทั้งแถว พ.ศ. และแถว ค.ศ.
 -- ของเดือนเดียวกัน เพราะกรณีนั้นต้องให้คนตัดสินว่ายอดไหนถูก ไม่ควรให้ script เดาเอง

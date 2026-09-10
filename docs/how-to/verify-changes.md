@@ -40,7 +40,25 @@ npm run test:e2e --workspace @suth/web
 
 ตรวจเส้นทางการทำงานจริงบนเบราว์เซอร์ — กรอกข้อมูลแล้วบันทึก, คำเตือนออกจากหน้าทั้งที่ยังไม่บันทึก, การวางตัวเลขจากตารางคำนวณ, คีย์บอร์ดและ contrast ตามเกณฑ์ WCAG AA ทั้งสองธีม (`apps/web/e2e/wcag.spec.js`, `login-wcag.spec.js`)
 
-ต้องมีทั้ง API (พอร์ต 3000) และเว็บ (5173) รันอยู่พร้อมฐานข้อมูลจริงก่อน — ถ้าต่อไม่ได้เทสจะ **ข้ามทั้งชุด** ไม่ใช่ล้มเหลว เทสกลุ่มที่เขียนข้อมูลลงฐาน (เช่น `month-entry.spec.js`) คืนค่าเดิมกลับเองทุกครั้งในขั้นตอนสุดท้าย (ดู `apps/web/e2e/fixtures.js`)
+ต้องมีทั้ง API (พอร์ต 3000) และเว็บ (5173) รันอยู่พร้อมฐานข้อมูลจริงก่อน — ถ้าต่อไม่ได้เทสจะ **ข้ามทั้งชุด** ไม่ใช่ล้มเหลว เทสกลุ่มที่เขียนข้อมูลลงฐาน (เช่น `month-entry.spec.js`) ต้องเปิดเองด้วย `SUTH_E2E_ALLOW_WRITES=1` และคืนค่าเดิมกลับเองทุกครั้งในขั้นตอนสุดท้าย (ดู `apps/web/e2e/fixtures.js`)
+
+อยากจำลองงาน `db` ของ CI บนเครื่องตัวเองก่อน push (เช่นตอน GitHub Actions ยังรันไม่ได้)
+ไม่ต้องแตะฐานพัฒนาเลย — สร้างฐานชั่วคราวด้วย Docker แล้วชี้ API ไปที่ฐานนั้นแทน:
+
+```powershell
+docker run -d --name suth-ci-mysql -e MYSQL_ALLOW_EMPTY_PASSWORD=yes -e MYSQL_DATABASE=suth_ci -p 3307:3306 mysql:8.4
+Get-Content database/schema.sql, database/seed_ci.sql | docker exec -i suth-ci-mysql mysql --default-character-set=utf8mb4 -uroot suth_ci
+
+$env:DB_HOST="127.0.0.1"; $env:DB_PORT="3307"; $env:DB_NAME="suth_ci"
+$env:SUTH_E2E_START_API="1"; $env:SUTH_E2E_REQUIRE_SERVICES="1"; $env:SUTH_E2E_ALLOW_WRITES="1"
+npm run test:e2e:db --workspace @suth/web
+
+docker rm -f suth-ci-mysql
+```
+
+`--default-character-set=utf8mb4` ตอนโหลด seed จำเป็น ไม่ใช่ตัวเลือก — ไม่ใส่แล้ว client
+ต่อด้วย latin1 นับความยาวชื่อภาษาไทยเป็นไบต์แทนตัวอักษร ทำให้ INSERT ที่ตัวอักษรไม่เกิน
+255 จริงล้มด้วย "Data too long"
 
 ถ้าแก้สี ธีม หรือ layout ของหน้าที่มีอยู่แล้ว ถ่ายภาพหน้าจอไว้เทียบก่อน/หลังด้วย `npm run test:e2e:shots --workspace @suth/web` (ภาพออกที่ `apps/web/e2e/screens/` — ไม่ commit เพราะสร้างใหม่ได้ทุกครั้ง ดู `.gitignore`)
 
@@ -82,18 +100,31 @@ API/ฐานข้อมูล เพราะ push ที่ล้มเพร
 > ไม่เริ่ม ด่านที่ทำงานจริงอยู่ตอนนี้คือ hook ด้านบน เมื่อบิลปลดแล้วส่วนนี้จะทำงานเองทันที
 > โดยไม่ต้องแก้อะไร
 
-ทุก PR และทุก push เข้า `main` GitHub Actions (`.github/workflows/ci.yml`) รัน `npm test`
-ทุก workspace, `npm run build`, ตรวจช่องว่างท้ายบรรทัดของสิ่งที่เปลี่ยน และรัน E2E สามไฟล์
-ที่ไม่ต้องใช้ API หรือฐานข้อมูล (`asset-drawer`, `asset-evidence`, `contrast-helper`)
-เพราะ fixture ของมัน intercept `/api/*` ทั้งหมด — ชุดที่ต้องมีฐานจริงยังเป็นงานที่ต้องรันเอง
+ทุก PR และทุก push เข้า `main` GitHub Actions (`.github/workflows/ci.yml`) รันสองงานคู่กัน
+
+| งาน | รันอะไร | ต้องมีฐานข้อมูล |
+|---|---|---|
+| `verify` | `npm test` ทุก workspace, `npm run build`, ตรวจช่องว่างท้ายบรรทัด, E2E ที่ fixture intercept `/api/*` ทั้งหมด (`asset-drawer`, `asset-evidence`, `contrast-helper`) | ไม่ต้อง |
+| `db` | E2E ที่เหลือทั้งหมด ยกเว้น `screenshots.spec.js` (ภาพเทียบข้ามรอบ ไม่เหมาะกับ CI) และ `asset-qa48.spec.js` (ใช้ฐาน QA แยกบนเครื่อง ดู [ADR-0016](../decisions/0016-isolated-qa-database-and-bootstrap-harness.md)) | ต้องมี — MySQL service container สร้างใหม่ทุก run จาก `database/schema.sql` + `database/seed_ci.sql` |
+
+งาน `db` สตาร์ต API เองด้วย `SUTH_E2E_START_API=1` ต่อฐานที่สร้างใหม่นั้นโดยตรง (ไม่ใช่ฐาน
+พัฒนา) ด้วย `JWT_SECRET` ที่สุ่มใหม่ทุก run ผ่าน `openssl rand` ไม่เก็บเป็น GitHub Secret
+เพราะฐานทิ้งทุกครั้งจบ job ไม่มีอะไรต้องคงอยู่ข้ามรอบ และตั้ง `SUTH_E2E_REQUIRE_SERVICES=1`
+ให้ `reasonToSkip()` โยน error แทนการข้าม — ถ้า service container ต่อไม่ติดเพราะ config ผิด
+งานนี้ต้องแดง ไม่ใช่เขียวแบบ skip ทั้งที่ไม่ได้ตรวจอะไรเลย
+
+`database/seed_ci.sql` ใส่เคสร้ายจงใจ (ชื่อแผนกยาว 102 ตัวอักษร, เครื่องที่มีประวัติย้าย,
+สัญญา 0.45 บาท/แผ่น) เพราะรอบ #48 เจอบั๊ก a11y สองตัวได้ก็เพราะฐาน QA บังเอิญมีข้อมูล
+แบบนี้ — ถ้า seed มีแต่ข้อมูลสวย CI จะตรวจไม่เจอสิ่งเหล่านี้อีกเลย ปีงบและเดือนคำนวณจาก
+วันที่รันจริงด้วย `CURDATE()` ไม่ตรึงวันที่ตายตัว seed จึงไม่มีวัน "หมดอายุ"
 
 เว็บใน CI ถูกสตาร์ตจาก **build จริงแล้ว preview** ผ่าน `webServer` ใน `playwright.config.js`
 ไม่ใช่ dev server เพราะสิ่งที่ต้องทดสอบคือ bundle ที่จะถูกส่งมอบ ตอนรันบนเครื่อง
 `reuseExistingServer` ทำให้ Playwright ใช้ server ที่คุณเปิดค้างไว้เหมือนเดิม ไม่มีขั้นตอนใหม่
 
-ผลที่ล้มดูได้จาก artifact `playwright-report` ของ run นั้น เก็บไว้ 14 วัน เปิดด้วย
-`npx playwright show-report <โฟลเดอร์ที่แตกไฟล์>` — CI เขียวไม่ได้แปลว่าตรวจครบ
-รายการที่ CI ยังไม่ครอบอยู่ในหัวข้อด้านบนทั้งหมด
+ผลที่ล้มดูได้จาก artifact `playwright-report` (งาน `verify`) หรือ `playwright-report-db`
+(งาน `db`) ของ run นั้น เก็บไว้ 14 วัน เปิดด้วย `npx playwright show-report <โฟลเดอร์ที่แตกไฟล์>`
+— CI เขียวไม่ได้แปลว่าตรวจครบ รายการที่ CI ยังไม่ครอบอยู่ในหัวข้อด้านบนทั้งหมด
 
 ## ก่อนเปิด PR
 

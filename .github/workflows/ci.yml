@@ -1,7 +1,12 @@
-# ชั้นแรกของ CI — ทุกอย่างในไฟล์นี้ต้องรันได้โดยไม่ต้องมีฐานข้อมูล
+# สองชั้นของ CI ในไฟล์เดียว
 #
-# ชุดที่ต้องมี API/MySQL อยู่ใน #63 ไม่ใช่ที่นี่ เพราะงานนี้ต้องเร็วพอที่จะเป็น
-# ด่านบังคับของทุก PR โดยไม่มีใครอยากข้าม
+#   verify — ไม่ต้องมีฐานข้อมูล ต้องเร็วพอที่จะเป็นด่านบังคับของทุก PR โดยไม่มีใคร
+#            อยากข้าม (ชั้นแรก #66)
+#   db     — ต้องมี MySQL service container จริง สร้างจาก schema.sql + seed_ci.sql
+#            ใหม่ทุกครั้ง ไม่มี state ค้างข้ามรอบ (ชั้นสอง #63)
+#
+# สองงานนี้รันคู่กันทุก PR ไม่ใช่ชั้นสองรันทีหลังชั้นแรก — ถ้าต่อ API/DB ไม่ได้
+# งาน db ต้องแดง ไม่ใช่เขียวแบบ skip (ดู SUTH_E2E_REQUIRE_SERVICES ใน e2e/fixtures.js)
 name: CI
 
 on:
@@ -64,4 +69,79 @@ jobs:
           path: apps/web/playwright-report
           # เอกสาร Playwright เตือนว่า artifact อาจมี credential ติดไปด้วย
           # 14 วันพอสำหรับไล่ดูสาเหตุ โดยไม่ต้องเก็บนานเกินจำเป็น
+          retention-days: 14
+
+  db:
+    name: E2E ที่ต้องใช้ฐานข้อมูลจริง
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # สร้างใหม่ทุก run — schema.sql + seed_ci.sql เท่านั้น ไม่มี state ค้างข้ามรอบ
+    # และไม่ใช่ฐานพัฒนา/ฐานจริงของโรงพยาบาลเลยแม้แต่น้อย
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: suth_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # --default-character-set=utf8mb4 จำเป็น ไม่ใช่ตัวเลือก — ไม่ใส่แล้ว client
+      # จะต่อด้วย latin1 แล้วนับความยาวชื่อแผนกภาษาไทยเป็นไบต์ ไม่ใช่ตัวอักษร ทำให้
+      # ชื่อยาวจงใจ (102 ตัวอักษร) ถูกนับเกิน VARCHAR(255) ทั้งที่ไม่ได้ยาวเกินจริง
+      - name: โหลด schema แล้วตามด้วย seed ของ CI (มีเคสร้ายจงใจ — ดูหมายเหตุในไฟล์)
+        run: |
+          mysql --default-character-set=utf8mb4 -h 127.0.0.1 -u root suth_ci < database/schema.sql
+          mysql --default-character-set=utf8mb4 -h 127.0.0.1 -u root suth_ci < database/seed_ci.sql
+
+      - name: build ฝั่งเว็บ
+        run: npm run build
+
+      - name: ติดตั้งเบราว์เซอร์
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+
+      # สุ่มใหม่ทุก run ด้วย openssl ไม่ใช่ค่าที่เดาได้จาก run id และไม่เคยเก็บเป็น
+      # GitHub Secret เพราะไม่มีอะไรต้องคงอยู่ข้ามรอบ — ฐาน suth_ci ก็ถูกทิ้งทุกจบ job
+      - name: สุ่ม JWT_SECRET ใหม่เฉพาะ run นี้
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      # webServer ของ playwright.config.js สตาร์ต API เองด้วย SUTH_E2E_START_API=1
+      # ต่อฐาน suth_ci ข้างบนโดยตรง ไม่ใช่ฐานพัฒนา ใช้ JWT_SECRET ที่สุ่มไว้ข้างบน
+      #
+      # SUTH_E2E_REQUIRE_SERVICES=1 ทำให้ reasonToSkip() โยน error แทนการข้าม —
+      # ถ้าต่อ API/DB ไม่ได้ตรงนี้ workflow ต้องแดง ไม่ใช่เขียวแบบ skip (เกณฑ์ตรวจรับ #63)
+      # SUTH_E2E_ALLOW_WRITES=1 ปลอดภัยเพราะฐานนี้ทิ้งทุกครั้งจบ job ไม่มีใครอ่านรายงานจากมัน
+      - name: E2E ที่เหลือทั้งหมด ยกเว้น screenshots และ asset-qa48
+        env:
+          DB_HOST: 127.0.0.1
+          DB_USER: root
+          DB_PASSWORD: ""
+          DB_NAME: suth_ci
+          SUTH_E2E_START_API: "1"
+          SUTH_E2E_REQUIRE_SERVICES: "1"
+          SUTH_E2E_ALLOW_WRITES: "1"
+        run: npm run test:e2e:db --workspace @suth/web
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-db
+          path: apps/web/playwright-report
           retention-days: 14
