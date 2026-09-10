@@ -55,8 +55,7 @@ jobs:
       # สามไฟล์นี้ intercept /api/* ทั้งหมดผ่าน fixture จึงไม่ต้องมี API หรือฐานข้อมูล
       # Playwright สตาร์ต preview ของ build ที่เพิ่งทำเองผ่าน webServer ใน config
       - name: E2E ที่ใช้ fixture
-        run: npx playwright test asset-drawer.spec.js asset-evidence.spec.js contrast-helper.spec.js
-        working-directory: apps/web
+        run: npm run test:e2e:fixture --workspace @suth/web
 
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}

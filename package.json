@@ -14,7 +14,8 @@
     "start": "npm run start --workspace @suth/api",
     "build": "npm run build --workspace @suth/web",
     "preview": "npm run preview --workspace @suth/web",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "verify": "npm test && npm run build && npm run test:e2e:fixture --workspace @suth/web"
   },
   "engines": {
     "node": ">=20"

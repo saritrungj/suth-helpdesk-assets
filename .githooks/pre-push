@@ -1,0 +1,29 @@
+#!/bin/sh
+# ด่านก่อน push — รันชุดเดียวกับ .github/workflows/ci.yml
+#
+# มีไว้เพราะ Actions ของบัญชีนี้ถูกล็อกจากปัญหาบิล จึงยังไม่มีอะไรกั้นฝั่ง GitHub
+# เมื่อบิลปลดแล้ว hook นี้ยังมีประโยชน์ต่อ คือรู้ผลก่อน push แทนที่จะรอ CI
+#
+# ติดตั้ง (ครั้งเดียวต่อ clone):  git config core.hooksPath .githooks
+# ข้ามชั่วคราวเมื่อจำเป็นจริง:    git push --no-verify
+#
+# hook นี้ตั้งใจ **ไม่** รันชุดที่ต้องมี API/ฐานข้อมูล เพราะไม่ใช่ทุกเครื่องที่เปิดไว้
+# และ push ที่ล้มเพราะเครื่องคนอื่นไม่ได้เปิด MySQL ไม่ได้บอกอะไรเกี่ยวกับโค้ด
+
+set -e
+
+if [ "$SKIP_VERIFY" = "1" ]; then
+  echo "pre-push: ข้ามตามคำสั่ง SKIP_VERIFY=1"
+  exit 0
+fi
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+echo "pre-push: ตรวจช่องว่างท้ายบรรทัดและ conflict marker"
+git diff --check HEAD
+
+echo "pre-push: npm test, build และ E2E ที่ไม่ต้องใช้ฐานข้อมูล"
+npm run verify
+
+echo "pre-push: ผ่าน"

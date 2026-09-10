@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:fixture": "playwright test asset-drawer.spec.js asset-evidence.spec.js contrast-helper.spec.js",
     "test:e2e:shots": "playwright test screenshots.spec.js"
   },
   "dependencies": {
