@@ -77,7 +77,12 @@ export default defineConfig({
   fullyParallel: false,
 
   // บน CI เก็บ HTML report ไว้เป็น artifact ด้วย เพราะ log อย่างเดียวไล่ไม่ออกว่าพังตรงไหน
-  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
+  // junit เพิ่มเฉพาะบน CI ให้ dorny/test-reporter (#65) อ่านไปขึ้น Checks พร้อม
+  // annotation ที่บรรทัดที่ล้ม — ไม่กระทบเทอร์มินัลตอนรันบนเครื่อง (ดู test-results/
+  // ใน .gitignore)
+  reporter: process.env.CI
+    ? [["list"], ["html", { open: "never" }], ["junit", { outputFile: "test-results/e2e-junit.xml" }]]
+    : [["list"]],
 
   use: {
     baseURL: webUrl,

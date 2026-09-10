@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import { test } from "@playwright/test";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const API_URL = process.env.SUTH_API_URL || "http://localhost:3000/api";
@@ -130,6 +131,24 @@ export async function apiFetch(pathname, options = {}) {
 
   if (!res.ok) throw new Error(`${pathname} ตอบสถานะ ${res.status}: ${await res.text()}`);
   return res.json();
+}
+
+/**
+ * แปลง URL พิเศษ `/assets/:fixture` เป็น id เครื่องที่มีจริงในฐานที่กำลังรันเทส
+ * อยู่ — ใช้ร่วมกันทุกชุดเทสที่ต้องเปิดหน้ารายละเอียดเครื่อง (wcag.spec.js,
+ * page-structure.spec.js, axe-pages.spec.js, ...)
+ *
+ * ห้ามตรึง id เครื่องไว้ตรงๆ (เช่น `/assets/17`) — ฐานที่ใช้รันเทสแต่ละครั้งมี
+ * จำนวนเครื่องไม่เท่ากัน (ฐาน CI ของ #63 มีแค่ไม่กี่เครื่อง) id ที่ตรึงไว้จะชี้
+ * ไปยังเครื่องที่ไม่มีอยู่แล้วรายงานเป็นบั๊กปลอม (ดูประวัติใน page-structure.spec.js)
+ *
+ * @returns {Promise<string>} URL จริงที่ไปได้ — เทสจะถูก skip เองถ้าไม่มีเครื่อง
+ */
+export async function resolveAssetDetailUrl(url) {
+  if (url !== "/assets/:fixture") return url;
+  const devices = await apiFetch("/devices?per_page=1");
+  test.skip(!devices.length, "ไม่มีเครื่องสำหรับตรวจหน้ารายละเอียด — ไม่สร้างข้อมูลในฐานจริง");
+  return `/assets/${devices[0].id}`;
 }
 
 /**

@@ -1,0 +1,59 @@
+{
+  "แดชบอร์ด": [
+    "color-contrast",
+    "role-img-alt"
+  ],
+  "บันทึกยอดพิมพ์": [
+    "color-contrast"
+  ],
+  "ทะเบียนทรัพย์สิน": [
+    "color-contrast"
+  ],
+  "รายละเอียดเครื่อง": [
+    "color-contrast",
+    "role-img-alt"
+  ],
+  "ค่าใช้จ่าย": [
+    "color-contrast"
+  ],
+  "เปรียบเทียบรายเดือน": [
+    "color-contrast",
+    "role-img-alt"
+  ],
+  "รายงานสรุป": [
+    "color-contrast"
+  ],
+  "สัญญา": [
+    "color-contrast"
+  ],
+  "จัดการผู้ใช้งาน": [
+    "color-contrast"
+  ],
+  "ยี่ห้อ": [
+    "color-contrast"
+  ],
+  "อาคาร": [
+    "color-contrast"
+  ],
+  "ชั้น": [
+    "color-contrast"
+  ],
+  "ฝ่าย": [
+    "color-contrast"
+  ],
+  "แผนก": [
+    "color-contrast"
+  ],
+  "ปีงบ": [
+    "color-contrast"
+  ],
+  "เพิ่มทรัพย์สิน": [
+    "color-contrast"
+  ],
+  "นำเข้าทรัพย์สิน": [
+    "color-contrast"
+  ],
+  "ค่าใช้จ่ายแยกแผนก": [
+    "color-contrast"
+  ]
+}
