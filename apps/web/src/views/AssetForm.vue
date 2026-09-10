@@ -11,9 +11,10 @@ import { t } from "../lib/locale";
  * เขียนเอง ไว้ด้วยกัน — การนำเข้าไฟล์ย้ายไป DeviceImportPanel แล้ว เพราะเป็นคนละ
  * งานกับการกรอกทีละเครื่อง แค่บังเอิญเคยอยู่ในหน้าต่างเดียวกัน
  */
-import { ref, useTemplateRef, watch } from "vue";
+import { computed, ref, useTemplateRef } from "vue";
+import { useAssetDraftGuard } from "./use-asset-draft-guard";
 import DeviceFormFields from "../components/DeviceFormFields.vue";
-import { UiButton, UiModal } from "../ui";
+import { UiButton, UiDrawer } from "../ui";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -24,41 +25,50 @@ const emit = defineEmits(["update:modelValue", "saved"]);
 
 const fields = useTemplateRef("fields");
 const busy = ref(false);
-
-watch(
-  () => [props.modelValue, props.assetId],
-  ([open]) => {
-    if (open) fields.value?.reset();
-  }
-);
+const dirty = ref(false);
+const pending = computed(() => busy.value || Boolean(fields.value?.saving));
+const mayLeave = useAssetDraftGuard({
+  open: () => props.modelValue,
+  dirty: () => dirty.value,
+  pending: () => pending.value,
+  discard: () => { dirty.value = false; },
+});
+async function requestClose() {
+  if (await mayLeave()) emit("update:modelValue", false);
+}
+function saved() {
+  dirty.value = false;
+  emit("saved");
+  emit("update:modelValue", false);
+}
 
 async function save() {
+  if (pending.value) return;
   busy.value = true;
-  const ok = await fields.value?.submit();
-  busy.value = false;
-
-  if (ok) {
-    emit("saved");
-    emit("update:modelValue", false);
+  try {
+    await fields.value?.submit();
+  } finally {
+    busy.value = false;
   }
 }
 </script>
 
 <template>
-  <UiModal
+  <UiDrawer
     :open="modelValue"
     :title="assetId ? t(&quot;แก้ไขข้อมูลเครื่อง&quot;) : t(&quot;เพิ่มเครื่องเข้าทะเบียน&quot;)"
     :description="t(&quot;ช่องที่มีเครื่องหมาย * ต้องกรอก ช่องอื่นเว้นไว้แล้วมาเติมทีหลังได้&quot;)"
     size="lg"
-    @update:open="emit('update:modelValue', $event)"
+    :pending="pending"
+    @update:open="requestClose"
   >
-    <DeviceFormFields ref="fields" :asset-id="assetId" />
+    <DeviceFormFields v-if="modelValue" :key="assetId" ref="fields" :asset-id="assetId" @dirty="dirty = $event" @saved="saved" />
 
     <template #footer>
-      <UiButton variant="secondary" :disabled="busy" @click="emit('update:modelValue', false)"> {{ t("ยกเลิก") }} </UiButton>
-      <UiButton variant="primary" :loading="busy" @click="save">
+      <UiButton variant="secondary" :disabled="pending" @click="requestClose"> {{ t("ยกเลิก") }} </UiButton>
+      <UiButton variant="primary" :loading="pending" :disabled="!fields?.ready" @click="save">
         {{ assetId ? t("บันทึกการแก้ไข") : t("เพิ่มเครื่อง") }}
       </UiButton>
     </template>
-  </UiModal>
+  </UiDrawer>
 </template>

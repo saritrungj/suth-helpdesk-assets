@@ -53,7 +53,6 @@ import UiSelect from "./UiSelect.vue";
 import UiSkeleton from "./UiSkeleton.vue";
 
 const tableRoot = useTemplateRef("tableRoot");
-const { expanded, expandError, toggleExpanded } = useFullscreen(tableRoot);
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   columns: { type: Array, required: true },
@@ -75,9 +74,19 @@ const props = defineProps({
   /** ตรึงคอลัมน์แรกไว้ตอนเลื่อนแนวนอน สำหรับตารางที่กว้างมาก */
   stickyFirst: { type: Boolean, default: false },
   rowClass: { type: Function, default: null },
+  /** Optional search owner; existing callers keep their local search. */
+  searchValue: { type: String, default: undefined },
+  preservePageOnRefresh: { type: Boolean, default: false },
+  fullscreenTarget: { type: Object, default: null },
 });
-
-const search = ref("");
+const fullscreenRoot = computed(() => props.fullscreenTarget || tableRoot.value);
+const { expanded, expandError, toggleExpanded } = useFullscreen(fullscreenRoot);
+const emit = defineEmits(["update:searchValue"]);
+const localSearch = ref("");
+const search = computed({
+  get: () => props.searchValue ?? localSearch.value,
+  set: (value) => { localSearch.value = value; emit("update:searchValue", value); },
+});
 
 /**
  * คำค้นที่ใช้กรองจริง — หน่วงจากช่องกรอก 180 มิลลิวินาที
@@ -178,8 +187,11 @@ const rangeEnd = computed(() =>
   Math.min(currentPage.value * pageSize.value, sortedRows.value.length)
 );
 
-watch([searchTerm, () => props.rows.length, pageSize], () => {
+watch([searchTerm, pageSize], () => {
   currentPage.value = 1;
+});
+watch(() => props.rows.length, () => {
+  if (!props.preservePageOnRefresh) currentPage.value = 1;
 });
 
 watch(totalPages, (tp) => {
@@ -261,10 +273,13 @@ async function exportExcel() {
     context: [...props.exportContext, [t("ค้นหา"), search.value]],
   });
 }
+defineExpose({
+  containsRow: (key) => searchedRows.value.some((row) => row[props.rowKey] === key),
+});
 </script>
 
 <template>
-  <div ref="tableRoot" class="flex flex-col min-w-0 bg-surface" :class="expanded && 'h-screen overflow-auto p-5'">
+  <div ref="tableRoot" class="flex flex-col min-w-0 bg-surface" :class="expanded && !fullscreenTarget && 'h-screen overflow-auto p-5'">
     <p v-if="expandError" role="status">{{ expandError }}</p>
     <!-- แถบเครื่องมือ -->
     <div class="flex flex-wrap items-center gap-2 mb-3" data-print="hide">
@@ -284,7 +299,7 @@ async function exportExcel() {
 
       <slot name="toolbar-extra" />
 
-      <div class="flex items-center gap-2 ml-auto">
+      <div role="group" :aria-label="t('เครื่องมือตาราง')" class="flex items-center gap-2 ml-auto">
         <UiButton size="sm" variant="secondary" @click="toggleExpanded">{{ expanded ? t("ย่อตาราง") : t("ขยายตาราง") }}</UiButton>
         <UiMenu v-if="showColumnPicker" :label="t(&quot;แสดงคอลัมน์&quot;)">
           <template #trigger>
