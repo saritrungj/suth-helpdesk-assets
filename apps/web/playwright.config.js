@@ -1,4 +1,8 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * playwright.config.js — เทสที่รันบนเบราว์เซอร์จริง
@@ -13,7 +17,12 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * ทั้ง API (พอร์ต 3000) และเว็บ (5173) ต้องทำงานอยู่ พร้อมฐานข้อมูลจริง
  * เทสจะ **ข้ามทั้งชุด** ถ้าต่อไม่ได้ ไม่ใช่ล้มเหลว — เพราะการที่เครื่องใครสักคน
- * ไม่ได้เปิดฐานข้อมูลไม่ใช่ความผิดของโค้ด
+ * ไม่ได้เปิดฐานข้อมูลไม่ใช่ความผิดของโค้ด (ยกเว้นตั้ง `SUTH_E2E_REQUIRE_SERVICES=1`
+ * ให้กลายเป็นล้มเหลวแทน — ใช้บนงาน CI ที่ต้องมีฐานข้อมูลจริงเสมอ ดู e2e/fixtures.js)
+ *
+ * บนเครื่องคนมักเปิด API ค้างไว้เองอยู่แล้ว (`npm run dev:api`) ตั้ง
+ * `SUTH_E2E_START_API=1` ให้ Playwright สตาร์ต API เองแทนเฉพาะตอนไม่มีใครเปิดไว้
+ * (เช่นบน CI)
  *
  * ## เรื่องข้อมูล
  *
@@ -23,21 +32,45 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const webUrl = process.env.SUTH_WEB_URL || "http://localhost:5173";
 const webPort = new URL(webUrl).port || "5173";
+const apiUrl = process.env.SUTH_API_URL || "http://localhost:3000/api";
 
-export default defineConfig({
-  testDir: "./e2e",
-  outputDir: "./e2e/.artifacts",
-
-  /* บนเครื่องคนมักเปิด dev server ค้างไว้อยู่แล้ว `reuseExistingServer` จึงทำให้
-     ทุกอย่างเหมือนเดิมทุกประการ ส่วนบน CI ที่ไม่มีใครเปิดอะไรไว้ Playwright จะ
-     สตาร์ตเอง และตั้งใจใช้ผลของ `vite build` ผ่าน preview ไม่ใช่ dev server
-     เพราะสิ่งที่ต้องทดสอบคือ bundle ที่จะถูกส่งมอบจริง */
-  webServer: {
+/* บนเครื่องคนมักเปิด dev server ค้างไว้อยู่แล้ว `reuseExistingServer` จึงทำให้
+   ทุกอย่างเหมือนเดิมทุกประการ ส่วนบน CI ที่ไม่มีใครเปิดอะไรไว้ Playwright จะ
+   สตาร์ตเอง และตั้งใจใช้ผลของ `vite build` ผ่าน preview ไม่ใช่ dev server
+   เพราะสิ่งที่ต้องทดสอบคือ bundle ที่จะถูกส่งมอบจริง */
+const webServers = [
+  {
     command: `npm run preview -- --port ${webPort} --strictPort`,
     url: webUrl,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
+];
+
+/*
+ * ชุดที่ต้องมีฐานข้อมูลจริง (#63) ต้องมี API ทำงานอยู่ด้วย ซึ่งบนเครื่องคนมักเปิด
+ * ไว้เองแล้ว (`npm run dev:api`) แต่บน CI ไม่มีใครเปิดอะไรไว้ ตั้ง
+ * `SUTH_E2E_START_API=1` ให้ Playwright สตาร์ต API เองอีกตัว — ปิดเป็นค่าเริ่มต้น
+ * เพื่อไม่ให้ชนพอร์ตกับ API ที่เปิดอยู่แล้วตอนรันบนเครื่องปกติ
+ *
+ * env ที่ API ต้องการ (DB_*, JWT_SECRET, ...) รับผ่าน process.env ตรงๆ อยู่แล้ว —
+ * ผู้เรียก (workflow หรือคนบนเครื่อง) ต้องตั้งไว้ก่อนรัน playwright ไม่ใช่ที่นี่
+ */
+if (process.env.SUTH_E2E_START_API === "1") {
+  webServers.push({
+    command: "npm start",
+    cwd: path.resolve(HERE, "../api"),
+    url: `${apiUrl}/health`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  });
+}
+
+export default defineConfig({
+  testDir: "./e2e",
+  outputDir: "./e2e/.artifacts",
+
+  webServer: webServers,
 
   // เทสที่เขียนข้อมูลลงฐานเดียวกันห้ามรันพร้อมกัน ไม่งั้นจะแย่งกันแก้แถวเดียวกัน
   workers: 1,

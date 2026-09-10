@@ -171,7 +171,7 @@ ALTER TABLE print_transactions AUTO_INCREMENT = 15;
 -- ==============================================================================
 -- ประวัติการย้าย (device_location_history) — ตั้งต้นช่วง "ปัจจุบัน" ให้เครื่องที่ seed มา
 -- ใช้เดือนแรกสุดที่มียอดพิมพ์ของเครื่องนั้นเป็นจุดเริ่ม เพื่อให้รายงานแยกตามฝ่าย/แผนก
--- ดึงข้อมูล seed เดือนย้อนหลังได้ครบ (ดูรายละเอียดที่ migration_add_device_location_history.sql)
+-- ดึงข้อมูล seed เดือนย้อนหลังได้ครบ (ดูรายละเอียดที่ migrations/migration_add_device_location_history.sql)
 -- ==============================================================================
 INSERT INTO device_location_history
     (device_id, building_id, floor_id, location, division_id, department_id, effective_from, effective_to)

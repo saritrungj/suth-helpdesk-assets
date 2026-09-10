@@ -70,8 +70,7 @@ export function issueToken(role = "admin") {
   });
 }
 
-/** @returns {Promise<string|null>} เหตุผลที่ต้องข้าม หรือ null ถ้ารันได้ */
-export async function reasonToSkip() {
+async function computeReasonToSkip() {
   if (!issueToken()) return "ออก token ไม่ได้ (ไม่มี JWT_SECRET และไม่ได้ตั้ง SUTH_E2E_TOKEN)";
 
   try {
@@ -82,6 +81,25 @@ export async function reasonToSkip() {
   }
 
   return null;
+}
+
+/**
+ * @returns {Promise<string|null>} เหตุผลที่ต้องข้าม หรือ null ถ้ารันได้
+ *
+ * ค่าเริ่มต้นคือคืนเหตุผลให้แต่ละเทส `test.skip()` เอง เพราะเครื่องพัฒนาของใคร
+ * บางคนอาจไม่ได้เปิด API/ฐานข้อมูลไว้ ซึ่งไม่ใช่ความผิดของโค้ด
+ *
+ * บนงาน CI ที่มีฐานข้อมูลจริง (#63) การ skip แบบนี้อันตราย — ถ้า service
+ * container ต่อไม่ติดเพราะ config ผิด workflow จะรายงานว่า "ผ่าน" (skipped
+ * ไม่ใช่ failed) ทั้งที่ไม่ได้ตรวจอะไรเลย ตั้ง `SUTH_E2E_REQUIRE_SERVICES=1`
+ * ให้โยน error แทน — เทสจะแดงแทนที่จะข้ามเงียบๆ
+ */
+export async function reasonToSkip() {
+  const reason = await computeReasonToSkip();
+  if (reason && process.env.SUTH_E2E_REQUIRE_SERVICES === "1") {
+    throw new Error(`SUTH_E2E_REQUIRE_SERVICES=1 แต่ยังรันไม่ได้: ${reason}`);
+  }
+  return reason;
 }
 
 /** วาง cookie เข้าสู่ระบบลงใน context — ต้องเรียกก่อน goto ครั้งแรกเสมอ */

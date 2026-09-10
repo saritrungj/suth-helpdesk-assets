@@ -17,14 +17,21 @@
 // รัน: npm run test:e2e --workspace @suth/web
 
 import { expect, test } from "@playwright/test";
-import { reasonToSkip, signIn } from "./fixtures.js";
+import { apiFetch, reasonToSkip, signIn } from "./fixtures.js";
 
-/** ทุกหน้าหลังล็อกอิน — ต้องเพิ่มที่นี่ทุกครั้งที่เพิ่มหน้าใหม่ */
+/**
+ * ทุกหน้าหลังล็อกอิน — ต้องเพิ่มที่นี่ทุกครั้งที่เพิ่มหน้าใหม่
+ *
+ * `/assets/:fixture` แปลว่าให้เลือกเครื่องที่มีจริงจาก API ตอนรัน (ดูฟังก์ชัน
+ * `resolveUrl` ด้านล่าง) — ห้ามตรึง id เครื่องไว้ตรงๆ (เช่น `/assets/17`) เพราะ
+ * ฐานที่ใช้รันเทสแต่ละครั้งมีจำนวนเครื่องไม่เท่ากัน (ฐาน CI ของ #63 มีแค่ไม่กี่
+ * เครื่อง) id ที่ตรึงไว้จะชี้ไปยังเครื่องที่ไม่มีอยู่แล้วรายงานเป็นบั๊กปลอม
+ */
 const PAGES = [
   { name: "แดชบอร์ด", url: "/dashboard" },
   { name: "บันทึกยอดพิมพ์", url: "/print-transactions" },
   { name: "ทะเบียนทรัพย์สิน", url: "/assets" },
-  { name: "รายละเอียดเครื่อง", url: "/assets/17" },
+  { name: "รายละเอียดเครื่อง", url: "/assets/:fixture" },
   { name: "ค่าใช้จ่าย", url: "/expense" },
   { name: "เปรียบเทียบรายเดือน", url: "/compare" },
   { name: "รายงานสรุป", url: "/report" },
@@ -41,6 +48,14 @@ test.beforeEach(async ({ context }) => {
   await signIn(context);
 });
 
+/** แปลง `/assets/:fixture` เป็น id เครื่องที่มีจริงในฐานที่กำลังรันเทสอยู่ */
+async function resolveUrl(url) {
+  if (url !== "/assets/:fixture") return url;
+  const devices = await apiFetch("/devices?per_page=1");
+  test.skip(!devices.length, "ไม่มีเครื่องสำหรับตรวจหน้ารายละเอียด — ไม่สร้างข้อมูลในฐานจริง");
+  return `/assets/${devices[0].id}`;
+}
+
 for (const target of PAGES) {
   test(`โครงหน้า · ${target.name}`, async ({ page }) => {
     const consoleErrors = [];
@@ -48,7 +63,7 @@ for (const target of PAGES) {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
 
-    await page.goto(target.url);
+    await page.goto(await resolveUrl(target.url));
     await page.waitForLoadState("networkidle").catch(() => {});
     await expect(page.locator("#main-content")).toBeVisible({ timeout: 20000 });
 
