@@ -194,3 +194,21 @@
     }
   }
 }
+@keyframes drawer-enter {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.ui-drawer[data-state="open"] {
+  animation: drawer-enter var(--dur-panel) ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-drawer[data-state="open"] { animation: none; }
+}
+/* Owners may include their search, filters and feedback in table fullscreen. */
+.ui-fullscreen-context:fullscreen {
+  overflow: auto;
+  padding: calc(var(--spacing) * 6);
+  background: var(--surface);
+}

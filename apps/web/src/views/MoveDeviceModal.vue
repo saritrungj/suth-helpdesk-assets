@@ -2,7 +2,7 @@
 import { formatDate } from "../lib/locale-format";
 
 import { t } from "../lib/locale";
-import { errorMessage } from "../lib/api-error";
+import { errorMessage, fieldErrors } from "../lib/api-error";
 
 /**
  * MoveDeviceModal — ย้ายเครื่องไปที่ตั้ง/หน่วยงานใหม่
@@ -20,7 +20,10 @@ import { errorMessage } from "../lib/api-error";
  *
  * หลังย้ายสำเร็จหน้าต่างจะไม่ปิดทันที แต่รีโหลดประวัติให้เห็นกับตาว่าถูกบันทึกแล้ว
  */
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
+import { useAssetDraftGuard } from "./use-asset-draft-guard";
+import { useDraftSnapshot } from "../lib/use-draft-snapshot";
+import { usePlacementFields } from "../lib/use-placement-fields";
 import { ArrowRight, History, MapPin } from "lucide-vue-next";
 
 import api from "../services/api";
@@ -36,16 +39,17 @@ import {
   UiEmpty,
   UiField,
   UiInput,
-  UiModal,
+  UiDrawer,
   UiSkeleton,
 } from "../ui";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   assetId: { type: [Number, String, null], default: null },
+  returnFocus: { type: Object, default: null },
 });
 
-const emit = defineEmits(["update:modelValue", "saved"]);
+const emit = defineEmits(["update:modelValue", "saved", "focus-fallback"]);
 
 const queryClient = useQueryClient();
 
@@ -69,44 +73,38 @@ const masterLoaded = ref(false);
 const loading = ref(false);
 const saving = ref(false);
 const formError = ref("");
+const errors = ref({});
 const successMessage = ref("");
+const source = ref("");
+const confirming = ref(false);
+const pending = computed(() => saving.value || confirming.value);
+const { ready, dirty, capture } = useDraftSnapshot(form);
+const mayLeave = useAssetDraftGuard({
+  open: () => props.modelValue,
+  dirty: () => dirty.value,
+  pending: () => pending.value,
+  discard: capture,
+});
+async function requestClose() {
+  if (await mayLeave()) emit("update:modelValue", false);
+}
 
 const currentUsage = ref(null);
 const usageLoading = ref(false);
 
 const historyRows = ref([]);
 const historyLoading = ref(false);
+const usageError = ref("");
+const historyError = ref("");
 
-const buildingOptions = computed(() => buildings.value.map((b) => ({ value: b.id, label: b.name })));
-const divisionOptions = computed(() => divisions.value.map((d) => ({ value: d.id, label: d.name })));
-
-const floorOptions = computed(() => {
-  if (!form.value.building_id) return [];
-  return floors.value
-    .filter((f) => Number(f.building_id) === Number(form.value.building_id))
-    .map((f) => ({ value: f.id, label: f.name }));
+const { buildingOptions, floorOptions, divisionOptions, departmentOptions } = usePlacementFields({
+  form,
+  ready,
+  buildings,
+  floors,
+  divisions,
+  departments,
 });
-
-const departmentOptions = computed(() => {
-  if (!form.value.division_id) return [];
-  return departments.value
-    .filter((d) => Number(d.division_id) === Number(form.value.division_id))
-    .map((d) => ({ value: d.id, label: d.name }));
-});
-
-watch(
-  () => form.value.building_id,
-  (_, previous) => {
-    if (previous !== undefined && previous !== "") form.value.floor_id = "";
-  }
-);
-
-watch(
-  () => form.value.division_id,
-  (_, previous) => {
-    if (previous !== undefined && previous !== "") form.value.department_id = "";
-  }
-);
 
 function nameOf(list, id) {
   if (!id) return t("ยังไม่ระบุ");
@@ -159,13 +157,14 @@ async function loadMasterData() {
 
 async function loadAsset(id) {
   loading.value = true;
-  formError.value = "";
 
   try {
     const res = await api.get(`/devices/${id}`);
     const device = res.data.data ?? res.data;
 
     serialNumber.value = device.serial_number ?? "";
+    source.value = [device.building_name, device.floor_name, device.location,
+      device.division_name, device.department_name].filter(Boolean).join(" · ") || t("ยังไม่ระบุ");
     form.value = {
       building_id: device.building_id ?? "",
       floor_id: device.floor_id ?? "",
@@ -183,6 +182,7 @@ async function loadAsset(id) {
 
 async function loadCurrentUsage(id) {
   usageLoading.value = true;
+  usageError.value = "";
   currentUsage.value = null;
 
   try {
@@ -190,6 +190,7 @@ async function loadCurrentUsage(id) {
     currentUsage.value = res.data.usage ?? res.data;
   } catch (err) {
     console.error("Load current usage error:", err);
+    usageError.value = t("โหลดช่วงการใช้งานไม่สำเร็จ");
   } finally {
     usageLoading.value = false;
   }
@@ -197,12 +198,14 @@ async function loadCurrentUsage(id) {
 
 async function loadHistory(id) {
   historyLoading.value = true;
+  historyError.value = "";
 
   try {
     const res = await api.get(`/devices/${id}/history`);
     historyRows.value = res.data.history ?? [];
   } catch (err) {
     console.error("Load move history error:", err);
+    historyError.value = t("โหลดประวัติการย้ายไม่สำเร็จ");
   } finally {
     historyLoading.value = false;
   }
@@ -218,20 +221,26 @@ function historyDate(value) {
   return formatDate(String(value).split("T")[0]);
 }
 
+async function load() {
+  ready.value = false;
+  loading.value = true;
+  formError.value = "";
+  successMessage.value = "";
+  historyRows.value = [];
+  await Promise.all([loadMasterData(), loadAsset(props.assetId), loadCurrentUsage(props.assetId), loadHistory(props.assetId)]);
+  await nextTick();
+  capture();
+  ready.value = masterLoaded.value && !formError.value;
+  loading.value = false;
+}
+
 watch(
   () => [props.modelValue, props.assetId],
   ([open, assetId]) => {
     if (!open) return;
 
-    formError.value = "";
-    successMessage.value = "";
-    historyRows.value = [];
-    loadMasterData();
-
     if (assetId !== null && assetId !== undefined) {
-      loadAsset(assetId);
-      loadCurrentUsage(assetId);
-      loadHistory(assetId);
+      load();
     } else {
       form.value = emptyForm();
       serialNumber.value = "";
@@ -241,10 +250,14 @@ watch(
 );
 
 async function submit() {
+  if (pending.value || !ready.value) return;
+  errors.value = {};
+  confirming.value = true;
   const confirmed = await askConfirm(
     t("ย้ายจาก\n{0}\n\nไปที่\n{1}\n\nยอดพิมพ์ที่บันทึกไว้ก่อนหน้านี้จะยังเป็นของหน่วยงานเดิม ระบบจะเปิดช่วงใหม่นับจากวันนี้", [origin.value, destination.value]),
     { title: t("ยืนยันการย้ายเครื่อง"), confirmText: t("ย้ายเครื่อง"), danger: false }
   );
+  confirming.value = false;
   if (!confirmed) return;
 
   saving.value = true;
@@ -262,16 +275,19 @@ async function submit() {
 
     // ย้ายเครื่องเปลี่ยนที่ตั้ง/สังกัด ทุกรายงานที่แยกตามอาคาร/แผนกจึงเปลี่ยนตาม
     await invalidateAfterWrite(queryClient, "device");
+    capture();
+    source.value = destination.value;
 
     emit("saved", res.data);
 
     // ไม่ปิดหน้าต่างทันที — โหลดยอดและประวัติใหม่ให้ผู้ใช้เห็นกับตาว่าช่วงเดิมถูก
     // ปิดและบันทึกไว้จริง ของเดิมปิดทันทีจนไม่มีใครรู้ว่าประวัติถูกเขียนหรือไม่
     await Promise.all([loadCurrentUsage(props.assetId), loadHistory(props.assetId)]);
-    successMessage.value = t("ย้ายเรียบร้อย — ประวัติด้านล่างอัปเดตแล้ว");
+    successMessage.value = historyError.value ? t("ย้ายเครื่องเรียบร้อย") : t("ย้ายเรียบร้อย — ประวัติด้านล่างอัปเดตแล้ว");
     toastSuccess(t("ย้ายเครื่องเรียบร้อย"));
   } catch (err) {
     console.error("Move device error:", err);
+    errors.value = fieldErrors(err);
     const message = errorMessage(err, t("ย้ายเครื่องไม่สำเร็จ"));
     formError.value = message;
     toastError(message);
@@ -282,19 +298,30 @@ async function submit() {
 </script>
 
 <template>
-  <UiModal
+  <UiDrawer
+    @focus-fallback="emit('focus-fallback')"
     :open="modelValue"
     :title="t(&quot;ย้ายเครื่อง&quot;)"
     :description="serialNumber ? `Serial ${serialNumber}` : ''"
-    size="lg"
-    @update:open="emit('update:modelValue', $event)"
+    size="md"
+    :pending="pending"
+    :return-focus="returnFocus"
+    @update:open="requestClose"
   >
     <div v-if="loading" class="flex flex-col gap-4">
       <UiSkeleton v-for="n in 5" :key="n" height="2.5rem" />
     </div>
 
+    <UiAlert v-else-if="!ready" tone="danger">
+      {{ formError }}
+      <template #actions><UiButton variant="secondary" @click="load">{{ t("ลองใหม่") }}</UiButton></template>
+    </UiAlert>
     <div v-else class="flex flex-col gap-5">
       <UiAlert v-if="successMessage" tone="ok">{{ successMessage }}</UiAlert>
+      <section class="rounded-lg border border-line-soft bg-surface-2 p-4">
+        <h3 class="eyebrow mb-2">{{ t("ต้นทาง") }}</h3>
+        <p class="text-sm text-ink-soft break-words">{{ source }}</p>
+      </section>
 
       <!-- ที่ตั้งปัจจุบันและยอดสะสมของช่วงนี้ -->
       <section class="rounded-lg border border-line-soft bg-surface-2 px-4 py-3">
@@ -305,6 +332,10 @@ async function submit() {
           <UiSkeleton height="1rem" width="40%" />
         </div>
 
+        <UiAlert v-else-if="usageError" tone="danger">
+          {{ usageError }}
+          <template #actions><UiButton variant="secondary" @click="loadCurrentUsage(assetId)">{{ t("ลองใหม่") }}</UiButton></template>
+        </UiAlert>
         <template v-else-if="currentUsage">
           <p class="flex items-center gap-1.5 text-sm text-ink">
             <MapPin :size="14" class="text-ink-mute shrink-0" aria-hidden="true" />
@@ -329,12 +360,13 @@ async function submit() {
       </section>
 
       <!-- ที่ตั้งใหม่ -->
-      <form class="grid grid-cols-1 sm:grid-cols-2 gap-4" @submit.prevent="submit">
-        <UiField :label="t(&quot;อาคาร&quot;)" class="sm:col-span-1">
+      <form :inert="pending" class="grid grid-cols-1 sm:grid-cols-2 gap-4" @submit.prevent="submit">
+        <h3 class="eyebrow sm:col-span-2">{{ t("ปลายทาง") }}</h3>
+        <UiField :label="t(&quot;อาคาร&quot;)" :error="errors.building_id" class="sm:col-span-1">
           <UiCombobox v-model="form.building_id" :options="buildingOptions" :placeholder="t(&quot;เลือกอาคาร&quot;)" :any-label="t(&quot;ยังไม่ระบุ&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;ชั้น&quot;)" :hint="form.building_id ? '' : t(&quot;เลือกอาคารก่อน&quot;)">
+        <UiField :label="t(&quot;ชั้น&quot;)" :error="errors.floor_id" :hint="form.building_id ? '' : t(&quot;เลือกอาคารก่อน&quot;)">
           <UiCombobox
             v-model="form.floor_id"
             :options="floorOptions"
@@ -344,15 +376,15 @@ async function submit() {
           />
         </UiField>
 
-        <UiField :label="t(&quot;ตำแหน่งที่ตั้ง&quot;)" class="sm:col-span-2">
+        <UiField :label="t(&quot;ตำแหน่งที่ตั้ง&quot;)" :error="errors.location" class="sm:col-span-2">
           <UiInput v-model="form.location" :placeholder="t(&quot;เช่น เคาน์เตอร์พยาบาล ฝั่งตะวันออก&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;ฝ่าย&quot;)">
+        <UiField :label="t(&quot;ฝ่าย&quot;)" :error="errors.division_id">
           <UiCombobox v-model="form.division_id" :options="divisionOptions" :placeholder="t(&quot;เลือกฝ่าย&quot;)" :any-label="t(&quot;ยังไม่ระบุ&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;แผนก&quot;)" :hint="form.division_id ? t(&quot;แผนกนี้จะรับผิดชอบค่าใช้จ่ายนับจากวันย้าย&quot;) : t(&quot;เลือกฝ่ายก่อน&quot;)">
+        <UiField :label="t(&quot;แผนก&quot;)" :error="errors.department_id" :hint="form.division_id ? t(&quot;แผนกนี้จะรับผิดชอบค่าใช้จ่ายนับจากวันย้าย&quot;) : t(&quot;เลือกฝ่ายก่อน&quot;)">
           <UiCombobox
             v-model="form.department_id"
             :options="departmentOptions"
@@ -369,6 +401,9 @@ async function submit() {
         <ArrowRight :size="15" class="text-brand-ink shrink-0" aria-hidden="true" />
         <span class="font-medium text-brand-ink">{{ destination }}</span>
       </div>
+      <UiField :label="t('วันที่มีผล')">
+        <p class="text-sm text-ink-soft">{{ t("วันที่บันทึกตามเซิร์ฟเวอร์ — ระบบเดิมไม่รองรับการเลือกวันย้อนหลัง") }}</p>
+      </UiField>
 
       <UiAlert v-if="formError" tone="danger">{{ formError }}</UiAlert>
 
@@ -381,6 +416,10 @@ async function submit() {
           <UiSkeleton v-for="n in 3" :key="n" height="2.25rem" />
         </div>
 
+        <UiAlert v-else-if="historyError" tone="danger">
+          {{ historyError }}
+          <template #actions><UiButton variant="secondary" @click="loadHistory(assetId)">{{ t("ลองใหม่") }}</UiButton></template>
+        </UiAlert>
         <UiEmpty
           v-else-if="!historyRows.length"
           :title="t(&quot;ยังไม่เคยย้ายเครื่องนี้&quot;)"
@@ -396,7 +435,7 @@ async function submit() {
                    border-b border-line-soft last:border-0 odd:bg-surface-2"
           >
             <span class="text-xs text-ink-mute numeral shrink-0 w-24">
-              {{ historyDate(row.start_date ?? row.moved_at ?? row.changed_at) }}
+              {{ historyDate(row.effective_from ?? row.start_date ?? row.moved_at ?? row.changed_at) }}
             </span>
             <span class="text-ink-soft min-w-0">
               {{ row.division_name || row.to_division || t("ไม่ระบุฝ่าย") }} /
@@ -412,8 +451,8 @@ async function submit() {
     </div>
 
     <template #footer>
-      <UiButton variant="secondary" :disabled="saving" @click="emit('update:modelValue', false)"> {{ t("ปิด") }} </UiButton>
-      <UiButton variant="primary" :loading="saving" @click="submit"> {{ t("ย้ายเครื่อง") }} </UiButton>
+      <UiButton variant="secondary" :disabled="pending" @click="requestClose"> {{ t("ปิด") }} </UiButton>
+      <UiButton variant="primary" :loading="pending" :disabled="!ready" @click="submit"> {{ t("ย้ายเครื่อง") }} </UiButton>
     </template>
-  </UiModal>
+  </UiDrawer>
 </template>

@@ -85,6 +85,10 @@ const selectedLabels = computed(() => {
 
 const count = computed(() => (props.multiple ? innerValue.value.length : 0));
 
+// The trigger owns the selected label; the popup input is only a search query.
+// Keep Reka's selection/reset display empty instead of filtering by the raw ID.
+const searchDisplayValue = () => "";
+
 function onUpdate(value) {
   emit("update:modelValue", props.multiple ? value ?? [] : value ?? "");
 }
@@ -147,6 +151,7 @@ watch(open, (isOpen) => {
           />
           <ComboboxInput
             v-model="search"
+            :display-value="searchDisplayValue"
             :placeholder="searchPlaceholder"
             class="w-full bg-transparent pl-9 pr-3 py-2.5 text-sm outline-none placeholder:text-ink-faint"
           />

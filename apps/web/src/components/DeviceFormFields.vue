@@ -1,7 +1,9 @@
 <script setup>
 import { yearLabel } from "../lib/locale-format";
 import { t } from "../lib/locale";
-import { errorMessage } from "../lib/api-error";
+import { errorMessage, fieldErrors } from "../lib/api-error";
+import { useDraftSnapshot } from "../lib/use-draft-snapshot";
+import { usePlacementFields } from "../lib/use-placement-fields";
 
 /**
  * DeviceFormFields — ช่องกรอกข้อมูลเครื่องหนึ่งเครื่อง พร้อมการบันทึก
@@ -19,12 +21,12 @@ import { errorMessage } from "../lib/api-error";
  * ช่องที่อ้างอิงกัน (อาคาร -> ชั้น, ฝ่าย -> แผนก) ถูกล้างค่าลูกทุกครั้งที่เปลี่ยน
  * ค่าแม่ เพราะชั้นของอีกอาคารไม่มีอยู่จริงในอาคารใหม่
  */
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateAfterWrite } from "../api/invalidate";
 import { toastError, toastSuccess } from "../store/toast";
-import { UiAlert, UiCombobox, UiField, UiInput, UiSegmented, UiSkeleton } from "../ui";
+import { UiAlert, UiButton, UiCombobox, UiField, UiInput, UiSegmented, UiSkeleton } from "../ui";
 
 const props = defineProps({
   /** null = เพิ่มใหม่, ตัวเลข = แก้ไขเครื่องนั้น */
@@ -71,23 +73,18 @@ const masterLoaded = ref(false);
 const loading = ref(false);
 const saving = ref(false);
 const formError = ref("");
+const errors = ref({});
+const { ready, dirty, capture } = useDraftSnapshot(form);
+watch(dirty, (value) => emit("dirty", value));
 
 const brandOptions = computed(() => brands.value.map((b) => ({ value: b.id, label: b.name })));
-const buildingOptions = computed(() => buildings.value.map((b) => ({ value: b.id, label: b.name })));
-const divisionOptions = computed(() => divisions.value.map((d) => ({ value: d.id, label: d.name })));
-
-const floorOptions = computed(() => {
-  if (!form.value.building_id) return [];
-  return floors.value
-    .filter((f) => Number(f.building_id) === Number(form.value.building_id))
-    .map((f) => ({ value: f.id, label: f.name }));
-});
-
-const departmentOptions = computed(() => {
-  if (!form.value.division_id) return [];
-  return departments.value
-    .filter((d) => Number(d.division_id) === Number(form.value.division_id))
-    .map((d) => ({ value: d.id, label: d.name }));
+const { buildingOptions, floorOptions, divisionOptions, departmentOptions } = usePlacementFields({
+  form,
+  ready,
+  buildings,
+  floors,
+  divisions,
+  departments,
 });
 
 const contractOptions = computed(() =>
@@ -113,20 +110,6 @@ const effectivePriceHint = computed(() => {
   }
   return t("เว้นว่างไว้ = ใช้ราคาตามสัญญาที่เลือก");
 });
-
-watch(
-  () => form.value.building_id,
-  (_, previous) => {
-    if (previous !== undefined && previous !== "") form.value.floor_id = "";
-  }
-);
-
-watch(
-  () => form.value.division_id,
-  (_, previous) => {
-    if (previous !== undefined && previous !== "") form.value.department_id = "";
-  }
-);
 
 async function loadMasterData() {
   if (masterLoaded.value) return;
@@ -156,7 +139,6 @@ async function loadMasterData() {
 
 async function loadAsset(id) {
   loading.value = true;
-  formError.value = "";
 
   try {
     const res = await api.get(`/devices/${id}`);
@@ -186,26 +168,36 @@ async function loadAsset(id) {
 
 /** เริ่มฟอร์มใหม่ให้ตรงกับโหมดปัจจุบัน — parent เรียกทุกครั้งที่เปิดฟอร์ม */
 async function reset() {
+  ready.value = false;
+  loading.value = true;
   formError.value = "";
   await loadMasterData();
 
   if (isEdit.value) await loadAsset(props.assetId);
   else form.value = emptyForm();
+  await nextTick();
+  capture();
+  ready.value = masterLoaded.value && !formError.value;
+  loading.value = false;
 }
+onMounted(reset);
 
 function validate() {
-  if (!form.value.serial_number.trim()) return t("กรอกหมายเลข Serial ของเครื่องก่อน");
-  if (!form.value.brand_id) return t("เลือกยี่ห้อของเครื่องก่อน");
+  if (!form.value.serial_number.trim()) return { field: "serial_number", message: t("กรอกหมายเลข Serial ของเครื่องก่อน") };
+  if (!form.value.brand_id) return { field: "brand_id", message: t("เลือกยี่ห้อของเครื่องก่อน") };
   if (form.value.price_override !== "" && Number(form.value.price_override) < 0) {
-    return t("ราคาต่อแผ่นติดลบไม่ได้");
+    return { field: "price_override", message: t("ราคาต่อแผ่นติดลบไม่ได้") };
   }
   return "";
 }
 
 async function submit() {
+  if (saving.value || !ready.value) return false;
+  errors.value = {};
   const problem = validate();
   if (problem) {
-    formError.value = problem;
+    formError.value = problem.message;
+    errors.value = { [problem.field]: problem.message };
     return false;
   }
 
@@ -247,11 +239,12 @@ async function submit() {
 
     // ทะเบียนเครื่อง แดชบอร์ด และความครบถ้วนรายเดือนใช้ข้อมูลชุดนี้ทั้งหมด
     await invalidateAfterWrite(queryClient, "device");
-
+    capture();
     emit("saved", res.data);
     return true;
   } catch (err) {
     console.error("Save device error:", err);
+    errors.value = fieldErrors(err);
     const message = errorMessage(err, t("บันทึกไม่สำเร็จ"));
     formError.value = message;
     toastError(message);
@@ -261,7 +254,7 @@ async function submit() {
   }
 }
 
-defineExpose({ reset, submit, saving, loading });
+defineExpose({ reset, submit, saving, loading, ready });
 </script>
 
 <template>
@@ -270,13 +263,18 @@ defineExpose({ reset, submit, saving, loading });
       <UiSkeleton v-for="n in 6" :key="n" height="2.5rem" />
     </div>
 
-    <form v-else class="flex flex-col gap-5" @submit.prevent="submit">
+    <UiAlert v-else-if="!ready" tone="danger">
+      {{ formError }}
+      <template #actions><UiButton variant="secondary" @click="reset">{{ t("ลองใหม่") }}</UiButton></template>
+    </UiAlert>
+    <form v-else :inert="saving" class="flex flex-col gap-5" @submit.prevent="submit">
       <!-- ตัวเครื่อง -->
       <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <legend class="eyebrow mb-2"> {{ t("ข้อมูลเครื่อง") }} </legend>
 
         <UiField
           :label="t(&quot;หมายเลข Serial&quot;)"
+          :error="errors.serial_number"
           required
           :hint="t(&quot;เลขที่พิมพ์อยู่บนตัวเครื่อง ใช้เป็นตัวระบุหลักของทุกรายงาน&quot;)"
         >
@@ -287,7 +285,7 @@ defineExpose({ reset, submit, saving, loading });
           <UiInput v-model="form.asset_code" mono :placeholder="t(&quot;เช่น IT-PR-1024&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;ยี่ห้อ&quot;)" required>
+        <UiField :label="t(&quot;ยี่ห้อ&quot;)" :error="errors.brand_id" required>
           <UiCombobox v-model="form.brand_id" :options="brandOptions" :placeholder="t(&quot;เลือกยี่ห้อ&quot;)" />
         </UiField>
 
@@ -295,9 +293,6 @@ defineExpose({ reset, submit, saving, loading });
           <UiInput v-model="form.model" :placeholder="t(&quot;เช่น LaserJet M404dn&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;สถานะเครื่อง&quot;)" class="sm:col-span-2">
-          <UiSegmented v-model="form.status" :options="STATUS_OPTIONS" :label="t(&quot;สถานะของเครื่อง&quot;)" />
-        </UiField>
       </fieldset>
 
       <!-- ที่ตั้ง -->
@@ -368,12 +363,19 @@ defineExpose({ reset, submit, saving, loading });
           />
         </UiField>
 
-        <UiField :label="t(&quot;ราคาต่อแผ่นเฉพาะเครื่อง&quot;)" :hint="effectivePriceHint">
+        <UiField :label="t(&quot;ราคาต่อแผ่นเฉพาะเครื่อง&quot;)" :hint="effectivePriceHint" :error="errors.price_override">
           <UiInput v-model="form.price_override" type="number" step="0.0001" min="0" :suffix="t(&quot;บาท&quot;)" />
         </UiField>
       </fieldset>
 
       <UiAlert v-if="formError" tone="danger">{{ formError }}</UiAlert>
+
+      <fieldset class="pt-5 border-t border-line-soft">
+        <legend class="eyebrow mb-2">{{ t("สถานะ") }}</legend>
+        <UiField :label="t('สถานะเครื่อง')">
+          <UiSegmented v-model="form.status" :options="STATUS_OPTIONS" :label="t('สถานะของเครื่อง')" />
+        </UiField>
+      </fieldset>
 
       <button type="submit" class="hidden" tabindex="-1" aria-hidden="true"></button>
     </form>
