@@ -1,0 +1,67 @@
+# ชั้นแรกของ CI — ทุกอย่างในไฟล์นี้ต้องรันได้โดยไม่ต้องมีฐานข้อมูล
+#
+# ชุดที่ต้องมี API/MySQL อยู่ใน #63 ไม่ใช่ที่นี่ เพราะงานนี้ต้องเร็วพอที่จะเป็น
+# ด่านบังคับของทุก PR โดยไม่มีใครอยากข้าม
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # push ตามมาติดๆ ให้ยกเลิกรอบเก่า ยกเว้นบน main ที่ต้องรู้ผลของทุก commit
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: unit, build และ E2E ที่ไม่ต้องใช้ฐานข้อมูล
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # ต้องมีประวัติถึง base ของ PR ไม่งั้น git diff --check ไม่มีอะไรให้เทียบ
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: unit ทุก workspace
+        run: npm test
+
+      - name: build ฝั่งเว็บ
+        run: npm run build
+
+      - name: ช่องว่างท้ายบรรทัดและ conflict marker ในสิ่งที่เปลี่ยน
+        run: |
+          base='${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}'
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "ไม่มี base ให้เทียบ (push แรกของ branch) ข้ามขั้นนี้"
+            exit 0
+          fi
+          git diff --check "$base" HEAD
+
+      - name: ติดตั้งเบราว์เซอร์
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+
+      # สามไฟล์นี้ intercept /api/* ทั้งหมดผ่าน fixture จึงไม่ต้องมี API หรือฐานข้อมูล
+      # Playwright สตาร์ต preview ของ build ที่เพิ่งทำเองผ่าน webServer ใน config
+      - name: E2E ที่ใช้ fixture
+        run: npm run test:e2e:fixture --workspace @suth/web
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          # เอกสาร Playwright เตือนว่า artifact อาจมี credential ติดไปด้วย
+          # 14 วันพอสำหรับไล่ดูสาเหตุ โดยไม่ต้องเก็บนานเกินจำเป็น
+          retention-days: 14
