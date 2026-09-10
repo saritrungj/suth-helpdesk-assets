@@ -21,18 +21,33 @@ import { defineConfig, devices } from "@playwright/test";
  * จึงมีกฎว่า **ต้องคืนค่าเดิมกลับทุกครั้ง** ในขั้นตอนสุดท้ายของแต่ละเทส
  * ห้ามทิ้งข้อมูลขยะไว้ในฐาน (ดู e2e/fixtures.js)
  */
+const webUrl = process.env.SUTH_WEB_URL || "http://localhost:5173";
+const webPort = new URL(webUrl).port || "5173";
+
 export default defineConfig({
   testDir: "./e2e",
   outputDir: "./e2e/.artifacts",
+
+  /* บนเครื่องคนมักเปิด dev server ค้างไว้อยู่แล้ว `reuseExistingServer` จึงทำให้
+     ทุกอย่างเหมือนเดิมทุกประการ ส่วนบน CI ที่ไม่มีใครเปิดอะไรไว้ Playwright จะ
+     สตาร์ตเอง และตั้งใจใช้ผลของ `vite build` ผ่าน preview ไม่ใช่ dev server
+     เพราะสิ่งที่ต้องทดสอบคือ bundle ที่จะถูกส่งมอบจริง */
+  webServer: {
+    command: `npm run preview -- --port ${webPort} --strictPort`,
+    url: webUrl,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
 
   // เทสที่เขียนข้อมูลลงฐานเดียวกันห้ามรันพร้อมกัน ไม่งั้นจะแย่งกันแก้แถวเดียวกัน
   workers: 1,
   fullyParallel: false,
 
-  reporter: [["list"]],
+  // บน CI เก็บ HTML report ไว้เป็น artifact ด้วย เพราะ log อย่างเดียวไล่ไม่ออกว่าพังตรงไหน
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
 
   use: {
-    baseURL: process.env.SUTH_WEB_URL || "http://localhost:5173",
+    baseURL: webUrl,
     // เก็บ trace ไว้เฉพาะตอนล้ม เพื่อให้ไล่ดูได้ว่าพังตรงไหนโดยไม่ต้องรันซ้ำ
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

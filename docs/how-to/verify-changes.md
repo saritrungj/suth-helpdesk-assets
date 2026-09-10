@@ -58,6 +58,21 @@ npm run test:e2e --workspace @suth/web
 | หน้าเว็บที่ดึงข้อมูลอ้างอิงซ้ำ (อาคาร, แผนก, ฝ่าย, ยี่ห้อ, สัญญา) | เปิดหน้าที่เกี่ยวข้องสลับกันแล้วดูใน DevTools Network ว่าไม่ยิงซ้ำภายใน `staleTime` ของ [ADR-0009](../decisions/0009-tanstack-query-as-the-data-layer.md) |
 | UI, สี, หรือ component ใน `apps/web/src/ui` | รัน E2E ด้านบน ทั้งสองธีม (สว่าง/มืด) และตรวจ contrast ผ่านเกณฑ์ AA |
 
+## CI ทำอะไรให้บ้าง
+
+ทุก PR และทุก push เข้า `main` GitHub Actions (`.github/workflows/ci.yml`) รัน `npm test`
+ทุก workspace, `npm run build`, ตรวจช่องว่างท้ายบรรทัดของสิ่งที่เปลี่ยน และรัน E2E สามไฟล์
+ที่ไม่ต้องใช้ API หรือฐานข้อมูล (`asset-drawer`, `asset-evidence`, `contrast-helper`)
+เพราะ fixture ของมัน intercept `/api/*` ทั้งหมด — ชุดที่ต้องมีฐานจริงยังเป็นงานที่ต้องรันเอง
+
+เว็บใน CI ถูกสตาร์ตจาก **build จริงแล้ว preview** ผ่าน `webServer` ใน `playwright.config.js`
+ไม่ใช่ dev server เพราะสิ่งที่ต้องทดสอบคือ bundle ที่จะถูกส่งมอบ ตอนรันบนเครื่อง
+`reuseExistingServer` ทำให้ Playwright ใช้ server ที่คุณเปิดค้างไว้เหมือนเดิม ไม่มีขั้นตอนใหม่
+
+ผลที่ล้มดูได้จาก artifact `playwright-report` ของ run นั้น เก็บไว้ 14 วัน เปิดด้วย
+`npx playwright show-report <โฟลเดอร์ที่แตกไฟล์>` — CI เขียวไม่ได้แปลว่าตรวจครบ
+รายการที่ CI ยังไม่ครอบอยู่ในหัวข้อด้านบนทั้งหมด
+
 ## ก่อนเปิด PR
 
 ตรวจ `git diff` ทั้งหมดด้วยตาอีกรอบ และแยกให้ชัดว่า commit ไหนย้ายไฟล์ commit ไหนเปลี่ยนพฤติกรรม — diff ที่ปนกันสองอย่าง review ไม่ได้จริง
