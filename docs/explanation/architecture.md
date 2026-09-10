@@ -50,6 +50,6 @@ middleware ตรวจสิทธิ์อยู่ใต้ `auth/` เพร
 
 ## ฐานข้อมูล
 
-`database/schema.sql` เป็น source of truth ของฐานข้อมูลใหม่ ส่วน `database/migration_*.sql` เป็นการเปลี่ยนแปลงแบบมีลำดับสำหรับฐานข้อมูลที่มีอยู่แล้ว — ดู [วิธีรัน](../how-to/run-migrations.md)
+`database/schema.sql` เป็น source of truth ของฐานข้อมูลใหม่ ส่วน `database/migrations/*.sql` เป็นการเปลี่ยนแปลงแบบมีลำดับสำหรับฐานข้อมูลที่มีอยู่แล้ว — ดู [วิธีรัน](../how-to/run-migrations.md)
 
 กฎที่บังคับได้ในระดับฐานข้อมูลให้บังคับที่นั่น เช่น `UNIQUE KEY (device_id, month)` และ `CHECK` ที่กันเดือน พ.ศ. หลุดเข้ามา เพราะการบังคับในโค้ดอย่างเดียวข้ามได้ทุกครั้งที่มีคนเปิด phpMyAdmin

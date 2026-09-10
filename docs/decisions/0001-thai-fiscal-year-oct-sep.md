@@ -32,4 +32,4 @@
 - ทุก query ที่กรองตามปีงบต้องใช้ `month BETWEEN start_month AND end_month` ห้ามใช้ `month LIKE 'YYYY-%'` เพราะปีงบไม่เท่ากับปีปฏิทิน
 - ฝั่ง frontend สร้างรายการเดือนจากช่วงจริง 12 เดือนเรียงจาก ต.ค. ถึง ก.ย. ไม่ใช่วนลูป ม.ค.–ธ.ค.
 - เทสของตรรกะการคิดเงินต้องมีเคสขอบปีงบ คือรอยต่อ ก.ย. → ต.ค. เสมอ
-- ปีงบเก่าที่มีอยู่ก่อนต้อง backfill — ดู `database/migration_add_fiscal_year_range.sql`
+- ปีงบเก่าที่มีอยู่ก่อนต้อง backfill — ดู `database/migrations/migration_add_fiscal_year_range.sql`

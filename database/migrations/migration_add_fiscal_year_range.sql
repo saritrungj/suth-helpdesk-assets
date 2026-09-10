@@ -11,7 +11,7 @@
 -- (1 ต.ค. ของปี ค.ศ. ก่อนหน้า ถึง 30 ก.ย. ของปีที่ตรงกับปีงบ)
 --
 -- วิธีรัน (ตัวอย่าง):
---   mysql -u root -p your_database < database/migration_add_fiscal_year_range.sql
+--   mysql -u root -p your_database < database/migrations/migration_add_fiscal_year_range.sql
 -- =============================================================
 
 ALTER TABLE fiscal_year

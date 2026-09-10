@@ -24,7 +24,7 @@ CREATE TABLE fiscal_year (
     status ENUM('active','inactive') DEFAULT 'active',
 
     -- ช่วงเดือนเก็บเป็น ค.ศ. เท่านั้น (ปี 1900-2399) ดู backend/utils/month.js
-    -- และ database/migration_normalize_month_to_ce.sql
+    -- และ database/migrations/migration_normalize_month_to_ce.sql
     CONSTRAINT chk_fiscal_year_start_month_ce CHECK (
         start_month REGEXP '^[0-9]{4}-(0[1-9]|1[0-2])$'
         AND CAST(SUBSTRING(start_month, 1, 4) AS UNSIGNED) BETWEEN 1900 AND 2399
@@ -109,7 +109,7 @@ CREATE TABLE devices (
 --   INSERT ... ON DUPLICATE KEY UPDATE pages = VALUES(pages)
 -- ถ้าไม่มี UNIQUE KEY คู่นี้ คำสั่งข้างต้นจะไม่รู้ว่าแถวไหนซ้ำ และจะ INSERT
 -- แถวใหม่ทุกครั้งที่กด "บันทึก" ซ้ำในเดือนเดิม ทำให้ยอดพิมพ์/ค่าใช้จ่ายถูกนับซ้ำ
--- (เดิมคีย์นี้อยู่แยกไว้ในไฟล์ migration_unique_print_transactions.sql
+-- (เดิมคีย์นี้อยู่แยกไว้ในไฟล์ migrations/migration_unique_print_transactions.sql
 -- ตอนนี้รวมเข้ามาไว้ใน schema หลักเพื่อให้ setup ฐานข้อมูลใหม่ได้ครบในครั้งเดียว)
 CREATE TABLE print_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -130,7 +130,7 @@ CREATE TABLE print_transactions (
 );
 
 -- ประวัติการย้ายเครื่อง (อาคาร/ชั้น/ฝ่าย/แผนก) — ดูรายละเอียดเหตุผลที่
--- database/migration_add_device_location_history.sql (เดิมคีย์นี้อยู่แยกไว้ในไฟล์ migration นั้น
+-- database/migrations/migration_add_device_location_history.sql (เดิมคีย์นี้อยู่แยกไว้ในไฟล์ migration นั้น
 -- ตอนนี้รวมเข้ามาไว้ใน schema หลักเช่นเดียวกับ print_transactions ด้านบน เพื่อให้ setup ฐานข้อมูลใหม่ได้ครบในครั้งเดียว)
 -- effective_to = NULL คือช่วงปัจจุบันที่เครื่องยังสังกัดอยู่
 CREATE TABLE device_location_history (

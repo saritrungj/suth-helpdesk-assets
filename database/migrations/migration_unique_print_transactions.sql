@@ -5,7 +5,7 @@
 -- แทนที่จะอัปเดตของเดิม ส่งผลให้ยอดพิมพ์/ค่าใช้จ่ายในรายงานถูกนับซ้ำ
 --
 -- วิธีรัน (ตัวอย่าง):
---   mysql -u root -p your_database < database/migration_unique_print_transactions.sql
+--   mysql -u root -p your_database < database/migrations/migration_unique_print_transactions.sql
 -- =============================================================
 
 -- ถ้ามีข้อมูลซ้ำอยู่ก่อนแล้ว ให้รวมยอดหน้าของแถวที่ซ้ำกันไว้ในแถวที่ id น้อยที่สุดก่อน

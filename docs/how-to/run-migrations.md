@@ -1,6 +1,6 @@
 # รัน migration กับฐานข้อมูลเดิม
 
-ใช้เมื่อฐานข้อมูลมีข้อมูลอยู่แล้วและต้องอัปโครงสร้างให้ทันโค้ด ถ้าเป็นฐานข้อมูลใหม่ให้ใช้ `database/schema.sql` แทน ดู [ตั้งระบบสำหรับพัฒนา](set-up-development.md)
+ใช้เมื่อฐานข้อมูลมีข้อมูลอยู่แล้วและต้องอัปโครงสร้างให้ทันโค้ด ถ้าเป็นฐานข้อมูลใหม่ให้ใช้ `database/schema.sql` แทน ดู [ตั้งระบบสำหรับพัฒนา](set-up-development.md) — ไฟล์ migration ทั้งหมดอยู่ใน `database/migrations/`
 
 > การเปลี่ยน schema และการรันกับ production **ต้องได้รับอนุมัติก่อนเสมอ**
 
@@ -33,7 +33,7 @@ mysql -u root -p your_database -e "DESCRIBE fiscal_year; DESCRIBE devices; SHOW 
 | 5 | `migration_normalize_month_to_ce.sql` | แปลงเดือน พ.ศ. เป็น ค.ศ. และเพิ่ม `CHECK` |
 
 ```sh
-mysql -u root -p your_database < database/migration_add_device_location.sql
+mysql -u root -p your_database < database/migrations/migration_add_device_location.sql
 ```
 
 ## 4. ตรวจผล
