@@ -52,7 +52,7 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: apps/web
 
-      # สามไฟล์นี้ intercept /api/* ทั้งหมดผ่าน fixture จึงไม่ต้องมี API หรือฐานข้อมูล
+      # ชุดนี้ intercept /api/* ทั้งหมดผ่าน fixture จึงไม่ต้องมี API หรือฐานข้อมูล
       # Playwright สตาร์ต preview ของ build ที่เพิ่งทำเองผ่าน webServer ใน config
       - name: E2E ที่ใช้ fixture
         run: npm run test:e2e:fixture --workspace @suth/web
