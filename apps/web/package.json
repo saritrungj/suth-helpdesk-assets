@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:fixture": "playwright test asset-drawer.spec.js asset-evidence.spec.js contrast-helper.spec.js",
+    "test:e2e:fixture": "playwright test asset-drawer.spec.js asset-evidence.spec.js contrast-helper.spec.js axe-fixture.spec.js",
     "test:e2e:shots": "playwright test screenshots.spec.js",
     "test:e2e:db": "playwright test login-wcag.spec.js login.spec.js month-entry.spec.js page-structure.spec.js report-workflow.spec.js shell.spec.js wcag.spec.js"
   },
@@ -29,6 +29,7 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.5.0",
