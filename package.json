@@ -15,7 +15,8 @@
     "build": "npm run build --workspace @suth/web",
     "preview": "npm run preview --workspace @suth/web",
     "test": "npm run test --workspaces --if-present",
-    "verify": "npm test && npm run build && npm run test:e2e:fixture --workspace @suth/web"
+    "verify": "npm test && npm run build && npm run test:e2e:fixture --workspace @suth/web",
+    "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}\""
   },
   "engines": {
     "node": ">=20"

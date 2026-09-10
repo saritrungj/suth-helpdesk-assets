@@ -4,13 +4,22 @@
 # มีไว้เพราะ Actions ของบัญชีนี้ถูกล็อกจากปัญหาบิล จึงยังไม่มีอะไรกั้นฝั่ง GitHub
 # เมื่อบิลปลดแล้ว hook นี้ยังมีประโยชน์ต่อ คือรู้ผลก่อน push แทนที่จะรอ CI
 #
-# ติดตั้ง (ครั้งเดียวต่อ clone):  git config core.hooksPath .githooks
+# ติดตั้งเองอัตโนมัติตอน `npm install` / `npm ci` ผ่านสคริปต์ prepare ของ package.json
 # ข้ามชั่วคราวเมื่อจำเป็นจริง:    git push --no-verify
 #
 # hook นี้ตั้งใจ **ไม่** รันชุดที่ต้องมี API/ฐานข้อมูล เพราะไม่ใช่ทุกเครื่องที่เปิดไว้
 # และ push ที่ล้มเพราะเครื่องคนอื่นไม่ได้เปิด MySQL ไม่ได้บอกอะไรเกี่ยวกับโค้ด
 
 set -e
+
+# ruleset ฝั่ง GitHub ตั้งไม่ได้ระหว่างที่บัญชีถูกล็อก จึงกันการ push ตรงเข้า main ที่นี่แทน
+# การ merge ผ่าน PR บนเว็บไม่ผ่าน hook นี้ เส้นทาง PR จึงใช้ได้เหมือนเดิม
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "pre-push: ห้าม push ตรงเข้า main — เปิด branch แล้วส่งผ่าน PR"
+    exit 1
+  fi
+done
 
 if [ "$SKIP_VERIFY" = "1" ]; then
   echo "pre-push: ข้ามตามคำสั่ง SKIP_VERIFY=1"
