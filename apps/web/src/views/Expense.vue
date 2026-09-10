@@ -19,7 +19,7 @@ import { t } from "../lib/locale";
  * ยอดรวมของสองร้อยเครื่องที่บวกด้วย float จะคลาดจากการคำนวณมือ (ดู ADR และ
  * packages/domain/money.cjs)
  */
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onActivated, onMounted, ref, watch } from "vue";
 import { exportSheet } from "../lib/export-xlsx";
 import { ChevronRight, Download, Printer, ReceiptText, Search, TriangleAlert } from "lucide-vue-next";
 import { fromSatang, sumSatang, toSatang } from "@suth/domain";
@@ -46,6 +46,9 @@ function sumCost(rows) {
 
 const loading = ref(false);
 const loadError = ref("");
+let loaded = false;
+let requestId = 0;
+let loadedContext = "";
 
 const contracts = ref([]);
 const unassignedDevices = ref([]);
@@ -153,6 +156,9 @@ async function loadUnassignedDevices() {
 }
 
 async function loadExpense() {
+  const request = ++requestId;
+  const context = `${fiscalYearState.activeId}|${month.value}`;
+  if (context !== loadedContext) contracts.value = [];
   if (!fiscalYearState.activeId) {
     contracts.value = [];
     return;
@@ -166,14 +172,16 @@ async function loadExpense() {
       params: month.value ? { month: month.value } : {},
     });
 
+    if (request !== requestId) return;
     contracts.value = res.data.contracts ?? [];
-    collapseAll();
+    loadedContext = context;
   } catch (err) {
+    if (request !== requestId) return;
     console.error("Load expense error:", err);
     loadError.value = t("โหลดข้อมูลค่าใช้จ่ายไม่สำเร็จ");
     contracts.value = [];
   } finally {
-    loading.value = false;
+    if (request === requestId) { loading.value = false; loaded = true; }
   }
 }
 
@@ -219,6 +227,13 @@ async function exportExcel() {
 // ปีงบเป็น state กลางที่แถบบนเป็นคนตั้ง หน้านี้แค่ตามไปโหลดใหม่เมื่อค่าเปลี่ยน
 watch(() => fiscalYearState.activeId, (id) => id && loadExpense(), { immediate: true });
 watch(monthSelection, loadExpense);
+onActivated(() => {
+  if (loaded) {
+    loadExpense();
+    loadMonths();
+    loadUnassignedDevices();
+  }
+});
 
 onMounted(() => {
   loadMonths();
@@ -243,7 +258,7 @@ onMounted(() => {
       <div class="flex items-center gap-2 ml-auto">
         <UiButton size="sm" variant="ghost" @click="expandAll"> {{ t("กางทั้งหมด") }} </UiButton>
         <UiButton size="sm" variant="ghost" @click="collapseAll"> {{ t("พับทั้งหมด") }} </UiButton>
-        <UiButton size="sm" variant="secondary" :disabled="!contracts.length" @click="exportExcel">
+        <UiButton size="sm" variant="secondary" :disabled="!contracts.length || loading || !!loadError" @click="exportExcel">
           <template #icon><Download :size="15" /></template>
           Excel
         </UiButton>
@@ -251,7 +266,7 @@ onMounted(() => {
     </div>
 
     <!-- ยอดรวม -->
-    <div class="grid-fit mb-4">
+    <div v-if="!loadError" class="grid-fit mb-4">
       <UiStat
         :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
         :unit="t(&quot;บาท&quot;)"
@@ -283,11 +298,11 @@ onMounted(() => {
       </template>
     </UiAlert>
 
-    <div v-if="loading" class="flex flex-col gap-2">
+    <div v-if="loading && !contracts.length" class="flex flex-col gap-2">
       <UiSkeleton v-for="n in 4" :key="n" height="3.5rem" />
     </div>
 
-    <UiCard v-else-if="!contracts.length">
+    <UiCard v-else-if="!loadError && !contracts.length">
       <UiEmpty
         :title="t(&quot;ยังไม่มีสัญญาในปีงบนี้&quot;)"
         :description="t(&quot;เพิ่มสัญญาและผูกเครื่องเข้ากับสัญญา ระบบจึงจะคิดค่าใช้จ่ายให้ได้&quot;)"
@@ -298,7 +313,7 @@ onMounted(() => {
       </UiEmpty>
     </UiCard>
 
-    <UiCard v-else-if="!filteredContracts.length">
+    <UiCard v-else-if="!loadError && !filteredContracts.length">
       <UiEmpty
         variant="search"
         :title="t(&quot;ไม่พบรายการที่ตรงกับ “{0}”&quot;, [search])"
@@ -311,7 +326,7 @@ onMounted(() => {
     </UiCard>
 
     <!-- โครงสร้างสามชั้น: สัญญา -> เครื่อง -> ยอดรายเดือน -->
-    <UiExpandable v-else>
+    <UiExpandable v-else-if="!loadError">
     <div class="flex flex-col gap-2">
       <section
         v-for="contract in filteredContracts"

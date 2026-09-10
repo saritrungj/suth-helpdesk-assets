@@ -13,7 +13,7 @@ import { t } from "../lib/locale";
  * แท็บผูกกับ ?tab= เพื่อให้บุ๊กมาร์กและลิงก์จากเมนูเปิดมาถูกมุมมอง และใช้
  * <KeepAlive> ไม่ให้ตัวกรองกับตำแหน่งที่เลื่อนค้างไว้หายทุกครั้งที่สลับแท็บ
  */
-import { computed } from "vue";
+import { computed, nextTick, onActivated, onDeactivated, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Building2, ReceiptText } from "lucide-vue-next";
 import ByDepartment from "./ByDepartment.vue";
@@ -29,10 +29,41 @@ const TABS = [
   { value: "department", label: t("ตามฝ่าย / แผนก"), icon: Building2 },
 ];
 
-const tab = computed({
-  get: () => (route.query.tab === "department" ? "department" : "expense"),
-  set: (value) => router.replace({ query: { ...route.query, tab: value } }),
+const selectedTab = ref(route.query.tab === "department" ? "department" : "expense");
+watch(() => [route.path, route.query.tab], ([path, value]) => {
+  if (path === "/expense") selectedTab.value = value === "department" ? "department" : "expense";
 });
+const tab = computed({
+  get: () => selectedTab.value,
+  set: (value) => {
+    scrollPositions[tab.value] = window.scrollY;
+    router.replace({ query: { ...route.query, tab: value } });
+  },
+});
+const visited = ref(new Set([tab.value]));
+const scrollPositions = { expense: 0, department: 0 };
+let activeTab = tab.value;
+let restoringScroll = false;
+const rememberScroll = () => {
+  if (!restoringScroll) scrollPositions[activeTab] = window.scrollY;
+};
+async function restoreScroll(value) {
+  restoringScroll = true;
+  activeTab = value;
+  await nextTick();
+  window.scrollTo(0, scrollPositions[value]);
+  requestAnimationFrame(() => { restoringScroll = false; });
+}
+watch(tab, value => {
+  visited.value = new Set([...visited.value, value]);
+  restoreScroll(value);
+});
+onActivated(async () => {
+  await restoreScroll(tab.value);
+  window.addEventListener("scroll", rememberScroll, { passive: true });
+});
+onDeactivated(() => window.removeEventListener("scroll", rememberScroll));
+onUnmounted(() => window.removeEventListener("scroll", rememberScroll));
 </script>
 
 <template>
@@ -49,16 +80,16 @@ const tab = computed({
       :description="t(&quot;ข้อมูลชุดเดียวกันสองมุมมอง — ตามสัญญาไว้ตรวจใบแจ้งหนี้ ตามหน่วยงานไว้ทำเรื่องเบิกภายใน&quot;)"
     />
 
-    <UiTabs v-model="tab" :tabs="TABS" :label="t(&quot;มุมมองของรายงานค่าใช้จ่าย&quot;)">
+    <UiTabs v-model="tab" :tabs="TABS" keep-mounted :label="t(&quot;มุมมองของรายงานค่าใช้จ่าย&quot;)">
       <template #expense>
         <KeepAlive>
-          <Expense />
+          <Expense v-if="visited.has('expense')" />
         </KeepAlive>
       </template>
 
       <template #department>
         <KeepAlive>
-          <ByDepartment />
+          <ByDepartment v-if="visited.has('department')" />
         </KeepAlive>
       </template>
     </UiTabs>

@@ -24,7 +24,7 @@ import { t } from "../lib/locale";
  * ป้ายแนวโน้มของแต่ละแผนกใช้สีคู่กับไอคอนและข้อความเสมอ เพราะ "เพิ่มขึ้น" ใน
  * บริบทค่าใช้จ่ายคือเรื่องไม่ดี ซึ่งตรงข้ามกับสัญชาตญาณของสีเขียว/แดงทั่วไป
  */
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onActivated, onMounted, ref, watch } from "vue";
 import { exportSheet } from "../lib/export-xlsx";
 import {
   Building2,
@@ -72,6 +72,9 @@ function sumCost(rows) {
    -------------------------------------------------------------------------- */
 const loading = ref(false);
 const loadError = ref("");
+let loaded = false;
+let requestId = 0;
+let loadedContext = "";
 
 const divisions = ref([]);
 const unassignedDevices = ref([]);
@@ -98,6 +101,9 @@ async function loadMonths() {
 }
 
 async function loadByDepartment() {
+  const request = ++requestId;
+  const context = `${fiscalYearState.activeId}|${month.value}`;
+  if (context !== loadedContext) { divisions.value = []; unassignedDevices.value = []; }
   if (!fiscalYearState.activeId) {
     divisions.value = [];
     unassignedDevices.value = [];
@@ -112,19 +118,29 @@ async function loadByDepartment() {
     if (month.value) params.month = month.value;
 
     const res = await api.get("/dashboard/by-department", { params });
+    if (request !== requestId) return;
     divisions.value = res.data.divisions ?? [];
     unassignedDevices.value = res.data.unassignedDevices ?? [];
+    loadedContext = context;
   } catch (err) {
+    if (request !== requestId) return;
     console.error("Load by-department error:", err);
     loadError.value = t("โหลดข้อมูลแยกตามฝ่าย/แผนกไม่สำเร็จ");
     divisions.value = [];
     unassignedDevices.value = [];
   } finally {
-    loading.value = false;
+    if (request === requestId) { loading.value = false; loaded = true; }
   }
 }
 
 watch(trendMonthSelection, loadByDepartment);
+onActivated(() => {
+  if (loaded) {
+    loadByDepartment();
+    loadMonths();
+    loadUsageMasterData();
+  }
+});
 watch(() => fiscalYearState.activeId, (id) => id && loadByDepartment(), { immediate: true });
 
 /* --------------------------------------------------------------------------
@@ -605,7 +621,7 @@ onMounted(async () => {
       <div class="flex items-center gap-2 ml-auto">
         <UiButton size="sm" variant="ghost" @click="expandAll"> {{ t("กางทั้งหมด") }} </UiButton>
         <UiButton size="sm" variant="ghost" @click="collapseAll"> {{ t("พับทั้งหมด") }} </UiButton>
-        <UiButton size="sm" variant="secondary" :disabled="!divisions.length" @click="exportTreeExcel">
+        <UiButton size="sm" variant="secondary" :disabled="!divisions.length || loading || !!loadError" @click="exportTreeExcel">
           <template #icon><Download :size="15" /></template>
           Excel
         </UiButton>
@@ -613,7 +629,7 @@ onMounted(async () => {
     </div>
 
     <!-- ยอดรวมทั้งปีงบ -->
-    <div class="grid-fit">
+    <div v-if="!loadError" class="grid-fit">
       <UiStat
         :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
         :unit="t(&quot;บาท&quot;)"
@@ -648,7 +664,7 @@ onMounted(async () => {
     </UiAlert>
 
     <!-- กราฟเปรียบเทียบ -->
-    <UiCard :eyebrow="t(&quot;เปรียบเทียบ&quot;)" :title="t(&quot;แนวโน้มของฝ่าย / แผนกที่เลือก&quot;)">
+    <UiCard v-if="!loadError" :eyebrow="t(&quot;เปรียบเทียบ&quot;)" :title="t(&quot;แนวโน้มของฝ่าย / แผนกที่เลือก&quot;)">
       <template #actions>
         <UiSegmented
           v-model="chartMetric"
@@ -737,11 +753,11 @@ onMounted(async () => {
     </UiCard>
 
     <!-- ต้นไม้รายละเอียด -->
-    <div v-if="loading" class="flex flex-col gap-2">
+    <div v-if="loading && !divisions.length" class="flex flex-col gap-2">
       <UiSkeleton v-for="n in 4" :key="n" height="3.5rem" />
     </div>
 
-    <UiCard v-else-if="!filteredDivisions.length">
+    <UiCard v-else-if="!loadError && !filteredDivisions.length">
       <UiEmpty
         :variant="search ? 'search' : 'empty'"
         :title="search ? t(&quot;ไม่พบผลลัพธ์ที่ตรงกับ “{0}”&quot;, [search]) : t(&quot;ยังไม่มีข้อมูลฝ่าย/แผนก&quot;)"
@@ -749,7 +765,7 @@ onMounted(async () => {
       />
     </UiCard>
 
-    <div v-else class="flex flex-col gap-2">
+    <div v-else-if="!loadError" class="flex flex-col gap-2">
       <section v-for="division in filteredDivisions" :key="division.id" class="card overflow-hidden">
         <!-- ระดับ 1: ฝ่าย -->
         <h3>
@@ -921,6 +937,7 @@ onMounted(async () => {
 
     <!-- อันดับการใช้งานรายเครื่อง -->
     <UiCard
+      v-if="!loadError"
       :eyebrow="t(&quot;อันดับรายเครื่อง&quot;)"
       :title="t(&quot;เครื่องที่ใช้งานหนักที่สุด&quot;)"
       :description="t(&quot;ยอดพิมพ์และค่าใช้จ่ายสุทธิของแต่ละเครื่อง รวมทั้งปีงบที่เลือกไว้ด้านบน&quot;)"
