@@ -15,8 +15,11 @@
 ```powershell
 # web ต้องทำงานอยู่ (default 5173; ตั้ง SUTH_WEB_URL หากใช้พอร์ตอื่น)
 cd apps/web
+$env:SUTH_EVIDENCE_FULL="1"
 npx playwright test asset-drawer.spec.js asset-evidence.spec.js --output=../../output/playwright/issue-48-review-new-run
 ```
+
+`SUTH_EVIDENCE_FULL=1` ให้ `asset-evidence.spec.js` ถ่ายครบ 12 แบบ ไม่ตั้งจะได้แค่ไทย-สว่างกับอังกฤษ-มืดที่ 1440×900 ซึ่งเป็นชุดที่ pre-push รันทุกครั้ง
 
 ชุดนี้ intercept HTTP API ด้วย fixture ใน `asset-fixture.js`: เครื่อง SUTH-001–045, ชื่อหน่วยงานยาว, ราคา 0.45 บาท/แผ่น ไม่มีการเขียนฐานข้อมูลจริง หากรันพร้อมชุดอื่นต้องระบุ `--output` คนละโฟลเดอร์เพื่อไม่ให้ไฟล์ trace ชนกัน
 

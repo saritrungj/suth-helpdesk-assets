@@ -96,6 +96,15 @@ async function computeReasonToSkip() {
  * ให้โยน error แทน — เทสจะแดงแทนที่จะข้ามเงียบๆ
  */
 export async function reasonToSkip() {
+  // spec ที่เรียกฟังก์ชันนี้คือ spec ที่ต้องใช้ API/ฐานข้อมูล ถ้ามันมาอยู่ในโปรเจกต์
+  // fixture แปลว่าลืมเพิ่มชื่อใน DB_SPECS — ต้องแดงตรงนี้ ไม่ใช่ข้ามเงียบๆ ใน
+  // `npm run verify` แล้วไม่ถูกรันใน `test:e2e:db` เลย
+  if (test.info().project.name === "fixture") {
+    throw new Error(
+      `${path.basename(test.info().file)} ต้องใช้ API/ฐานข้อมูล — เพิ่มชื่อไฟล์ใน DB_SPECS ของ apps/web/playwright.config.js`
+    );
+  }
+
   const reason = await computeReasonToSkip();
   if (reason && process.env.SUTH_E2E_REQUIRE_SERVICES === "1") {
     throw new Error(`SUTH_E2E_REQUIRE_SERVICES=1 แต่ยังรันไม่ได้: ${reason}`);

@@ -39,6 +39,9 @@ playwright-report/
 apps/web/e2e/.artifacts/
 apps/web/e2e/screens/
 
+# build แยกของ scripts/verify-db.cjs ที่ฝังที่อยู่ API ชั่วคราวไว้ — ห้ามเอาไป deploy
+apps/web/dist-verify-db/
+
 # ภาพที่ .claude/skills/run-web/driver.mjs ถ่ายไว้ตอน agent สั่งรันแอป
 apps/web/e2e/.driver-shots/
 
