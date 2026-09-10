@@ -48,36 +48,36 @@ const RAILS = {
     >
       <TransitionGroup name="toast">
         <div
-          v-for="t in toastState.items"
-          :key="t.id"
+          v-for="item in toastState.items"
+          :key="item.id"
           class="pointer-events-auto relative flex items-start gap-2.5 overflow-hidden
                  rounded-xl border border-line-soft bg-surface-float shadow-pop px-4 py-3 pl-5 text-sm"
-          :role="t.type === 'error' ? 'alert' : 'status'"
+          :role="item.type === 'error' ? 'alert' : 'status'"
         >
           <!-- แถบสีด้านซ้ายบอกชนิด — เห็นได้จากหางตาโดยไม่ต้องอ่านไอคอน -->
           <span
             class="absolute inset-y-0 left-0 w-1"
-            :class="RAILS[t.type] ?? RAILS.info"
+            :class="RAILS[item.type] ?? RAILS.info"
             aria-hidden="true"
           ></span>
 
           <component
-            :is="ICONS[t.type] ?? ICONS.info"
+            :is="ICONS[item.type] ?? ICONS.info"
             :size="18"
             class="shrink-0 mt-0.5"
-            :class="TONES[t.type] ?? TONES.info"
+            :class="TONES[item.type] ?? TONES.info"
             aria-hidden="true"
           />
 
           <p class="flex-1 leading-snug text-ink-soft whitespace-pre-line min-w-0">
-            {{ t.message }}
+            {{ item.message }}
           </p>
 
           <button
             type="button"
             class="shrink-0 -mr-1 -mt-0.5 grid place-items-center w-6 h-6 rounded-sm text-ink-faint hover:text-ink hover:bg-surface-3 transition-colors"
             :aria-label="t(&quot;ปิดการแจ้งเตือน&quot;)"
-            @click="dismissToast(t.id)"
+            @click="dismissToast(item.id)"
           >
             <X :size="14" aria-hidden="true" />
           </button>

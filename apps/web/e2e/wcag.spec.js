@@ -406,6 +406,27 @@ test.describe("WCAG 2.2 AA — ทุกหน้าหลังล็อกอ�
      ====================================================================== */
   test("1.4.12 เพิ่มระยะห่างตัวอักษรแล้วต้องไม่มีข้อความหาย", async ({ page }) => {
     await open(page, "/dashboard");
+
+    /* ข้อกำหนดถามว่า "การเพิ่มระยะห่าง" ทำให้เนื้อหาหายหรือไม่ จึงต้องวัดสองครั้ง
+       แล้วเทียบส่วนต่าง ไม่ใช่วัดครั้งเดียวหลังใส่สไตล์ การวัดครั้งเดียวจะจับ
+       `truncate` ที่ repo นี้อนุญาตไว้กับ "ชื่อ" ด้วย (docs/reference/accessibility.md)
+       ผลคือเทสเปลี่ยนสถานะตามความยาวชื่อในฐานข้อมูล ไม่ได้ตามโค้ด — ดัชนีของ element
+       ถูกใส่ไว้ในคีย์เพื่อให้เทียบตัวเดียวกันได้ เพราะ DOM ไม่เปลี่ยนระหว่างสองครั้ง
+       ข้อจำกัด: element ที่ถูกตัดอยู่ก่อนแล้วและถูกตัดมากขึ้นหลังเพิ่มระยะห่าง
+       จะไม่ถูกจับ เพราะเทียบเป็น boolean ไม่ได้เทียบระยะที่ล้น */
+    const clippedNow = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll("#main-content :is(h1,h2,h3,p,label,strong)"))
+          .map((el, index) => {
+            const s = getComputedStyle(el);
+            if (s.overflow === "visible" || !el.textContent.trim()) return null;
+            if (el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1) return null;
+            return index + " " + el.tagName.toLowerCase() + ': "' + el.textContent.trim().slice(0, 30) + '"';
+          })
+          .filter(Boolean)
+      );
+
+    const before = await clippedNow();
     await page.addStyleTag({
       content: `#main-content * {
         line-height: 1.5 !important;
@@ -416,16 +437,7 @@ test.describe("WCAG 2.2 AA — ทุกหน้าหลังล็อกอ�
     });
     await page.waitForTimeout(400);
 
-    const clipped = await page.evaluate(() =>
-      Array.from(document.querySelectorAll("#main-content :is(h1,h2,h3,p,label,strong)"))
-        .filter((el) => {
-          const s = getComputedStyle(el);
-          if (s.overflow === "visible" || !el.textContent.trim()) return false;
-          return el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
-        })
-        .slice(0, 6)
-        .map((el) => el.tagName.toLowerCase() + ': "' + el.textContent.trim().slice(0, 30) + '"')
-    );
+    const clipped = (await clippedNow()).filter((entry) => !before.includes(entry)).slice(0, 6);
 
     expect(clipped, "เพิ่มระยะห่างแล้วมีข้อความถูกตัดหาย").toEqual([]);
   });

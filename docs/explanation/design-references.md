@@ -57,6 +57,16 @@
 
 ## 3. การนำเสนอตัวเลขและกราฟ
 
+### ทะเบียนต้นแบบ #48
+
+| Reference | รูปแบบที่เลือกและจุดใช้ | เหตุผล / หลักฐาน |
+|---|---|---|
+| [Carbon data table](https://carbondesignsystem.com/components/data-table/usage/) | `AssetList.vue`: ค้นหาและตัวกรองก่อนตาราง, แก้ไขในแถว, ย้าย/ลบใน overflow menu | แยกคำสั่งรายแถวจากคำสั่งทั้งชุด; `registry.png` |
+| [View Options](https://dribbble.com/shots/18146985-View-Option-Sorting) | `UiDataTable.vue`: กลุ่มเครื่องมือคอลัมน์/เต็มจอ/Excel | หาเครื่องมือมุมมองในตำแหน่งเดียว โดยคงการเรียงและ export เดิม; `registry.png` |
+| [Wayflyer slide-overs](https://dribbble.com/shots/19470569-Wayflyer-Slide-overs) | `UiDrawer.vue`, `AssetForm.vue`, `MoveDeviceModal.vue`: แผงขวา หัว/footer คงที่ พื้นหลังเห็นรายการ | แก้ไขแล้วกลับคำค้น/หน้าเดิม; `edit.png`, `move.png` |
+
+ตรวจแหล่งอ้างอิง 9 ก.ย. 2026 ใช้เป็นแนวทางองค์ประกอบ ไม่คัดลอก assets หรืออ้างว่าได้ทดสอบ usability ของต้นฉบับ ดู [วิธีเปิดหลักฐาน](../how-to/review-asset-prototype.md)
+
 | แหล่ง | ที่มา | เอามาใช้ที่ |
 |---|---|---|
 | [Chart Cards — widelab](https://dribbble.com/shots/20454370-Chart-Cards) | ~2.1K likes | `ui/UiStat.vue` — ลำดับในการ์ดตัวเลข: ป้ายกำกับ → ตัวเลข+หน่วย → การเปลี่ยนแปลง → กราฟเล็ก; หน่วยตัวเล็กติดตัวเลขเสมอ ไม่แยกบรรทัด |

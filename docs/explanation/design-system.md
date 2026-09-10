@@ -32,8 +32,21 @@ src/app/      เปลือกแอป   แถบเมนู แถบบ�
 | Sidebar | group open/closed, active route, expanded/rail, tooltip hover/focus, admin hidden | `e2e/shell.spec.js`, `app/navigation.test.js` |
 | Topbar | ปีงบ loading/list/empty, account menu, ภาษา, theme และ density ที่จำค่า | `e2e/shell.spec.js`, store tests เดิม |
 | Command search | closed/open, keyboard cursor, empty result, route filtered by role | `e2e/shell.spec.js` |
+| ทะเบียน / drawer | loading, error + retry, empty, filtered-empty, dirty confirmation, pending, validation, success; keyboard focus trap/restore | `e2e/asset-drawer.spec.js`, `e2e/asset-evidence.spec.js` |
 
-งาน #47 ไม่เปลี่ยน state ของข้อมูลในหน้าธุรกิจ loading/error/retry/empty/filtered-empty/success ยังคงเป็นเจ้าของหน้าเดิม และจะถูก redesign เฉพาะหลัง human gate ตาม #46
+### Drawer contract
+
+เมื่อปิด drawer แล้ว opener ถูกถอดจาก DOM ตัว primitive emit `focus-fallback` ให้เจ้าของบริบทเลือกจุดกลับ เช่น ช่องค้นหาทะเบียนหลังย้ายจนแถวหลุดคำค้น หาก opener ยังอยู่จะคืน focus ตามเดิมโดยไม่เปลี่ยน scroll
+
+`UiDrawer` ใช้ Reka Dialog กับ portal เดิม รับ controlled `open`, `title`, `description`, `size` (`md` 560px / `lg` 640px), `pending` และ slot body/default/footer หัวและ footer คงที่ เนื้อหาเลื่อนภายใน การขอปิดทุกทาง emit `update:open` ให้เจ้าของฟอร์มตรวจ dirty/pending ก่อนเปลี่ยนค่า; ตัว UI ไม่ตัดสินว่าข้อมูลทิ้งได้หรือไม่ ใช้ `returnFocus` เมื่อเปิดจากรายการในเมนูที่ถูกถอดออกหลังเลือก
+
+ทะเบียนเลือก `preservePageOnRefresh` ของ `UiDataTable` เพื่อคงหน้าเมื่อเปลี่ยนจำนวนผลลัพธ์และ clamp เมื่อเกินหน้าสุดท้าย ค่าเริ่มต้นของผู้เรียกอื่นเหมือนเดิม คำค้นควบคุมผ่าน optional `searchValue` เพื่อวางในแถบตัวกรองโดยใช้ search/export semantics เดิม
+
+เมื่อคำค้น/ตัวกรองอยู่ภายนอกตาราง ผู้เรียกส่ง DOM element ผ่าน optional `fullscreenTarget` ให้เต็มจอทั้งบริบท และใช้ `ui-fullscreen-context` สำหรับพื้นและการเลื่อน ค่าเริ่มต้นยังเต็มจอเฉพาะตารางเหมือนเดิม เจ้าของทะเบียนคืน focus ไปช่องค้นหาหาก refresh ถอดปุ่มเดิมออกหลัง save; หากปุ่มเดิมยังอยู่ให้รักษา focus และ scroll เดิม
+
+ต้นแบบ #48 มี [ขั้นตอนตรวจรับและขอบเขตหลักฐาน](../how-to/review-asset-prototype.md) การขยายหน้าอื่นยังรอ gate #51
+
+งาน #47 ไม่เปลี่ยน state ของข้อมูลในหน้าธุรกิจ loading/error/retry/empty/filtered-empty/success ยังคงเป็นเจ้าของหน้าเดิม งานต้นแบบ #48–#50 ทดลองได้เฉพาะหน้าที่กำหนด ก่อนขยายไปหน้าอื่นหลัง human gate ตาม #46
 
 ## สี
 

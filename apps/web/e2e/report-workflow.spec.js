@@ -154,18 +154,28 @@ test("report device rows link to the complete asset detail", async ({ page }) =>
 
 
 test("filtered Excel export carries the search context", async ({ page }) => {
+  /* คำค้นต้องมาจากข้อมูลจริงของฐานที่กำลังทดสอบ ค่าคงที่อย่าง "HP" ทำให้เทสนี้
+     ล้มบนฐาน QA ที่มี serial คนละชุด ทั้งที่ปุ่ม export ถูก disable อย่างถูกต้อง
+     เพราะไม่มีแถวตรงเงื่อนไข — อาการที่ได้คือ timeout ของ event download */
+  const devices = await apiFetch("/devices");
+  const sample = devices.find((device) => (device.serial_number || "").length >= 4);
+  test.skip(!sample, "No device with a serial number to filter by");
+  const term = sample.serial_number.slice(0, 4);
+
   await page.goto("/assets");
-  await page.getByRole("textbox", { name: "ค้นหา Serial, รุ่น, ตำแหน่ง…" }).fill("HP");
+  await page.getByRole("textbox", { name: "ค้นหา Serial, รุ่น, ตำแหน่ง…" }).fill(term);
+  const exportButton = page.getByRole("button", { name: /Excel/ });
+  await expect(exportButton).toBeEnabled();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Excel/ }).click();
+  await exportButton.click();
   const download = await downloadPromise;
   const { readFile } = await import("node:fs/promises");
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(await readFile(await download.path()), { type: "buffer" });
   const context = XLSX.utils.sheet_to_json(workbook.Sheets["บริบทรายงาน"], { header: 1 });
-  expect(context).toContainEqual(["ค้นหา", "HP"]);
+  expect(context).toContainEqual(["ค้นหา", term]);
   expect(context).toContainEqual(["สกุลเงิน", "THB"]);
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }).slice(1);
   expect(rows.length).toBeGreaterThan(0);
-  expect(rows.every((row) => row.some((value) => String(value).toUpperCase().includes("HP")))).toBe(true);
+  expect(rows.every((row) => row.some((value) => String(value).toUpperCase().includes(term.toUpperCase())))).toBe(true);
 });

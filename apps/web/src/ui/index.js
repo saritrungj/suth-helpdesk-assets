@@ -19,6 +19,7 @@ export { default as UiCheckbox } from "./UiCheckbox.vue";
 export { default as UiCombobox } from "./UiCombobox.vue";
 export { default as UiConfirm } from "./UiConfirm.vue";
 export { default as UiDataTable } from "./UiDataTable.vue";
+export { default as UiDrawer } from "./UiDrawer.vue";
 export { default as UiEmpty } from "./UiEmpty.vue";
 export { default as UiField } from "./UiField.vue";
 export { default as UiFilterBar } from "./UiFilterBar.vue";

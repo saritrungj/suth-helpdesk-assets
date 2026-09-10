@@ -37,3 +37,4 @@
 | [0013](0013-localized-reporting.md) | แยกภาษาแสดงผลออกจากข้อมูลรายงาน | Accepted |
 | [0014](0014-resolve-overlapping-location-history.md) | เลือกประวัติตำแหน่งที่มีผลเพียงช่วงเดียวต่อเดือน | Accepted |
 | [0015](0015-brand-assets-in-repository.md) | เก็บ brand asset ของเจ้าของระบบไว้ใน repository | Accepted |
+| [0016](0016-isolated-qa-database-and-bootstrap-harness.md) | ฐาน QA แยก และ harness ที่ต่อ MySQL ตรงเฉพาะ bootstrap | Accepted |

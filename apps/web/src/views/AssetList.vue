@@ -19,9 +19,9 @@ import { errorMessage } from "../lib/api-error";
  * ตัวเลือกชั้นและแผนกผูกกับอาคารและฝ่ายที่เลือกไว้ (cascading) เพื่อไม่ให้เลือก
  * ชั้นที่ไม่มีอยู่ในอาคารนั้นแล้วได้ตารางว่างโดยไม่รู้สาเหตุ
  */
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { CirclePlus, FileSpreadsheet, Move, Pencil, Trash2 } from "lucide-vue-next";
+import { CirclePlus, FileSpreadsheet, MoreHorizontal, Move, Pencil, Search, Trash2 } from "lucide-vue-next";
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateAfterWrite } from "../api/invalidate";
@@ -39,6 +39,9 @@ import {
   UiDataTable,
   UiField,
   UiFilterBar,
+  UiInput,
+  UiMenu,
+  UiMenuItem,
   UiPageHeader,
   UiSegmented,
   UiTooltip,
@@ -49,6 +52,13 @@ const isAdmin = computed(() => authState.user?.role === "admin");
 const assets = ref([]);
 const loading = ref(true);
 const loadError = ref("");
+const filterError = ref("");
+const search = ref("");
+const table = ref(null);
+const registryRoot = ref(null);
+const searchInput = ref(null);
+const refreshNotice = ref("");
+const refreshing = ref(false);
 
 const fiscalYears = ref([]);
 const brands = ref([]);
@@ -182,9 +192,13 @@ function clearFilter(key) {
 
 function resetFilters() {
   filters.value = emptyFilters();
+  search.value = "";
 }
 
 // เปลี่ยนอาคาร/ฝ่ายแล้ว ชั้น/แผนกที่เลือกไว้อาจไม่อยู่ในตัวเลือกใหม่ ล้างทิ้ง
+// คำอธิบายนี้พูดถึงผลของการบันทึกครั้งนั้นกับเงื่อนไขชุดนั้น พอผู้ใช้เปลี่ยน
+// คำค้นหรือตัวกรองเอง มันก็ไม่ตรงกับสิ่งที่เห็นอยู่แล้ว
+watch([search, filters], () => (refreshNotice.value = ""), { deep: true });
 watch(() => filters.value.building, () => (filters.value.floor = ""));
 watch(() => filters.value.division, () => (filters.value.department = ""));
 
@@ -282,22 +296,40 @@ const columns = [
   },
 ];
 
-async function loadAssets() {
-  loading.value = true;
+async function loadAssets({ refresh = false } = {}) {
+  if (!refresh) loading.value = true;
   loadError.value = "";
 
   try {
     const res = await api.get("/devices");
     assets.value = res.data ?? [];
+    return true;
   } catch (err) {
     console.error("Load assets error:", err);
     loadError.value = t("โหลดทะเบียนทรัพย์สินไม่สำเร็จ");
+    return false;
   } finally {
     loading.value = false;
   }
 }
+async function refreshAfterSave() {
+  const previousFocus = document.activeElement;
+  refreshing.value = true;
+  refreshNotice.value = "";
+  const loaded = await loadAssets({ refresh: true });
+  await nextTick();
+  if (loaded && !table.value?.containsRow(activeAssetId.value)) {
+    refreshNotice.value = t("บันทึกแล้ว เครื่องนี้ไม่ตรงกับคำค้นหาหรือตัวกรองปัจจุบัน");
+  }
+  refreshing.value = false;
+  await nextTick();
+  if (!moveOpen.value && (document.activeElement === document.body || !previousFocus?.isConnected)) {
+    searchInput.value?.focus();
+  }
+}
 
 async function loadFilterData() {
+  filterError.value = "";
   try {
     const [fy, brand, building, floor, division, department] = await Promise.all([
       api.get("/fiscal-years"),
@@ -316,6 +348,7 @@ async function loadFilterData() {
     departments.value = department.data ?? [];
   } catch (err) {
     console.error("Load filter data error:", err);
+    filterError.value = t("โหลดข้อมูลอ้างอิงไม่สำเร็จ");
   }
 }
 
@@ -325,6 +358,7 @@ async function loadFilterData() {
    -------------------------------------------------------------------------- */
 const formOpen = ref(false);
 const moveOpen = ref(false);
+const moveTrigger = ref(null);
 const activeAssetId = ref(null);
 
 function openEdit(id) {
@@ -332,8 +366,10 @@ function openEdit(id) {
   formOpen.value = true;
 }
 
-function openMove(id) {
+async function openMove(id) {
   activeAssetId.value = id;
+  // Let the menu dismiss and restore its trigger before the drawer traps focus.
+  await new Promise((resolve) => requestAnimationFrame(resolve));
   moveOpen.value = true;
 }
 
@@ -361,7 +397,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div>
+  <div ref="registryRoot" class="ui-fullscreen-context">
     <UiPageHeader
       :eyebrow="t(&quot;ทรัพย์สิน&quot;)"
       :title="t(&quot;ทะเบียนเครื่องพิมพ์&quot;)"
@@ -375,6 +411,9 @@ onMounted(async () => {
       </template>
 
       <template #actions>
+        <UiButton v-if="isAdmin" :to="{ path: '/admin/add-asset', query: { tab: 'import' } }" variant="secondary">
+          <template #icon><FileSpreadsheet :size="16" /></template>{{ t("นำเข้าจากไฟล์") }}
+        </UiButton>
         <UiButton v-if="isAdmin" to="/admin/add-asset" variant="primary">
           <template #icon><CirclePlus :size="16" /></template> {{ t("เพิ่มเครื่อง") }} </UiButton>
       </template>
@@ -386,12 +425,23 @@ onMounted(async () => {
         <UiButton size="sm" variant="secondary" @click="loadAssets"> {{ t("ลองใหม่") }} </UiButton>
       </template>
     </UiAlert>
+    <UiAlert v-if="refreshNotice" tone="info" class="mb-4">{{ refreshNotice }}</UiAlert>
+    <UiAlert v-if="filterError" tone="danger" class="mb-4">
+      {{ filterError }}
+      <template #actions><UiButton variant="secondary" @click="loadFilterData">{{ t("ลองใหม่") }}</UiButton></template>
+    </UiAlert>
+    <p v-if="refreshing" role="status" class="text-sm text-ink-mute mb-2">{{ t("กำลังโหลดข้อมูล…") }}</p>
 
     <!-- ตัวกรอง — ใช้ UiFilterBar ตัวเดียวกับหน้าบันทึกยอดพิมพ์
          เดิมหน้านี้เขียนแผงพับกับชิปขึ้นเองแยกต่างหาก ทำให้สองหน้าที่ทำงาน
          เหมือนกันหน้าตาไม่เหมือนกัน และเวลาแก้พฤติกรรมต้องแก้สองที่ -->
     <UiFilterBar :chips="filterChips" @remove="clearFilter" @clear="resetFilters">
       <template #primary>
+        <UiField :label="t('ค้นหา')" class="flex-1 min-w-[14rem]">
+          <UiInput ref="searchInput" v-model="search" clearable :aria-label="t('ค้นหา Serial, รุ่น, ตำแหน่ง…')" :placeholder="t('ค้นหา Serial, รุ่น, ตำแหน่ง…')">
+            <template #icon><Search :size="15" /></template>
+          </UiInput>
+        </UiField>
         <UiField :label="t(&quot;สถานะเครื่อง&quot;)">
           <UiSegmented v-model="filters.status" :options="STATUS_OPTIONS" size="sm" :label="t(&quot;กรองตามสถานะเครื่อง&quot;)" />
         </UiField>
@@ -447,6 +497,12 @@ onMounted(async () => {
     </UiFilterBar>
 
     <UiDataTable
+      v-show="!loadError"
+      ref="table"
+      :fullscreen-target="registryRoot"
+      v-model:search-value="search"
+      :searchable="false"
+      preserve-page-on-refresh
       :rows="filteredAssets"
       :columns="columns"
       :loading="loading"
@@ -486,6 +542,16 @@ onMounted(async () => {
         <span class="block text-2xs text-ink-mute">{{ row.model || "" }}</span>
       </template>
 
+      <template #cell-department_name="{ row }">
+        <span class="block w-52 whitespace-normal break-words">{{ row.department_name || '—' }}</span>
+      </template>
+      <template #cell-division_name="{ row }">
+        <span class="block w-44 whitespace-normal break-words">{{ row.division_name || '—' }}</span>
+      </template>
+      <template #cell-location="{ row }">
+        <span class="block w-40 whitespace-normal break-words">{{ row.location || '—' }}</span>
+      </template>
+
       <template #cell-contract_no="{ row }">
         <span>{{ row.contract_no || "—" }}</span>
         <span v-if="row.fiscal_year" class="block text-2xs text-ink-mute numeral"> {{ t("ปีงบ") }} {{ yearLabel(row.fiscal_year) }}
@@ -508,12 +574,12 @@ onMounted(async () => {
         </UiBadge>
       </template>
 
-      <template #empty="{ search }">
+      <template #empty>
         <div class="py-12 text-center">
           <template v-if="search || activeFilters.length">
             <p class="text-md font-semibold text-ink"> {{ t("ไม่มีเครื่องที่ตรงกับเงื่อนไข") }} </p>
             <p class="text-sm text-ink-mute mt-1"> {{ t("ลองเอาตัวกรองบางอันออก แล้วดูใหม่อีกครั้ง") }} </p>
-            <UiButton v-if="activeFilters.length" size="sm" variant="secondary" class="mt-4" @click="resetFilters"> {{ t("ล้างตัวกรองทั้งหมด") }} </UiButton>
+            <UiButton size="sm" variant="secondary" class="mt-4" @click="resetFilters"> {{ t("ล้างตัวกรองทั้งหมด") }} </UiButton>
           </template>
 
           <template v-else>
@@ -532,33 +598,20 @@ onMounted(async () => {
       </template>
 
       <template v-if="isAdmin" #actions="{ row }">
-        <UiTooltip :content="t(&quot;แก้ไขข้อมูลเครื่อง&quot;)">
-          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;แก้ไข {0}&quot;, [row.serial_number])" @click="openEdit(row.id)">
-            <Pencil :size="15" />
-          </UiButton>
-        </UiTooltip>
-
-        <UiTooltip :content="t(&quot;ย้ายที่ตั้งหรือเปลี่ยนแผนก&quot;)">
-          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;ย้าย {0}&quot;, [row.serial_number])" @click="openMove(row.id)">
-            <Move :size="15" />
-          </UiButton>
-        </UiTooltip>
-
-        <UiTooltip :content="t(&quot;ลบออกจากทะเบียน&quot;)">
-          <UiButton
-            size="sm"
-            variant="danger-ghost"
-            icon-only
-            :label="t(&quot;ลบ {0}&quot;, [row.serial_number])"
-            @click="remove(row)"
-          >
-            <Trash2 :size="15" />
-          </UiButton>
-        </UiTooltip>
+        <UiButton size="sm" variant="ghost" :aria-label="t('แก้ไข {0}', [row.serial_number])" @click="openEdit(row.id)">
+          <template #icon><Pencil :size="15" /></template>{{ t("แก้ไข") }}
+        </UiButton>
+        <UiMenu :label="row.serial_number">
+          <template #trigger>
+            <UiButton size="sm" variant="ghost" icon-only :label="t('การกระทำเพิ่มเติม {0}', [row.serial_number])" @focus="moveTrigger = $event.currentTarget"><MoreHorizontal :size="16" /></UiButton>
+          </template>
+          <UiMenuItem @select="openMove(row.id)"><template #icon><Move :size="15" /></template>{{ t("ย้ายเครื่อง") }}</UiMenuItem>
+          <UiMenuItem tone="danger" separated @select="remove(row)"><template #icon><Trash2 :size="15" /></template>{{ t("ลบเครื่องนี้") }}</UiMenuItem>
+        </UiMenu>
       </template>
     </UiDataTable>
 
-    <AssetForm v-model="formOpen" :asset-id="activeAssetId" @saved="loadAssets" />
-    <MoveDeviceModal v-model="moveOpen" :asset-id="activeAssetId" @saved="loadAssets" />
+    <AssetForm v-model="formOpen" :asset-id="activeAssetId" @saved="refreshAfterSave" />
+    <MoveDeviceModal v-if="moveOpen" v-model="moveOpen" :asset-id="activeAssetId" :return-focus="moveTrigger" @saved="refreshAfterSave" @focus-fallback="searchInput?.focus()" />
   </div>
 </template>

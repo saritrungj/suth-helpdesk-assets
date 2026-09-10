@@ -29,6 +29,7 @@
 - [นำเข้าไฟล์ Excel/CSV](how-to/import-files.md)
 - [ตรวจยอดและติดตามงานจากรายงาน](how-to/use-report-workflow.md)
 - [ตรวจการเปลี่ยนแปลงก่อนส่งมอบ](how-to/verify-changes.md)
+- [เปิดและทดสอบ QA แยกสำหรับ #48](how-to/run-qa48.md)
 - [เตรียมขึ้น production](how-to/prepare-for-production.md)
 
 ## reference — เพื่อเปิดหา
