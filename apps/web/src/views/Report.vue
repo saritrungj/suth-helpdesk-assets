@@ -550,7 +550,7 @@ onMounted(async () => {
             <span class="text-xs text-ink-soft">{{ row._period_label }}</span>
             <button
               type="button"
-              class="inline-flex items-center gap-0.5 text-2xs text-brand-ink hover:underline whitespace-nowrap"
+              class="inline-flex min-h-6 items-center gap-0.5 text-2xs text-brand-ink hover:underline whitespace-nowrap"
               @click="toggleHistory(row.id)"
             >
               {{ expandedDeviceIds.has(row.id) ? t("ซ่อน") : t("ดูประวัติ") }}

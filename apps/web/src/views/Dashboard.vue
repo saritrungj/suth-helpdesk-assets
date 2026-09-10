@@ -527,7 +527,9 @@ onMounted(loadHighlights);
               <p class="text-sm font-medium text-ink-soft font-mono truncate">
                 <RouterLink :to="{ path: `/assets/${device.device_id}`, query: { fy: activeFiscalYear?.id } }" class="inline-flex items-center min-h-6 underline">{{ device.serial_number || device.asset_code || "—" }}</RouterLink>
               </p>
-              <p class="text-2xs text-ink-mute truncate">
+              <!-- ชื่อแผนกตรงนี้พอดีบรรทัดที่ระยะห่างปกติ แต่ล้นเมื่อผู้ใช้เพิ่ม
+                   letter/word-spacing ตาม 1.4.12 จึงให้ขึ้นบรรทัดใหม่แทนการตัดทิ้ง -->
+              <p class="text-2xs text-ink-mute break-words">
                 {{ device.department_name || t("ไม่ระบุแผนก") }}
                 <span class="block whitespace-normal">{{ deviceLocationLabel(device.locations) }}</span>
               </p>
