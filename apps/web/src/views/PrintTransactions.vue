@@ -23,8 +23,8 @@ import { t } from "../lib/locale";
  * ให้ลบค่าที่เคยบันทึกไว้ทิ้ง ไม่ใช่แค่ไม่พูดถึงเดือนนั้น
  */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
-import { CircleCheck, ClipboardList, ClipboardPaste, Pencil, Search, Undo2 } from "lucide-vue-next";
+import { onBeforeRouteLeave, useRoute } from "vue-router";
+import { ChevronDown, CircleCheck, ClipboardList, ClipboardPaste, Pencil, Search, Undo2 } from "lucide-vue-next";
 
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -78,6 +78,11 @@ const queryClient = useQueryClient();
 const canEdit = computed(() => authState.user?.role !== "viewer");
 
 const loading = ref(true);
+const workspace = ref(null);
+const pageError = ref("");
+const summaryError = ref("");
+const summaryLoading = ref(true);
+let summaryRequest = 0;
 
 const devices = ref([]);
 const filledSummary = ref({});
@@ -96,7 +101,11 @@ const brands = ref([]);
  *
  * โหมด month ต้องเลือกเดือนก่อนเสมอ เพราะกรอกโดยไม่รู้ว่าเดือนไหนไม่มีความหมาย
  */
-const mode = ref("overview");
+const mode = ref(canEdit.value ? "month" : "overview");
+const yearExpanded = ref(false);
+// Only the initial selection may be filled by coverage. User choices, including
+// "all year", remain authoritative when a delayed response arrives.
+const awaitingDefaultMonth = ref(!route.query.month);
 
 const MODE_OPTIONS = [
   { value: "overview", label: t("ภาพรวมทั้งปี") },
@@ -122,7 +131,8 @@ const fiscalYearId = computed(() => fiscalYearState.activeId);
 
 // ความครบถ้วนรายเดือนของทั้งปีงบ — ใช้เลือกเดือนตั้งต้นของโหมดกรอกรายเดือน
 // และใช้ cache ก้อนเดียวกับหน้าแรก จึงไม่ยิงซ้ำเมื่อเปิดสลับกัน
-const { data: coverage, refetch: refetchCoverage } = useCoverage(fiscalYearId);
+const coverageQuery = useCoverage(fiscalYearId);
+const { data: coverage, refetch: refetchCoverage } = coverageQuery;
 const range = computed(() => activeFiscalYearRange.value);
 const displayYearBE = computed(() => formatFiscalYearRange(range.value));
 const fyMonths = computed(() => fiscalYearMonths(range.value));
@@ -182,8 +192,12 @@ async function loadMasterData() {
 }
 
 async function loadSummary() {
+  const request = ++summaryRequest;
+  summaryError.value = "";
+  summaryLoading.value = true;
   if (!fiscalYearId.value) {
     filledSummary.value = {};
+    summaryLoading.value = false;
     return;
   }
 
@@ -191,6 +205,7 @@ async function loadSummary() {
     const res = await api.get("/print-transactions/summary", {
       params: { fiscal_year_id: fiscalYearId.value },
     });
+    if (request !== summaryRequest) return;
 
     filledSummary.value = Object.fromEntries(
       (res.data ?? []).map((r) => [
@@ -204,7 +219,9 @@ async function loadSummary() {
       ])
     );
   } catch (err) {
-    console.error("Load summary error:", err);
+    if (request === summaryRequest) summaryError.value = t("โหลดความคืบหน้าปีไม่สำเร็จ");
+  } finally {
+    if (request === summaryRequest) summaryLoading.value = false;
   }
 }
 
@@ -294,6 +311,7 @@ const confirmDiscardDraft = createDraftGuard({
  * (เช่นลิงก์ ?month= จากหน้าแรก) โดยที่ตารางยังอยู่บนหน้าจอ
  */
 async function changeMonth(next) {
+  awaitingDefaultMonth.value = false;
   if (next === filters.value.month) return;
 
   // ด่านล้าง draft ให้เองเมื่อผู้ใช้ยืนยัน เพื่อไม่ให้ watch ในตารางถามซ้ำอีกรอบ
@@ -337,12 +355,16 @@ async function setMode(next) {
   });
   if (!ok) return;
 
-  if (next === "month" && !filters.value.month) {
-    filters.value.month = defaultEntryMonth();
-  }
+  if (next === "month" && !filters.value.month) awaitingDefaultMonth.value = true;
 
   mode.value = next;
 }
+
+watch([coverage, mode, awaitingDefaultMonth], () => {
+  if (mode.value !== "month" || !awaitingDefaultMonth.value || !coverage.value) return;
+  filters.value.month = defaultEntryMonth();
+  awaitingDefaultMonth.value = false;
+}, { immediate: true });
 
 /** บันทึกเสร็จแล้วต้องโหลดใหม่ทั้งยอดของเดือนนั้นและความคืบหน้าทั้งปี */
 async function onMonthSaved() {
@@ -383,12 +405,14 @@ const entryColumns = computed(() => [
 
 async function init() {
   loading.value = true;
+  pageError.value = "";
 
   try {
     await Promise.all([loadDevices(), loadMasterData(), loadSummary()]);
   } catch (err) {
     console.error("Init print transactions error:", err);
     toastError(t("โหลดข้อมูลไม่สำเร็จ"));
+    pageError.value = t("โหลดข้อมูลไม่สำเร็จ");
   } finally {
     loading.value = false;
   }
@@ -402,8 +426,10 @@ async function init() {
 // มาแล้วเสมอ
 watch(
   fiscalYearId,
-  () => {
+  (_, previous) => {
+    if (!previous) return;
     filters.value.month = "";
+    awaitingDefaultMonth.value = true;
     loadSummary();
   },
   { immediate: true }
@@ -511,6 +537,7 @@ async function resetFilters() {
   });
   if (!ok) return;
 
+  awaitingDefaultMonth.value = false;
   search.value = "";
   filters.value = {
     building: "",
@@ -634,6 +661,30 @@ const dialogLoading = ref(false);
 const dialogSaving = ref(false);
 const dialogError = ref("");
 const monthRows = ref([]);
+const annualSnapshot = ref([]);
+const annualReady = ref(false);
+const annualDirtyCount = computed(() => dialogOpen.value && annualReady.value
+  ? monthRows.value.filter((row, index) => String(row.pages ?? "") !== String(annualSnapshot.value[index] ?? "")).length
+  : 0);
+const confirmDiscardAnnual = createDraftGuard({
+  dirtyCount: () => annualDirtyCount.value,
+  describe: (count, consequence) => t("มียอดพิมพ์ที่แก้ไว้ {0} รายการแต่ยังไม่ได้บันทึก {1}", [count, consequence]),
+  discard: () => { dialogOpen.value = false; },
+});
+
+async function closeAnnual(open) {
+  if (open || dialogSaving.value) return;
+  if (await confirmDiscardAnnual(t("ถ้าปิดตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด"))) dialogOpen.value = false;
+}
+
+onBeforeRouteLeave(() => dialogSaving.value ? false : confirmDiscardAnnual(t("ถ้าออกจากหน้านี้ ค่าที่กรอกไว้จะหายทั้งหมด")));
+function guardAnnualUnload(event) {
+  if (!annualDirtyCount.value && !dialogSaving.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+onMounted(() => window.addEventListener("beforeunload", guardAnnualUnload));
+onUnmounted(() => window.removeEventListener("beforeunload", guardAnnualUnload));
 
 const filledInDialog = computed(() => monthRows.value.filter((row) => isFilled(row.pages)).length);
 
@@ -648,6 +699,7 @@ async function openDialog(device) {
   }
 
   dialogDevice.value = device;
+  annualReady.value = false;
   dialogError.value = "";
   beforePaste.value = null;
   // ต่อท้ายด้วยปีเสมอ เพราะปีงบไทยคร่อมสองปีปฏิทิน ชื่อเดือนเปล่าๆ จึงกำกวม
@@ -666,6 +718,8 @@ async function openDialog(device) {
 
     const byMonth = Object.fromEntries((res.data ?? []).map((r) => [r.month, Number(r.pages)]));
     monthRows.value = monthRows.value.map((row) => ({ ...row, pages: byMonth[row.month] ?? null }));
+    annualSnapshot.value = monthRows.value.map(row => row.pages);
+    annualReady.value = true;
   } catch (err) {
     console.error("Load device months error:", err);
     dialogError.value = t("โหลดยอดที่เคยกรอกไว้ไม่สำเร็จ");
@@ -752,6 +806,7 @@ function onMonthKeydown(event, index) {
 }
 
 async function save() {
+  if (dialogSaving.value || !annualReady.value) return;
   dialogError.value = "";
 
   const invalid = monthRows.value.find((row) => isFilled(row.pages) && Number(row.pages) < 0);
@@ -792,8 +847,8 @@ onMounted(init);
 // ⚠️ ถ้าวันหลังหน้านี้ถูกครอบด้วย <KeepAlive> ต้องเปลี่ยนไปใช้ onActivated/onDeactivated
 // ด้วย เพราะ onUnmounted จะไม่ยิงตอน deactivate แล้วด่านจะค้างบล็อกการเปลี่ยนปีงบ
 // ของทั้งแอปทั้งที่ผู้ใช้ออกจากหน้านี้ไปแล้ว
-const unregisterFiscalYearGuard = registerFiscalYearGuard(() =>
-  confirmDiscardDraft(t("ถ้าเปลี่ยนปีงบตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด"), {
+const unregisterFiscalYearGuard = registerFiscalYearGuard(async () =>
+  !dialogSaving.value && await confirmDiscardAnnual(t("ถ้าเปลี่ยนปีงบตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด")) && await confirmDiscardDraft(t("ถ้าเปลี่ยนปีงบตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด"), {
     confirmText: t("เปลี่ยนปีงบโดยไม่บันทึก"),
   })
 );
@@ -802,18 +857,28 @@ onUnmounted(unregisterFiscalYearGuard);
 </script>
 
 <template>
-  <div>
+  <div ref="workspace" class="ui-fullscreen-context">
     <UiPageHeader
       :eyebrow="t(&quot;บันทึกข้อมูล&quot;)"
       :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
-      :description="t(&quot;กรอกยอดมิเตอร์ของแต่ละเครื่องสำหรับปีงบ {0} — เปิดเครื่องหนึ่งครั้งกรอกได้ครบทั้งปี&quot;, [displayYearBE])"
+      :description="t(&quot;เลือกเดือน กรอกยอด แล้วตรวจจำนวนรายการก่อนบันทึก&quot;)"
     />
 
     <!-- ความคืบหน้าของทั้งปีงบ -->
-    <UiCard class="mb-4" :eyebrow="t(&quot;ความคืบหน้าของปีงบนี้&quot;)" :title="t(&quot;กรอกครบแล้ว {0} จาก {1} เครื่อง&quot;, [formatCount(progress.done), formatCount(progress.total)])">
+    <UiCard class="mb-4" flush>
+      <template #header>
+        <p class="text-sm text-ink-soft">
+          {{ t("ปีงบ {0}", [displayYearBE]) }}
+          <span v-if="!summaryError && !summaryLoading && !loading && !pageError"> · {{ t("กรอกครบแล้ว {0} จาก {1} เครื่อง", [formatCount(progress.done), formatCount(progress.total)]) }}</span>
+        </p>
+      </template>
       <template #actions>
+        <UiButton size="sm" variant="ghost" :aria-expanded="yearExpanded" aria-controls="year-progress" @click="yearExpanded = !yearExpanded">
+          {{ t("รายละเอียดความคืบหน้าปี") }}
+          <ChevronDown :size="14" :class="yearExpanded && 'rotate-180'" aria-hidden="true" />
+        </UiButton>
         <UiButton
-          v-if="progress.total - progress.done > 0"
+          v-if="yearExpanded && progress.total - progress.done > 0"
           size="sm"
           :variant="filters.fillStatus === 'done' ? 'secondary' : 'soft'"
           @click="filters.fillStatus = filters.fillStatus === 'partial' ? '' : 'partial'"
@@ -823,36 +888,46 @@ onUnmounted(unregisterFiscalYearGuard);
         </UiButton>
       </template>
 
-      <UiSkeleton v-if="loading" height="2.5rem" />
+      <div id="year-progress" v-show="yearExpanded" class="px-4 py-3">
+        <UiSkeleton v-if="loading || summaryLoading" height="2.5rem" />
 
-      <div v-else class="flex flex-col gap-3">
-        <UiMeter
-          :value="progress.done"
-          :max="progress.total || 1"
-          tone="brand"
-          size="lg"
-          :label="t(&quot;สัดส่วนเครื่องที่กรอกครบแล้ว&quot;)"
-        />
+        <div v-else-if="!summaryError && !pageError" class="flex flex-col gap-3">
+          <UiMeter
+            :value="progress.done"
+            :max="progress.total || 1"
+            tone="brand"
+            size="lg"
+            :label="t(&quot;สัดส่วนเครื่องที่กรอกครบแล้ว&quot;)"
+          />
 
-        <ul class="flex flex-wrap gap-x-6 gap-y-1.5 list-none text-sm">
-          <li class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-brand shrink-0" aria-hidden="true"></span>
-            <span class="text-ink-mute"> {{ t("ครบแล้ว") }} </span>
-            <span class="numeral font-semibold text-ink">{{ formatCount(progress.done) }}</span>
-          </li>
-          <li class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-warn shrink-0" aria-hidden="true"></span>
-            <span class="text-ink-mute"> {{ t("กรอกบางเดือน") }} </span>
-            <span class="numeral font-semibold text-ink">{{ formatCount(progress.started) }}</span>
-          </li>
-          <li class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-line-strong shrink-0" aria-hidden="true"></span>
-            <span class="text-ink-mute"> {{ t("ยังไม่เริ่ม") }} </span>
-            <span class="numeral font-semibold text-ink">{{ formatCount(progress.pending) }}</span>
-          </li>
-        </ul>
+          <ul class="flex flex-wrap gap-x-6 gap-y-1.5 list-none text-sm">
+            <li class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-brand shrink-0" aria-hidden="true"></span>
+              <span class="text-ink-mute"> {{ t("ครบแล้ว") }} </span>
+              <span class="numeral font-semibold text-ink">{{ formatCount(progress.done) }}</span>
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-warn shrink-0" aria-hidden="true"></span>
+              <span class="text-ink-mute"> {{ t("กรอกบางเดือน") }} </span>
+              <span class="numeral font-semibold text-ink">{{ formatCount(progress.started) }}</span>
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-line-strong shrink-0" aria-hidden="true"></span>
+              <span class="text-ink-mute"> {{ t("ยังไม่เริ่ม") }} </span>
+              <span class="numeral font-semibold text-ink">{{ formatCount(progress.pending) }}</span>
+            </li>
+          </ul>
+        </div>
       </div>
     </UiCard>
+    <UiAlert v-if="summaryError" tone="danger" class="mb-4">
+      {{ summaryError }}
+      <template #actions><UiButton variant="secondary" size="sm" @click="loadSummary">{{ t("ลองใหม่") }}</UiButton></template>
+    </UiAlert>
+    <UiAlert v-if="pageError" tone="danger" class="mb-4">
+      {{ pageError }}
+      <template #actions><UiButton variant="secondary" size="sm" @click="init">{{ t("ลองใหม่") }}</UiButton></template>
+    </UiAlert>
 
     <!-- สลับโหมด — วางเหนือทุกอย่างที่มันเปลี่ยน เพราะมันเปลี่ยนทั้งหน้า -->
     <UiSegmented
@@ -928,6 +1003,11 @@ onUnmounted(unregisterFiscalYearGuard);
     </UiFilterBar>
 
     <!-- ================= โหมดกรอกรายเดือน ================= -->
+    <UiAlert v-if="mode === 'month' && awaitingDefaultMonth && coverageQuery.isError.value" tone="danger" class="mb-4">
+      {{ t("โหลดเดือนที่ค้างไม่สำเร็จ เลือกเดือนเองหรือลองใหม่") }}
+      <template #actions><UiButton variant="secondary" size="sm" @click="refetchCoverage()">{{ t("ลองใหม่") }}</UiButton></template>
+    </UiAlert>
+    <UiSkeleton v-else-if="mode === 'month' && awaitingDefaultMonth" height="2rem" class="mb-4" />
     <!-- โหลดยอดของเดือนไม่สำเร็จ ต้องบอกให้ชัด ไม่ใช่ปล่อยให้ตารางว่างเปล่า
          ซึ่งหน้าตาเหมือน "เดือนนี้ยังไม่มีใครกรอก" แล้วผู้ใช้จะกรอกทับของเดิม -->
     <UiAlert v-if="mode === 'month' && monthPagesError" tone="danger" class="mb-4">
@@ -943,8 +1023,8 @@ onUnmounted(unregisterFiscalYearGuard);
       :devices="filteredDevices"
       :month="filters.month"
       :saved="monthPages"
-      :can-edit="canEdit && monthPagesReady"
-      :ready="monthPagesReady"
+      :can-edit="canEdit && monthPagesReady && !loading && !pageError"
+      :ready="monthPagesReady && !loading && !pageError"
       @saved="onMonthSaved"
       @update:month="filters.month = $event"
       @update:dirty="onDirtyChange"
@@ -958,11 +1038,16 @@ onUnmounted(unregisterFiscalYearGuard);
           export-filename="print-transactions-month"
           :export-context="reportContext({ months: filters.month ? [filters.month] : [], filters, labels: FILTER_LABELS })"
           :searchable="false"
+          :fullscreen-target="workspace"
           :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
           :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
           max-height="60vh"
           sticky-first
+          :row-class="row => draft.has(row.id) ? 'bg-brand-soft' : ''"
         >
+          <template #cell-location="{ value }">
+            <span class="block max-w-xs whitespace-normal break-words">{{ value }}</span>
+          </template>
           <!-- inline-flex + min-h-6: ข้อ 2.5.8 บังคับพื้นที่กด 24x24 ส่วนตัวอักษร
                บรรทัดเดียวสูงแค่ 17px และลิงก์นี้ไม่เข้าข้อยกเว้น "อยู่ในประโยค"
                เพราะมันอยู่เดี่ยวๆ ในช่องตาราง ไม่ได้แทรกอยู่ในข้อความ (เจอบั๊กนี้
@@ -978,12 +1063,13 @@ onUnmounted(unregisterFiscalYearGuard);
           </template>
 
           <template #cell-entry="{ row, index, rows }">
+            <span v-if="draft.has(row.id)" class="block text-2xs text-brand-ink">{{ t("แก้ไขแล้ว") }}</span>
             <UiInput
               :model-value="displayValue(row.id)"
               type="text"
               inputmode="numeric"
               class="w-28 text-right"
-              :disabled="!canEdit || !monthPagesReady"
+              :disabled="!canEdit || !monthPagesReady || loading || !!pageError"
               :aria-label="t(&quot;ยอดพิมพ์ของ {0}&quot;, [row.serial_number])"
               :class="draft.has(row.id) ? 'ring-1 ring-brand-line' : ''"
               @update:model-value="(v) => onInput(row.id, v)"
@@ -1002,7 +1088,7 @@ onUnmounted(unregisterFiscalYearGuard);
 
     <!-- ================= โหมดภาพรวมทั้งปี ================= -->
     <UiDataTable
-      v-else
+      v-else-if="!summaryError && !pageError"
       :rows="filteredDevices"
       :columns="columns"
       :loading="loading"
@@ -1010,6 +1096,7 @@ onUnmounted(unregisterFiscalYearGuard);
       export-filename="print-transactions"
       :export-context="reportContext({ months: filters.month ? [filters.month] : [], filters, labels: FILTER_LABELS })"
       :searchable="false"
+      :fullscreen-target="workspace"
       :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
       :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
       max-height="68vh"
@@ -1063,7 +1150,8 @@ onUnmounted(unregisterFiscalYearGuard);
 
     <!-- หน้าต่างกรอกยอดทั้งปี -->
     <UiModal
-      v-model:open="dialogOpen"
+      :open="dialogOpen"
+      @update:open="closeAnnual"
       :title="t(&quot;กรอกยอดพิมพ์ · {0}&quot;, [dialogDevice?.serial_number ?? ''])"
       :description="t(&quot;ปีงบ {0} — เว้นเดือนที่ยังไม่มีข้อมูลไว้ว่างได้ ระบบจะไม่นับเป็นศูนย์&quot;, [displayYearBE])"
       size="lg"
@@ -1104,6 +1192,7 @@ onUnmounted(unregisterFiscalYearGuard);
           >
             <UiInput
               v-model="row.pages"
+              :disabled="!annualReady || dialogSaving"
               type="number"
               min="0"
               :suffix="t(&quot;หน้า&quot;)"
@@ -1113,12 +1202,17 @@ onUnmounted(unregisterFiscalYearGuard);
           </UiField>
         </div>
 
-        <UiAlert v-if="dialogError" tone="danger">{{ dialogError }}</UiAlert>
+        <UiAlert v-if="dialogError" tone="danger">
+          {{ dialogError }}
+          <template v-if="!annualReady" #actions>
+            <UiButton variant="secondary" @click="openDialog(dialogDevice)">{{ t("ลองใหม่") }}</UiButton>
+          </template>
+        </UiAlert>
       </div>
 
       <template #footer>
-        <UiButton variant="secondary" :disabled="dialogSaving" @click="dialogOpen = false"> {{ t("ยกเลิก") }} </UiButton>
-        <UiButton variant="primary" :loading="dialogSaving" @click="save"> {{ t("บันทึกยอดทั้งปี") }} </UiButton>
+        <UiButton variant="secondary" :disabled="dialogSaving" @click="closeAnnual(false)"> {{ t("ยกเลิก") }} </UiButton>
+        <UiButton variant="primary" :disabled="!annualReady" :loading="dialogSaving" @click="save"> {{ t("บันทึกยอดทั้งปี") }} </UiButton>
       </template>
     </UiModal>
   </div>

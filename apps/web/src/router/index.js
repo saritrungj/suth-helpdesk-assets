@@ -124,6 +124,8 @@ const router = createRouter({
   // เปลี่ยนหน้าแล้วเลื่อนขึ้นบนสุดเสมอ ยกเว้นตอนกดปุ่มย้อนกลับ/ไปข้างหน้าของ
   // เบราว์เซอร์ ซึ่งควรกลับไปตำแหน่งเดิมที่เคยอ่านค้างไว้
   scrollBehavior(to, from, savedPosition) {
+    // The expense workspace restores the position of each retained tab itself.
+    if (to.path === "/expense") return false;
     return savedPosition ?? { top: 0 };
   },
 });

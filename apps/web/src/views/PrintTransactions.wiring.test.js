@@ -24,6 +24,7 @@ vi.mock("../services/api", () => ({
 }));
 
 vi.mock("vue-router", () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ query: {} }),
   RouterLink: { template: "<a><slot /></a>" },
 }));
@@ -60,7 +61,7 @@ vi.mock("../api/queries", () => ({
     contracts: () => ["contracts"],
     devices: () => ["devices"],
   },
-  useCoverage: () => ({ data: ref(null), refetch: vi.fn() }),
+  useCoverage: () => emptyQuery(),
   useMonthPages: () => emptyQuery(),
 }));
 

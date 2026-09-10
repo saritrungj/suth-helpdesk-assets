@@ -1,6 +1,6 @@
 {
   "โหลดช่วงการใช้งานไม่สำเร็จ": "Could not load current usage",
-  "โหลดประวัติการย้ายไม่สำเร็จ": "Could not load relocation history",
+  "โหลดประวัติการย้ายไม่สำเร็จ": "Unable to load location history",
   "เครื่องมือตาราง": "Table tools",
   "ข้อมูลที่แก้ไขยังไม่ได้บันทึก ต้องการออกโดยไม่บันทึกหรือไม่": "Your changes have not been saved. Leave without saving?",
   "บันทึกแล้ว เครื่องนี้ไม่ตรงกับคำค้นหาหรือตัวกรองปัจจุบัน": "Saved. This device no longer matches the current search or filters.",
@@ -419,7 +419,6 @@
   "เว้นว่างไว้ = ใช้รหัสผ่านเดิมต่อ": "Leave blank to keep the current password.",
   "อย่างน้อย 6 ตัวอักษร": "At least 6 characters",
   "ต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจการเชื่อมต่อแล้วกดลองใหม่": "Unable to reach the server. Check your connection and try again.",
-  "โหลดประวัติการย้ายไม่สำเร็จ": "Unable to load location history",
   "โหลดยอดพิมพ์ของเครื่องนี้ไม่สำเร็จ": "Unable to load usage for this device",
   "ราคาเฉพาะเครื่อง": "Device-specific price",
   "สัญญา {0}": "Contract {0}",
@@ -786,5 +785,12 @@
   "ตรวจสอบข้อมูลที่กรอกแล้วลองใหม่": "Check the values you entered and try again.",
   "ตรวจสอบช่องที่ระบุแล้วลองใหม่": "Check the highlighted fields and try again.",
   "กรอกข้อมูลที่ถูกต้องในช่องนี้": "Enter a valid value for this field.",
-  "ดูรายการเครื่อง": "View devices"
+  "ดูรายการเครื่อง": "View devices",
+  "เลือกเดือน กรอกยอด แล้วตรวจจำนวนรายการก่อนบันทึก": "Choose a month, enter readings, then review the number of changes before saving.",
+  "รายละเอียดความคืบหน้าปี": "Yearly progress details",
+  "แก้ไขแล้ว": "Edited",
+  "ถ้าปิดตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด": "Closing now will discard your changes.",
+  "ถ้าออกจากหน้านี้ ค่าที่กรอกไว้จะหายทั้งหมด": "Leaving this page will discard your changes.",
+  "โหลดเดือนที่ค้างไม่สำเร็จ เลือกเดือนเองหรือลองใหม่": "Could not load the pending month. Choose a month or retry.",
+  "โหลดความคืบหน้าปีไม่สำเร็จ": "Could not load yearly progress."
 }

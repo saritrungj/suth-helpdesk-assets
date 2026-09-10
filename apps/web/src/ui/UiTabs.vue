@@ -20,6 +20,8 @@ defineProps({
   /** [{ value, label, icon?, count? }] */
   tabs: { type: Array, required: true },
   label: { type: String, default: t("แท็บเนื้อหา") },
+  /** Keep visited panels mounted so their form and scroll context survives. */
+  keepMounted: { type: Boolean, default: false },
 });
 
 defineEmits(["update:modelValue"]);
@@ -67,6 +69,8 @@ defineEmits(["update:modelValue"]);
       v-for="tab in tabs"
       :key="tab.value"
       :value="tab.value"
+      :force-mount="keepMounted || undefined"
+      v-show="!keepMounted || modelValue === tab.value"
       class="pt-4 min-w-0 focus-visible:outline-none"
     >
       <slot :name="tab.value" />
