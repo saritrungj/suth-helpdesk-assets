@@ -62,7 +62,7 @@ watch(
 
   <aside
     class="fixed lg:sticky top-0 z-50 h-dvh shrink-0 flex flex-col
-           bg-surface border-r border-line-soft
+           bg-chrome border-r border-chrome-line lg:border-r-0
            transition-[width,transform] duration-200 ease-out-quart
            lg:translate-x-0"
     :class="[
@@ -72,14 +72,14 @@ watch(
     :aria-label="t(&quot;เมนูหลัก&quot;)"
   >
     <!-- ตราสัญลักษณ์ -->
-    <div class="flex items-center gap-2 h-[var(--shell-topbar-height)] px-2.5 shrink-0 border-b border-line-soft">
+    <div class="flex items-center gap-2 h-[var(--shell-topbar-height)] px-2.5 shrink-0">
       <UiTooltip
         :content="uiState.navCollapsed ? `${APP_NAME} · ${ORG_NAME_SHORT}` : ''"
         side="right"
       >
         <RouterLink
           to="/dashboard"
-          class="flex items-center gap-2 min-w-0 rounded-md p-1 -m-1 hover:bg-surface-2 transition-colors"
+          class="flex items-center gap-2 min-w-0 rounded-md p-1 -m-1 hover:bg-chrome-hover transition-colors"
           :aria-label="uiState.navCollapsed ? `${APP_NAME} · ${ORG_NAME_SHORT}` : undefined"
         >
           <span
@@ -109,7 +109,7 @@ watch(
 
       <button
         type="button"
-        class="lg:hidden ml-auto grid place-items-center w-8 h-8 rounded-md text-ink-mute hover:bg-surface-3 hover:text-ink transition-colors"
+        class="lg:hidden ml-auto grid place-items-center w-8 h-8 rounded-md text-ink-mute hover:bg-chrome-hover hover:text-ink transition-colors"
         :aria-label="t(&quot;ปิดเมนู&quot;)"
         @click="closeMobileNav"
       >
@@ -122,13 +122,13 @@ watch(
       <section
         v-for="group in visibleGroups"
         :key="group.key"
-        :class="group.admin ? 'border-t border-line-soft pt-2' : ''"
+        :class="group.admin ? 'border-t border-chrome-line pt-2' : ''"
       >
         <button
           v-if="!uiState.navCollapsed"
           type="button"
           class="group flex items-center w-full h-8 px-2 rounded-md text-xs font-semibold text-ink-mute
-                 hover:bg-surface-3 hover:text-ink transition-colors"
+                 hover:bg-chrome-hover hover:text-ink transition-colors"
           :aria-expanded="Boolean(openGroups[group.key])"
           :aria-controls="`nav-group-${group.key}`"
           @click="toggleGroup(group.key)"
@@ -156,8 +156,8 @@ watch(
                 :class="[
                   uiState.navCollapsed ? 'justify-center' : '',
                   isActiveNav(item, route)
-                    ? 'bg-brand-soft text-brand-ink font-medium'
-                    : 'text-ink-mute hover:bg-surface-3 hover:text-ink',
+                    ? 'bg-surface text-ink font-semibold shadow-[0_0_0_1px_var(--chrome-line)]'
+                    : 'text-ink-soft hover:bg-chrome-hover hover:text-ink',
                 ]"
                 :aria-current="isActiveNav(item, route) ? 'page' : undefined"
                 :aria-label="uiState.navCollapsed ? item.label : undefined"
@@ -169,7 +169,13 @@ watch(
                   aria-hidden="true"
                 ></span>
 
-                <component :is="item.icon" :size="17" class="shrink-0" aria-hidden="true" />
+                <component
+                  :is="item.icon"
+                  :size="17"
+                  class="shrink-0"
+                  :class="isActiveNav(item, route) && 'text-brand-ink'"
+                  aria-hidden="true"
+                />
                 <span v-if="!uiState.navCollapsed" class="truncate">{{ item.label }}</span>
               </RouterLink>
             </UiTooltip>
@@ -179,7 +185,7 @@ watch(
     </nav>
 
     <!-- ปุ่มพับ — เฉพาะจอใหญ่ที่แถบเมนูอยู่ประจำที่ -->
-    <div class="hidden lg:block shrink-0 border-t border-line-soft p-2">
+    <div class="hidden lg:block shrink-0 border-t border-chrome-line p-2">
       <UiTooltip
         :content="uiState.navCollapsed ? t(&quot;กางแถบเมนู&quot;) : t(&quot;พับแถบเมนูให้เหลือไอคอน&quot;)"
         side="right"
@@ -187,7 +193,7 @@ watch(
         <button
           type="button"
           class="flex items-center gap-2.5 w-full h-9 px-2.5 rounded-lg text-sm text-ink-mute
-                 hover:bg-surface-3 hover:text-ink transition-colors"
+                 hover:bg-chrome-hover hover:text-ink transition-colors"
           :aria-pressed="uiState.navCollapsed"
           :aria-label="uiState.navCollapsed ? t(&quot;กางแถบเมนู&quot;) : undefined"
           @click="toggleNavCollapsed"

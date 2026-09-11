@@ -146,3 +146,28 @@
 
 ภาพก่อน/หลังและผลจริงอยู่ในชุดส่งมอบตาม [คู่มือตรวจสามหน้า](../how-to/review-three-page-prototype.md)
 ทิศทางยังเป็นต้นแบบจนผู้ใช้รับรองที่ #51 ไม่อ้างผล usability หรือเวลาที่ลดลงเป็นเปอร์เซ็นต์จาก reference
+
+## รอบที่ 3 — หลังผลตรวจรอบที่ 2 ของ #51
+
+ผลตรวจรอบที่ 2 ไม่รับทิศทางภาพรวม (สี ความหนาแน่น การใช้พื้นที่ โหมดขยายตาราง) ทิศทางใหม่ผ่าน
+mockup ที่ผู้ใช้เห็นชอบแล้วใน #51 ก่อนแก้โค้ด แหล่งรอบนี้เลือกจาก design system ของผลิตภัณฑ์
+และงานบริการสาธารณะที่มีคนใช้จริง อ่านจากต้นฉบับ ตรวจเมื่อ 11 ก.ย. 2026
+
+### ใช้แล้ว
+
+| แหล่ง | สิ่งที่บอก | จุดใช้ในโค้ด |
+|---|---|---|
+| [Linear — How we redesigned the Linear UI](https://linear.app/now/how-we-redesigned-the-linear-ui) | กรอบ "inverted L", ลด visual noise, ไล่ระดับพื้นผิวด้วยความสว่าง | `layouts/MainLayout.vue`, `app/AppSidebar.vue`, `app/AppTopbar.vue`, `--chrome*` ใน `design/tokens.css` |
+| [Radix Colors — Understanding the scale](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale) | 12 ขั้นแบ่งบทบาท พื้น / ส่วนประกอบ / เส้น / ทึบ / ตัวอักษร | ตารางบทบาทในหัวไฟล์ `design/tokens.css` |
+| [Stripe — Designing accessible color systems](https://stripe.com/blog/accessible-color-systems) | ทุกเฉดสว่างเท่ากันต่อขั้น; ตัวอักษรกับพื้นห่างอย่างน้อยห้าขั้น | สเกล primitive เดิมทำตามอยู่แล้ว บันทึกเป็นกฎใน `design/tokens.css`; `--ink` เข้มขึ้นเป็น n-950 |
+| [Material 3 — Tone-based surfaces](https://m3.material.io/blog/tone-based-surface-color-m3), [Side sheet](https://github.com/material-components/material-components-android/blob/master/docs/components/SideSheet.md) | แยกระดับด้วยโทนของพื้น ไม่ใช่เงาอย่างเดียว | `--sheet-head` / `--sheet-body` ใน `design/tokens.css` |
+| [NN/g — Data tables](https://www.nngroup.com/articles/data-tables/), [NHS — Table](https://service-manual.nhs.uk/design-system/components/table) | hover และแถวสลับสีช่วยไล่แถว; แผงแก้ไขไม่ควรบังข้อมูลอ้างอิง | `--row-hover` / `--row-selected` / `--row-stripe` / `--scrim-panel` ใน `design/tokens.css` |
+
+### รอใช้ในขั้นถัดไป (ยังไม่อยู่ในโค้ด)
+
+| แหล่ง | สิ่งที่จะใช้ | ขั้น |
+|---|---|---|
+| [Carbon — Data table](https://github.com/carbon-design-system/carbon-website/blob/main/src/pages/components/data-table/usage.mdx), [Pagination](https://github.com/carbon-design-system/carbon-website/blob/main/src/pages/components/pagination/usage.mdx) | เครื่องมือตารางเป็นไอคอนได้ไม่เกินห้าปุ่ม; ตัวแบ่งหน้าอยู่ใต้ตารางเสมอ | 2 — ตารางกลาง |
+| [Primer — DataTable](https://primer.style/product/components/data-table/guidelines/), [PageHeader](https://primer.style/product/components/page-header/guidelines/) | ชื่อหน้าเป็นชื่อตาราง; ตัวเลขชิดขวา tabular; ตัดข้อความเป็นทางเลือกสุดท้าย | 2 — หัวหน้าและตารางกลาง |
+| [NN/g — Applying filters](https://www.nngroup.com/articles/applying-filters/) | ตัวกรองที่ใช้อยู่ต้องเห็นชัด ไม่เลื่อนหน้ากลับบนสุดระหว่างกรอง | 2–3 — แถวเครื่องมือ |
+| [GOV.UK — Table](https://design-system.service.gov.uk/components/table/) | caption และ `scope` ทุกตาราง | 2 — ตารางกลาง |

@@ -6,6 +6,10 @@ import { t } from "../lib/locale";
  *
  * แถบเมนูซ้าย + แถบบนที่ปักหมุด + พื้นที่เนื้อหา
  *
+ * กรอบแบบ "inverted L" (รอบที่ 3 ของ #51, อ้างอิง Linear): แถบเมนูกับแถบบนใช้พื้น
+ * --chrome เดียวกันไม่มีเส้นคั่น ส่วนพื้นที่ทำงานเป็นแผ่น --canvas ที่สว่างกว่า มีขอบ
+ * และมุมบนซ้ายโค้งบนจอใหญ่ — เห็นทันทีว่าตรงไหนคือกรอบ ตรงไหนคือที่ทำงาน
+ *
  * มีลิงก์ "ข้ามไปยังเนื้อหา" เป็นสิ่งแรกในลำดับ Tab สำหรับคนที่ใช้คีย์บอร์ด
  * ไม่งั้นทุกครั้งที่เปลี่ยนหน้า ต้องกด Tab ผ่านรายการเมนูทั้งหมดก่อนถึงจะถึง
  * เนื้อหาจริง (WCAG 2.4.1 Bypass Blocks)
@@ -19,7 +23,7 @@ import AppTopbar from "../app/AppTopbar.vue";
 </script>
 
 <template>
-  <div class="flex min-h-dvh bg-canvas">
+  <div class="flex min-h-dvh bg-chrome">
     <a
       href="#main-content"
       class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200]
@@ -32,7 +36,13 @@ import AppTopbar from "../app/AppTopbar.vue";
     <div class="flex-1 min-w-0 flex flex-col">
       <AppTopbar />
 
-      <main id="main-content" class="flex-1 min-w-0 p-[var(--shell-content-padding)]" tabindex="-1">
+      <main
+        id="main-content"
+        class="flex-1 min-w-0 p-[var(--shell-content-padding)] bg-canvas
+               lg:border-t lg:border-l lg:border-chrome-line lg:rounded-tl-[var(--radius-xl)]
+               print:border-0 print:rounded-none"
+        tabindex="-1"
+      >
         <div class="mx-auto w-full max-w-[var(--shell-content-max)]">
           <RouterView v-slot="{ Component, route }">
             <!-- key ตาม path เพื่อให้หน้าที่ใช้ component เดียวกันแต่คนละ route
