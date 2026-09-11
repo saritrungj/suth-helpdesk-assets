@@ -26,6 +26,9 @@ import { t } from "../lib/locale";
  *    มาจากแดชบอร์ดพร้อม ?status=repair — คนต้องเห็นว่าอะไรกำลังกรองอยู่
  *
  * 3. ปุ่มเปิด/ปิดมี `aria-expanded` และ `aria-controls` จริง ไม่ใช่ div ที่กดได้
+ *
+ * 4. (รอบที่ 3 ของ #51, NN/g — Applying filters) ป้ายตัวกรองที่ใช้อยู่เป็นสีแบรนด์ทึบ
+ *    ให้ต่างจากปุ่มทั่วไปชัด คนเห็นได้ทันทีว่ากำลังกรองอะไรอยู่
  */
 import { computed, ref, useId, watch } from "vue";
 import { SlidersHorizontal, X } from "lucide-vue-next";
@@ -61,7 +64,7 @@ watch(
 </script>
 
 <template>
-  <section class="mb-4" data-print="hide">
+  <section class="mb-3" data-print="hide">
     <div class="flex flex-wrap items-end gap-2">
       <!-- ตัวกรองที่ใช้บ่อย — อยู่ในสายตาเสมอ ไม่ต้องกดเปิด -->
       <div class="flex-1 min-w-0 flex flex-wrap items-end gap-2">
@@ -93,12 +96,12 @@ watch(
         <button
           type="button"
           class="group inline-flex items-center gap-1 h-7 pl-2.5 pr-1.5 rounded-full
-                 border border-line bg-surface-2 text-xs text-ink-soft
-                 hover:border-line-strong hover:text-ink transition-colors"
+                 border border-brand-line bg-brand-soft text-xs font-medium text-brand-ink
+                 hover:bg-brand-soft-hover transition-colors"
           @click="emit('remove', chip.key)"
         >
           {{ chip.label }}
-          <X :size="13" class="text-ink-faint group-hover:text-ink" aria-hidden="true" />
+          <X :size="13" class="text-brand-ink" aria-hidden="true" />
           <span class="sr-only"> {{ t("เอาตัวกรองนี้ออก") }} </span>
         </button>
       </li>

@@ -40,16 +40,18 @@ function restoreFocus(event) {
 <template>
   <DialogRoot :open="open" @update:open="emit('update:open', $event)">
     <DialogPortal :to="portalTarget">
-      <DialogOverlay class="fixed inset-0 z-[100] bg-scrim data-[state=open]:animate-fade-in" />
+      <!-- ม่านจางกว่าของ dialog — NN/g: แผงแก้ไขแถวไม่ควรบังข้อมูลที่ใช้อ้างอิง (รอบที่ 3 ของ #51) -->
+      <DialogOverlay class="fixed inset-0 z-[100] bg-scrim-panel data-[state=open]:animate-fade-in" />
       <DialogContent
-        class="ui-drawer fixed inset-y-0 right-0 z-[101] flex flex-col max-w-full bg-surface border-l border-line-soft shadow-pop"
+        class="ui-drawer fixed inset-y-0 right-0 z-[101] flex flex-col max-w-full bg-sheet-body border-l border-line shadow-pop"
         :class="size === 'lg' ? 'w-[640px]' : 'w-[560px]'"
         :aria-busy="pending || undefined"
         @escape-key-down="requestClose"
         @pointer-down-outside="requestClose"
         @close-auto-focus="restoreFocus"
       >
-        <header class="flex shrink-0 items-start justify-between gap-4 border-b border-line-soft p-6">
+        <!-- tonal elevation (Material 3): หัวแผงเข้มกว่าเนื้อใน กลุ่มฟอร์มในเนื้อในเป็นการ์ด surface -->
+        <header class="flex shrink-0 items-start justify-between gap-4 border-b border-line bg-sheet-head px-6 py-5">
           <div class="min-w-0">
             <DialogTitle class="text-lg font-semibold text-ink">{{ title }}</DialogTitle>
             <DialogDescription :class="description ? 'mt-1 text-sm text-ink-mute' : 'sr-only'">{{ description || title }}</DialogDescription>
@@ -59,7 +61,7 @@ function restoreFocus(event) {
           </UiButton>
         </header>
         <div class="grow min-h-0 overflow-y-auto p-6"><slot name="body"><slot /></slot></div>
-        <footer v-if="$slots.footer" class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line-soft bg-surface-2 px-6 py-4">
+        <footer v-if="$slots.footer" class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-6 py-4">
           <slot name="footer" />
         </footer>
       </DialogContent>
