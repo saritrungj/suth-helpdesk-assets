@@ -25,6 +25,14 @@ import { t } from "../lib/locale";
  *
  *   - บนจอเล็กเปลี่ยนเป็นการ์ดแนวตั้งแทนตารางที่ต้องเลื่อนซ้ายขวา
  *
+ *   รอบที่ 3 ของ #51
+ *   - จำนวน "แสดง 1–20 จาก 45" อยู่ท้ายตารางคู่ตัวแบ่งหน้า ตาม Carbon ("pagination
+ *     is always placed at the bottom") ท้ายตารางแสดงเสมอแม้มีหน้าเดียว ส่วนปุ่มเปลี่ยน
+ *     หน้าแสดงเมื่อมีมากกว่าหนึ่งหน้า
+ *   - แถวสลับสี (NHS) เป็นเงาในบนเซลล์ จึงซ้อนกับสีแถวที่หน้ากำหนดเองผ่าน rowClass ได้
+ *   - ปุ่มขยายตารางเป็นไอคอนพร้อม tooltip ส่วนคอลัมน์/Excel คงข้อความ
+ *   - caption ของตาราง (GOV.UK / NHS) เป็นหัวเรื่องตอนขยายเต็มจอด้วย
+ *
  * นิยามคอลัมน์: { key, label, align?, sortable?, hidden?, width?,
  *                 value?: (row) => any, csv?: (row) => any }
  */
@@ -37,11 +45,11 @@ import {
   ArrowUp,
   ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   ChevronsUpDown,
   Columns3,
   Download,
+  Maximize2,
+  Minimize2,
   Search,
 } from "lucide-vue-next";
 import UiButton from "./UiButton.vue";
@@ -51,6 +59,7 @@ import UiInput from "./UiInput.vue";
 import UiMenu from "./UiMenu.vue";
 import UiSelect from "./UiSelect.vue";
 import UiSkeleton from "./UiSkeleton.vue";
+import UiTooltip from "./UiTooltip.vue";
 
 const tableRoot = useTemplateRef("tableRoot");
 const props = defineProps({
@@ -78,6 +87,8 @@ const props = defineProps({
   searchValue: { type: String, default: undefined },
   preservePageOnRefresh: { type: Boolean, default: false },
   fullscreenTarget: { type: Object, default: null },
+  /** ชื่อตาราง — เป็น <caption> ให้โปรแกรมอ่านหน้าจอ และเป็นหัวเรื่องตอนขยายเต็มจอ */
+  caption: { type: String, default: "" },
 });
 const fullscreenRoot = computed(() => props.fullscreenTarget || tableRoot.value);
 const { expanded, expandError, toggleExpanded } = useFullscreen(fullscreenRoot);
@@ -279,10 +290,11 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="tableRoot" class="flex flex-col min-w-0 bg-surface" :class="expanded && !fullscreenTarget && 'h-screen overflow-auto p-5'">
+  <div ref="tableRoot" class="flex flex-col min-w-0" :class="expanded && !fullscreenTarget && 'bg-surface h-screen overflow-auto p-5'">
     <p v-if="expandError" role="status">{{ expandError }}</p>
     <!-- แถบเครื่องมือ -->
     <div class="flex flex-wrap items-center gap-2 mb-3" data-print="hide">
+      <h2 v-if="expanded && caption" class="text-lg font-semibold text-ink mr-2">{{ caption }}</h2>
       <div v-if="searchable" class="min-w-[13rem] flex-1 max-w-sm">
         <!-- ต้องมี aria-label ไม่ใช่พึ่ง placeholder อย่างเดียว — placeholder หายไป
              ทันทีที่เริ่มพิมพ์ คนที่ใช้โปรแกรมอ่านหน้าจอจึงได้ยินแค่ "ช่องกรอก"
@@ -300,7 +312,17 @@ defineExpose({
       <slot name="toolbar-extra" />
 
       <div role="group" :aria-label="t('เครื่องมือตาราง')" class="flex items-center gap-2 ml-auto">
-        <UiButton size="sm" variant="secondary" @click="toggleExpanded">{{ expanded ? t("ย่อตาราง") : t("ขยายตาราง") }}</UiButton>
+        <UiTooltip :content="expanded ? t('ย่อตาราง') : t('ขยายตาราง')">
+          <UiButton
+            size="sm"
+            variant="secondary"
+            icon-only
+            :label="expanded ? t('ย่อตาราง') : t('ขยายตาราง')"
+            @click="toggleExpanded"
+          >
+            <component :is="expanded ? Minimize2 : Maximize2" :size="15" />
+          </UiButton>
+        </UiTooltip>
         <UiMenu v-if="showColumnPicker" :label="t(&quot;แสดงคอลัมน์&quot;)">
           <template #trigger>
             <UiButton size="sm" variant="secondary" :label="t(&quot;เลือกคอลัมน์ที่จะแสดง&quot;)">
@@ -335,22 +357,15 @@ defineExpose({
       </div>
     </div>
 
-    <!-- สรุปจำนวน — เป็น live region ให้โปรแกรมอ่านหน้าจอประกาศเมื่อผลลัพธ์เปลี่ยน -->
-    <p class="text-xs text-ink-mute mb-2" aria-live="polite">
-      <template v-if="loading"> {{ t("กำลังโหลดข้อมูล…") }} </template>
-      <template v-else-if="sortedRows.length"> {{ t("แสดง") }} <span class="numeral font-medium text-ink-soft">{{ rangeStart.toLocaleString("th-TH") }}–{{ rangeEnd.toLocaleString("th-TH") }}</span> {{ t("จาก") }} <span class="numeral font-medium text-ink-soft">{{ sortedRows.length.toLocaleString("th-TH") }}</span> {{ t("รายการ") }} <span v-if="search" class="text-ink-mute"> {{ t("(กรองจากทั้งหมด") }} {{ rows.length.toLocaleString("th-TH") }})</span>
-      </template>
-      <template v-else> {{ t("ไม่มีรายการที่ตรงกับเงื่อนไข") }} </template>
-    </p>
-
     <!-- ตาราง (จอ >= sm) -->
     <div
       ref="scrollBox"
-      class="hidden sm:block relative overflow-auto rounded-lg border border-line-soft bg-surface"
+      class="hidden sm:block relative overflow-auto rounded-t-lg border border-line-soft bg-surface"
       :class="!maxHeight && 'scroll-hint-x'"
       :style="maxHeight ? { maxHeight } : {}"
     >
       <table class="w-full text-sm border-collapse min-w-max">
+        <caption v-if="caption" class="sr-only">{{ caption }}</caption>
         <thead class="sticky top-0 z-[2]">
           <tr class="bg-surface-2">
             <th
@@ -432,17 +447,17 @@ defineExpose({
             <tr
               v-for="(row, pageIndex) in paginatedRows"
               :key="row[rowKey]"
-              class="border-b border-line-soft last:border-0 hover:bg-surface-2 transition-colors duration-100"
+              class="group/row border-b border-line-soft last:border-0 hover:bg-row-hover transition-colors duration-100"
               :class="rowClass ? rowClass(row) : ''"
             >
               <td
                 v-for="(col, i) in visibleColumns"
                 :key="col.key"
-                class="px-[var(--row-px)] py-[var(--row-py)] text-ink-soft"
+                class="px-[var(--row-px)] py-[var(--row-py)] text-ink-soft group-even/row:[box-shadow:inset_0_0_0_100vmax_var(--row-stripe)]"
                 :class="[
                   alignClass(col),
                   col.align === 'right' && 'numeral',
-                  stickyFirst && i === 0 && 'sticky left-0 bg-surface shadow-[1px_0_0_var(--line-soft)]',
+                  stickyFirst && i === 0 && 'sticky left-0 bg-surface border-r border-line-soft',
                 ]"
               >
                 <slot
@@ -458,7 +473,7 @@ defineExpose({
 
               <td
                 v-if="$slots.actions"
-                class="px-[var(--row-px)] py-[var(--row-py)] text-center whitespace-nowrap"
+                class="px-[var(--row-px)] py-[var(--row-py)] text-center whitespace-nowrap group-even/row:[box-shadow:inset_0_0_0_100vmax_var(--row-stripe)]"
                 data-print="hide"
               >
                 <div class="inline-flex items-center gap-1">
@@ -523,15 +538,27 @@ defineExpose({
       </li>
     </ul>
 
-    <!-- แบ่งหน้า -->
+    <!-- ท้ายตาราง — จำนวนคู่ตัวแบ่งหน้า (Carbon / Primer) แสดงเสมอแม้มีหน้าเดียว
+         จำนวนเป็น live region ให้โปรแกรมอ่านหน้าจอประกาศเมื่อค้นหา/เรียง/เปลี่ยนหน้า -->
+    <div
+      class="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2 bg-surface text-xs text-ink-mute
+             mt-2 sm:mt-0 sm:border sm:border-t-0 sm:border-line-soft sm:rounded-b-lg"
+    >
+      <p class="min-w-0" aria-live="polite">
+        <template v-if="loading"> {{ t("กำลังโหลดข้อมูล…") }} </template>
+        <template v-else-if="sortedRows.length"> {{ t("แสดง") }} <span class="numeral font-semibold text-ink">{{ rangeStart.toLocaleString("th-TH") }}–{{ rangeEnd.toLocaleString("th-TH") }}</span> {{ t("จาก") }} <span class="numeral font-semibold text-ink">{{ sortedRows.length.toLocaleString("th-TH") }}</span> {{ t("รายการ") }} <span v-if="search"> {{ t("(กรองจากทั้งหมด") }} {{ rows.length.toLocaleString("th-TH") }})</span>
+        </template>
+        <template v-else> {{ t("ไม่มีรายการที่ตรงกับเงื่อนไข") }} </template>
+      </p>
+
     <nav
       v-if="totalPages > 1 && !loading"
-      class="flex flex-wrap items-center justify-between gap-3 mt-4"
+      class="flex flex-wrap items-center gap-x-4 gap-y-2 ml-auto"
       :aria-label="t(&quot;แบ่งหน้าของตาราง&quot;)"
       data-print="hide"
     >
-      <div class="flex items-center gap-2 order-2 sm:order-1">
-        <span class="text-xs text-ink-mute whitespace-nowrap"> {{ t("แสดงหน้าละ") }} </span>
+      <div class="flex items-center gap-2">
+        <span class="whitespace-nowrap"> {{ t("แสดงหน้าละ") }} </span>
         <UiSelect
           :model-value="pageSize"
           size="sm"
@@ -543,12 +570,8 @@ defineExpose({
         </UiSelect>
       </div>
 
-      <ul class="flex items-center gap-1 order-1 sm:order-2 list-none mx-auto sm:mx-0">
-        <li>
-          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;ไปหน้าแรก&quot;)" :disabled="currentPage === 1" @click="goToPage(1)">
-            <ChevronsLeft :size="16" />
-          </UiButton>
-        </li>
+      <!-- ไม่มีปุ่มไปหน้าแรก/สุดท้ายแยก — เลขหน้าแรกและหน้าสุดท้ายแสดงอยู่ในแถวเสมอ -->
+      <ul class="flex items-center gap-1 list-none">
         <li>
           <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;หน้าก่อนหน้า&quot;)" :disabled="currentPage === 1" @click="goToPage(currentPage - 1)">
             <ChevronLeft :size="16" />
@@ -575,15 +598,8 @@ defineExpose({
             <ChevronRight :size="16" />
           </UiButton>
         </li>
-        <li>
-          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;ไปหน้าสุดท้าย&quot;)" :disabled="currentPage === totalPages" @click="goToPage(totalPages)">
-            <ChevronsRight :size="16" />
-          </UiButton>
-        </li>
       </ul>
-
-      <p class="text-xs text-ink-mute numeral order-3 hidden sm:block"> {{ t("หน้า") }} {{ currentPage }} / {{ totalPages }}
-      </p>
     </nav>
+    </div>
   </div>
 </template>
