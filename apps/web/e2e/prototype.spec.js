@@ -316,7 +316,8 @@ test("expense price, discount and unit copy is translated while the amounts stay
   await page.addInitScript(() => localStorage.setItem("suth-language", "en"));
   await page.goto("/expense");
   await expect(page.getByText("Total net cost", { exact: true })).toBeVisible();
-  await expect(page.getByText("Full fiscal year · After 20% discount", { exact: true })).toBeVisible();
+  // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือแค่ส่วนลด (รอบที่ 3 ของ #51)
+  await expect(page.getByText("After 20% discount", { exact: true })).toBeVisible();
   await expect(page.getByText(/0\.45\s+THB\/page/)).toBeVisible();
   await expect(page.getByText("360.00", { exact: true }).first()).toBeVisible();
   await page.getByRole("tab", { name: "By division / department", exact: true }).click();

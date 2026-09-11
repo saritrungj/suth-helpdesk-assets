@@ -284,6 +284,10 @@ const columns = [
   {
     key: "effective_price",
     label: t("ราคา/แผ่น"),
+    // ซ่อนบนจอไว้ก่อน (รอบที่ 3 ของ #51) — เกือบทุกแถวเท่าราคาตามสัญญา เปิดได้จากปุ่มคอลัมน์
+    // แต่ยังอยู่ใน Excel เสมอ เพราะไฟล์ใช้ตรวจค่าใช้จ่ายกับสัญญา
+    hidden: true,
+    alwaysExport: true,
     align: "right",
     value: (a) => effectivePrice(a),
     csv: (a) => effectivePrice(a) ?? "",
@@ -533,14 +537,11 @@ onMounted(async () => {
         >
           {{ row.serial_number || "—" }}
         </RouterLink>
-        <span v-if="row.asset_code" class="block text-2xs text-ink-mute font-mono">
-          {{ row.asset_code }}
-        </span>
       </template>
 
       <template #cell-brand_name="{ row }">
         <span class="text-ink-soft">{{ row.brand_name || "—" }}</span>
-        <span class="block text-2xs text-ink-mute">{{ row.model || "" }}</span>
+        <span class="block text-xs text-ink-soft">{{ row.model || "" }}</span>
       </template>
 
       <!-- ข้อความยาวตัดที่ 2 บรรทัด (รอบที่ 3 ของ #51) แถวจึงสูงเท่ากันพอให้ไล่ตาได้
@@ -557,7 +558,7 @@ onMounted(async () => {
 
       <template #cell-contract_no="{ row }">
         <span>{{ row.contract_no || "—" }}</span>
-        <span v-if="row.fiscal_year" class="block text-2xs text-ink-mute numeral"> {{ t("ปีงบ") }} {{ yearLabel(row.fiscal_year) }}
+        <span v-if="row.fiscal_year" class="block text-xs text-ink-soft numeral"> {{ t("ปีงบ") }} {{ yearLabel(row.fiscal_year) }}
         </span>
       </template>
 

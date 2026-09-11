@@ -19,7 +19,7 @@ import { Building2, ReceiptText } from "lucide-vue-next";
 import ByDepartment from "./ByDepartment.vue";
 import Expense from "./Expense.vue";
 import { activeFiscalYear } from "../store/fiscalYear";
-import { UiBadge, UiPageHeader, UiTabs } from "../ui";
+import { UiPageHeader, UiTabs } from "../ui";
 
 const route = useRoute();
 const router = useRouter();
@@ -75,11 +75,7 @@ onUnmounted(() => window.removeEventListener("scroll", rememberScroll));
       ในระบบที่หน้าตาไม่เข้าชุดกับหน้าอื่นที่ใช้ UiPageHeader ทั้งหมด
     -->
     <!-- หัวหน้าแถวเดียวแบบเดียวกับทะเบียนและบันทึกยอด (รอบที่ 3 ของ #51) -->
-    <UiPageHeader :title="t(&quot;ค่าใช้จ่าย&quot;)">
-      <template v-if="activeFiscalYear?.year" #badge>
-        <UiBadge tone="neutral" class="numeral">{{ t("ปีงบ {0}", [yearLabel(activeFiscalYear.year)]) }}</UiBadge>
-      </template>
-    </UiPageHeader>
+    <UiPageHeader :title="t(&quot;ค่าใช้จ่าย&quot;)" />
 
     <UiTabs v-model="tab" :tabs="TABS" keep-mounted :label="t(&quot;มุมมองของรายงานค่าใช้จ่าย&quot;)">
       <template #expense>

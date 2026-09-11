@@ -37,7 +37,7 @@ import { t } from "../lib/locale";
  *     ตัวกรองเข้ามาในตาราง — ตอนขยายตารางแบบไม่มี fullscreenTarget แถบตัวกรองอยู่
  *     นอกจอ เครื่องมือจึงกลับมาอยู่ในตารางเอง
  *
- * นิยามคอลัมน์: { key, label, align?, sortable?, hidden?, width?,
+ * นิยามคอลัมน์: { key, label, align?, sortable?, hidden?, alwaysExport?, width?,
  *                 value?: (row) => any, csv?: (row) => any }
  */
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
@@ -272,7 +272,8 @@ function toggleColumn(key) {
    ต้องการทั้งชุดที่กรองไว้ ไม่ใช่แค่ 20 แถวที่เห็นอยู่
    -------------------------------------------------------------------------- */
 async function exportExcel() {
-  const cols = visibleColumns.value;
+  // คอลัมน์ที่ซ่อนไว้เพื่อลดความรกบนจอแต่ยังต้องอยู่ในไฟล์ (alwaysExport) ส่งออกเสมอ
+  const cols = props.columns.filter((c) => !hiddenKeys.value.has(c.key) || c.alwaysExport);
   const header = cols.map((c) => c.label);
 
   const body = sortedRows.value.map((row) =>
