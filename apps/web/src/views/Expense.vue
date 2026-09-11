@@ -21,7 +21,7 @@ import { t } from "../lib/locale";
  */
 import { computed, onActivated, onMounted, ref, watch } from "vue";
 import { exportSheet } from "../lib/export-xlsx";
-import { ChevronRight, Download, Printer, ReceiptText, Search, TriangleAlert } from "lucide-vue-next";
+import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, Printer, ReceiptText, Search, TriangleAlert } from "lucide-vue-next";
 import { fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
 import { fiscalYearState } from "../store/fiscalYear";
@@ -38,6 +38,7 @@ import {
   UiInput,
   UiSkeleton,
   UiStat,
+  UiTooltip,
 } from "../ui";
 
 function sumCost(rows) {
@@ -255,9 +256,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
-    <!-- แถบเครื่องมือ -->
-    <div class="card p-3 mb-4 flex flex-wrap items-end gap-3" data-print="hide">
+  <!-- ทั้งแท็บอยู่ใน UiExpandable เดียว (รอบที่ 3 ของ #51) — ขยายแล้วเห็นแถบเครื่องมือ ยอดรวม
+       และรายการครบ เดิมขยายได้แค่รายการสัญญาและปุ่มขยายลอยอยู่แถวของตัวเอง -->
+  <UiExpandable :title="t(&quot;ค่าใช้จ่ายตามสัญญา&quot;)">
+    <template #toolbar>
       <UiField :label="t(&quot;เดือน&quot;)" class="w-56">
         <PeriodPicker v-model="monthSelection" :options="monthsWithData" />
       </UiField>
@@ -269,18 +271,22 @@ onMounted(() => {
       </UiField>
 
       <div class="flex items-center gap-2 ml-auto">
-        <UiButton size="sm" variant="ghost" @click="expandAll"> {{ t("กางทั้งหมด") }} </UiButton>
-        <UiButton size="sm" variant="ghost" @click="collapseAll"> {{ t("พับทั้งหมด") }} </UiButton>
+        <UiTooltip :content="t(&quot;กางทั้งหมด&quot;)">
+          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;กางทั้งหมด&quot;)" @click="expandAll"><ChevronsUpDown :size="15" /></UiButton>
+        </UiTooltip>
+        <UiTooltip :content="t(&quot;พับทั้งหมด&quot;)">
+          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;พับทั้งหมด&quot;)" @click="collapseAll"><ChevronsDownUp :size="15" /></UiButton>
+        </UiTooltip>
         <UiButton size="sm" variant="secondary" :disabled="!contracts.length || loading || !!loadError" @click="exportExcel">
           <template #icon><Download :size="15" /></template>
           Excel
         </UiButton>
       </div>
-    </div>
+    </template>
 
-    <!-- ยอดรวม -->
-    <div v-if="!loadError" class="grid-fit mb-4">
-      <UiStat
+    <!-- ยอดรวม — แถบเดียวแบ่งสามช่อง ไม่ใช่การ์ดสามใบ (รอบที่ 3 ของ #51) -->
+    <div v-if="!loadError" class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4">
+      <UiStat plain
         :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
         :unit="t(&quot;บาท&quot;)"
         :hint="month ? t(&quot;เฉพาะเดือนที่เลือก · หัก 20% แล้ว&quot;) : t(&quot;ทั้งปีงบ · หัก 20% แล้ว&quot;)"
@@ -289,11 +295,11 @@ onMounted(() => {
         {{ formatBahtValue(grandTotal) }}
       </UiStat>
 
-      <UiStat :label="t(&quot;จำนวนหน้ารวม&quot;)" :unit="t(&quot;หน้า&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;จำนวนหน้ารวม&quot;)" :unit="t(&quot;หน้า&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 
-      <UiStat
+      <UiStat plain
         :label="t(&quot;เครื่องในสัญญา&quot;)"
         :unit="t(&quot;เครื่อง&quot;)"
         :hint="t(&quot;{0} สัญญา&quot;, [formatCount(contracts.length)])"
@@ -353,8 +359,7 @@ onMounted(() => {
     </UiCard>
 
     <!-- โครงสร้างสามชั้น: สัญญา -> เครื่อง -> ยอดรายเดือน -->
-    <UiExpandable v-else-if="!loadError">
-    <div class="flex flex-col gap-2">
+    <div v-else-if="!loadError" class="flex flex-col gap-2">
       <section
         v-for="contract in filteredContracts"
         :key="contract.id"
@@ -472,8 +477,6 @@ onMounted(() => {
       </section>
     </div>
 
-    </UiExpandable>
-
     <!-- เครื่องที่ยังไม่ผูกสัญญา — เดิมมองไม่เห็นจากหน้านี้เลย ทั้งที่เป็นสาเหตุ
          อันดับหนึ่งที่ยอดรวมไม่ตรงกับใบแจ้งหนี้ -->
     <section v-if="unassignedDevices.length" class="card overflow-hidden mt-4 border-warn-line">
@@ -496,7 +499,7 @@ onMounted(() => {
 
           <span class="min-w-0 flex-1">
             <span class="block font-medium text-warn-ink"> {{ t("เครื่องที่ยังไม่ได้ผูกสัญญา") }} </span>
-            <span class="block text-2xs text-warn-ink opacity-80"> {{ t("ยอดของเครื่องเหล่านี้ไม่ถูกนับรวมในค่าใช้จ่ายตามสัญญาด้านบน") }} </span>
+            <span class="block text-2xs text-warn-ink"> {{ t("ยอดของเครื่องเหล่านี้ไม่ถูกนับรวมในค่าใช้จ่ายตามสัญญาด้านบน") }} </span>
           </span>
 
           <UiBadge tone="warn" size="lg">
@@ -523,5 +526,5 @@ onMounted(() => {
         </li>
       </ul>
     </section>
-  </div>
+  </UiExpandable>
 </template>

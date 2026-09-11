@@ -29,6 +29,8 @@ import { exportSheet } from "../lib/export-xlsx";
 import {
   Building2,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   CircleHelp,
   Download,
   FolderTree,
@@ -60,6 +62,7 @@ import {
   UiSelect,
   UiSkeleton,
   UiStat,
+  UiTooltip,
 } from "../ui";
 
 /** บวกเงินในหน่วยสตางค์ที่เป็นจำนวนเต็มเสมอ ไม่บวกทศนิยมของบาท */
@@ -616,9 +619,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <UiExpandable class="flex flex-col gap-4">
-    <!-- แถบเครื่องมือ -->
-    <div class="card p-3 flex flex-wrap items-end gap-3" data-print="hide">
+  <!-- แถบเครื่องมือส่งเข้า slot ของ UiExpandable ปุ่มขยายจึงอยู่แถวเดียวกัน (รอบที่ 3 ของ #51) -->
+  <UiExpandable class="flex flex-col gap-4" :title="t(&quot;ตามฝ่าย / แผนก&quot;)">
+    <template #toolbar>
       <UiField
         :label="t(&quot;ช่วงที่เทียบแนวโน้ม&quot;)"
         class="w-56"
@@ -633,18 +636,22 @@ onMounted(async () => {
       </UiField>
 
       <div class="flex items-center gap-2 ml-auto">
-        <UiButton size="sm" variant="ghost" @click="expandAll"> {{ t("กางทั้งหมด") }} </UiButton>
-        <UiButton size="sm" variant="ghost" @click="collapseAll"> {{ t("พับทั้งหมด") }} </UiButton>
+        <UiTooltip :content="t(&quot;กางทั้งหมด&quot;)">
+          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;กางทั้งหมด&quot;)" @click="expandAll"><ChevronsUpDown :size="15" /></UiButton>
+        </UiTooltip>
+        <UiTooltip :content="t(&quot;พับทั้งหมด&quot;)">
+          <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;พับทั้งหมด&quot;)" @click="collapseAll"><ChevronsDownUp :size="15" /></UiButton>
+        </UiTooltip>
         <UiButton size="sm" variant="secondary" :disabled="!divisions.length || loading || !!loadError" @click="exportTreeExcel">
           <template #icon><Download :size="15" /></template>
           Excel
         </UiButton>
       </div>
-    </div>
+    </template>
 
-    <!-- ยอดรวมทั้งปีงบ -->
-    <div v-if="!loadError" class="grid-fit">
-      <UiStat
+    <!-- ยอดรวมทั้งปีงบ — แถบเดียวแบ่งสามช่อง ไม่ใช่การ์ดสามใบ -->
+    <div v-if="!loadError" class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft">
+      <UiStat plain
         :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
         :unit="t(&quot;บาท&quot;)"
         :hint="t(&quot;ทั้งปีงบ · หัก 20% แล้ว · ไม่ขึ้นกับช่วงที่เลือกเทียบ&quot;)"
@@ -653,11 +660,11 @@ onMounted(async () => {
         {{ formatBahtValue(grandTotalCost) }}
       </UiStat>
 
-      <UiStat :label="t(&quot;จำนวนหน้าสุทธิรวม&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ทั้งปีงบ&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;จำนวนหน้าสุทธิรวม&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ทั้งปีงบ&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 
-      <UiStat
+      <UiStat plain
         :label="t(&quot;แผนกที่มีข้อมูล&quot;)"
         :unit="t(&quot;แผนก&quot;)"
         :hint="t(&quot;ปีงบ {0}&quot;, [yearLabel(activeFiscalYear?.year)])"

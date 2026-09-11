@@ -318,13 +318,14 @@ async function submit() {
     </UiAlert>
     <div v-else class="flex flex-col gap-5">
       <UiAlert v-if="successMessage" tone="ok">{{ successMessage }}</UiAlert>
-      <section class="rounded-lg border border-line-soft bg-surface-2 p-4">
+      <!-- กลุ่มเป็นการ์ดขาวบนพื้นแผงโทนอ่อน (M3 tonal, รอบที่ 3 ของ #51) -->
+      <section class="rounded-lg border border-line-soft bg-surface p-4">
         <h3 class="eyebrow mb-2">{{ t("ต้นทาง") }}</h3>
         <p class="text-sm text-ink-soft break-words">{{ source }}</p>
       </section>
 
       <!-- ที่ตั้งปัจจุบันและยอดสะสมของช่วงนี้ -->
-      <section class="rounded-lg border border-line-soft bg-surface-2 px-4 py-3">
+      <section class="rounded-lg border border-line-soft bg-surface px-4 py-3">
         <p class="eyebrow mb-2"> {{ t("ช่วงการใช้งานปัจจุบัน") }} </p>
 
         <div v-if="usageLoading" class="flex flex-col gap-2">
@@ -360,7 +361,7 @@ async function submit() {
       </section>
 
       <!-- ที่ตั้งใหม่ -->
-      <form :inert="pending" class="grid grid-cols-1 sm:grid-cols-2 gap-4" @submit.prevent="submit">
+      <form :inert="pending" class="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-line-soft bg-surface p-4" @submit.prevent="submit">
         <h3 class="eyebrow sm:col-span-2">{{ t("ปลายทาง") }}</h3>
         <UiField :label="t(&quot;อาคาร&quot;)" :error="errors.building_id" class="sm:col-span-1">
           <UiCombobox v-model="form.building_id" :options="buildingOptions" :placeholder="t(&quot;เลือกอาคาร&quot;)" :any-label="t(&quot;ยังไม่ระบุ&quot;)" />
@@ -397,7 +398,9 @@ async function submit() {
 
       <!-- สรุปการย้าย -->
       <div class="flex flex-wrap items-center gap-2 rounded-lg border border-brand-line bg-brand-soft px-4 py-3 text-sm">
-        <span class="text-brand-ink opacity-80">{{ origin }}</span>
+        <!-- ไม่ลดความเด่นของต้นทางด้วย opacity — สีจางบนพื้น brand-soft ตกเกณฑ์ 1.4.3
+             แบบเดียวกับคำว่า "ปีงบ" บนแถบบน ใช้น้ำหนักตัวอักษรแยกต้นทางกับปลายทางแทน -->
+        <span class="text-brand-ink">{{ origin }}</span>
         <ArrowRight :size="15" class="text-brand-ink shrink-0" aria-hidden="true" />
         <span class="font-medium text-brand-ink">{{ destination }}</span>
       </div>
@@ -427,7 +430,7 @@ async function submit() {
           compact
         />
 
-        <ol v-else class="flex flex-col list-none border border-line-soft rounded-lg overflow-hidden">
+        <ol v-else class="flex flex-col list-none border border-line-soft rounded-lg overflow-hidden bg-surface">
           <li
             v-for="(row, index) in historyRows"
             :key="row.id ?? index"

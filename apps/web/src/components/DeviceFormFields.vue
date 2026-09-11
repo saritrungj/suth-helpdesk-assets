@@ -29,6 +29,8 @@ import { toastError, toastSuccess } from "../store/toast";
 import { UiAlert, UiButton, UiCombobox, UiField, UiInput, UiSegmented, UiSkeleton } from "../ui";
 
 const props = defineProps({
+  /** แยกแต่ละกลุ่มเป็นการ์ดขาว — ใช้ในแผงแก้ไขที่พื้นเป็นโทนอ่อน (ในหน้าเพิ่มเครื่องอยู่ในการ์ดแล้ว) */
+  grouped: { type: Boolean, default: false },
   /** null = เพิ่มใหม่, ตัวเลข = แก้ไขเครื่องนั้น */
   assetId: { type: [Number, String, null], default: null },
 });
@@ -269,8 +271,10 @@ defineExpose({ reset, submit, saving, loading, ready });
     </UiAlert>
     <form v-else :inert="saving" class="flex flex-col gap-5" @submit.prevent="submit">
       <!-- ตัวเครื่อง -->
-      <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <legend class="eyebrow mb-2"> {{ t("ข้อมูลเครื่อง") }} </legend>
+      <!-- grouped: กลุ่มเป็นการ์ดขาวบนพื้นแผงโทนอ่อน (M3 tonal, รอบที่ 3 ของ #51)
+           legend ลอย (float) จึงอยู่ในการ์ดเป็นแถวแรกของ grid ไม่ทับเส้นขอบแบบ legend ปกติ -->
+      <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4" :class="grouped && 'rounded-lg border border-line-soft bg-surface p-4'">
+        <legend class="eyebrow" :class="grouped ? 'float-left w-full col-span-full' : 'mb-2'"> {{ t("ข้อมูลเครื่อง") }} </legend>
 
         <UiField
           :label="t(&quot;หมายเลข Serial&quot;)"
@@ -296,8 +300,8 @@ defineExpose({ reset, submit, saving, loading, ready });
       </fieldset>
 
       <!-- ที่ตั้ง -->
-      <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-5 border-t border-line-soft">
-        <legend class="eyebrow mb-2"> {{ t("ที่ตั้งและหน่วยงานที่ดูแล") }} </legend>
+      <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4" :class="grouped ? 'rounded-lg border border-line-soft bg-surface p-4' : 'pt-5 border-t border-line-soft'">
+        <legend class="eyebrow" :class="grouped ? 'float-left w-full col-span-full' : 'mb-2'"> {{ t("ที่ตั้งและหน่วยงานที่ดูแล") }} </legend>
 
         <UiField :label="t(&quot;อาคาร&quot;)">
           <UiCombobox
@@ -351,8 +355,8 @@ defineExpose({ reset, submit, saving, loading, ready });
       </fieldset>
 
       <!-- สัญญาและราคา -->
-      <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-5 border-t border-line-soft">
-        <legend class="eyebrow mb-2"> {{ t("สัญญาและราคา") }} </legend>
+      <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4" :class="grouped ? 'rounded-lg border border-line-soft bg-surface p-4' : 'pt-5 border-t border-line-soft'">
+        <legend class="eyebrow" :class="grouped ? 'float-left w-full col-span-full' : 'mb-2'"> {{ t("สัญญาและราคา") }} </legend>
 
         <UiField :label="t(&quot;สัญญาที่ผูกอยู่&quot;)">
           <UiCombobox
@@ -370,8 +374,8 @@ defineExpose({ reset, submit, saving, loading, ready });
 
       <UiAlert v-if="formError" tone="danger">{{ formError }}</UiAlert>
 
-      <fieldset class="pt-5 border-t border-line-soft">
-        <legend class="eyebrow mb-2">{{ t("สถานะ") }}</legend>
+      <fieldset class="flow-root" :class="grouped ? 'rounded-lg border border-line-soft bg-surface p-4' : 'pt-5 border-t border-line-soft'">
+        <legend class="eyebrow mb-2" :class="grouped && 'float-left w-full'">{{ t("สถานะ") }}</legend>
         <UiField :label="t('สถานะเครื่อง')">
           <UiSegmented v-model="form.status" :options="STATUS_OPTIONS" :label="t('สถานะของเครื่อง')" />
         </UiField>
