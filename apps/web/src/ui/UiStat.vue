@@ -35,6 +35,8 @@ const props = defineProps({
   deltaInverse: { type: Boolean, default: false },
   /** ชุดตัวเลขสำหรับเส้นแนวโน้มจิ๋ว — ไม่มีแกน ไม่มีตัวเลข บอกแค่รูปร่าง */
   trend: { type: Array, default: () => [] },
+  /** ไม่มีกรอบการ์ดของตัวเอง — ใช้วางหลายตัวในแถบเดียว (รอบที่ 3 ของ #51) */
+  plain: { type: Boolean, default: false },
 });
 
 const VALUE_TONE = {
@@ -80,8 +82,11 @@ const sparkPath = computed(() => {
 
 <template>
   <div
-    class="card px-4 py-3.5 flex flex-col gap-1 min-w-0 h-full transition-shadow duration-200 ease-out-quart hover:shadow-e2"
-    :class="emphasis && 'ring-1 ring-brand-line bg-brand-soft/35'"
+    class="px-4 py-3.5 flex flex-col gap-1 min-w-0 h-full"
+    :class="[
+      !plain && 'card transition-shadow duration-200 ease-out-quart hover:shadow-e2',
+      emphasis && 'ring-1 ring-brand-line bg-brand-soft/35',
+    ]"
     :aria-busy="loading ? 'true' : undefined"
   >
     <div class="flex items-start justify-between gap-2">

@@ -62,7 +62,7 @@ async function save() {
     :pending="pending"
     @update:open="requestClose"
   >
-    <DeviceFormFields v-if="modelValue" :key="assetId" ref="fields" :asset-id="assetId" @dirty="dirty = $event" @saved="saved" />
+    <DeviceFormFields v-if="modelValue" :key="assetId" ref="fields" grouped :asset-id="assetId" @dirty="dirty = $event" @saved="saved" />
 
     <template #footer>
       <UiButton variant="secondary" :disabled="pending" @click="requestClose"> {{ t("ยกเลิก") }} </UiButton>

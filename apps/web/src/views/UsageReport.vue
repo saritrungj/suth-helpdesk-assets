@@ -19,7 +19,7 @@ import { Building2, ReceiptText } from "lucide-vue-next";
 import ByDepartment from "./ByDepartment.vue";
 import Expense from "./Expense.vue";
 import { activeFiscalYear } from "../store/fiscalYear";
-import { UiPageHeader, UiTabs } from "../ui";
+import { UiBadge, UiPageHeader, UiTabs } from "../ui";
 
 const route = useRoute();
 const router = useRouter();
@@ -74,11 +74,12 @@ onUnmounted(() => window.removeEventListener("scroll", rememberScroll));
       หน้าจอใช้รายการหัวเรื่องเป็นสารบัญหลักในการนำทาง) และหน้านี้ก็เป็นหน้าเดียว
       ในระบบที่หน้าตาไม่เข้าชุดกับหน้าอื่นที่ใช้ UiPageHeader ทั้งหมด
     -->
-    <UiPageHeader
-      :eyebrow="activeFiscalYear?.year ? t(&quot;วิเคราะห์ · ปีงบประมาณ {0}&quot;, [yearLabel(activeFiscalYear.year)]) : t(&quot;วิเคราะห์&quot;)"
-      :title="t(&quot;ค่าใช้จ่าย&quot;)"
-      :description="t(&quot;ข้อมูลชุดเดียวกันสองมุมมอง — ตามสัญญาไว้ตรวจใบแจ้งหนี้ ตามหน่วยงานไว้ทำเรื่องเบิกภายใน&quot;)"
-    />
+    <!-- หัวหน้าแถวเดียวแบบเดียวกับทะเบียนและบันทึกยอด (รอบที่ 3 ของ #51) -->
+    <UiPageHeader :title="t(&quot;ค่าใช้จ่าย&quot;)">
+      <template v-if="activeFiscalYear?.year" #badge>
+        <UiBadge tone="neutral" class="numeral">{{ t("ปีงบ {0}", [yearLabel(activeFiscalYear.year)]) }}</UiBadge>
+      </template>
+    </UiPageHeader>
 
     <UiTabs v-model="tab" :tabs="TABS" keep-mounted :label="t(&quot;มุมมองของรายงานค่าใช้จ่าย&quot;)">
       <template #expense>
