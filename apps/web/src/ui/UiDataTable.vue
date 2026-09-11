@@ -299,7 +299,16 @@ defineExpose({
 
       <slot name="toolbar-extra" />
 
-      <div role="group" :aria-label="t('เครื่องมือตาราง')" class="flex items-center gap-2 ml-auto">
+      <!-- สรุปจำนวน — อยู่แถวเดียวกับเครื่องมือ ชิดหน้าปุ่มขยายตาราง (ผลตรวจ gate #51)
+           เป็น live region ให้โปรแกรมอ่านหน้าจอประกาศเมื่อผลลัพธ์เปลี่ยน -->
+      <p class="text-xs text-ink-mute ml-auto" aria-live="polite" data-table-count>
+        <template v-if="loading"> {{ t("กำลังโหลดข้อมูล…") }} </template>
+        <template v-else-if="sortedRows.length"> {{ t("แสดง") }} <span class="numeral font-medium text-ink-soft">{{ rangeStart.toLocaleString("th-TH") }}–{{ rangeEnd.toLocaleString("th-TH") }}</span> {{ t("จาก") }} <span class="numeral font-medium text-ink-soft">{{ sortedRows.length.toLocaleString("th-TH") }}</span> {{ t("รายการ") }} <span v-if="search" class="text-ink-mute"> {{ t("(กรองจากทั้งหมด") }} {{ rows.length.toLocaleString("th-TH") }})</span>
+        </template>
+        <template v-else> {{ t("ไม่มีรายการที่ตรงกับเงื่อนไข") }} </template>
+      </p>
+
+      <div role="group" :aria-label="t('เครื่องมือตาราง')" class="flex items-center gap-2">
         <UiButton size="sm" variant="secondary" @click="toggleExpanded">{{ expanded ? t("ย่อตาราง") : t("ขยายตาราง") }}</UiButton>
         <UiMenu v-if="showColumnPicker" :label="t(&quot;แสดงคอลัมน์&quot;)">
           <template #trigger>
@@ -334,14 +343,6 @@ defineExpose({
         </UiButton>
       </div>
     </div>
-
-    <!-- สรุปจำนวน — เป็น live region ให้โปรแกรมอ่านหน้าจอประกาศเมื่อผลลัพธ์เปลี่ยน -->
-    <p class="text-xs text-ink-mute mb-2" aria-live="polite">
-      <template v-if="loading"> {{ t("กำลังโหลดข้อมูล…") }} </template>
-      <template v-else-if="sortedRows.length"> {{ t("แสดง") }} <span class="numeral font-medium text-ink-soft">{{ rangeStart.toLocaleString("th-TH") }}–{{ rangeEnd.toLocaleString("th-TH") }}</span> {{ t("จาก") }} <span class="numeral font-medium text-ink-soft">{{ sortedRows.length.toLocaleString("th-TH") }}</span> {{ t("รายการ") }} <span v-if="search" class="text-ink-mute"> {{ t("(กรองจากทั้งหมด") }} {{ rows.length.toLocaleString("th-TH") }})</span>
-      </template>
-      <template v-else> {{ t("ไม่มีรายการที่ตรงกับเงื่อนไข") }} </template>
-    </p>
 
     <!-- ตาราง (จอ >= sm) -->
     <div

@@ -71,7 +71,7 @@ test("staff opens the API's pending month after coverage arrives", async ({ page
   await page.goto("/print-transactions");
   await expect(page.getByRole("textbox", { name: "ยอดพิมพ์ของ SUTH-001", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "ยอดพิมพ์ของ SUTH-001", exact: true })).toHaveValue("100");
-  await expect(page.getByRole("columnheader", { name: /ยอดส.ค./ })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /ยอด ส\.ค\./ })).toBeVisible();
 });
 
 test("expense keeps search and expanded detail across tabs and browser back", async ({ page }) => {
@@ -221,7 +221,7 @@ test("explicit month survives late coverage and yearly detail keeps the draft", 
   await toggle.press("Enter");
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(input).toHaveValue("250");
-  await expect(page.getByRole("columnheader", { name: /ยอดก.ย./ })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /ยอด ก\.ย\./ })).toBeVisible();
 });
 
 test("expense side data that fails to load is reported instead of silently disappearing", async ({ page }) => {
@@ -324,4 +324,21 @@ test("expense price, discount and unit copy is translated while the amounts stay
   const department = page.getByRole("tabpanel", { name: "By division / department" });
   await expect(department.getByText("Total net cost", { exact: true })).toBeVisible();
   await expect(department.getByText("360.00", { exact: true }).first()).toBeVisible();
+});
+
+test("table count sits on the same row as the expand-table button", async ({ page }) => {
+  // ผลตรวจ gate #51 รอบที่ 1: "แสดง 1–20 จาก 20 รายการ" ต้องอยู่บรรทัดเดียวกับ "ขยายตาราง"
+  await prototypeFixture(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  for (const url of ["/assets", "/print-transactions"]) {
+    await page.goto(url);
+    const count = page.locator("[data-table-count]").first();
+    await expect(count, url).toContainText("รายการ");
+    const expand = count.locator("xpath=..").getByRole("button", { name: "ขยายตาราง", exact: true });
+    const [text, button] = [await count.boundingBox(), await expand.boundingBox()];
+    // จุดกึ่งกลางแนวตั้งของข้อความต้องอยู่ในความสูงของปุ่ม ถ้าถูกดันลงอีกบรรทัดจะหลุดช่วงนี้
+    const middle = text.y + text.height / 2;
+    expect(middle, url).toBeGreaterThan(button.y);
+    expect(middle, url).toBeLessThan(button.y + button.height);
+  }
 });
