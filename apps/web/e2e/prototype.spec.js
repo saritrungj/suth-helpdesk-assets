@@ -165,12 +165,20 @@ test("expense retains each tab's scroll position", async ({ page }) => {
   await page.goto("/expense?tab=department");
   await expect(page.getByText("เครื่องที่ใช้งานหนักที่สุด", { exact: true })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 420));
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(420);
+  /* จำตำแหน่งที่เบราว์เซอร์หยุดให้จริง ไม่ยึด 420 เป๊ะ — Chromium ขยับตำแหน่งเลื่อนเอง
+     ได้เป็นพิกเซลจาก scroll anchoring เมื่อกราฟที่อยู่เหนือ viewport วาดเสร็จทีหลัง
+     สิ่งที่เทสนี้ต้องรับประกันคือ "กลับมาที่เดิม" ไม่ใช่ค่าตัวเลขค่าหนึ่ง (เคยทำ
+     pre-push ล้มด้วย 421 ทั้งที่พฤติกรรมถูก) ใช้ระยะเผื่อ 2px เท่ากับเทสตำแหน่งเลื่อน
+     ของทะเบียนใน asset-drawer.spec.js */
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+  const parked = await page.evaluate(() => window.scrollY);
   // Dispatch activation without the test runner scrolling the tab into view first.
   await page.getByRole("tab", { name: "ตามสัญญา", exact: true }).dispatchEvent("mousedown", { button: 0, ctrlKey: false });
   await expect(page.getByRole("tab", { name: "ตามสัญญา", exact: true })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "ตามฝ่าย / แผนก", exact: true }).dispatchEvent("mousedown", { button: 0, ctrlKey: false });
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(420);
+  await expect
+    .poll(() => page.evaluate((top) => Math.abs(window.scrollY - top), parked))
+    .toBeLessThanOrEqual(2);
 });
 
 test("annual draft survives canceling close", async ({ page }) => {
