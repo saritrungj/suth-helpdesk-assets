@@ -101,8 +101,9 @@ async function logout() {
       <Menu :size="18" />
     </UiButton>
 
-    <!-- ตำแหน่งปัจจุบัน — บอกว่าอยู่กลุ่มไหนและหน้าอะไร -->
-    <nav class="min-w-0 flex items-center gap-1.5 text-sm" :aria-label="t(&quot;ตำแหน่งปัจจุบัน&quot;)">
+    <!-- ตำแหน่งปัจจุบัน — แสดงเฉพาะหน้าลูก (meta.breadcrumb เช่นรายละเอียดเครื่อง) ที่ต้องมีลิงก์กลับหน้าแม่
+         หน้าหลักไม่แสดง เพราะชื่อหน้าซ้ำกับเมนูข้างที่เลือกอยู่และหัวหน้าอยู่แล้ว (รอบที่ 3 ของ #51) -->
+    <nav v-if="route.meta.breadcrumb" class="min-w-0 flex items-center gap-1.5 text-sm" :aria-label="t(&quot;ตำแหน่งปัจจุบัน&quot;)">
       <span class="hidden sm:inline text-ink-mute truncate">
         {{ activeItem?.groupLabel ?? APP_NAME_SHORT }}
       </span>
@@ -122,9 +123,6 @@ async function logout() {
         <span class="font-medium text-ink truncate">{{ route.meta.breadcrumb }}</span>
       </template>
 
-      <span v-else class="font-medium text-ink truncate">
-        {{ activeItem?.label ?? APP_NAME_SHORT }}
-      </span>
     </nav>
 
     <div class="flex items-center gap-2 ml-auto">

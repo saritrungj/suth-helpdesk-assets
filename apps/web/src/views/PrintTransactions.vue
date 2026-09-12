@@ -382,8 +382,9 @@ const entryColumns = computed(() => [
   { key: "serial_number", label: "Serial", width: "11rem" },
   {
     key: "location",
-    label: t("ที่ตั้ง / แผนก"),
-    value: (d) => [d.building_name, d.floor_name, d.location, d.department_name].filter(Boolean).join(" · ") || "—",
+    // บรรทัดเดียว "อาคาร ชั้น · จุดที่ตั้ง" — คนกรอกยอดหาเครื่องจากที่ตั้ง ส่วนแผนกยังค้นหาได้จากช่องค้นหา
+    label: t("ที่ตั้ง"),
+    value: (d) => [[d.building_name, d.floor_name].filter(Boolean).join(" "), d.location].filter(Boolean).join(" · ") || "—",
   },
   {
     key: "previous_month",
@@ -861,9 +862,12 @@ onUnmounted(unregisterFiscalYearGuard);
          ส่วนสลับโหมดอยู่ขวาสุด เหนือทุกอย่างที่มันเปลี่ยน เพราะมันเปลี่ยนทั้งหน้า -->
     <UiPageHeader :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)">
       <template #badge>
-        <p class="text-sm text-ink-soft">
-          {{ t("ปีงบ {0}", [displayYearBE]) }}
-          <span v-if="!summaryError && !summaryLoading && !loading && !pageError"> · {{ t("กรอกครบแล้ว {0} จาก {1} เครื่อง", [formatCount(progress.done), formatCount(progress.total)]) }}</span>
+        <!-- ไม่ใส่ "ปีงบ" ซ้ำบนจอปกติ — ปีงบที่กำลังดูอยู่บนแถบบนตลอดเวลาแล้ว
+             ยกเว้นตอนขยายตารางเต็มจอ (แถบบนอยู่นอก fullscreen root จึงมองไม่เห็น)
+             และตอนสั่งพิมพ์ (แถบบนถูกซ่อน) สองกรณีนั้นป้ายนี้โผล่มาแทน ดู base.css -->
+        <p data-topbar-context class="text-sm text-ink-soft numeral">{{ t("ปีงบ {0}", [displayYearBE]) }}</p>
+        <p v-if="!summaryError && !summaryLoading && !loading && !pageError" class="text-sm text-ink-soft">
+          {{ t("กรอกครบแล้ว {0} จาก {1} เครื่อง", [formatCount(progress.done), formatCount(progress.total)]) }}
         </p>
         <UiButton size="sm" variant="ghost" :aria-expanded="yearExpanded" aria-controls="year-progress" @click="yearExpanded = !yearExpanded">
           {{ t("รายละเอียดความคืบหน้าปี") }}
@@ -1047,7 +1051,7 @@ onUnmounted(unregisterFiscalYearGuard);
           :row-class="row => draft.has(row.id) ? 'bg-brand-soft' : ''"
         >
           <template #cell-location="{ value }">
-            <span class="block max-w-xs whitespace-normal break-words">{{ value }}</span>
+            <span class="block max-w-sm truncate" :title="value">{{ value }}</span>
           </template>
           <!-- inline-flex + min-h-6: ข้อ 2.5.8 บังคับพื้นที่กด 24x24 ส่วนตัวอักษร
                บรรทัดเดียวสูงแค่ 17px และลิงก์นี้ไม่เข้าข้อยกเว้น "อยู่ในประโยค"
@@ -1107,7 +1111,7 @@ onUnmounted(unregisterFiscalYearGuard);
     >
       <template #cell-serial_number="{ row }">
         <span class="font-mono text-sm text-ink">{{ row.serial_number || "—" }}</span>
-        <span v-if="row.asset_code" class="block text-2xs text-ink-mute font-mono">{{ row.asset_code }}</span>
+        <span v-if="row.asset_code" class="block text-xs text-ink-soft font-mono">{{ row.asset_code }}</span>
       </template>
 
       <template #cell-fill_status="{ row }">

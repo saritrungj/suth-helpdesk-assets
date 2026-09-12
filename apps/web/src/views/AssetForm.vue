@@ -57,7 +57,6 @@ async function save() {
   <UiDrawer
     :open="modelValue"
     :title="assetId ? t(&quot;แก้ไขข้อมูลเครื่อง&quot;) : t(&quot;เพิ่มเครื่องเข้าทะเบียน&quot;)"
-    :description="t(&quot;ช่องที่มีเครื่องหมาย * ต้องกรอก ช่องอื่นเว้นไว้แล้วมาเติมทีหลังได้&quot;)"
     size="lg"
     :pending="pending"
     @update:open="requestClose"

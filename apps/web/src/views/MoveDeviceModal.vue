@@ -24,7 +24,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useAssetDraftGuard } from "./use-asset-draft-guard";
 import { useDraftSnapshot } from "../lib/use-draft-snapshot";
 import { usePlacementFields } from "../lib/use-placement-fields";
-import { ArrowRight, History, MapPin } from "lucide-vue-next";
+import { ArrowRight, History } from "lucide-vue-next";
 
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -318,32 +318,21 @@ async function submit() {
     </UiAlert>
     <div v-else class="flex flex-col gap-5">
       <UiAlert v-if="successMessage" tone="ok">{{ successMessage }}</UiAlert>
-      <!-- กลุ่มเป็นการ์ดขาวบนพื้นแผงโทนอ่อน (M3 tonal, รอบที่ 3 ของ #51) -->
+      <!-- ต้นทาง: ที่ตั้งปัจจุบันกับยอดสะสมของช่วงนี้อยู่ในกล่องเดียว (รอบที่ 3 ของ #51 — เดิมแยกสองกล่อง
+           และชื่อฝ่าย/แผนกต้นทางขึ้นซ้ำสามครั้งรวมแถบสรุป) กลุ่มเป็นการ์ดขาวบนพื้นแผงโทนอ่อน -->
       <section class="rounded-lg border border-line-soft bg-surface p-4">
         <h3 class="eyebrow mb-2">{{ t("ต้นทาง") }}</h3>
         <p class="text-sm text-ink-soft break-words">{{ source }}</p>
-      </section>
 
-      <!-- ที่ตั้งปัจจุบันและยอดสะสมของช่วงนี้ -->
-      <section class="rounded-lg border border-line-soft bg-surface px-4 py-3">
-        <p class="eyebrow mb-2"> {{ t("ช่วงการใช้งานปัจจุบัน") }} </p>
-
-        <div v-if="usageLoading" class="flex flex-col gap-2">
-          <UiSkeleton height="1rem" width="60%" />
+        <div v-if="usageLoading" class="flex flex-col gap-2 mt-3">
           <UiSkeleton height="1rem" width="40%" />
         </div>
 
-        <UiAlert v-else-if="usageError" tone="danger">
+        <UiAlert v-else-if="usageError" tone="danger" class="mt-3">
           {{ usageError }}
           <template #actions><UiButton variant="secondary" @click="loadCurrentUsage(assetId)">{{ t("ลองใหม่") }}</UiButton></template>
         </UiAlert>
-        <template v-else-if="currentUsage">
-          <p class="flex items-center gap-1.5 text-sm text-ink">
-            <MapPin :size="14" class="text-ink-mute shrink-0" aria-hidden="true" />
-            {{ origin }}
-          </p>
-
-          <dl class="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs">
+          <dl v-else-if="currentUsage" class="flex flex-wrap gap-x-6 gap-y-1 mt-3 pt-3 border-t border-line-soft text-xs">
             <div class="flex items-baseline gap-1.5">
               <dt class="text-ink-mute"> {{ t("ยอดพิมพ์สะสม") }} </dt>
               <dd class="numeral font-semibold text-ink">
@@ -355,9 +344,8 @@ async function submit() {
                 {{ formatBahtValue(currentUsage.total_cost) }} {{ t("บาท") }} </dd>
             </div>
           </dl>
-        </template>
 
-        <p v-else class="text-sm text-ink-mute"> {{ t("ยังไม่มียอดพิมพ์บันทึกไว้ในช่วงนี้") }} </p>
+        <p v-else class="text-sm text-ink-mute mt-3"> {{ t("ยังไม่มียอดพิมพ์บันทึกไว้ในช่วงนี้") }} </p>
       </section>
 
       <!-- ที่ตั้งใหม่ -->
@@ -403,10 +391,9 @@ async function submit() {
         <span class="text-brand-ink">{{ origin }}</span>
         <ArrowRight :size="15" class="text-brand-ink shrink-0" aria-hidden="true" />
         <span class="font-medium text-brand-ink">{{ destination }}</span>
+        <!-- วันที่มีผลเลือกไม่ได้ (API ใช้วันที่ของเซิร์ฟเวอร์) จึงเป็นบรรทัดบอกในแถบสรุป ไม่ใช่ช่องที่แก้ไม่ได้ -->
+        <p class="basis-full text-xs text-brand-ink">{{ t("มีผลวันที่บันทึกตามเซิร์ฟเวอร์ — เลือกวันย้อนหลังไม่ได้") }}</p>
       </div>
-      <UiField :label="t('วันที่มีผล')">
-        <p class="text-sm text-ink-soft">{{ t("วันที่บันทึกตามเซิร์ฟเวอร์ — ระบบเดิมไม่รองรับการเลือกวันย้อนหลัง") }}</p>
-      </UiField>
 
       <UiAlert v-if="formError" tone="danger">{{ formError }}</UiAlert>
 

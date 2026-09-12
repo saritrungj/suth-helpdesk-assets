@@ -146,9 +146,16 @@ test("historical report views preserve row counts and financial totals", async (
 });
 
 test("report device rows link to the complete asset detail", async ({ page }) => {
+  /* เดิมเช็ก detailLink.count() ทันทีหลัง goto แล้วข้ามถ้าได้ศูนย์ — ตารางยังไม่ทันเรนเดอร์
+     เคสจึงข้ามตัวเองเพราะจังหวะ ไม่ใช่เพราะไม่มีเครื่องจริง แล้วรายงานผลออกมาเป็น "skip"
+     ให้คนอ่านเข้าใจว่าตรวจแล้ว (ผลตรวจของ Codex รอบ #51 จับได้ว่า flow นี้ไม่เคยถูกยืนยัน)
+     ตัดสินใจข้ามจากข้อมูลของ API แบบเดียวกับเคสอื่นในไฟล์นี้ — สองเงื่อนไขที่หน้านี้ต้องมี
+     คือปีงบ (loadReport คืนค่าเปล่าถ้าไม่มี) และเครื่องในทะเบียน ถ้าครบทั้งคู่ต้อง assert
+     ไม่ใช่ข้าม */
+  const [years, devices] = await Promise.all([apiFetch("/fiscal-years"), apiFetch("/devices")]);
+  test.skip(!years.length || !devices.length, "No fiscal year or device in the database under test");
   await page.goto("/report");
   const detailLink = page.locator('a[href^="/assets/"]').first();
-  test.skip(!(await detailLink.count()), "No devices available in the selected fiscal year");
   await expect(detailLink).toHaveAttribute("href", /^\/assets\/\d+$/);
 });
 

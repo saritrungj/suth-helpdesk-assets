@@ -260,8 +260,8 @@ onMounted(() => {
        และรายการครบ เดิมขยายได้แค่รายการสัญญาและปุ่มขยายลอยอยู่แถวของตัวเอง -->
   <UiExpandable :title="t(&quot;ค่าใช้จ่ายตามสัญญา&quot;)">
     <template #toolbar>
-      <UiField :label="t(&quot;เดือน&quot;)" class="w-56">
-        <PeriodPicker v-model="monthSelection" :options="monthsWithData" />
+      <UiField :label="t(&quot;เดือน&quot;)" class="w-80">
+        <PeriodPicker v-model="monthSelection" :options="monthsWithData" inline />
       </UiField>
 
       <UiField :label="t(&quot;ค้นหาสัญญาหรือเครื่อง&quot;)" class="flex-1 min-w-[14rem] max-w-sm">
@@ -289,7 +289,7 @@ onMounted(() => {
       <UiStat plain
         :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
         :unit="t(&quot;บาท&quot;)"
-        :hint="month ? t(&quot;เฉพาะเดือนที่เลือก · หัก 20% แล้ว&quot;) : t(&quot;ทั้งปีงบ · หัก 20% แล้ว&quot;)"
+        :hint="t(&quot;หัก 20% แล้ว&quot;)"
         :loading="loading"
       >
         {{ formatBahtValue(grandTotal) }}
@@ -386,7 +386,7 @@ onMounted(() => {
 
             <span class="min-w-0 flex-1">
               <span class="block font-medium text-ink truncate">{{ contract.contract_no }}</span>
-              <span class="block text-2xs text-ink-mute numeral">
+              <span class="block text-xs text-ink-soft numeral">
                 {{ formatCount((contract.devices ?? []).length) }} {{ t("เครื่อง ·") }} {{ formatBahtValue(contract.price_per_page) }} {{ t("บาท/แผ่น") }} </span>
             </span>
 
@@ -431,7 +431,7 @@ onMounted(() => {
                 <span class="block text-sm text-ink-soft truncate">
                   {{ device.brand_name || "—" }} {{ device.model || "" }}
                 </span>
-                <span class="block text-2xs text-ink-mute font-mono truncate">
+                <span class="block text-xs text-ink-soft font-mono truncate">
                   {{ device.serial_number }}
                 <span class="block text-xs text-ink-mute font-sans">{{ deviceLocationLabel(device.monthly) }}</span>
                 </span>
@@ -441,7 +441,7 @@ onMounted(() => {
                 <span class="block text-sm font-medium text-ink numeral">
                   {{ formatBahtValue(device.total_cost) }}
                 </span>
-                <span class="block text-2xs text-ink-mute numeral">
+                <span class="block text-xs text-ink-soft numeral">
                   {{ formatCount(devicePages(device)) }} {{ t("หน้า") }} </span>
               </span>
             </button>
@@ -517,7 +517,7 @@ onMounted(() => {
             <span class="block text-sm text-ink-soft truncate">
               {{ device.brand_name || "—" }} {{ device.model || "" }}
             </span>
-            <span class="block text-2xs text-ink-mute font-mono">{{ device.serial_number }}
+            <span class="block text-xs text-ink-soft font-mono">{{ device.serial_number }}
                 <span class="block text-xs text-ink-mute font-sans">{{ t("ที่ตั้งปัจจุบัน") + ": " + deviceLocationLabel([device]) }}</span></span>
           </span>
 

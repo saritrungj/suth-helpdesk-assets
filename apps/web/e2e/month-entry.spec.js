@@ -155,7 +155,7 @@ test("มีของแก้ค้างแล้วเปลี่ยนห�
   await expect(page.getByRole("button", { name: "บันทึก 1 รายการ" })).toBeVisible();
 
   // พยายามออกไปหน้าอื่น
-  await page.getByRole("link", { name: "ทะเบียนทรัพย์สิน" }).click();
+  await page.getByRole("link", { name: "ทะเบียนเครื่องพิมพ์" }).click();
 
   // ต้องมีกล่องยืนยันขึ้นมา และ **ยังอยู่หน้าเดิม**
   await expect(page.getByText("ยังมีข้อมูลที่ยังไม่ได้บันทึก")).toBeVisible();

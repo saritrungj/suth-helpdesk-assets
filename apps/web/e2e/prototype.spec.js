@@ -165,12 +165,20 @@ test("expense retains each tab's scroll position", async ({ page }) => {
   await page.goto("/expense?tab=department");
   await expect(page.getByText("เครื่องที่ใช้งานหนักที่สุด", { exact: true })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 420));
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(420);
+  /* จำตำแหน่งที่เบราว์เซอร์หยุดให้จริง ไม่ยึด 420 เป๊ะ — Chromium ขยับตำแหน่งเลื่อนเอง
+     ได้เป็นพิกเซลจาก scroll anchoring เมื่อกราฟที่อยู่เหนือ viewport วาดเสร็จทีหลัง
+     สิ่งที่เทสนี้ต้องรับประกันคือ "กลับมาที่เดิม" ไม่ใช่ค่าตัวเลขค่าหนึ่ง (เคยทำ
+     pre-push ล้มด้วย 421 ทั้งที่พฤติกรรมถูก) ใช้ระยะเผื่อ 2px เท่ากับเทสตำแหน่งเลื่อน
+     ของทะเบียนใน asset-drawer.spec.js */
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+  const parked = await page.evaluate(() => window.scrollY);
   // Dispatch activation without the test runner scrolling the tab into view first.
   await page.getByRole("tab", { name: "ตามสัญญา", exact: true }).dispatchEvent("mousedown", { button: 0, ctrlKey: false });
   await expect(page.getByRole("tab", { name: "ตามสัญญา", exact: true })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "ตามฝ่าย / แผนก", exact: true }).dispatchEvent("mousedown", { button: 0, ctrlKey: false });
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(420);
+  await expect
+    .poll(() => page.evaluate((top) => Math.abs(window.scrollY - top), parked))
+    .toBeLessThanOrEqual(2);
 });
 
 test("annual draft survives canceling close", async ({ page }) => {
@@ -316,7 +324,8 @@ test("expense price, discount and unit copy is translated while the amounts stay
   await page.addInitScript(() => localStorage.setItem("suth-language", "en"));
   await page.goto("/expense");
   await expect(page.getByText("Total net cost", { exact: true })).toBeVisible();
-  await expect(page.getByText("Full fiscal year · After 20% discount", { exact: true })).toBeVisible();
+  // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือแค่ส่วนลด (รอบที่ 3 ของ #51)
+  await expect(page.getByText("After 20% discount", { exact: true })).toBeVisible();
   await expect(page.getByText(/0\.45\s+THB\/page/)).toBeVisible();
   await expect(page.getByText("360.00", { exact: true }).first()).toBeVisible();
   await page.getByRole("tab", { name: "By division / department", exact: true }).click();
@@ -324,4 +333,33 @@ test("expense price, discount and unit copy is translated while the amounts stay
   const department = page.getByRole("tabpanel", { name: "By division / department" });
   await expect(department.getByText("Total net cost", { exact: true })).toBeVisible();
   await expect(department.getByText("360.00", { exact: true }).first()).toBeVisible();
+});
+
+/*
+ * ปีงบที่กำลังดูอยู่บนแถบบนตลอดเวลา หน้าจึงไม่พิมพ์เลขปีซ้ำบนจอปกติ (รอบที่ 3 ของ #51)
+ * แต่แถบบนหายไปสองกรณี — ตอนสั่งพิมพ์ และตอนขยายตารางเต็มจอ (fullscreen root คือกล่อง
+ * ของหน้า ไม่ได้ครอบแถบบน) ถ้าไม่มีป้ายสำรอง คนจะอ่านยอดรวมโดยไม่รู้ว่าเป็นปีงบไหน
+ */
+test("ค่าใช้จ่ายที่พิมพ์ออกกระดาษยังมีปีงบกำกับยอดรวม", async ({ page }) => {
+  await prototypeFixture(page);
+  await page.goto("/expense?tab=department");
+  await expect(page.getByText("เครื่องที่ใช้งานหนักที่สุด", { exact: true })).toBeVisible();
+  const year = page.getByText("ปีงบ 2569", { exact: true });
+  await expect(year).toBeHidden();
+  await page.emulateMedia({ media: "print" });
+  await expect(year).toBeVisible();
+  await page.emulateMedia({ media: "screen" });
+  await expect(year).toBeHidden();
+});
+
+test("บันทึกยอดที่ขยายเต็มจอยังบอกว่ากำลังดูปีงบไหน", async ({ page }) => {
+  await prototypeFixture(page, "viewer");
+  await page.goto("/print-transactions");
+  await expect(page.getByRole("radio", { name: "ภาพรวมทั้งปี", exact: true })).toHaveAttribute("aria-checked", "true");
+  const year = page.getByText("ปีงบ 2569", { exact: true });
+  await expect(year).toBeHidden();
+  await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
+  await expect(year).toBeVisible();
+  await page.getByRole("button", { name: "ย่อตาราง", exact: true }).click();
+  await expect(year).toBeHidden();
 });

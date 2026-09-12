@@ -29,7 +29,10 @@ import { toastError, toastSuccess } from "../store/toast";
 import { UiAlert, UiButton, UiCombobox, UiField, UiInput, UiSegmented, UiSkeleton } from "../ui";
 
 const props = defineProps({
-  /** แยกแต่ละกลุ่มเป็นการ์ดขาว — ใช้ในแผงแก้ไขที่พื้นเป็นโทนอ่อน (ในหน้าเพิ่มเครื่องอยู่ในการ์ดแล้ว) */
+  /**
+   * แยกแต่ละกลุ่มเป็นการ์ดขาว — ใช้ในแผงแก้ไขที่พื้นเป็นโทนอ่อน (ในหน้าเพิ่มเครื่องอยู่ในการ์ดแล้ว)
+   * และตัดคำอธิบายใต้ช่องที่บอกสิ่งที่เห็นอยู่แล้ว เหลือเฉพาะที่กันกรอกผิด
+   */
   grouped: { type: Boolean, default: false },
   /** null = เพิ่มใหม่, ตัวเลข = แก้ไขเครื่องนั้น */
   assetId: { type: [Number, String, null], default: null },
@@ -280,12 +283,12 @@ defineExpose({ reset, submit, saving, loading, ready });
           :label="t(&quot;หมายเลข Serial&quot;)"
           :error="errors.serial_number"
           required
-          :hint="t(&quot;เลขที่พิมพ์อยู่บนตัวเครื่อง ใช้เป็นตัวระบุหลักของทุกรายงาน&quot;)"
+          :hint="grouped ? '' : t(&quot;เลขที่พิมพ์อยู่บนตัวเครื่อง ใช้เป็นตัวระบุหลักของทุกรายงาน&quot;)"
         >
           <UiInput v-model="form.serial_number" mono :placeholder="t(&quot;เช่น SN2446179&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;รหัสครุภัณฑ์&quot;)" :hint="t(&quot;ถ้ามีรหัสจากงานพัสดุ ให้กรอกไว้เพื่อใช้ตรวจสอบข้ามระบบ&quot;)">
+        <UiField :label="t(&quot;รหัสครุภัณฑ์&quot;)" :hint="grouped ? '' : t(&quot;ถ้ามีรหัสจากงานพัสดุ ให้กรอกไว้เพื่อใช้ตรวจสอบข้ามระบบ&quot;)">
           <UiInput v-model="form.asset_code" mono :placeholder="t(&quot;เช่น IT-PR-1024&quot;)" />
         </UiField>
 
@@ -326,7 +329,7 @@ defineExpose({ reset, submit, saving, loading, ready });
           />
         </UiField>
 
-        <UiField :label="t(&quot;ตำแหน่งที่ตั้ง&quot;)" class="sm:col-span-2" :hint="t(&quot;จุดที่เครื่องตั้งอยู่จริง เพื่อให้คนไปหาเจอ&quot;)">
+        <UiField :label="t(&quot;ตำแหน่งที่ตั้ง&quot;)" class="sm:col-span-2" :hint="grouped ? '' : t(&quot;จุดที่เครื่องตั้งอยู่จริง เพื่อให้คนไปหาเจอ&quot;)">
           <UiInput v-model="form.location" :placeholder="t(&quot;เช่น เคาน์เตอร์พยาบาล ฝั่งตะวันออก&quot;)" />
         </UiField>
 

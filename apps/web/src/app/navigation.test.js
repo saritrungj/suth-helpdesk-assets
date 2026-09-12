@@ -39,15 +39,15 @@ function navItem(path) {
 
 describe("findActiveItem", () => {
   it("หาหน้าที่ตรงกับ path ตรงๆ ได้", () => {
-    expect(findActiveItem(routeAt("/assets"))?.label).toBe("ทะเบียนทรัพย์สิน");
+    expect(findActiveItem(routeAt("/assets"))?.label).toBe("ทะเบียนเครื่องพิมพ์");
   });
 
   it("?fy= ที่ระบบเติมให้ทุกหน้าต้องไม่ทำให้หาไม่เจอ", () => {
     expect(findActiveItem(routeAt("/dashboard", { fy: "1" }))?.label).toBe("แดชบอร์ด");
   });
 
-  it("หน้าลูกตกกลับไปหาหน้าแม่ — /assets/17 คือทะเบียนทรัพย์สิน", () => {
-    expect(findActiveItem(routeAt("/assets/17"))?.label).toBe("ทะเบียนทรัพย์สิน");
+  it("หน้าลูกตกกลับไปหาหน้าแม่ — /assets/17 คือทะเบียนเครื่องพิมพ์", () => {
+    expect(findActiveItem(routeAt("/assets/17"))?.label).toBe("ทะเบียนเครื่องพิมพ์");
   });
 
   it("เส้นทางที่ไม่รู้จักคืน null ไม่ใช่เดามั่ว", () => {
