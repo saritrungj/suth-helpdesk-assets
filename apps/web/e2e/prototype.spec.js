@@ -326,3 +326,32 @@ test("expense price, discount and unit copy is translated while the amounts stay
   await expect(department.getByText("Total net cost", { exact: true })).toBeVisible();
   await expect(department.getByText("360.00", { exact: true }).first()).toBeVisible();
 });
+
+/*
+ * ปีงบที่กำลังดูอยู่บนแถบบนตลอดเวลา หน้าจึงไม่พิมพ์เลขปีซ้ำบนจอปกติ (รอบที่ 3 ของ #51)
+ * แต่แถบบนหายไปสองกรณี — ตอนสั่งพิมพ์ และตอนขยายตารางเต็มจอ (fullscreen root คือกล่อง
+ * ของหน้า ไม่ได้ครอบแถบบน) ถ้าไม่มีป้ายสำรอง คนจะอ่านยอดรวมโดยไม่รู้ว่าเป็นปีงบไหน
+ */
+test("ค่าใช้จ่ายที่พิมพ์ออกกระดาษยังมีปีงบกำกับยอดรวม", async ({ page }) => {
+  await prototypeFixture(page);
+  await page.goto("/expense?tab=department");
+  await expect(page.getByText("เครื่องที่ใช้งานหนักที่สุด", { exact: true })).toBeVisible();
+  const year = page.getByText("ปีงบ 2569", { exact: true });
+  await expect(year).toBeHidden();
+  await page.emulateMedia({ media: "print" });
+  await expect(year).toBeVisible();
+  await page.emulateMedia({ media: "screen" });
+  await expect(year).toBeHidden();
+});
+
+test("บันทึกยอดที่ขยายเต็มจอยังบอกว่ากำลังดูปีงบไหน", async ({ page }) => {
+  await prototypeFixture(page, "viewer");
+  await page.goto("/print-transactions");
+  await expect(page.getByRole("radio", { name: "ภาพรวมทั้งปี", exact: true })).toHaveAttribute("aria-checked", "true");
+  const year = page.getByText("ปีงบ 2569", { exact: true });
+  await expect(year).toBeHidden();
+  await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
+  await expect(year).toBeVisible();
+  await page.getByRole("button", { name: "ย่อตาราง", exact: true }).click();
+  await expect(year).toBeHidden();
+});

@@ -862,7 +862,10 @@ onUnmounted(unregisterFiscalYearGuard);
          ส่วนสลับโหมดอยู่ขวาสุด เหนือทุกอย่างที่มันเปลี่ยน เพราะมันเปลี่ยนทั้งหน้า -->
     <UiPageHeader :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)">
       <template #badge>
-        <!-- ไม่ใส่ "ปีงบ" ซ้ำ — ปีงบที่กำลังดูอยู่บนแถบบนตลอดเวลาแล้ว -->
+        <!-- ไม่ใส่ "ปีงบ" ซ้ำบนจอปกติ — ปีงบที่กำลังดูอยู่บนแถบบนตลอดเวลาแล้ว
+             ยกเว้นตอนขยายตารางเต็มจอ (แถบบนอยู่นอก fullscreen root จึงมองไม่เห็น)
+             และตอนสั่งพิมพ์ (แถบบนถูกซ่อน) สองกรณีนั้นป้ายนี้โผล่มาแทน ดู base.css -->
+        <p data-topbar-context class="text-sm text-ink-soft numeral">{{ t("ปีงบ {0}", [displayYearBE]) }}</p>
         <p v-if="!summaryError && !summaryLoading && !loading && !pageError" class="text-sm text-ink-soft">
           {{ t("กรอกครบแล้ว {0} จาก {1} เครื่อง", [formatCount(progress.done), formatCount(progress.total)]) }}
         </p>

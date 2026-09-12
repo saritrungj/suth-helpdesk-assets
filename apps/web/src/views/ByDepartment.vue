@@ -1,6 +1,5 @@
 <script setup>
 import { reportContext } from "../components/report-context";
-import { yearLabel } from "../lib/locale-format";
 import { deviceLocationLabel } from "../lib/device-location";
 import { formatMonth } from "../lib/locale-format";
 
@@ -43,7 +42,7 @@ import {
 } from "lucide-vue-next";
 import { fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
-import { activeFiscalYear, fiscalYearState } from "../store/fiscalYear";
+import { fiscalYearState } from "../store/fiscalYear";
 import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
 import {
