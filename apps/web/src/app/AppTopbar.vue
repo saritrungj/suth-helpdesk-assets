@@ -87,7 +87,7 @@ async function logout() {
 <template>
   <header
     class="sticky top-0 z-30 h-[var(--shell-topbar-height)] shrink-0 flex items-center gap-2 px-3 sm:px-4
-           border-b border-line-soft bg-canvas/85 backdrop-blur-md"
+           bg-chrome"
     data-print="hide"
   >
     <UiButton
@@ -165,7 +165,10 @@ async function logout() {
                    hover:bg-brand-soft-hover transition-colors"
           >
             <CalendarRange :size="15" class="shrink-0" aria-hidden="true" />
-            <span class="hidden sm:inline text-2xs font-medium opacity-80"> {{ t("ปีงบ") }} </span>
+            <!-- ไม่ใช้ opacity ลดความเด่น — ข้อความ 11px ที่จางลง 20% บนพื้น brand-soft
+                 วัดได้ 4.14:1 ตกเกณฑ์ 1.4.3 (เจอตอนแถบบนเปลี่ยนเป็นพื้นทึบในรอบที่ 3 ของ #51
+                 ซึ่งทำให้ตัววัดใน wcag.spec.js วัดข้อความตรงนี้ได้เป็นครั้งแรก) -->
+            <span class="hidden sm:inline text-2xs font-medium"> {{ t("ปีงบ") }} </span>
             <UiSkeleton v-if="fiscalYearState.loading" width="2.5rem" height="0.9rem" />
             <span v-else-if="activeFiscalYear" class="numeral">
               {{ yearLabel(activeFiscalYear.year) }}
@@ -201,7 +204,7 @@ async function logout() {
         <template #trigger>
           <button
             type="button"
-            class="flex items-center gap-2 h-8 pl-1 pr-2 rounded-lg hover:bg-surface-3 transition-colors"
+            class="flex items-center gap-2 h-8 pl-1 pr-2 rounded-lg hover:bg-chrome-hover transition-colors"
             :aria-label="t(&quot;บัญชีของ {0}&quot;, [authState.user?.username ?? ''])"
           >
             <span
