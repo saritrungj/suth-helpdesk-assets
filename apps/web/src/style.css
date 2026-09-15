@@ -12,7 +12,6 @@
 @import "./design/tokens.css";
 @import "./design/base.css";
 @import "./design/utilities.css";
-@import "./design/report.css";
 
 /* บอก Tailwind ให้สแกนไฟล์ในโฟลเดอร์ ui/ ด้วย (v4 หา source เองจาก entry
    แต่ประกาศไว้ชัดเจนกันพลาดเวลาเพิ่มโฟลเดอร์ใหม่) */

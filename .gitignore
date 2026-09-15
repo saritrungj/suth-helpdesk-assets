@@ -56,3 +56,6 @@ docs/reference/review-*.md
 
 # การตั้งค่าส่วนตัวของ Claude Code ต่อเครื่อง — ไม่ใช่ของทีม
 .claude/settings.local.json
+
+# เครื่องมือ CLI ของ agent ที่ใช้ขับเบราว์เซอร์ระหว่างตรวจงาน ไม่ใช่ส่วนของระบบ
+.playwright-cli/

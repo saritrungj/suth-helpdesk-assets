@@ -180,3 +180,13 @@ mockup ที่ผู้ใช้เห็นชอบแล้วใน #51 �
 | [Primer — DataTable](https://primer.style/product/components/data-table/guidelines/), [PageHeader](https://primer.style/product/components/page-header/guidelines/) | ชื่อหน้าเป็นชื่อตาราง; ตัวเลขชิดขวา tabular; ตัดข้อความเป็นทางเลือกสุดท้าย | หัวหน้าแถวเดียวพร้อม slot `badge` ใน `ui/UiPageHeader.vue` ใช้ใน `views/AssetList.vue`, `views/PrintTransactions.vue`, `views/UsageReport.vue`; ตัดข้อความที่ 2 บรรทัด (ไม่ใช่บรรทัดเดียว) เฉพาะฝ่าย/แผนก/ตำแหน่งใน `views/AssetList.vue` |
 | [NN/g — Applying filters](https://www.nngroup.com/articles/applying-filters/) | ตัวกรองที่ใช้อยู่ต้องเห็นชัด ไม่เลื่อนหน้ากลับบนสุดระหว่างกรอง | ป้ายตัวกรองโทน brand ใน `ui/UiFilterBar.vue`; ค้นหา ตัวกรอง และเครื่องมือตารางอยู่แถวเดียวกันด้วย `tools-target` ของ `ui/UiDataTable.vue` |
 | [GOV.UK — Table](https://design-system.service.gov.uk/components/table/) | caption และ `scope` ทุกตาราง | prop `caption` (เป็น `<caption>` และหัวเรื่องตอนขยาย) กับ `scope="col"` ใน `ui/UiDataTable.vue`; ทุกจุดที่เรียกใช้ส่ง caption แล้ว |
+
+
+### Dashboard — Executive premium (16 กันยายน 2026)
+
+รอบล่าสุดปรับเป็นแถบสรุปพื้นเดียวกับการ์ดอื่นในธีม กราฟกว้าง การกดเจาะรายละเอียด และการส่งออกภาพสรุปตามที่ผู้ใช้เลือก ดูเหตุผล ขอบเขตข้อมูล และแหล่งอ้างอิงที่ [Dashboard สำหรับผู้บริหาร](executive-dashboard.md) การยอมรับหน้าตาจากผู้ใช้ยังเปิดอยู่
+
+
+### Dashboard — ใช้รูปแบบเดียวกับหน้าอื่น (16 กันยายน 2026)
+
+ตามคำแก้ไขล่าสุดของผู้ใช้ ใช้หน้าทะเบียนและหน้าค่าใช้จ่ายในระบบเป็นต้นแบบของโครงหน้า: ใช้ `UiPageHeader`, `UiCard`, `UiStat` และ semantic token กลาง เลิกติด `report-workspace` ที่ MainLayout เพื่อให้ขอบ มุมโค้ง เงา สี Sidebar และพื้นที่เนื้อหาเหมือนหน้าอื่น ความสามารถกดเจาะข้อมูลและส่งออกคงเดิม
