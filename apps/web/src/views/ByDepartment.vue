@@ -1,6 +1,5 @@
 <script setup>
 import { reportContext } from "../components/report-context";
-import { yearLabel } from "../lib/locale-format";
 import { deviceLocationLabel } from "../lib/device-location";
 import { formatMonth } from "../lib/locale-format";
 
@@ -43,14 +42,14 @@ import {
 } from "lucide-vue-next";
 import { fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
-import { activeFiscalYear, fiscalYearState } from "../store/fiscalYear";
+import { fiscalYearState } from "../store/fiscalYear";
 import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
 import {
   UiAlert,
   UiBadge,
   UiButton,
-  UiExpandable,
+  UiFilterBar,
   UiCard,
   UiChart,
   UiCombobox,
@@ -64,6 +63,11 @@ import {
   UiStat,
   UiTooltip,
 } from "../ui";
+
+defineProps({
+  showComparison: { type: Boolean, default: true },
+  comparisonOnly: { type: Boolean, default: false },
+});
 
 /** บวกเงินในหน่วยสตางค์ที่เป็นจำนวนเต็มเสมอ ไม่บวกทศนิยมของบาท */
 function sumCost(rows) {
@@ -286,7 +290,9 @@ const divisionOptions = computed(() =>
 );
 
 const departmentOptions = computed(() =>
-  divisions.value.flatMap((division) =>
+  (selectedDivisionIds.value.length
+    ? divisions.value.filter((division) => selectedDivisionIds.value.includes(division.id))
+    : divisions.value).flatMap((division) =>
     (division.departments ?? []).map((department) => ({
       value: department.id,
       label: department.name,
@@ -295,6 +301,21 @@ const departmentOptions = computed(() =>
     }))
   )
 );
+
+// กราฟใช้ขอบเขตเดียวต่อครั้งเพื่อไม่ให้เส้นฝ่ายกับเส้นแผนกปนกันจนอ่านผิด
+// ฝ่ายที่เลือกไว้ยังใช้จำกัดรายการแผนกได้ แต่เมื่อเลือกแผนกแล้วกราฟจะเหลือเฉพาะแผนก
+watch(selectedDivisionIds, (next) => {
+  if (!selectedDepartmentIds.value.length) return;
+
+  // ฝ่ายทำหน้าที่จำกัดรายการแผนกที่เลือกได้ ไม่ใช่รายการที่จะวาดพร้อมกัน
+  // เก็บแผนกเดิมไว้ถ้ายังอยู่ในฝ่ายที่เลือก เพื่อให้เลือกหลายแผนกในฝ่ายเดียวกัน
+  // ต่อได้โดยไม่ต้องค้นหาใหม่ทุกครั้ง
+  const allowed = new Set(
+    (next.length ? divisions.value.filter((division) => next.includes(division.id)) : divisions.value)
+      .flatMap((division) => (division.departments ?? []).map((department) => department.id))
+  );
+  selectedDepartmentIds.value = selectedDepartmentIds.value.filter((id) => allowed.has(id));
+}, { deep: true });
 
 function findDivision(id) {
   return divisions.value.find((d) => d.id === id) ?? null;
@@ -312,24 +333,26 @@ function findDepartment(id) {
 const chartEntities = computed(() => {
   const list = [];
 
-  for (const id of selectedDivisionIds.value) {
-    const division = findDivision(id);
-    if (!division) continue;
-    list.push({
-      key: `div-${id}`,
-      label: division.name,
-      devices: (division.departments ?? []).flatMap((dep) => dep.devices ?? []),
-    });
-  }
-
-  for (const id of selectedDepartmentIds.value) {
-    const found = findDepartment(id);
-    if (!found) continue;
-    list.push({
-      key: `dep-${id}`,
-      label: `${found.department.name} (${found.division.name})`,
-      devices: found.department.devices ?? [],
-    });
+  if (selectedDepartmentIds.value.length) {
+    for (const id of selectedDepartmentIds.value) {
+      const found = findDepartment(id);
+      if (!found) continue;
+      list.push({
+        key: `dep-${id}`,
+        label: `${found.department.name} (${found.division.name})`,
+        devices: found.department.devices ?? [],
+      });
+    }
+  } else {
+    for (const id of selectedDivisionIds.value) {
+      const division = findDivision(id);
+      if (!division) continue;
+      list.push({
+        key: `div-${id}`,
+        label: division.name,
+        devices: (division.departments ?? []).flatMap((dep) => dep.devices ?? []),
+      });
+    }
   }
 
   return list;
@@ -522,6 +545,24 @@ function resetUsageFilters() {
   usageFilters.value = { building: "", floor: "", division: "", department: "", brand: "", status: "" };
 }
 
+/** ป้ายของตัวกรองตารางอันดับที่เปิดอยู่ — ตัวกรองอยู่ในแผงพับ ป้ายจึงต้องบอกค่าเองให้อ่านรู้เรื่อง */
+const USAGE_FILTER_LABELS = {
+  building: t("อาคาร"),
+  floor: t("ชั้น"),
+  brand: t("ยี่ห้อ"),
+  division: t("ฝ่าย"),
+  department: t("แผนก"),
+  status: t("สถานะเครื่อง"),
+};
+const usageChips = computed(() =>
+  Object.entries(usageFilters.value)
+    .filter(([, value]) => value)
+    .map(([key, value]) => ({
+      key,
+      label: `${USAGE_FILTER_LABELS[key]}: ${key === "status" ? STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value : value}`,
+    }))
+);
+
 /** เครื่องทั้งหมดเป็นรายการแบนราบ รวมเครื่องที่ยังไม่ได้สังกัดแผนกด้วย */
 const allDevicesFlat = computed(() => {
   const list = divisions.value.flatMap((division) =>
@@ -619,14 +660,19 @@ onMounted(async () => {
 </script>
 
 <template>
-  <!-- แถบเครื่องมือส่งเข้า slot ของ UiExpandable ปุ่มขยายจึงอยู่แถวเดียวกัน (รอบที่ 3 ของ #51) -->
-  <UiExpandable class="flex flex-col gap-4" :title="t(&quot;ตามฝ่าย / แผนก&quot;)">
-    <template #toolbar>
+  <div class="flex flex-col gap-4">
+    <div v-if="comparisonOnly" class="flex flex-wrap items-end gap-2" data-print="hide">
+      <UiField :label="t(&quot;เดือนที่จะเปรียบเทียบ&quot;)" class="w-80">
+        <PeriodPicker v-model="trendMonthSelection" :options="monthsWithData" mode="multi" :all-label="t(&quot;ทุกเดือนที่มีข้อมูล&quot;)" inline />
+      </UiField>
+    </div>
+
+    <div v-else class="flex flex-wrap items-end gap-2" data-print="hide">
       <UiField
         :label="t(&quot;ช่วงที่เทียบแนวโน้ม&quot;)"
-        class="w-56"
+        class="w-80"
       >
-        <PeriodPicker v-model="trendMonthSelection" :options="monthsWithData" :all-label="t(&quot;ไม่เทียบแนวโน้ม&quot;)" />
+        <PeriodPicker v-model="trendMonthSelection" :options="monthsWithData" :all-label="t(&quot;ไม่เทียบแนวโน้ม&quot;)" inline />
       </UiField>
 
       <UiField :label="t(&quot;ค้นหาฝ่าย แผนก หรือเครื่อง&quot;)" class="flex-1 min-w-[14rem] max-w-sm">
@@ -647,27 +693,26 @@ onMounted(async () => {
           Excel
         </UiButton>
       </div>
-    </template>
+    </div>
 
     <!-- ยอดรวมทั้งปีงบ — แถบเดียวแบ่งสามช่อง ไม่ใช่การ์ดสามใบ -->
-    <div v-if="!loadError" class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft">
+    <div v-if="!comparisonOnly && !loadError" class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft">
       <UiStat plain
         :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
         :unit="t(&quot;บาท&quot;)"
-        :hint="t(&quot;ทั้งปีงบ · หัก 20% แล้ว · ไม่ขึ้นกับช่วงที่เลือกเทียบ&quot;)"
+        :hint="t(&quot;หัก 2% แล้ว · ไม่ขึ้นกับช่วงที่เลือกเทียบ&quot;)"
         :loading="loading"
       >
         {{ formatBahtValue(grandTotalCost) }}
       </UiStat>
 
-      <UiStat plain :label="t(&quot;จำนวนหน้าสุทธิรวม&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ทั้งปีงบ&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;จำนวนหน้าสุทธิรวม&quot;)" :unit="t(&quot;หน้า&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 
       <UiStat plain
         :label="t(&quot;แผนกที่มีข้อมูล&quot;)"
         :unit="t(&quot;แผนก&quot;)"
-        :hint="t(&quot;ปีงบ {0}&quot;, [yearLabel(activeFiscalYear?.year)])"
         tone="ink"
         :loading="loading"
       >
@@ -675,7 +720,7 @@ onMounted(async () => {
       </UiStat>
     </div>
 
-    <UiAlert v-if="month && noDataCount > 0" tone="warn"> {{ t("มี") }} {{ formatCount(noDataCount) }} {{ t("จาก") }} {{ formatCount(totalDepartmentCount) }} {{ t("แผนก ที่ยังไม่มีการบันทึกยอดพิมพ์ทั้งในช่วงนี้และช่วงก่อนหน้า จึงเทียบแนวโน้มให้ไม่ได้") }} </UiAlert>
+    <UiAlert v-if="!comparisonOnly && month && noDataCount > 0" tone="warn"> {{ t("มี") }} {{ formatCount(noDataCount) }} {{ t("จาก") }} {{ formatCount(totalDepartmentCount) }} {{ t("แผนก ที่ยังไม่มีการบันทึกยอดพิมพ์ทั้งในช่วงนี้และช่วงก่อนหน้า จึงเทียบแนวโน้มให้ไม่ได้") }} </UiAlert>
 
     <UiAlert v-if="loadError" tone="danger">
       {{ loadError }}
@@ -692,7 +737,7 @@ onMounted(async () => {
     </UiAlert>
 
     <!-- กราฟเปรียบเทียบ -->
-    <UiCard v-if="!loadError" :eyebrow="t(&quot;เปรียบเทียบ&quot;)" :title="t(&quot;แนวโน้มของฝ่าย / แผนกที่เลือก&quot;)">
+    <UiCard v-if="showComparison && !loadError" :title="chartMetric === 'cost' ? t(&quot;ค่าใช้จ่ายของฝ่าย / แผนกที่เลือก&quot;) : t(&quot;ยอดพิมพ์ของฝ่าย / แผนกที่เลือก&quot;)">
       <template #actions>
         <UiSegmented
           v-model="chartMetric"
@@ -727,7 +772,7 @@ onMounted(async () => {
       <UiEmpty
         v-if="!chartEntities.length"
         :title="t(&quot;ยังไม่ได้เลือกอะไรมาเทียบ&quot;)"
-        :description="t(&quot;เลือกฝ่ายหรือแผนกอย่างน้อยหนึ่งรายการด้านบน แต่ละรายการจะกลายเป็นหนึ่งเส้นบนกราฟ&quot;)"
+          :description="t(&quot;เลือกฝ่ายเพื่อดูยอดรวมของฝ่าย หรือเลือกแผนกในฝ่ายนั้นเพื่อดูเฉพาะแผนก แต่ละรายการจะเป็นหนึ่งเส้นบนกราฟ&quot;)"
         compact
       />
 
@@ -780,6 +825,7 @@ onMounted(async () => {
       </template>
     </UiCard>
 
+    <template v-if="!comparisonOnly">
     <!-- ต้นไม้รายละเอียด -->
     <div v-if="loading && !divisions.length" class="flex flex-col gap-2">
       <UiSkeleton v-for="n in 4" :key="n" height="3.5rem" />
@@ -813,7 +859,7 @@ onMounted(async () => {
 
             <span class="min-w-0 flex-1">
               <span class="block font-medium text-ink truncate">{{ division.name }}</span>
-              <span class="block text-2xs text-ink-mute numeral">
+              <span class="block text-xs text-ink-soft numeral">
                 {{ formatCount((division.departments ?? []).length) }} {{ t("แผนก ·") }} {{ formatCount(division.total_pages) }} {{ t("หน้า") }} </span>
             </span>
 
@@ -850,7 +896,7 @@ onMounted(async () => {
               <span class="min-w-0 flex-1">
                 <span class="flex flex-wrap items-center gap-2">
                   <span class="text-sm text-ink-soft">{{ department.name }}</span>
-                  <span class="text-2xs text-ink-mute numeral">
+                  <span class="text-xs text-ink-soft numeral">
                     {{ formatCount((department.devices ?? []).length) }} {{ t("เครื่อง") }} </span>
 
                   <UiBadge
@@ -865,7 +911,7 @@ onMounted(async () => {
 
                 <span
                   v-if="month && trendDetail(department)"
-                  class="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-2xs text-ink-mute numeral"
+                  class="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-xs text-ink-soft numeral"
                 >
                   <span> {{ t("ช่วงนี้") }} {{ formatCount(trendDetail(department).currentPages) }} {{ t("หน้า (") }} {{ formatBahtValue(trendDetail(department).currentCost) }} {{ t("บาท)") }} </span>
                   <span> {{ t("ช่วงก่อน") }} {{ formatCount(trendDetail(department).previousPages) }} {{ t("หน้า (") }} {{ formatBahtValue(trendDetail(department).previousCost) }} {{ t("บาท)") }} </span>
@@ -914,7 +960,7 @@ onMounted(async () => {
                       {{ device.brand_name || "—" }} {{ device.model || "" }}
                       <span class="block text-xs text-ink-mute">{{ deviceLocationLabel(device.locations) }}</span>
                     </span>
-                    <span class="text-2xs text-ink-mute font-mono">{{ device.serial_number }}</span>
+                    <span class="text-xs text-ink-soft font-mono">{{ device.serial_number }}</span>
 
                     <UiBadge
                       v-if="device.moved_during_period"
@@ -966,7 +1012,6 @@ onMounted(async () => {
     <!-- อันดับการใช้งานรายเครื่อง -->
     <UiCard
       v-if="!loadError"
-      :eyebrow="t(&quot;อันดับรายเครื่อง&quot;)"
       :title="t(&quot;เครื่องที่ใช้งานหนักที่สุด&quot;)"
       :description="t(&quot;ยอดพิมพ์และค่าใช้จ่ายสุทธิของแต่ละเครื่อง รวมทั้งปีงบที่เลือกไว้ด้านบน&quot;)"
     >
@@ -982,7 +1027,9 @@ onMounted(async () => {
         />
       </template>
 
-      <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 pb-4 mb-4 border-b border-line-soft">
+      <!-- ตัวกรองหกช่องของตารางนี้อยู่ในแผงพับ (รอบที่ 3 ของ #51) — เดิมกางค้างเหนือตาราง ป้ายตัวกรอง
+           จึงเป็นทางที่เห็นว่ากำลังกรองอะไรอยู่ แบบเดียวกับหน้าทะเบียน -->
+      <UiFilterBar :chips="usageChips" @remove="(key) => (usageFilters[key] = '')" @clear="resetUsageFilters">
         <UiField :label="t(&quot;อาคาร&quot;)">
           <UiCombobox v-model="usageFilters.building" :options="usageBuildingOptions" :placeholder="t(&quot;ทุกอาคาร&quot;)" :any-label="t(&quot;ทุกอาคาร&quot;)" />
         </UiField>
@@ -1007,15 +1054,13 @@ onMounted(async () => {
           <UiSelect v-model="usageFilters.status" :options="STATUS_OPTIONS" value-key="value" label-key="label" />
         </UiField>
 
-        <div class="col-span-full flex justify-end">
-          <UiButton size="sm" variant="ghost" :disabled="!hasUsageFilter" @click="resetUsageFilters"> {{ t("ล้างตัวกรองของตารางนี้") }} </UiButton>
-        </div>
-      </div>
+      </UiFilterBar>
 
       <UiDataTable
         :rows="deviceUsageRows"
         :columns="usageColumns"
         :loading="loading"
+        :caption="t(&quot;อันดับรายเครื่อง&quot;)"
         row-key="reportKey"
         export-filename="device-usage-ranking"
         :export-context="reportContext({ filters: usageFilters })"
@@ -1029,7 +1074,7 @@ onMounted(async () => {
 
         <template #cell-serial_number="{ row }">
           <span class="font-mono text-sm text-ink">{{ row.serial_number || "—" }}</span>
-          <span class="block text-2xs text-ink-mute">{{ row.brand_name }} {{ row.model }}</span>
+          <span class="block text-xs text-ink-soft">{{ row.brand_name }} {{ row.model }}</span>
         </template>
 
         <template #cell-total_pages="{ row }">
@@ -1041,5 +1086,6 @@ onMounted(async () => {
         </template>
       </UiDataTable>
     </UiCard>
-  </UiExpandable>
+    </template>
+  </div>
 </template>

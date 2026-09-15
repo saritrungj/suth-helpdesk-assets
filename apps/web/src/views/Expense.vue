@@ -11,7 +11,7 @@ import { t } from "../lib/locale";
  * ใช้ตอนตรวจใบแจ้งหนี้จากผู้ให้เช่า: กางจากสัญญา -> เครื่องในสัญญา -> ยอดรายเดือน
  * ของเครื่องนั้น จนถึงตัวเลขที่เอาไปเทียบกับเอกสารได้ตรงบรรทัด
  *
- * ทุกยอดในหน้านี้เป็น "ยอดสุทธิหลังหัก 20%" ตามเงื่อนไขสัญญา และเขียนกำกับไว้
+ * ทุกยอดในหน้านี้เป็น "ยอดสุทธิหลังหัก 2%" ตามกฎธุรกิจที่ยืนยันแล้ว และเขียนกำกับไว้
  * ทุกที่ที่แสดง เพราะเป็นตัวเลขที่ถูกส่งต่อไปยังงานการเงิน การไม่บอกว่าหักแล้ว
  * ทำให้มีโอกาสถูกหักซ้ำอีกรอบ
  *
@@ -31,7 +31,6 @@ import {
   UiAlert,
   UiBadge,
   UiButton,
-  UiExpandable,
   UiCard,
   UiEmpty,
   UiField,
@@ -54,6 +53,17 @@ let loadedContext = "";
 const contracts = ref([]);
 const unassignedDevices = ref([]);
 const showUnassigned = ref(false);
+
+/*
+ * เครื่องที่พิมพ์ในปีงบนี้แต่สัญญาอยู่คนละปีงบ
+ *
+ * ยอดรวมของหน้านี้คิดจาก "สัญญาที่ขึ้นทะเบียนกับปีงบนี้" ส่วนแท็บตามฝ่าย/แผนก
+ * และแดชบอร์ดคิดจาก "เดือนของยอดพิมพ์" เครื่องที่ยังผูกสัญญาปีก่อนแต่ยังพิมพ์อยู่
+ * จึงตกจากยอดหน้านี้ไปทั้งก้อน ทั้งที่มีค่าใช้จ่ายจริง — ต้องเห็น ไม่ใช่ซ่อนไว้
+ */
+const outsideYearDevices = ref([]);
+const outsideYearTotal = ref(0);
+const showOutsideYear = ref(false);
 
 const monthsWithData = ref([]);
 const monthSelection = ref([]);
@@ -114,6 +124,21 @@ const totalDevices = computed(() =>
 
 function devicePages(device) {
   return (device.monthly ?? []).reduce((sum, m) => sum + Number(m.pages || 0), 0);
+}
+
+function contractPriceGroups(contract) {
+  const groups = new Map();
+  for (const device of contract.devices ?? []) {
+    const source = device.price_source === "device_override" ? "device_override" : "contract";
+    const price = device.effective_price ?? (source === "contract" ? contract.price_per_page : null);
+    const key = `${source}|${price ?? "unknown"}`;
+    if (!groups.has(key)) groups.set(key, { source, price, count: 0 });
+    groups.get(key).count += 1;
+  }
+  return [...groups.values()].sort((a, b) => {
+    if (a.source !== b.source) return a.source === "contract" ? -1 : 1;
+    return Number(a.price ?? Infinity) - Number(b.price ?? Infinity);
+  });
 }
 
 function toggleContract(id) {
@@ -188,12 +213,16 @@ async function loadExpense() {
 
     if (request !== requestId) return;
     contracts.value = res.data.contracts ?? [];
+    outsideYearDevices.value = res.data.outside_year_devices ?? [];
+    outsideYearTotal.value = Number(res.data.outside_year_total ?? 0);
     loadedContext = context;
   } catch (err) {
     if (request !== requestId) return;
     console.error("Load expense error:", err);
     loadError.value = t("โหลดข้อมูลค่าใช้จ่ายไม่สำเร็จ");
     contracts.value = [];
+    outsideYearDevices.value = [];
+    outsideYearTotal.value = 0;
   } finally {
     if (request === requestId) { loading.value = false; loaded = true; }
   }
@@ -206,18 +235,22 @@ async function loadExpense() {
 async function exportExcel() {
   const header = [
     t("เลขที่สัญญา"),
-    t("ราคาต่อแผ่น (บาท)"),
+    t("ราคาสัญญาต่อแผ่น (บาท)"),
+    t("ราคาที่ใช้จริง (บาท/แผ่น)"),
+    t("แหล่งราคา"),
     "Serial",
     t("ยี่ห้อ"),
     t("รุ่น"),
     t("จำนวนหน้ารวม"),
-    t("ค่าใช้จ่ายสุทธิ (หัก 20%)"),
+    t("ค่าใช้จ่ายสุทธิ (หัก 2%)"),
   ];
 
   const rows = filteredContracts.value.flatMap((contract) =>
     (contract.devices ?? []).map((device) => [
       contract.contract_no,
       Number(contract.price_per_page || 0),
+      Number(device.effective_price || 0),
+      device.price_source === "device_override" ? t("ราคาพิเศษของเครื่อง") : t("ราคาตามสัญญา"),
       device.serial_number || "",
       device.brand_name || "",
       device.model || "",
@@ -233,7 +266,7 @@ async function exportExcel() {
     rows,
     sheetName: t("ค่าใช้จ่ายตามสัญญา"),
     filename: `expense-by-contract${suffix}`,
-    columnWidths: [22, 14, 16, 12, 22, 14, 20],
+    columnWidths: [22, 18, 20, 22, 16, 14, 20],
     context: reportContext({ months: monthSelection.value, filters: { search: search.value }, labels: { search: t("ค้นหา") } }),
   });
 }
@@ -256,12 +289,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- ทั้งแท็บอยู่ใน UiExpandable เดียว (รอบที่ 3 ของ #51) — ขยายแล้วเห็นแถบเครื่องมือ ยอดรวม
-       และรายการครบ เดิมขยายได้แค่รายการสัญญาและปุ่มขยายลอยอยู่แถวของตัวเอง -->
-  <UiExpandable :title="t(&quot;ค่าใช้จ่ายตามสัญญา&quot;)">
-    <template #toolbar>
-      <UiField :label="t(&quot;เดือน&quot;)" class="w-56">
-        <PeriodPicker v-model="monthSelection" :options="monthsWithData" />
+  <div>
+    <div class="flex flex-wrap items-end gap-2 mb-3" data-print="hide">
+      <UiField :label="t(&quot;เดือน&quot;)" class="w-80">
+        <PeriodPicker v-model="monthSelection" :options="monthsWithData" inline />
       </UiField>
 
       <UiField :label="t(&quot;ค้นหาสัญญาหรือเครื่อง&quot;)" class="flex-1 min-w-[14rem] max-w-sm">
@@ -282,14 +313,14 @@ onMounted(() => {
           Excel
         </UiButton>
       </div>
-    </template>
+    </div>
 
     <!-- ยอดรวม — แถบเดียวแบ่งสามช่อง ไม่ใช่การ์ดสามใบ (รอบที่ 3 ของ #51) -->
     <div v-if="!loadError" class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4">
       <UiStat plain
         :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
         :unit="t(&quot;บาท&quot;)"
-        :hint="month ? t(&quot;เฉพาะเดือนที่เลือก · หัก 20% แล้ว&quot;) : t(&quot;ทั้งปีงบ · หัก 20% แล้ว&quot;)"
+        :hint="t(&quot;หัก 2% แล้ว · เฉพาะสัญญาของปีงบนี้&quot;)"
         :loading="loading"
       >
         {{ formatBahtValue(grandTotal) }}
@@ -386,8 +417,19 @@ onMounted(() => {
 
             <span class="min-w-0 flex-1">
               <span class="block font-medium text-ink truncate">{{ contract.contract_no }}</span>
-              <span class="block text-2xs text-ink-mute numeral">
-                {{ formatCount((contract.devices ?? []).length) }} {{ t("เครื่อง ·") }} {{ formatBahtValue(contract.price_per_page) }} {{ t("บาท/แผ่น") }} </span>
+              <span class="block text-xs text-ink-soft numeral">
+                {{ formatCount((contract.devices ?? []).length) }} {{ t("เครื่องทั้งหมด") }}
+              </span>
+              <span
+                v-for="group in contractPriceGroups(contract)"
+                :key="`${group.source}-${group.price}`"
+                class="block text-xs text-ink-mute numeral"
+              >
+                {{ formatCount(group.count) }} {{ t("เครื่อง ·") }}
+                {{ group.source === "device_override" ? t("ราคาพิเศษ") : t("ราคาสัญญา") }}
+                {{ group.price === null || group.price === undefined ? "—" : formatBahtValue(group.price) }}
+                {{ t("บาท/แผ่น") }}
+              </span>
             </span>
 
             <span class="shrink-0 text-right">
@@ -431,9 +473,13 @@ onMounted(() => {
                 <span class="block text-sm text-ink-soft truncate">
                   {{ device.brand_name || "—" }} {{ device.model || "" }}
                 </span>
-                <span class="block text-2xs text-ink-mute font-mono truncate">
+                <span class="block text-xs text-ink-soft font-mono truncate">
                   {{ device.serial_number }}
                 <span class="block text-xs text-ink-mute font-sans">{{ deviceLocationLabel(device.monthly) }}</span>
+                </span>
+                <span class="block text-xs text-ink-mute numeral">
+                  {{ t("ราคาที่ใช้จริง") }} {{ formatBahtValue(device.effective_price) }} {{ t("บาท/แผ่น") }} ·
+                  {{ device.price_source === "device_override" ? t("ราคาพิเศษของเครื่อง") : t("ราคาตามสัญญา") }}
                 </span>
               </span>
 
@@ -441,7 +487,7 @@ onMounted(() => {
                 <span class="block text-sm font-medium text-ink numeral">
                   {{ formatBahtValue(device.total_cost) }}
                 </span>
-                <span class="block text-2xs text-ink-mute numeral">
+                <span class="block text-xs text-ink-soft numeral">
                   {{ formatCount(devicePages(device)) }} {{ t("หน้า") }} </span>
               </span>
             </button>
@@ -476,6 +522,56 @@ onMounted(() => {
         </div>
       </section>
     </div>
+
+    <!-- เครื่องที่สัญญาอยู่คนละปีงบ — ยอดของกลุ่มนี้ไม่อยู่ในยอดรวมด้านบน แต่ไปโผล่
+         ในแท็บตามฝ่าย/แผนกและบนแดชบอร์ด ซึ่งคิดจากเดือนของยอดพิมพ์ ถ้าไม่บอกตรงนี้
+         คนที่เอาสองตัวเลขมาเทียบจะไม่มีทางรู้ว่าทำไมไม่เท่ากัน -->
+    <section v-if="outsideYearDevices.length" class="card overflow-hidden mt-4 border-warn-line">
+      <h2>
+        <button
+          type="button"
+          class="w-full flex items-center gap-3 px-4 py-3.5 text-left bg-warn-soft hover:brightness-[0.98] transition-all"
+          :aria-expanded="showOutsideYear"
+          aria-controls="outside-year-devices"
+          @click="showOutsideYear = !showOutsideYear"
+        >
+          <ChevronRight
+            :size="16"
+            class="shrink-0 text-warn-ink transition-transform duration-200"
+            :class="showOutsideYear && 'rotate-90'"
+            aria-hidden="true"
+          />
+
+          <TriangleAlert :size="16" class="shrink-0 text-warn-ink" aria-hidden="true" />
+
+          <span class="min-w-0 flex-1">
+            <span class="block font-medium text-warn-ink"> {{ t("เครื่องที่พิมพ์ในปีงบนี้ แต่สัญญาอยู่คนละปีงบ") }} </span>
+            <span class="block text-2xs text-warn-ink">
+              {{ t("ค่าใช้จ่าย {0} บาทของกลุ่มนี้ไม่ถูกนับในยอดรวมด้านบน แต่ถูกนับในแท็บตามฝ่าย/แผนกและบนแดชบอร์ด", [formatBahtValue(outsideYearTotal)]) }}
+            </span>
+          </span>
+
+          <UiBadge tone="warn" size="lg">
+            {{ formatCount(outsideYearDevices.length) }} {{ t("เครื่อง") }} </UiBadge>
+        </button>
+      </h2>
+
+      <ul v-if="showOutsideYear" id="outside-year-devices" class="list-none border-t border-warn-line">
+        <li
+          v-for="device in outsideYearDevices"
+          :key="device.id"
+          class="flex items-center justify-between gap-3 px-4 py-2.5 pl-10 border-b border-line-soft last:border-0"
+        >
+          <span class="min-w-0">
+            <span class="block font-mono text-sm text-ink">{{ device.serial_number }}</span>
+            <span class="block text-2xs text-ink-mute">
+              {{ t("สัญญา {0} · ปีงบ {1}", [device.contract_no, device.contract_fiscal_year ?? "—"]) }}
+            </span>
+          </span>
+          <span class="shrink-0 text-sm text-ink numeral">{{ formatBahtValue(device.total_cost) }} {{ t("บาท") }}</span>
+        </li>
+      </ul>
+    </section>
 
     <!-- เครื่องที่ยังไม่ผูกสัญญา — เดิมมองไม่เห็นจากหน้านี้เลย ทั้งที่เป็นสาเหตุ
          อันดับหนึ่งที่ยอดรวมไม่ตรงกับใบแจ้งหนี้ -->
@@ -517,7 +613,7 @@ onMounted(() => {
             <span class="block text-sm text-ink-soft truncate">
               {{ device.brand_name || "—" }} {{ device.model || "" }}
             </span>
-            <span class="block text-2xs text-ink-mute font-mono">{{ device.serial_number }}
+            <span class="block text-xs text-ink-soft font-mono">{{ device.serial_number }}
                 <span class="block text-xs text-ink-mute font-sans">{{ t("ที่ตั้งปัจจุบัน") + ": " + deviceLocationLabel([device]) }}</span></span>
           </span>
 
@@ -526,5 +622,5 @@ onMounted(() => {
         </li>
       </ul>
     </section>
-  </UiExpandable>
+  </div>
 </template>

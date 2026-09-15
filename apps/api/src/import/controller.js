@@ -1,10 +1,11 @@
 const fs = require("fs");
+const crypto = require("crypto");
 const XLSX = require("xlsx");
 const db = require("../shared/db");
 const asyncHandler = require("../shared/async-handler");
 const { badRequest, conflict } = require("../shared/http-error");
 const { recordLocationHistory } = require("../devices/controller");
-const { normalizeMonth } = require("@suth/domain");
+const { MAX_PAGES_PER_MONTH, normalizeMonth } = require("@suth/domain");
 
 // ============================================================
 // ตัวช่วยที่ทั้งสอง handler ใช้ร่วมกัน
@@ -424,8 +425,9 @@ exports.importPrintTransactions = asyncHandler(async (req, res) => {
             deviceMap[String(d.serial_number).trim().toUpperCase()] = d.id;
         });
 
-        const upserts = []; // [device_id, month, pages]
-        const skipped = [];
+        const candidates = []; // { device_id, serial_number, month, pages }
+        const errors = [];
+        const seenKeys = new Set();
 
         for (let r = headerRowIndex + 1; r < raw.length; r++) {
             const row = raw[r];
@@ -436,39 +438,125 @@ exports.importPrintTransactions = asyncHandler(async (req, res) => {
 
             const device_id = deviceMap[sn.toUpperCase()];
             if (!device_id) {
-                skipped.push({ serial_number: sn, reason: `ไม่พบเครื่อง SN "${sn}" ในระบบ` });
+                errors.push({ row: r + 1, serial_number: sn, reason: `ไม่พบเครื่อง SN "${sn}" ในระบบ` });
                 continue;
             }
 
             for (const { idx, month } of meterColumns) {
                 const cellValue = row[idx];
 
-                // ข้ามเซลล์ว่าง/ไม่ใช่ตัวเลข (เดือนที่เครื่องยังไม่ติดตั้ง หรือยังไม่มีการอ่านมิเตอร์)
+                // ช่องว่าง = ไม่เปลี่ยนข้อมูลเดิม ส่วน 0 = ยืนยันว่าเดือนนั้นเป็นศูนย์
                 if (cellValue === "" || cellValue === null || cellValue === undefined) continue;
 
                 const pages = Number(cellValue);
-                if (Number.isNaN(pages) || pages < 0) continue;
+                if (!Number.isFinite(pages) || pages < 0 || !Number.isInteger(pages) || pages > MAX_PAGES_PER_MONTH) {
+                    errors.push({
+                        row: r + 1,
+                        serial_number: sn,
+                        month,
+                        reason: `ยอดพิมพ์ต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง ${MAX_PAGES_PER_MONTH.toLocaleString("th-TH")} (พบ "${cellValue}")`,
+                    });
+                    continue;
+                }
 
-                upserts.push([device_id, month, pages]);
+                const key = `${device_id}|${month}`;
+                if (seenKeys.has(key)) {
+                    errors.push({
+                        row: r + 1,
+                        serial_number: sn,
+                        month,
+                        reason: "Serial และเดือนนี้ซ้ำกันในไฟล์",
+                    });
+                    continue;
+                }
+                seenKeys.add(key);
+                candidates.push({ device_id, serial_number: sn, month, pages });
             }
         }
 
-        if (upserts.length > 0) {
-            await db.query(
+        const existingMap = new Map();
+        if (candidates.length) {
+            const deviceIds = [...new Set(candidates.map((row) => row.device_id))];
+            const months = [...new Set(candidates.map((row) => row.month))];
+            const [existing] = await db.query(
+                "SELECT device_id, month, pages FROM print_transactions WHERE device_id IN (?) AND month IN (?)",
+                [deviceIds, months]
+            );
+            for (const row of existing) {
+                existingMap.set(`${row.device_id}|${row.month}`, Number(row.pages));
+            }
+        }
+
+        const newRows = [];
+        const overwriteRows = [];
+        const unchangedRows = [];
+        for (const row of candidates) {
+            const key = `${row.device_id}|${row.month}`;
+            if (!existingMap.has(key)) newRows.push(row);
+            else if (existingMap.get(key) === row.pages) unchangedRows.push(row);
+            else overwriteRows.push({ ...row, previous_pages: existingMap.get(key) });
+        }
+
+        const fileDigest = crypto.createHash("sha256").update(fs.readFileSync(req.file.path)).digest("hex");
+        // ผูก token กับทั้งไฟล์และค่าเดิมที่ผู้ใช้เห็นในหน้าตรวจ หากมีคนแก้ยอด
+        // ระหว่างเปิด preview กับกดยืนยัน token จะไม่ตรงและระบบจะให้ตรวจใหม่
+        // แทนการเขียนทับค่าที่ผู้ใช้ไม่เคยเห็น
+        const previewToken = crypto
+            .createHash("sha256")
+            .update(fileDigest)
+            .update(JSON.stringify(candidates.map((row) => ({
+                device_id: row.device_id,
+                month: row.month,
+                pages: row.pages,
+                previous_pages: existingMap.has(`${row.device_id}|${row.month}`)
+                    ? existingMap.get(`${row.device_id}|${row.month}`)
+                    : null,
+            }))))
+            .digest("hex");
+        const mode = String(req.body?.mode || "preview");
+
+        if (mode === "preview") {
+            return res.json({
+                valid: errors.length === 0,
+                preview_token: errors.length ? null : previewToken,
+                months_found: [...new Set(meterColumns.map((m) => m.month))].sort(),
+                new_rows: newRows,
+                overwrite_rows: overwriteRows,
+                unchanged_rows: unchangedRows,
+                errors,
+            });
+        }
+
+        if (mode !== "commit") {
+            throw badRequest("โหมดการนำเข้าไม่ถูกต้อง", { code: "invalid_import_mode" });
+        }
+        if (errors.length) {
+            throw badRequest("ไฟล์ยังมีข้อมูลที่ต้องแก้ จึงยังบันทึกไม่ได้", {
+                code: "import_validation_failed",
+                errors,
+            });
+        }
+        if (!req.body?.preview_token || req.body.preview_token !== previewToken) {
+            throw badRequest("กรุณาตรวจไฟล์ล่าสุดก่อนยืนยันบันทึก", { code: "preview_required" });
+        }
+
+        const rowsToWrite = [...newRows, ...overwriteRows];
+        if (rowsToWrite.length > 0) {
+            await db.withTransaction((conn) => conn.query(
                 `
                 INSERT INTO print_transactions (device_id, month, pages)
                 VALUES ?
                 ON DUPLICATE KEY UPDATE pages = VALUES(pages)
                 `,
-                [upserts]
-            );
+                [rowsToWrite.map((row) => [row.device_id, row.month, row.pages])]
+            ));
         }
 
-        res.json({
+        return res.json({
             message: "Import ยอดพิมพ์รายเดือนสำเร็จ",
             months_found: [...new Set(meterColumns.map((m) => m.month))].sort(),
-            rows_upserted: upserts.length,
-            skipped,
+            rows_upserted: rowsToWrite.length,
+            unchanged: unchangedRows.length,
         });
 
     } catch (err) {

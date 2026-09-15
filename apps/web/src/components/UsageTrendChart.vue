@@ -17,27 +17,27 @@ import { formatMonth } from "../lib/locale-format";
  * "เดือนนั้นไม่ได้พิมพ์เลย" ซึ่งคนละเรื่องกับ "ยังไม่ได้บันทึกยอดของเดือนนั้น"
  */
 import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 
 import { useMonthlyKpi } from "../api/queries";
 import { formatBahtValue, formatCompact, formatCount } from "../lib/format";
 import { UiAlert, UiButton, UiChart, UiEmpty, UiSkeleton } from "../ui";
 
 const props = defineProps({
-  filter: { type: Object, default: () => ({ building_name: "", month: "" }) },
+  filter: { type: Object, default: () => ({ contract_id: "", month: "" }) },
   /** "pages" = จำนวนหน้า | "cost" = ค่าใช้จ่าย */
   metric: { type: String, default: "pages" },
   height: { type: String, default: "18rem" },
 });
 
-const emit = defineEmits(["select-month"]);
 const isCost = computed(() => props.metric === "cost");
+const selectedIndex = ref(-1);
 
 // พารามิเตอร์เป็น computed จึงกลายเป็นส่วนหนึ่งของ cache key — เปลี่ยนตัวกรองแล้ว
 // ดึงชุดใหม่เอง และถ้าเคยดึงชุดนี้ไปแล้วก็ได้ของจาก cache ทันทีโดยไม่ยิงซ้ำ
 const params = computed(() => ({
-  building_name: props.filter.building_name || undefined,
-  month: activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value).join(",") : undefined,
+  contract_id: props.filter.contract_id || undefined,
+  month: props.filter.month || (activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value).join(",") : undefined),
 }));
 
 const { data, isPending, isFetching, isError, refetch } = useMonthlyKpi(params);
@@ -52,12 +52,33 @@ const series = computed(() => {
     byMonth.set(row.month, current);
   }
 
-  const months = activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value) : [...byMonth.keys()].sort();
+  const requestedMonths = String(props.filter.month || "").split(",").filter(Boolean);
+  const months = requestedMonths.length
+    ? requestedMonths
+    : activeFiscalYearRange.value
+      ? fiscalYearMonths(activeFiscalYearRange.value)
+      : [...byMonth.keys()].sort();
   return {
     months,
     labels: months.map((m) => formatMonth(m)),
     values: months.map((m) => byMonth.get(m)?.[isCost.value ? "cost" : "pages"] ?? null),
   };
+});
+
+const selectedPoint = computed(() => {
+  if (selectedIndex.value < 0) return null;
+  const month = series.value.months[selectedIndex.value];
+  const value = series.value.values[selectedIndex.value];
+  if (!month || value === null || value === undefined) return null;
+  return { month, value };
+});
+
+function selectPoint({ index }) {
+  selectedIndex.value = selectedIndex.value === index ? -1 : index;
+}
+
+watch(() => [props.filter.contract_id, props.filter.month, props.metric], () => {
+  selectedIndex.value = -1;
 });
 </script>
 
@@ -93,9 +114,21 @@ const series = computed(() => {
     :unit="isCost ? t(&quot;บาท&quot;) : t(&quot;หน้า&quot;)"
     :format-value="isCost ? formatBahtValue : formatCount"
     :format-axis="formatCompact"
-    :selected-index="series.months.indexOf(filter.month)"
+    :selected-index="selectedIndex"
     selectable
-    @select="emit('select-month', series.months[$event.index])"
+    @select="selectPoint"
     :category-label="t(&quot;เดือน&quot;)"
   />
+
+  <div
+    v-if="selectedPoint"
+    role="status"
+    class="mt-3 flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-brand-line bg-brand-soft px-3 py-2"
+  >
+    <span class="text-sm font-medium text-brand-ink">{{ formatMonth(selectedPoint.month, { long: true }) }}</span>
+    <span class="numeral text-sm font-semibold text-ink">
+      {{ isCost ? formatBahtValue(selectedPoint.value) : formatCount(selectedPoint.value) }}
+      {{ isCost ? t("บาท") : t("หน้า") }}
+    </span>
+  </div>
 </template>

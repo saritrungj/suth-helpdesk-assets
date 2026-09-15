@@ -5,7 +5,6 @@ import {
   CalendarRange,
   ChartColumnBig,
   CirclePlus,
-  FileSpreadsheet,
   FolderTree,
   Gauge,
   Layers,
@@ -76,7 +75,7 @@ export const NAV_GROUPS = [
       },
       {
         to: "/assets",
-        label: t("ทะเบียนทรัพย์สิน"),
+        label: t("ทะเบียนเครื่องพิมพ์"),
         icon: Boxes,
         keywords: t("asset device เครื่อง ทะเบียน ครุภัณฑ์ printer เพิ่ม นำเข้า"),
       },
@@ -94,7 +93,7 @@ export const NAV_GROUPS = [
       },
       {
         to: "/compare",
-        label: t("เปรียบเทียบรายเดือน"),
+        label: t("เปรียบเทียบ"),
         icon: ChartColumnBig,
         keywords: t("compare เทียบ เดือน month"),
       },
@@ -214,9 +213,6 @@ export const ALL_NAV_ITEMS = [
   })),
 ];
 
-/** ไอคอนของหน้านำเข้าไฟล์ ใช้ในปุ่มลัดของแดชบอร์ด */
-export const IMPORT_ICON = FileSpreadsheet;
-
 function pathOf(to) {
   return typeof to === "string" ? to : to.path;
 }
@@ -275,7 +271,7 @@ export function findActiveGroup(route) {
  * รายการเมนูนี้ควรถูกไฮไลต์อยู่หรือไม่ — ใช้กับแถบเมนูด้านข้าง
  *
  * ต่างจาก `matchesRoute` ตรงที่นับ "หน้าลูก" ด้วย: ตอนเปิด /assets/17 รายการ
- * "ทะเบียนทรัพย์สิน" ต้องยังสว่างอยู่ ไม่งั้นแถบเมนูจะดับทั้งแถบแล้วผู้ใช้ไม่รู้
+ * "ทะเบียนเครื่องพิมพ์" ต้องยังสว่างอยู่ ไม่งั้นแถบเมนูจะดับทั้งแถบแล้วผู้ใช้ไม่รู้
  * ว่าตัวเองอยู่ส่วนไหนของระบบ
  */
 export function isActiveNav(item, route) {

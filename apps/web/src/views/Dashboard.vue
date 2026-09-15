@@ -19,7 +19,7 @@ import { t } from "../lib/locale";
  * ไม่มีอะไรค้าง เขาปิดหน้าไปทำงานอื่น ถ้ามี เขาต้องรู้ทันทีว่าคืออะไรและกดตรงไหน
  * แดชบอร์ดเดิมตอบได้แค่ "ตัวเลขตอนนี้เป็นเท่าไหร่" ซึ่งเป็นคำถามอันดับสอง
  *
- * ตัวเลขค่าใช้จ่ายบนหน้านี้เป็น "ค่าใช้จ่ายสุทธิ" ที่หัก 20% แล้วตามเงื่อนไขสัญญา
+ * ตัวเลขค่าใช้จ่ายบนหน้านี้เป็น "ค่าใช้จ่ายสุทธิ" ที่หัก 2% แล้วตามกฎธุรกิจที่ยืนยัน
  * และเขียนกำกับไว้ทุกจุดที่แสดง เพราะเลขนี้ถูกเอาไปเทียบกับใบแจ้งหนี้จริง
  * ถ้าไม่บอกว่าหักแล้วจะกลายเป็นการรายงานผิด
  */
@@ -39,7 +39,7 @@ import { errorMessage } from "../lib/api-error";
 import { useOverview } from "../api/queries";
 import { activeFiscalYear, activeFiscalYearRange } from "../store/fiscalYear";
 import { formatBahtValue, formatCount, percentOf } from "../lib/format";
-import BuildingBreakdownChart from "../components/BuildingBreakdownChart.vue";
+import { exportSheet } from "../lib/export-xlsx";
 import AttentionPanel from "../components/AttentionPanel.vue";
 import DashboardHero from "../components/DashboardHero.vue";
 import DashboardFilter from "../components/DashboardFilter.vue";
@@ -49,9 +49,9 @@ import {
   UiBadge,
   UiButton,
   UiCard,
+  UiDrawer,
   UiEmpty,
   UiMeter,
-  UiSegmented,
   UiSkeleton,
   UiStat,
 } from "../ui";
@@ -59,8 +59,7 @@ import {
 /* --------------------------------------------------------------------------
    สถานะ
    -------------------------------------------------------------------------- */
-const dashboardFilter = ref(null);
-const filter = ref({ building_name: "", month: "" });
+const filter = ref({ contract_id: "", month: "" });
 
 const highlightsLoading = ref(true);
 const highlightsError = ref("");
@@ -68,19 +67,16 @@ const highlights = ref({ device_status: [], top_departments: [], top_devices: []
 
 const departmentOrder = ref("desc");
 const deviceOrder = ref("desc");
-const chartMetric = ref("pages");
+const detailOpen = ref(false);
+const detailLoading = ref(false);
+const detailError = ref("");
+const detailKind = ref("device");
+const detailRows = ref([]);
 
 const ORDER_OPTIONS = [
   { value: "desc", label: t("มากสุด") },
   { value: "asc", label: t("น้อยสุด") },
 ];
-
-/** สถานะของเครื่อง — ป้ายภาษาไทยและโทนสี กำหนดรวมไว้ที่เดียวเพื่อให้ทุกหน้าตรงกัน */
-const STATUS_META = {
-  active: { label: t("ใช้งานอยู่"), tone: "ok", bar: "bg-ok" },
-  repair: { label: t("ซ่อมบำรุง"), tone: "warn", bar: "bg-warn" },
-  retired: { label: t("ปลดระวาง"), tone: "neutral", bar: "bg-ink-faint" },
-};
 
 /* --------------------------------------------------------------------------
    ค่าที่คำนวณจากข้อมูลที่โหลดมาแล้ว — ไม่ยิง API เพิ่ม
@@ -117,7 +113,7 @@ const loading = computed(() => overviewLoading.value || highlightsLoading.value)
  */
 const overviewParams = computed(() => ({
   fiscal_year_id: activeFiscalYear.value?.id || undefined,
-  building_name: filter.value.building_name || undefined,
+  contract_id: filter.value.contract_id || undefined,
   month: filter.value.month || undefined,
 }));
 
@@ -189,7 +185,7 @@ const trend = computed(() => {
    -------------------------------------------------------------------------- */
 function params(extra = {}) {
   return {
-    building_name: filter.value.building_name || undefined,
+    contract_id: filter.value.contract_id || undefined,
     month: filter.value.month || undefined,
     ...extra,
   };
@@ -225,9 +221,75 @@ function reload() {
 
 /** ตัวกรองเปลี่ยนจริงเท่านั้นถึงยิงใหม่ — component ลูก emit ตอน mount ด้วย */
 function onFilter(next) {
-  if (filter.value.building_name === next.building_name && filter.value.month === next.month) return;
+  if (filter.value.contract_id === next.contract_id && filter.value.month === next.month) return;
   filter.value = { ...next };
   reload();
+}
+
+async function openDetails(kind) {
+  detailKind.value = kind;
+  detailOpen.value = true;
+  detailLoading.value = true;
+  detailError.value = "";
+  detailRows.value = [];
+
+  try {
+    const response = await api.get("/dashboard/monthly-kpi", { params: params() });
+    const groups = new Map();
+
+    for (const row of response.data ?? []) {
+      const key = kind === "device" ? row.device_id : (row.contract_id ?? "unassigned");
+      if (!groups.has(key)) {
+        groups.set(key, kind === "device"
+          ? {
+              key,
+              serial_number: row.serial_number,
+              model: row.model || "—",
+              department_name: row.department_name || t("ไม่ระบุแผนก"),
+              total_pages: 0,
+              total_cost: 0,
+            }
+          : {
+              key,
+              contract_no: row.contract_no || t("ยังไม่ผูกสัญญา"),
+              device_ids: new Set(),
+              total_pages: 0,
+              total_cost: 0,
+            });
+      }
+      const target = groups.get(key);
+      target.total_pages += Number(row.net_pages || 0);
+      target.total_cost += Number(row.total_cost || 0);
+      if (kind === "contract") target.device_ids.add(row.device_id);
+    }
+
+    detailRows.value = [...groups.values()]
+      .map((row) => kind === "contract" ? { ...row, device_count: row.device_ids.size } : row)
+      .sort((a, b) => b.total_pages - a.total_pages);
+  } catch (err) {
+    detailError.value = errorMessage(err, t("โหลดรายละเอียดไม่สำเร็จ"));
+  } finally {
+    detailLoading.value = false;
+  }
+}
+
+async function exportDetails() {
+  const isDevice = detailKind.value === "device";
+  await exportSheet({
+    header: isDevice
+      ? ["Serial", t("รุ่น"), t("แผนก"), t("ยอดพิมพ์สุทธิ"), t("ค่าใช้จ่ายสุทธิ (บาท)")]
+      : [t("สัญญา"), t("จำนวนเครื่อง"), t("ยอดพิมพ์สุทธิ"), t("ค่าใช้จ่ายสุทธิ (บาท)")],
+    rows: detailRows.value.map((row) => isDevice
+      ? [row.serial_number, row.model, row.department_name, row.total_pages, row.total_cost]
+      : [row.contract_no, row.device_count, row.total_pages, row.total_cost]),
+    sheetName: isDevice ? t("รายเครื่อง") : t("ตามสัญญา"),
+    filename: isDevice ? "dashboard-filtered-devices" : "dashboard-filtered-contracts",
+    context: [
+      [t("ปีงบ"), yearLabel(activeFiscalYear.value?.year)],
+      [t("เดือน"), filter.value.month || t("ดูทั้งปีงบ")],
+      [t("สัญญา"), filter.value.contract_id || t("ทุกสัญญา")],
+    ],
+  });
 }
 
 onMounted(loadHighlights);
@@ -251,7 +313,7 @@ onMounted(loadHighlights);
     <!-- ปุ่มรีเฟรชอยู่ติดแถบตัวกรอง เพราะสิ่งที่มันโหลดใหม่คือข้อมูล "ของตัวกรอง
          ชุดที่ตั้งอยู่ตอนนี้" ไม่ใช่ทั้งหน้าแบบไม่มีเงื่อนไข -->
     <div class="flex items-start gap-3 mb-5">
-      <DashboardFilter ref="dashboardFilter" v-model:metric="chartMetric" class="flex-1 min-w-0" @filter="onFilter" />
+      <DashboardFilter class="flex-1 min-w-0" @filter="onFilter" />
 
       <UiButton
         variant="secondary"
@@ -277,7 +339,7 @@ onMounted(loadHighlights);
       <UiStat
         :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
         :unit="t(&quot;บาท&quot;)"
-        :hint="t(&quot;ทุกสัญญา หลังหักส่วนลด 20%&quot;)"
+        :hint="t(&quot;ทุกสัญญา หลังหัก 2%&quot;)"
         tone="ink"
         :loading="overviewLoading"
         :trend="trend.cost"
@@ -330,79 +392,33 @@ onMounted(loadHighlights);
       </UiStat>
     </div>
 
-    <!-- แนวโน้มรายเดือน + สถานะเครื่อง -->
+    <p
+      v-if="!highlightsLoading && totalDeviceStatus"
+      class="mb-4 text-xs text-ink-mute"
+    >
+      {{ t("ยังไม่ตรวจยืนยันสถานะการติดตั้งของเครื่องเดิม {0} เครื่อง ความครบถ้วนด้านบนจึงยังยืนยันไม่ได้", [formatCount(totalDeviceStatus)]) }}
+      <RouterLink to="/assets" class="text-brand-ink hover:underline">{{ t("เปิดทะเบียนทรัพย์สิน") }}</RouterLink>
+    </p>
+
+    <!-- ยอดพิมพ์และค่าใช้จ่ายใช้ช่วงและสัญญาเดียวกัน วางคู่กันเพื่อเทียบได้ทันที -->
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
       <UiCard
-        :eyebrow="t(&quot;แนวโน้มตลอดปีงบ&quot;)"
-        :title="chartMetric === 'cost' ? t(&quot;ค่าใช้จ่ายรายเดือน&quot;) : t(&quot;ยอดพิมพ์รายเดือน&quot;)"
+        :eyebrow="t(&quot;ยอดพิมพ์ตามช่วงที่เลือก&quot;)"
+        :title="t(&quot;ยอดพิมพ์รายเดือน&quot;)"
       >
-        <UsageTrendChart :filter="filter" :metric="chartMetric" height="19rem" @select-month="dashboardFilter?.selectMonth($event)" />
+        <UsageTrendChart :filter="filter" metric="pages" height="19rem" />
       </UiCard>
 
       <UiCard
-        :eyebrow="t(&quot;เปรียบเทียบรายอาคาร&quot;)"
-        :title="chartMetric === 'cost' ? t(&quot;ค่าใช้จ่ายสุทธิรายอาคาร&quot;) : t(&quot;ยอดพิมพ์รายอาคาร&quot;)"
+        :eyebrow="t(&quot;ค่าใช้จ่ายตามช่วงที่เลือก&quot;)"
+        :title="t(&quot;ค่าใช้จ่ายสุทธิรายเดือน&quot;)"
       >
-        <BuildingBreakdownChart :filter="filter" :metric="chartMetric" height="19rem" />
+        <UsageTrendChart :filter="filter" metric="cost" height="19rem" />
       </UiCard>
     </div>
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
-      <UiCard :eyebrow="t(&quot;ทะเบียนอุปกรณ์&quot;)" :title="t(&quot;สถานะเครื่องพิมพ์&quot;)">
-        <div v-if="highlightsLoading" class="flex flex-col gap-3">
-          <UiSkeleton height="0.75rem" />
-          <UiSkeleton v-for="n in 3" :key="n" height="2.5rem" />
-        </div>
-
-        <div v-else-if="!totalDeviceStatus">
-          <UiEmpty :title="t(&quot;ยังไม่มีเครื่องในทะเบียน&quot;)" compact />
-        </div>
-
-        <div v-else class="flex flex-col gap-4">
-          <!-- แถบสัดส่วนรวม — เห็นภาพรวมทั้งกองในบรรทัดเดียวก่อนอ่านรายตัว -->
-          <div class="flex h-2.5 gap-0.5 rounded-full overflow-hidden bg-surface-3" aria-hidden="true">
-            <div
-              v-for="status in highlights.device_status"
-              :key="status.status"
-              class="h-full transition-[width] duration-500 ease-out-quart"
-              :class="STATUS_META[status.status]?.bar ?? 'bg-ink-faint'"
-              :style="{ width: `${percentOf(status.count, totalDeviceStatus)}%` }"
-            ></div>
-          </div>
-
-          <ul class="flex flex-col gap-3 list-none">
-            <li
-              v-for="status in highlights.device_status"
-              :key="status.status"
-              class="flex items-center justify-between gap-3"
-            >
-              <span class="flex items-center gap-2 min-w-0">
-                <span
-                  class="w-2.5 h-2.5 rounded-full shrink-0"
-                  :class="STATUS_META[status.status]?.bar ?? 'bg-ink-faint'"
-                  aria-hidden="true"
-                ></span>
-                <span class="text-sm text-ink-soft truncate">
-                  {{ STATUS_META[status.status]?.label ?? status.status }}
-                </span>
-              </span>
-
-              <span class="flex items-baseline gap-1.5 shrink-0">
-                <span class="text-md font-semibold text-ink numeral">
-                  {{ formatCount(status.count) }}
-                </span>
-                <span class="text-2xs text-ink-mute numeral">
-                  {{ percentOf(status.count, totalDeviceStatus).toFixed(0) }}%
-                </span>
-              </span>
-            </li>
-          </ul>
-
-          <UiButton to="/assets" variant="secondary" size="sm" block> {{ t("เปิดทะเบียนทรัพย์สิน") }} <template #trailing><ArrowUpRight :size="14" /></template>
-          </UiButton>
-        </div>
-      </UiCard>
+    <div class="grid grid-cols-1 gap-4 mb-4">
       <UiCard
-        :eyebrow="t(&quot;ค่าใช้จ่ายสุทธิ (หัก 20%)&quot;)"
+        :eyebrow="t(&quot;ค่าใช้จ่ายสุทธิ (หัก 2%)&quot;)"
         :title="departmentOrder === 'desc' ? t(&quot;แผนกที่ใช้งบสูงสุด&quot;) : t(&quot;แผนกที่ใช้งบน้อยสุด&quot;)"
       >
         <template #actions>
@@ -477,13 +493,6 @@ onMounted(loadHighlights);
       </template>
     </UiAlert>
 
-    <!-- อันดับแผนก + รายอาคาร -->
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
-
-
-
-    </div>
-
     <!-- เครื่องที่ใช้งานหนัก + สัญญา -->
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <UiCard
@@ -550,6 +559,10 @@ onMounted(loadHighlights);
             </div>
           </li>
         </ol>
+
+        <template #footer>
+          <UiButton variant="ghost" size="sm" @click="openDetails('device')">{{ t("ดูรายละเอียดรายเครื่อง") }} <template #trailing><ArrowUpRight :size="14" /></template></UiButton>
+        </template>
       </UiCard>
 
       <UiCard :eyebrow="t(&quot;สัญญาเช่า&quot;)" :title="t(&quot;ค่าใช้จ่ายแยกตามสัญญา&quot;)">
@@ -598,10 +611,33 @@ onMounted(loadHighlights);
         </ul>
 
         <template #footer>
-          <UiButton to="/expense" variant="ghost" size="sm"> {{ t("ดูรายละเอียดค่าใช้จ่าย") }} <template #trailing><ArrowUpRight :size="14" /></template>
+          <UiButton variant="ghost" size="sm" @click="openDetails('contract')"> {{ t("ดูรายละเอียดทุกสัญญา") }} <template #trailing><ArrowUpRight :size="14" /></template>
           </UiButton>
         </template>
       </UiCard>
     </div>
+
+    <UiDrawer
+      v-model:open="detailOpen"
+      size="lg"
+      :title="detailKind === 'device' ? t(&quot;รายละเอียดรายเครื่อง&quot;) : t(&quot;รายละเอียดตามสัญญา&quot;)"
+      :description="t(&quot;ข้อมูลทั้งหมดตามปีงบ เดือน และสัญญาที่เลือกบน Dashboard&quot;)"
+      :pending="detailLoading"
+    >
+      <template #body>
+        <UiAlert v-if="detailError" tone="danger">{{ detailError }}</UiAlert>
+        <div v-else-if="detailLoading" class="flex flex-col gap-2"><UiSkeleton v-for="n in 6" :key="n" height="2.75rem" /></div>
+        <UiEmpty v-else-if="!detailRows.length" :title="t(&quot;ไม่มีข้อมูลตามตัวกรองนี้&quot;)" compact />
+        <div v-else class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="border-b border-line-soft text-left text-ink-mute"><th class="py-2">{{ detailKind === 'device' ? 'Serial' : t('สัญญา') }}</th><th v-if="detailKind === 'device'">{{ t("รุ่น / แผนก") }}</th><th v-else class="text-right">{{ t("เครื่อง") }}</th><th class="text-right">{{ t("หน้าสุทธิ") }}</th><th class="text-right">{{ t("ค่าใช้จ่ายสุทธิ") }}</th></tr></thead>
+            <tbody><tr v-for="row in detailRows" :key="row.key" class="border-b border-line-soft"><td class="py-2" :class="detailKind === 'device' && 'font-mono'">{{ detailKind === 'device' ? row.serial_number : row.contract_no }}</td><td v-if="detailKind === 'device'">{{ row.model }}<span class="block text-xs text-ink-mute">{{ row.department_name }}</span></td><td v-else class="text-right numeral">{{ formatCount(row.device_count) }}</td><td class="text-right numeral">{{ formatCount(row.total_pages) }}</td><td class="text-right numeral">{{ formatBahtValue(row.total_cost) }}</td></tr></tbody>
+          </table>
+        </div>
+      </template>
+      <template #footer>
+        <UiButton variant="secondary" :disabled="!detailRows.length || detailLoading" @click="exportDetails">{{ t("ส่งออกผลที่กรอง") }}</UiButton>
+      </template>
+    </UiDrawer>
   </div>
 </template>

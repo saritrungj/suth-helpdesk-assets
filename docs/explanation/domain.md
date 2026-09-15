@@ -39,8 +39,10 @@ Middleware ฝั่ง API เป็นขอบเขตความปลอ�
 
 ## ยอดพิมพ์และค่าใช้จ่าย
 
+> กฎหัก 2% ถูกเปลี่ยนแล้วทั้งในโค้ดคำนวณและใน `database/schema.sql` แต่ฐานข้อมูลที่ใช้งานอยู่ยังต้องรัน `migration_update_page_deduction_to_two_percent.sql` ก่อน รายงานที่อ่านจาก SQL view จึงจะให้ตัวเลขตรงกับหน้าที่คำนวณฝั่ง API ดู [ADR-0017](../decisions/0017-two-percent-page-deduction.md) และ [วิธีรัน migration](../how-to/run-migrations.md) คำศัพท์อยู่ใน [CONTEXT.md](../../CONTEXT.md)
+
 - `(device_id, month)` ต้องไม่ซ้ำ การบันทึกเดือนเดิมคือการ update ยอดเดิม ไม่ใช่เพิ่มแถวใหม่
-- จำนวนหน้าสุทธิเท่ากับ `pages × 0.8` (หักส่วนลดตามสัญญา 20%)
+- จำนวนหน้าสุทธิเท่ากับ `pages × 0.98` (หัก 2% ตามกฎธุรกิจ)
 - ราคาที่ใช้คำนวณเรียงลำดับความสำคัญ: `devices.price_override` → `contracts.price_per_page` → `0`
 - ค่าใช้จ่ายเท่ากับจำนวนหน้าสุทธิคูณราคาที่มีผล
 

@@ -37,4 +37,3 @@ export { default as UiStat } from "./UiStat.vue";
 export { default as UiTabs } from "./UiTabs.vue";
 export { default as UiToaster } from "./UiToaster.vue";
 export { default as UiTooltip } from "./UiTooltip.vue";
-export { default as UiExpandable } from "./UiExpandable.vue";

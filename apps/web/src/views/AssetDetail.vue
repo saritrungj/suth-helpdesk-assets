@@ -231,7 +231,7 @@ const usageSeries = computed(() => [
                rounded-xl border border-line-soft bg-surface"
       >
         <div class="min-w-0">
-          <p class="eyebrow mb-1.5"> {{ t("ทะเบียนทรัพย์สิน") }} </p>
+          <p class="eyebrow mb-1.5"> {{ t("ทะเบียนเครื่องพิมพ์") }} </p>
 
           <h1 class="font-mono text-2xl font-semibold text-ink tracking-tight break-all">
             {{ device.serial_number || "—" }}

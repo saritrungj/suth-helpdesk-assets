@@ -177,22 +177,22 @@ test("toSatang รับค่าว่างได้โดยไม่ระ�
   }
 });
 
-test("หน้าสุทธิคือ 80% ของหน้าดิบ และมีเศษได้", () => {
-  assert.equal(billablePages(3360), 2688);
-  assert.equal(billablePages(1057), 845.6);
+test("หน้าสุทธิคือ 98% ของหน้าดิบ และมีเศษได้", () => {
+  assert.equal(billablePages(3360), 3292.8);
+  assert.equal(billablePages(1057), 1035.86);
   assert.equal(billablePages(0), 0);
 });
 
 test("ค่าใช้จ่ายคำนวณเป็นจำนวนเต็มสตางค์ ไม่มีเศษลอยตัว", () => {
   // float เดิมให้ 1209.6000000000001
-  assert.equal(costSatang(3360, "0.45"), 120960);
-  assert.equal(fromSatang(costSatang(3360, "0.45")), 1209.6);
+  assert.equal(costSatang(3360, "0.45"), 148176);
+  assert.equal(fromSatang(costSatang(3360, "0.45")), 1481.76);
 });
 
 test("ค่าใช้จ่ายถูกต้องเมื่อหน้าสุทธิมีเศษ", () => {
-  // 1057 x 0.8 x 0.40 = 845.6 x 0.40 = 338.24
-  assert.equal(costSatang(1057, "0.40"), 33824);
-  assert.equal(fromSatang(costSatang(1057, "0.40")), 338.24);
+  // 1057 x 0.98 x 0.40 = 1035.86 x 0.40 = 414.344 -> 414.34 satang-rounded
+  assert.equal(costSatang(1057, "0.40"), 41434);
+  assert.equal(fromSatang(costSatang(1057, "0.40")), 414.34);
 });
 
 test("ไม่มีหน้าหรือไม่มีราคา ค่าใช้จ่ายต้องเป็นศูนย์", () => {
@@ -211,13 +211,13 @@ test("ราคาเฉพาะเครื่องมีผลเหนื�
 test("รวมเงินหลายรายการต้องไม่คลาดสะสม", () => {
   const one = costSatang(3360, "0.45");
   const total = sumSatang(Array(114).fill(one));
-  assert.equal(total, 120960 * 114);
-  assert.equal(fromSatang(total), 137894.4);
+  assert.equal(total, 148176 * 114);
+  assert.equal(fromSatang(total), 168920.64);
 
   // ยืนยันว่านี่คือสิ่งที่การบวก float ทำไม่ได้
   let asFloat = 0;
-  for (let i = 0; i < 114; i++) asFloat += 1209.6;
-  assert.notEqual(asFloat, 137894.4, "ถ้าข้อนี้ผ่านแปลว่า float ไม่คลาดแล้ว ลบเทสนี้ได้");
+  for (let i = 0; i < 114; i++) asFloat += 1481.76;
+  assert.notEqual(asFloat, 168920.64, "ถ้าข้อนี้ผ่านแปลว่า float ไม่คลาดแล้ว ลบเทสนี้ได้");
 });
 
 test("คำนวณเกินช่วงที่แม่นยำต้อง throw ไม่ใช่คืนค่าเพี้ยนเงียบๆ", () => {

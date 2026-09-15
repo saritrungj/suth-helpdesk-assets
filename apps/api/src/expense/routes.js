@@ -238,6 +238,7 @@ router.get(
         // ราคาที่ใช้จริงหลังพิจารณาราคาเฉพาะเครื่องแล้ว — ส่งออกไปด้วยเพื่อให้หน้าเว็บ
         // อธิบายได้ว่าเครื่องนี้คิดที่ราคาเท่าไหร่ โดยไม่ต้องคำนวณกฎ COALESCE ซ้ำเอง
         effective_price: fromSatang(priceSatang),
+        price_source: row.price_override != null ? "device_override" : "contract",
         ...summarise(readings.get(row.device_id) ?? [], priceSatang),
       });
     }
@@ -254,6 +255,69 @@ router.get(
       };
     });
 
+
+    // ---------- คำสั่งที่ 4: เครื่องที่พิมพ์ในปีงบนี้ แต่สัญญาอยู่คนละปีงบ ----------
+    //
+    // คิวรี่ข้างบนเริ่มจาก `contracts WHERE c.fiscal_year_id = ?` ยอดรวมของหน้านี้
+    // จึงเป็น "ยอดของสัญญาที่ขึ้นทะเบียนไว้กับปีงบนี้" ไม่ใช่ "ยอดที่พิมพ์ในปีงบนี้"
+    // สองอย่างนี้ต่างกันเมื่อเครื่องยังผูกกับสัญญาของปีก่อนอยู่แต่ยังพิมพ์ต่อ —
+    // ยอดของมันตกจากหน้านี้ไปทั้งก้อนโดยไม่มีอะไรบนจอบอก ขณะที่แท็บตามฝ่าย/แผนก
+    // กับแดชบอร์ดคิดจากเดือนของยอดพิมพ์ จึงนับรวมเข้าไป ผลคือตัวเลขเงินสองตัวที่
+    // ป้ายเขียนเหมือนกันต่างกันได้หลายเท่า
+    //
+    // ที่นี่ไม่เปลี่ยนความหมายของยอดรวม เพราะ "ตามสัญญา" ไว้ตรวจใบแจ้งหนี้ของ
+    // สัญญาฉบับนั้นจริงๆ แต่ต้องบอกให้เห็นว่ามีเท่าไหร่ที่ไม่ถูกนับ ด้วยเหตุผล
+    // เดียวกับกลุ่ม "เครื่องที่ยังไม่ผูกสัญญา" ข้างบน — ยอดที่หลุดจากงบต้องเห็น
+    // ไม่ใช่ซ่อนไว้
+    //
+    // การผูกราคากับช่วงเวลาที่มีผลจริงเป็นขอบเขตของ ADR-0019 ซึ่งยังรอ schema
+    const [outsideRows] = await db.query(
+      `
+      SELECT
+        d.id AS device_id,
+        d.serial_number,
+        d.model,
+        d.price_override,
+        c.contract_no,
+        c.price_per_page,
+        fy.year AS contract_fiscal_year
+      FROM devices d
+      JOIN contracts c ON d.contract_id = c.id
+      LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
+      WHERE c.fiscal_year_id <> ?
+        AND EXISTS (
+          SELECT 1 FROM print_transactions pt
+          WHERE pt.device_id = d.id
+            AND pt.month BETWEEN ? AND ?
+            AND pt.pages > 0
+        )
+      ORDER BY d.serial_number
+      `,
+      [fiscalYearId, fiscalYear.start_month, fiscalYear.end_month]
+    );
+
+    const outsideReadings = await readingsByDevice(
+      outsideRows.map((row) => row.device_id),
+      fiscalYear.start_month,
+      fiscalYear.end_month,
+      monthsFilter
+    );
+
+    const outsideDevices = outsideRows.map((row) => {
+      const priceSatang = effectivePriceSatang(row.price_override, row.price_per_page);
+      return {
+        id: row.device_id,
+        serial_number: row.serial_number,
+        model: row.model,
+        contract_no: row.contract_no,
+        contract_fiscal_year: row.contract_fiscal_year,
+        effective_price: fromSatang(priceSatang),
+        ...summarise(outsideReadings.get(row.device_id) ?? [], priceSatang),
+      };
+    });
+
+    const outside_total_satang = sumSatang(outsideDevices.map((d) => d.total_cost_satang));
+
     const grand_total_satang = sumSatang(contractList.map((c) => c.total_cost_satang));
 
     cache.operationalData(res);
@@ -265,6 +329,10 @@ router.get(
       // ตัวเลขบาทแบบทศนิยม ซึ่งคลาดเคลื่อนได้เมื่อรวมกันหลายร้อยรายการ
       total_cost_satang: grand_total_satang,
       total_cost: fromSatang(grand_total_satang),
+      // เครื่องที่พิมพ์ในปีงบนี้แต่สัญญาอยู่คนละปีงบ — ไม่ถูกนับใน total ด้านบน
+      outside_year_devices: outsideDevices,
+      outside_year_total_satang: outside_total_satang,
+      outside_year_total: fromSatang(outside_total_satang),
     });
   })
 );

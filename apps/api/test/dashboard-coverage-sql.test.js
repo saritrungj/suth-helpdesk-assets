@@ -139,4 +139,44 @@ test("ขอบเขตของคิวรี่ที่ใช้คำน�
       );
     });
   });
+
+  // ตัวกรองสัญญาเพิ่มเข้ามาทีหลังตัวกรองอาคาร และมีกับดักเดียวกันเป๊ะ — ถ้าใส่ให้
+  // คิวรี่เดียวแล้วลืมอีกคิวรี่ ความครบถ้วนจะเทียบข้ามขอบเขตกันเงียบๆ เหมือนบั๊ก
+  // ของตัวกรองอาคารที่เคยเกิดมาแล้ว สองข้อล่างบังคับกฎเดียวกันกับตัวกรองใหม่
+  await t.test("เลือกสัญญา: ทั้งตัวเศษและตัวส่วนต้องกรองด้วยสัญญาเดียวกัน", async () => {
+    await withCapturedQueries(async ({ port, calls }) => {
+      const res = await fetch(
+        `http://localhost:${port}/api/dashboard/overview?fiscal_year_id=1&contract_id=7`
+      );
+      assert.equal(res.status, 200, await res.text());
+
+      const filled = filledQuery(calls);
+      const status = statusQuery(calls);
+
+      assert.match(
+        filled.sql,
+        /d\.contract_id\s*=\s*\?/,
+        "คิวรี่ที่นับ 'filled' ไม่ได้กรองตามสัญญา แต่คิวรี่ที่นับ active_devices กรอง — " +
+          "ตัวเศษกับตัวส่วนจะมาจากคนละขอบเขต ทำให้เดือนที่ยังไม่ได้กรอกถูกนับว่าครบ"
+      );
+      assert.match(
+        status.sql,
+        /d\.contract_id\s*=\s*\?/,
+        "คิวรี่ที่นับเครื่องตามสถานะไม่ได้กรองตามสัญญา"
+      );
+
+      assert.ok(filled.params.includes(7), "คิวรี่ตัวเศษไม่ได้รับรหัสสัญญาเป็นพารามิเตอร์");
+      assert.ok(status.params.includes(7), "คิวรี่ตัวส่วนไม่ได้รับรหัสสัญญาเป็นพารามิเตอร์");
+    });
+  });
+
+  await t.test("ไม่เลือกสัญญา: ทั้งสองคิวรี่ต้องไม่กรอง เหมือนกันทั้งคู่", async () => {
+    await withCapturedQueries(async ({ port, calls }) => {
+      const res = await fetch(`http://localhost:${port}/api/dashboard/overview?fiscal_year_id=1`);
+      assert.equal(res.status, 200, await res.text());
+
+      assert.doesNotMatch(filledQuery(calls).sql, /d\.contract_id\s*=\s*\?/);
+      assert.doesNotMatch(statusQuery(calls).sql, /d\.contract_id\s*=\s*\?/);
+    });
+  });
 });

@@ -55,6 +55,11 @@ const props = defineProps({
    */
   allEmitsEmpty: { type: Boolean, default: true },
   disabled: { type: Boolean, default: false },
+  /**
+   * ช่วงเดือนต่อท้ายในบรรทัดเดียว — ใช้ในแถบเครื่องมือที่ช่องอื่นสูงบรรทัดเดียว (รอบที่ 3 ของ #51)
+   * แบบสองบรรทัดทำให้ช่องสูงกว่าช่องข้างๆ ป้ายเหนือช่องจึงไม่ตรงแนว และบรรทัดล่างตัวเล็กอ่านยาก
+   */
+  inline: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["update:modelValue"]);
@@ -270,7 +275,11 @@ watch(open, (isOpen) => {
     >
       <CalendarRange :size="16" class="shrink-0 text-ink-mute" aria-hidden="true" />
 
-      <span class="min-w-0 flex-1">
+      <span v-if="inline" class="min-w-0 flex-1 truncate">
+        <span :class="summary.isAll ? 'text-ink-soft' : 'text-ink font-medium'">{{ summary.text }}</span>
+        <span v-if="summary.detail" class="text-ink-mute"> · {{ summary.detail }}</span>
+      </span>
+      <span v-else class="min-w-0 flex-1">
         <span class="block truncate leading-tight" :class="summary.isAll ? 'text-ink-soft' : 'text-ink font-medium'">
           {{ summary.text }}
         </span>

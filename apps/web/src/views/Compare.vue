@@ -16,7 +16,7 @@ import { t } from "../lib/locale";
  * ทิศทางของสีในหน้านี้กลับด้านกับกราฟการเงินทั่วไป: ตัวเลขที่ "เพิ่มขึ้น" ใช้โทน
  * เตือน เพราะทุกตัวชี้วัดในหน้านี้คือต้นทุน ไม่ใช่รายได้
  *
- * "จำนวนหน้าพิมพ์รวม" เป็นยอดดิบตามที่กรอก ส่วน "สุทธิ" คือหลังหัก 20% ตามสัญญา
+ * "จำนวนหน้าพิมพ์รวม" เป็นยอดที่กรอก ส่วน "สุทธิ" คือหลังหัก 2% ตามกฎธุรกิจ
  * ทั้งสองแสดงคู่กันเสมอ เพราะเป็นตัวเลขที่คนมักเอาไปสับสนกัน
  */
 import { computed, onMounted, ref, watch } from "vue";
@@ -28,17 +28,17 @@ import api from "../services/api";
 import { useMonthlyKpi } from "../api/queries";
 import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
+import ByDepartment from "./ByDepartment.vue";
 import {
   UiAlert,
   UiButton,
-  UiExpandable,
   UiCard,
   UiChart,
   UiCombobox,
   UiEmpty,
   UiField,
   UiPageHeader,
-  UiSelect,
+  UiSegmented,
   UiSkeleton,
 } from "../ui";
 
@@ -53,34 +53,34 @@ function sumCost(rows) {
    ข้อมูลและตัวกรอง
    -------------------------------------------------------------------------- */
 const selectedMonths = ref(monthsFromQuery());
+const comparisonType = ref(["contract", "department", "building"].includes(route.query.type) ? route.query.type : "contract");
+const COMPARISON_TYPES = [
+  { value: "contract", label: t("ตามสัญญา") },
+  { value: "department", label: t("ตามฝ่าย / แผนก") },
+  { value: "building", label: t("ตามอาคาร") },
+];
 
 const filters = ref({
   building: "",
   floor: "",
   division: "",
   department: "",
-  brand: "",
-  status: "",
+  contract: "",
 });
 
 const buildings = ref([]);
 const floors = ref([]);
 const divisions = ref([]);
 const departments = ref([]);
-const brands = ref([]);
-
-const STATUS_OPTIONS = [
-  { value: "", label: t("ทุกสถานะ") },
-  { value: "active", label: t("ใช้งานอยู่") },
-  { value: "repair", label: t("ซ่อมบำรุง") },
-  { value: "retired", label: t("ปลดระวาง") },
-];
+const contracts = ref([]);
 
 const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.name }));
 
 const buildingOptions = computed(() => toOptions(buildings.value));
 const divisionOptions = computed(() => toOptions(divisions.value));
-const brandOptions = computed(() => toOptions(brands.value));
+const contractOptions = computed(() =>
+  contracts.value.map((contract) => ({ value: String(contract.id), label: contract.contract_no }))
+);
 
 const floorOptions = computed(() => {
   const building = buildings.value.find((b) => b.name === filters.value.building);
@@ -106,8 +106,13 @@ watch(() => filters.value.division, () => (filters.value.department = ""));
 const hasActiveFilter = computed(() => Object.values(filters.value).some(Boolean));
 
 function resetFilters() {
-  filters.value = { building: "", floor: "", division: "", department: "", brand: "", status: "" };
+  filters.value = { building: "", floor: "", division: "", department: "", contract: "" };
 }
+
+watch(comparisonType, (value) => {
+  resetFilters();
+  router.replace({ query: { ...route.query, type: value } });
+});
 
 /** มิติของแต่ละแถวมาจากประวัติที่มีผลในเดือนนั้นแล้ว */
 function rowMatches(row) {
@@ -117,26 +122,25 @@ function rowMatches(row) {
     (!f.floor || row.floor_name === f.floor) &&
     (!f.division || row.division_name === f.division) &&
     (!f.department || row.department_name === f.department) &&
-    (!f.brand || row.brand_name === f.brand) &&
-    (!f.status || row.device_status === f.status)
+    (!f.contract || String(row.contract_id) === f.contract)
   );
 }
 
 async function loadMasterData() {
   try {
-    const [building, floor, division, department, brand] = await Promise.all([
+    const [building, floor, division, department, contract] = await Promise.all([
       api.get("/buildings"),
       api.get("/floors"),
       api.get("/divisions"),
       api.get("/departments"),
-      api.get("/brands"),
+      api.get("/contracts"),
     ]);
 
     buildings.value = building.data ?? [];
     floors.value = floor.data ?? [];
     divisions.value = division.data ?? [];
     departments.value = department.data ?? [];
-    brands.value = brand.data ?? [];
+    contracts.value = contract.data ?? [];
   } catch (err) {
     console.error("Load master data error:", err);
   }
@@ -216,7 +220,7 @@ const monthStats = computed(() =>
 /**
  * ตัวชี้วัดทั้งห้าของหน้านี้
  *
- * "รวม" คือยอดมิเตอร์ดิบตามที่กรอก ส่วน "สุทธิ" คือหลังหัก 20% ตามสัญญา —
+ * "รวม" คือยอดที่กรอก ส่วน "สุทธิ" คือหลังหัก 2% ตามกฎธุรกิจ —
  * แสดงคู่กันเสมอเพราะเป็นสองตัวเลขที่คนเอาไปสับสนกันบ่อยที่สุด
  */
 const METRICS = [
@@ -224,21 +228,21 @@ const METRICS = [
     key: "totalPages",
     label: t("จำนวนหน้าพิมพ์รวม"),
     unit: t("หน้า"),
-    hint: t("ยอดดิบตามที่กรอก ยังไม่หัก 20%"),
+    hint: t("ยอดตามที่กรอก ยังไม่หัก 2%"),
     format: formatCount,
   },
   {
     key: "netPages",
     label: t("จำนวนหน้าพิมพ์สุทธิ"),
     unit: t("หน้า"),
-    hint: t("หลังหัก 20% แล้ว"),
+    hint: t("หลังหัก 2% แล้ว"),
     format: formatCount,
   },
   {
     key: "totalCost",
     label: t("ค่าใช้จ่ายสุทธิ"),
     unit: t("บาท"),
-    hint: t("หลังหัก 20% แล้ว"),
+    hint: t("หลังหัก 2% แล้ว"),
     format: formatBahtValue,
   },
   {
@@ -309,14 +313,20 @@ onMounted(async () => {
   <div>
     <UiPageHeader
       :eyebrow="t(&quot;รายงาน&quot;)"
-      :title="t(&quot;เปรียบเทียบข้อมูลรายเดือน&quot;)"
+      :title="t(&quot;เปรียบเทียบ&quot;)"
       :description="t(&quot;เลือกเดือนที่ต้องการวางเทียบกัน ระบบจะสรุปให้ว่าตัวเลขไหนขยับไปทางไหนและกี่เปอร์เซ็นต์&quot;)"
     />
+
+    <UiSegmented v-model="comparisonType" :options="COMPARISON_TYPES" :label="t(&quot;รูปแบบการเปรียบเทียบ&quot;)" class="mb-4" />
+
+    <ByDepartment v-if="comparisonType === 'department'" comparison-only />
+
+    <template v-else>
 
     <!-- ตัวกรอง -->
     <UiCard class="mb-4" :title="t(&quot;เลือกช่วงที่จะเปรียบเทียบ&quot;)">
       <template #actions>
-        <UiButton v-if="hasActiveFilter" size="sm" variant="ghost" @click="resetFilters"> {{ t("ล้างตัวกรอง") }} </UiButton>
+        <UiButton v-if="hasActiveFilter" size="sm" variant="danger-ghost" @click="resetFilters"> {{ t("ล้างตัวกรอง") }} </UiButton>
       </template>
 
       <UiField
@@ -334,28 +344,24 @@ onMounted(async () => {
       </UiField>
 
       <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 pt-4 border-t border-line-soft">
-        <UiField :label="t(&quot;อาคาร&quot;)">
+        <UiField v-if="comparisonType === 'building'" :label="t(&quot;อาคาร&quot;)">
           <UiCombobox v-model="filters.building" :options="buildingOptions" :placeholder="t(&quot;ทุกอาคาร&quot;)" :any-label="t(&quot;ทุกอาคาร&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;ชั้น&quot;)">
+        <UiField v-if="comparisonType === 'building'" :label="t(&quot;ชั้น&quot;)">
           <UiCombobox v-model="filters.floor" :options="floorOptions" :placeholder="t(&quot;ทุกชั้น&quot;)" :any-label="t(&quot;ทุกชั้น&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;ยี่ห้อ&quot;)">
-          <UiCombobox v-model="filters.brand" :options="brandOptions" :placeholder="t(&quot;ทุกยี่ห้อ&quot;)" :any-label="t(&quot;ทุกยี่ห้อ&quot;)" />
-        </UiField>
-
-        <UiField :label="t(&quot;ฝ่าย&quot;)">
+        <UiField v-if="comparisonType === 'department'" :label="t(&quot;ฝ่าย&quot;)">
           <UiCombobox v-model="filters.division" :options="divisionOptions" :placeholder="t(&quot;ทุกฝ่าย&quot;)" :any-label="t(&quot;ทุกฝ่าย&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;แผนก&quot;)">
+        <UiField v-if="comparisonType === 'department'" :label="t(&quot;แผนก&quot;)">
           <UiCombobox v-model="filters.department" :options="departmentOptions" :placeholder="t(&quot;ทุกแผนก&quot;)" :any-label="t(&quot;ทุกแผนก&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;สถานะเครื่อง&quot;)">
-          <UiSelect v-model="filters.status" :options="STATUS_OPTIONS" value-key="value" label-key="label" />
+        <UiField v-if="comparisonType === 'contract'" :label="t(&quot;สัญญา&quot;)">
+          <UiCombobox v-model="filters.contract" :options="contractOptions" :placeholder="t(&quot;ทุกสัญญา&quot;)" :any-label="t(&quot;ทุกสัญญา&quot;)" />
         </UiField>
       </div>
     </UiCard>
@@ -407,7 +413,6 @@ onMounted(async () => {
       <UiAlert v-else tone="warn" class="mb-4"> {{ t("ตอนนี้เลือกไว้เดือนเดียว (") }} {{ summaryFirst?.label }} {{ t(") — เลือกอีกเดือนเพื่อให้ระบบเทียบให้") }} </UiAlert>
 
       <!-- ตารางเปรียบเทียบ -->
-      <UiExpandable>
       <UiCard flush class="mb-4" :title="t(&quot;ตารางเปรียบเทียบ&quot;)">
         <div class="overflow-x-auto scroll-hint-x">
           <table class="w-full text-sm min-w-max">
@@ -461,8 +466,6 @@ onMounted(async () => {
           </table>
         </div>
       </UiCard>
-
-      </UiExpandable>
       <!-- กราฟรายตัวชี้วัด -->
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <!-- กราฟย่อยชุดเดียวกันหลายใบ (small multiples) — ทุกใบมีชุดข้อมูลเดียว
@@ -488,6 +491,7 @@ onMounted(async () => {
           />
         </UiCard>
       </div>
+    </template>
     </template>
   </div>
 </template>

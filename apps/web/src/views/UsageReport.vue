@@ -19,7 +19,7 @@ import { Building2, ReceiptText } from "lucide-vue-next";
 import ByDepartment from "./ByDepartment.vue";
 import Expense from "./Expense.vue";
 import { activeFiscalYear } from "../store/fiscalYear";
-import { UiBadge, UiPageHeader, UiTabs } from "../ui";
+import { UiPageHeader, UiTabs } from "../ui";
 
 const route = useRoute();
 const router = useRouter();
@@ -75,9 +75,17 @@ onUnmounted(() => window.removeEventListener("scroll", rememberScroll));
       ในระบบที่หน้าตาไม่เข้าชุดกับหน้าอื่นที่ใช้ UiPageHeader ทั้งหมด
     -->
     <!-- หัวหน้าแถวเดียวแบบเดียวกับทะเบียนและบันทึกยอด (รอบที่ 3 ของ #51) -->
-    <UiPageHeader :title="t(&quot;ค่าใช้จ่าย&quot;)">
-      <template v-if="activeFiscalYear?.year" #badge>
-        <UiBadge tone="neutral" class="numeral">{{ t("ปีงบ {0}", [yearLabel(activeFiscalYear.year)]) }}</UiBadge>
+    <UiPageHeader :title="t(&quot;ค่าใช้จ่ายและยอดพิมพ์&quot;)">
+      <!--
+        ปีงบไม่ขึ้นซ้ำบนจอ เพราะแถบบนบอกอยู่แล้ว — แต่รายงานหน้านี้ถูกพิมพ์ออกกระดาษ
+        ส่งผู้บริหารจริง และแถบบนกับแถบเลือกช่วงเวลาไม่ติดไปกับกระดาษ ถ้าไม่มีป้ายนี้
+        กระดาษจะมีแต่ยอดรวมโดยไม่บอกว่าเป็นยอดของปีงบไหน (ข้อกำหนด #46: พิมพ์แล้ว
+        ต้องคงชื่อและช่วงเวลาไว้) ตัวป้ายซ่อนอยู่จนถึงตอนพิมพ์ ดู base.css
+      -->
+      <template v-if="activeFiscalYear?.year" #meta>
+        <p data-topbar-context class="mt-1 text-sm text-ink-mute numeral">
+          {{ t("ปีงบ {0}", [yearLabel(activeFiscalYear.year)]) }}
+        </p>
       </template>
     </UiPageHeader>
 
@@ -90,7 +98,7 @@ onUnmounted(() => window.removeEventListener("scroll", rememberScroll));
 
       <template #department>
         <KeepAlive>
-          <ByDepartment v-if="visited.has('department')" />
+          <ByDepartment v-if="visited.has('department')" :show-comparison="false" />
         </KeepAlive>
       </template>
     </UiTabs>

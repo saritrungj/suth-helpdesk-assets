@@ -24,7 +24,7 @@ import { t } from "../lib/locale";
  */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute } from "vue-router";
-import { ChevronDown, CircleCheck, ClipboardList, ClipboardPaste, Pencil, Search, Undo2 } from "lucide-vue-next";
+import { ChevronDown, CircleCheck, ClipboardList, ClipboardPaste, FileUp, Pencil, Search, Undo2 } from "lucide-vue-next";
 
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -43,6 +43,7 @@ import { errorMessage } from "../lib/api-error";
 import { applyPaste, describePaste, parseNumbers } from "../lib/paste-numbers";
 import { useCoverage, useMonthPages } from "../api/queries";
 import MonthEntryGrid from "../components/MonthEntryGrid.vue";
+import PrintUsageImportPanel from "../components/PrintUsageImportPanel.vue";
 import {
   UiAlert,
   UiBadge,
@@ -75,9 +76,9 @@ const queryClient = useQueryClient();
 
 /** viewer ดูได้อย่างเดียว — API บังคับด้วย staffMiddleware อยู่แล้ว ที่นี่แค่ไม่แสดงปุ่มที่กดไม่ได้ */
 const canEdit = computed(() => authState.user?.role !== "viewer");
+const canImport = computed(() => authState.user?.role === "admin");
 
 const loading = ref(true);
-const workspace = ref(null);
 const pageError = ref("");
 const summaryError = ref("");
 const summaryLoading = ref(true);
@@ -91,6 +92,8 @@ const floors = ref([]);
 const divisions = ref([]);
 const departments = ref([]);
 const brands = ref([]);
+const contracts = ref([]);
+const importOpen = ref(false);
 
 /**
  * โหมดการทำงานของหน้านี้
@@ -122,6 +125,7 @@ const filters = ref({
   division: "",
   department: "",
   brand: "",
+  contract: "",
   deviceStatus: route.query.fill === "empty" ? "active" : "",
   fillStatus: route.query.fill === "empty" ? "none" : "",
 });
@@ -172,12 +176,13 @@ async function loadDevices() {
 
 async function loadMasterData() {
   try {
-    const [building, floor, division, department, brand] = await Promise.all([
+    const [building, floor, division, department, brand, contract] = await Promise.all([
       api.get("/buildings"),
       api.get("/floors"),
       api.get("/divisions"),
       api.get("/departments"),
       api.get("/brands"),
+      api.get("/contracts"),
     ]);
 
     buildings.value = building.data ?? [];
@@ -185,6 +190,7 @@ async function loadMasterData() {
     divisions.value = division.data ?? [];
     departments.value = department.data ?? [];
     brands.value = brand.data ?? [];
+    contracts.value = contract.data ?? [];
   } catch (err) {
     console.error("Load master data error:", err);
   }
@@ -382,8 +388,9 @@ const entryColumns = computed(() => [
   { key: "serial_number", label: "Serial", width: "11rem" },
   {
     key: "location",
-    label: t("ที่ตั้ง / แผนก"),
-    value: (d) => [d.building_name, d.floor_name, d.location, d.department_name].filter(Boolean).join(" · ") || "—",
+    // บรรทัดเดียว "อาคาร ชั้น · จุดที่ตั้ง" — คนกรอกยอดหาเครื่องจากที่ตั้ง ส่วนแผนกยังค้นหาได้จากช่องค้นหา
+    label: t("ที่ตั้ง"),
+    value: (d) => [[d.building_name, d.floor_name].filter(Boolean).join(" "), d.location].filter(Boolean).join(" · ") || "—",
   },
   {
     key: "previous_month",
@@ -448,6 +455,9 @@ const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.
 const buildingOptions = computed(() => toOptions(buildings.value));
 const divisionOptions = computed(() => toOptions(divisions.value));
 const brandOptions = computed(() => toOptions(brands.value));
+const contractOptions = computed(() =>
+  contracts.value.map((contract) => ({ value: String(contract.id), label: contract.contract_no }))
+);
 
 const floorOptions = computed(() => {
   const building = buildings.value.find((b) => b.name === filters.value.building);
@@ -487,6 +497,7 @@ const FILTER_LABELS = {
   department: t("แผนก"),
   brand: t("ยี่ห้อ"),
   deviceStatus: t("สถานะเครื่อง"),
+  contract: t("สัญญา"),
 };
 
 function optionLabel(options, value, key = "value", labelKey = "label") {
@@ -496,6 +507,24 @@ function optionLabel(options, value, key = "value", labelKey = "label") {
   if (!match) return value;
   return typeof match === "string" ? match : match[labelKey];
 }
+
+const tableReportContext = computed(() => {
+  const contextFilters = { ...filters.value };
+  delete contextFilters.month;
+
+  if (contextFilters.fillStatus) {
+    contextFilters.fillStatus = optionLabel(FILL_STATUS_OPTIONS, contextFilters.fillStatus);
+  }
+  if (contextFilters.deviceStatus) {
+    contextFilters.deviceStatus = optionLabel(DEVICE_STATUS_OPTIONS, contextFilters.deviceStatus);
+  }
+
+  return reportContext({
+    months: mode.value === "month" && filters.value.month ? [filters.value.month] : [],
+    filters: contextFilters,
+    labels: FILTER_LABELS,
+  });
+});
 
 const filterChips = computed(() => {
   const chips = [];
@@ -545,6 +574,7 @@ async function resetFilters() {
     department: "",
     brand: "",
     deviceStatus: "",
+    contract: "",
     fillStatus: "",
     month: "",
   };
@@ -591,6 +621,7 @@ const filteredDevices = computed(() => {
       (!f.division || d.division_name === f.division) &&
       (!f.department || d.department_name === f.department) &&
       (!f.brand || d.brand_name === f.brand) &&
+      (!f.contract || String(d.contract_id) === f.contract) &&
       (!f.deviceStatus || d.status === f.deviceStatus) &&
       (!f.fillStatus || (mode.value === "month" && f.fillStatus === "none" ? !Object.hasOwn(monthPages.value, d.id) : fillStatusOf(d.id) === f.fillStatus)) &&
       // ⚠️ ตัวกรอง "เลือกเดือนแล้วเหลือเฉพาะเครื่องที่กรอกเดือนนั้นแล้ว" ใช้ได้
@@ -856,14 +887,17 @@ onUnmounted(unregisterFiscalYearGuard);
 </script>
 
 <template>
-  <div ref="workspace" class="ui-fullscreen-context">
+  <div>
     <!-- หัวหน้าแถวเดียว (รอบที่ 3 ของ #51): ความคืบหน้าของทั้งปีงบเป็นบรรทัดสรุปข้างชื่อหน้า
          ส่วนสลับโหมดอยู่ขวาสุด เหนือทุกอย่างที่มันเปลี่ยน เพราะมันเปลี่ยนทั้งหน้า -->
     <UiPageHeader :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)">
       <template #badge>
-        <p class="text-sm text-ink-soft">
-          {{ t("ปีงบ {0}", [displayYearBE]) }}
-          <span v-if="!summaryError && !summaryLoading && !loading && !pageError"> · {{ t("กรอกครบแล้ว {0} จาก {1} เครื่อง", [formatCount(progress.done), formatCount(progress.total)]) }}</span>
+        <!-- ไม่ใส่ "ปีงบ" ซ้ำบนจอปกติ — ปีงบที่กำลังดูอยู่บนแถบบนตลอดเวลาแล้ว
+             ยกเว้นตอนขยายตารางเต็มจอ (แถบบนอยู่นอก fullscreen root จึงมองไม่เห็น)
+             และตอนสั่งพิมพ์ (แถบบนถูกซ่อน) สองกรณีนั้นป้ายนี้โผล่มาแทน ดู base.css -->
+        <p data-topbar-context class="text-sm text-ink-soft numeral">{{ t("ปีงบ {0}", [displayYearBE]) }}</p>
+        <p v-if="!summaryError && !summaryLoading && !loading && !pageError" class="text-sm text-ink-soft">
+          {{ t("กรอกครบแล้ว {0} จาก {1} เครื่อง", [formatCount(progress.done), formatCount(progress.total)]) }}
         </p>
         <UiButton size="sm" variant="ghost" :aria-expanded="yearExpanded" aria-controls="year-progress" @click="yearExpanded = !yearExpanded">
           {{ t("รายละเอียดความคืบหน้าปี") }}
@@ -958,6 +992,11 @@ onUnmounted(unregisterFiscalYearGuard);
           :aria-label="t(&quot;ดูยอดของเดือน&quot;)"
           @update:model-value="changeMonth"
         />
+        <UiTooltip v-if="canImport" :content="t(&quot;นำเข้ายอดพิมพ์จาก Excel หรือ CSV&quot;)">
+          <UiButton variant="secondary" icon-only :label="t(&quot;นำเข้ายอดพิมพ์&quot;)" @click="importOpen = true">
+            <FileUp :size="16" />
+          </UiButton>
+        </UiTooltip>
         <div id="entry-table-tools" class="ml-auto"></div>
       </template>
 
@@ -999,7 +1038,21 @@ onUnmounted(unregisterFiscalYearGuard);
           label-key="label"
         />
       </UiField>
+
+      <UiField :label="t(&quot;สัญญา&quot;)">
+        <UiCombobox v-model="filters.contract" :options="contractOptions" :placeholder="t(&quot;ทุกสัญญา&quot;)" :any-label="t(&quot;ทุกสัญญา&quot;)" />
+      </UiField>
     </UiFilterBar>
+
+    <UiModal
+      v-if="canImport"
+      v-model:open="importOpen"
+      :title="t(&quot;นำเข้ายอดพิมพ์&quot;)"
+      :description="t(&quot;ตรวจไฟล์และจับคู่ด้วย Serial Number ก่อนยืนยันบันทึก&quot;)"
+      size="lg"
+    >
+      <PrintUsageImportPanel @imported="importOpen = false; init()" />
+    </UiModal>
 
     <!-- ================= โหมดกรอกรายเดือน ================= -->
     <UiAlert v-if="mode === 'month' && awaitingDefaultMonth && coverageQuery.isError.value" tone="danger" class="mb-4">
@@ -1035,9 +1088,9 @@ onUnmounted(unregisterFiscalYearGuard);
           :loading="loading"
           row-key="id"
           export-filename="print-transactions-month"
-          :export-context="reportContext({ months: filters.month ? [filters.month] : [], filters, labels: FILTER_LABELS })"
+          :export-context="tableReportContext"
           :searchable="false"
-          :fullscreen-target="workspace"
+          v-model:search-value="search"
           tools-target="#entry-table-tools"
           :caption="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
           :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
@@ -1047,7 +1100,7 @@ onUnmounted(unregisterFiscalYearGuard);
           :row-class="row => draft.has(row.id) ? 'bg-brand-soft' : ''"
         >
           <template #cell-location="{ value }">
-            <span class="block max-w-xs whitespace-normal break-words">{{ value }}</span>
+            <span class="block max-w-sm truncate" :title="value">{{ value }}</span>
           </template>
           <!-- inline-flex + min-h-6: ข้อ 2.5.8 บังคับพื้นที่กด 24x24 ส่วนตัวอักษร
                บรรทัดเดียวสูงแค่ 17px และลิงก์นี้ไม่เข้าข้อยกเว้น "อยู่ในประโยค"
@@ -1095,11 +1148,11 @@ onUnmounted(unregisterFiscalYearGuard);
       :loading="loading"
       row-key="id"
       export-filename="print-transactions"
-      :export-context="reportContext({ months: filters.month ? [filters.month] : [], filters, labels: FILTER_LABELS })"
+      :export-context="tableReportContext"
       :searchable="false"
-      :fullscreen-target="workspace"
+      v-model:search-value="search"
       tools-target="#entry-table-tools"
-      :caption="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
+      :caption="t(&quot;ภาพรวมทั้งปี&quot;)"
       :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
       :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
       max-height="68vh"
@@ -1107,7 +1160,7 @@ onUnmounted(unregisterFiscalYearGuard);
     >
       <template #cell-serial_number="{ row }">
         <span class="font-mono text-sm text-ink">{{ row.serial_number || "—" }}</span>
-        <span v-if="row.asset_code" class="block text-2xs text-ink-mute font-mono">{{ row.asset_code }}</span>
+        <span v-if="row.asset_code" class="block text-xs text-ink-soft font-mono">{{ row.asset_code }}</span>
       </template>
 
       <template #cell-fill_status="{ row }">

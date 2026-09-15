@@ -31,6 +31,7 @@ router.get(
     const { clauses, params } = reportFilters(req.query, {
       month: "m.month",
       building: "CASE WHEN h.id IS NOT NULL THEN hb.name ELSE b.name END",
+      contract: "d.contract_id",
     });
 
     const [rows] = await db.query(
@@ -42,7 +43,9 @@ router.get(
          dep.name AS department_name,
          divi.name AS division_name,
          brand.name AS brand_name,
-         d.model
+         d.model,
+         d.contract_id,
+         c.contract_no
        FROM v_monthly_kpi m
        LEFT JOIN devices d ON m.device_id = d.id
        LEFT JOIN building b ON d.building_id = b.id
@@ -53,6 +56,7 @@ router.get(
        LEFT JOIN department dep ON CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END = dep.id
        LEFT JOIN division divi ON CASE WHEN h.id IS NOT NULL THEN h.division_id ELSE d.division_id END = divi.id
        LEFT JOIN brand ON d.brand_id = brand.id
+       LEFT JOIN contracts c ON d.contract_id = c.id
        ${joinClauses(clauses)}
        ORDER BY m.month ASC`,
       params
@@ -73,6 +77,7 @@ router.get(
     const { clauses, params } = reportFilters(req.query, {
       month: "v.month",
       building: "CASE WHEN h.id IS NOT NULL THEN hb.name ELSE b.name END",
+      contract: "d.contract_id",
     });
 
     const [rows] = await db.query(
@@ -108,6 +113,7 @@ router.get(
     const { clauses, params } = reportFilters(req.query, {
       month: "v.month",
       building: "CASE WHEN h.id IS NOT NULL THEN hb.name ELSE b.name END",
+      contract: "d.contract_id",
     });
 
     const [rows] = await db.query(
@@ -157,10 +163,11 @@ router.get(
   "/stats",
   withFilters,
   asyncHandler(async (req, res) => {
-    const deviceFilter = reportFilters(req.query, { building: "b.name" });
+    const deviceFilter = reportFilters(req.query, { building: "b.name", contract: "d.contract_id" });
     const usageFilter = reportFilters(req.query, {
       month: "pt.month",
       building: "CASE WHEN h.id IS NOT NULL THEN hb.name ELSE b.name END",
+      contract: "d.contract_id",
     });
 
     const [[[devices]], [[contracts]], [[usage]]] = await Promise.all([
@@ -214,6 +221,7 @@ router.get(
     const { clauses, params } = reportFilters(req.query, {
       month: "v.month",
       building: "CASE WHEN h.id IS NOT NULL THEN hb.name ELSE b.name END",
+      contract: "d.contract_id",
     });
 
     const [rows] = await db.query(
@@ -256,12 +264,15 @@ router.get(
   "/highlights",
   withFilters,
   asyncHandler(async (req, res) => {
-    const { month, building_name } = req.query;
+    const { month, building_name, contract_id } = req.query;
     const buildingClause = building_name ? " AND b.name = ? " : "";
+    const contractClause = contract_id ? " AND d.contract_id = ? " : "";
+    const contractDeviceClause = contract_id ? " AND d.contract_id = ? " : "";
     const usageBuildingClause = building_name
       ? " AND CASE WHEN h.id IS NOT NULL THEN hb.name ELSE b.name END = ? "
       : "";
     const buildingParam = building_name ? [building_name] : [];
+    const contractParam = contract_id ? [contract_id] : [];
 
     // เงื่อนไขเดือนต้องอยู่ใน ON ของ LEFT JOIN ไม่ใช่ WHERE — ไม่งั้น LEFT JOIN
     // จะกลายเป็น INNER JOIN โดยปริยาย แล้วเครื่องที่ไม่มียอดพิมพ์ในเดือนที่เลือก
@@ -275,9 +286,9 @@ router.get(
           `SELECT d.status, COUNT(*) AS count
            FROM devices d
            LEFT JOIN building b ON d.building_id = b.id
-           WHERE 1=1 ${buildingClause}
+           WHERE 1=1 ${buildingClause} ${contractClause}
            GROUP BY d.status`,
-          buildingParam
+          [...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows),
 
@@ -296,11 +307,11 @@ router.get(
            LEFT JOIN building hb ON h.building_id = hb.id
            LEFT JOIN department dept ON CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END = dept.id
            LEFT JOIN division divi ON CASE WHEN h.id IS NOT NULL THEN h.division_id ELSE d.division_id END = divi.id
-           WHERE 1=1 ${month.length ? " AND v.month IN (?) " : ""} ${usageBuildingClause}
+           WHERE 1=1 ${month.length ? " AND v.month IN (?) " : ""} ${usageBuildingClause} ${contractClause}
            GROUP BY CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END, dept.name, divi.name
            ORDER BY total_cost ${sortDirection(req.query.department_order)}
            LIMIT 5`,
-          [...monthParam, ...buildingParam]
+          [...monthParam, ...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows),
 
@@ -321,11 +332,11 @@ router.get(
            LEFT JOIN v_monthly_kpi v ON v.device_id = d.id ${monthJoin}
            ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
            LEFT JOIN building hb ON h.building_id = hb.id
-           WHERE 1=1 ${usageBuildingClause}
+           WHERE 1=1 ${usageBuildingClause} ${contractDeviceClause}
            GROUP BY d.id, d.serial_number, d.model, d.status, b.name, dept.name
            ORDER BY total_pages ${sortDirection(req.query.device_order)}
            LIMIT 5`,
-          [...monthParam, ...buildingParam]
+          [...monthParam, ...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows),
 
@@ -346,10 +357,10 @@ router.get(
            LEFT JOIN v_monthly_kpi v ON v.device_id = d.id ${monthJoin}
            ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
            LEFT JOIN building hb ON h.building_id = hb.id
-           WHERE 1=1 ${usageBuildingClause}
+           WHERE 1=1 ${usageBuildingClause} ${contractDeviceClause}
            GROUP BY c.id, c.contract_no, fy.year, c.price_per_page
            ORDER BY total_cost DESC`,
-          [...monthParam, ...buildingParam]
+          [...monthParam, ...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows),
     ]);

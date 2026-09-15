@@ -1,6 +1,6 @@
 // apps/api/src/dashboard/filters.js
 //
-// ตัวกรองที่ทุกรายงานบนแดชบอร์ดใช้ร่วมกัน — เดือน และอาคาร
+// ตัวกรองที่ทุกรายงานบนแดชบอร์ดใช้ร่วมกัน — เดือน สัญญา และอาคาร
 //
 // เดิมทุก endpoint ในไฟล์ dashboard เขียนโค้ดต่อ SQL ชุดเดียวกันเองซ้ำๆ
 // (สร้าง array conditions, push เงื่อนไข, ต่อ " WHERE " + join(" AND ")) รวมกัน
@@ -19,6 +19,7 @@ const { monthListQuery } = require("../shared/validate");
 const reportQuery = z.object({
   month: monthListQuery,
   building_name: z.string().trim().max(255).optional(),
+  contract_id: z.coerce.number().int().positive().optional(),
   fiscal_year_id: z.coerce.number().int().positive().optional(),
 
   // ทิศทางการเรียงของอันดับบนแดชบอร์ด — "asc" = น้อยที่สุดก่อน (เครื่อง/แผนกที่
@@ -50,6 +51,11 @@ function reportFilters(query, columns) {
   if (query.building_name && columns.building) {
     clauses.push(`${columns.building} = ?`);
     params.push(query.building_name);
+  }
+
+  if (query.contract_id && columns.contract) {
+    clauses.push(`${columns.contract} = ?`);
+    params.push(query.contract_id);
   }
 
   return { clauses, params };

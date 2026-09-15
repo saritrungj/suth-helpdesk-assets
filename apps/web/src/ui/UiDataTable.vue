@@ -34,10 +34,10 @@ import { t } from "../lib/locale";
  *   - caption ของตาราง (GOV.UK / NHS) เป็นหัวเรื่องตอนขยายเต็มจอด้วย
  *   - toolsTarget ย้ายกลุ่มเครื่องมือ (ขยาย/คอลัมน์/Excel) ไปวางในแถบตัวกรองของหน้า
  *     ด้วย Teleport ให้ตัวกรองกับเครื่องมือตารางอยู่แถวเดียวกัน โดยหน้าไม่ต้องย้าย
- *     ตัวกรองเข้ามาในตาราง — ตอนขยายตารางแบบไม่มี fullscreenTarget แถบตัวกรองอยู่
- *     นอกจอ เครื่องมือจึงกลับมาอยู่ในตารางเอง
+ *     ตัวกรองเข้ามาในตาราง — ตอนขยาย แถบตัวกรองอยู่นอกจอ เครื่องมือจึงกลับมาอยู่
+ *     ในตารางเอง
  *
- * นิยามคอลัมน์: { key, label, align?, sortable?, hidden?, width?,
+ * นิยามคอลัมน์: { key, label, align?, sortable?, hidden?, alwaysExport?, width?,
  *                 value?: (row) => any, csv?: (row) => any }
  */
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
@@ -80,6 +80,8 @@ const props = defineProps({
   emptyText: { type: String, default: t("ยังไม่มีข้อมูลในตารางนี้") },
   emptyHint: { type: String, default: "" },
   showExport: { type: Boolean, default: true },
+  /** ปิดได้ในตารางสั้นและเรียบง่ายที่การเต็มจอไม่ได้ช่วยให้ทำงานดีขึ้น */
+  showFullscreen: { type: Boolean, default: true },
   /** ให้ผู้ใช้ซ่อน/แสดงคอลัมน์เองได้ — ช่วยมากกับตารางที่มีสิบกว่าคอลัมน์ */
   showColumnPicker: { type: Boolean, default: true },
   /** ความสูงสูงสุดของกล่องตาราง เช่น "65vh" ทำให้หัวตารางปักหมุดอยู่ในกล่อง */
@@ -90,20 +92,35 @@ const props = defineProps({
   /** Optional search owner; existing callers keep their local search. */
   searchValue: { type: String, default: undefined },
   preservePageOnRefresh: { type: Boolean, default: false },
-  fullscreenTarget: { type: Object, default: null },
   /** ชื่อตาราง — เป็น <caption> ให้โปรแกรมอ่านหน้าจอ และเป็นหัวเรื่องตอนขยายเต็มจอ */
   caption: { type: String, default: "" },
   /** selector ของจุดวางกลุ่มเครื่องมือในแถบตัวกรองของหน้า เช่น "#registry-table-tools" */
   toolsTarget: { type: String, default: "" },
 });
-const fullscreenRoot = computed(() => props.fullscreenTarget || tableRoot.value);
-const { expanded, expandError, toggleExpanded } = useFullscreen(fullscreenRoot);
-const toolsInline = computed(() => !props.toolsTarget || (expanded.value && !props.fullscreenTarget));
+const { expanded, expandError, toggleExpanded, collapseExpanded } = useFullscreen(tableRoot);
+const toolsInline = computed(() => !props.toolsTarget || expanded.value);
+// หน้าที่วางช่องค้นหาไว้นอกตารางส่ง v-model เข้ามาอยู่แล้ว เมื่อเต็มจอให้สร้าง
+// ช่องค้นหาอีกตำแหน่งด้วยค่าเดียวกัน เพื่อไม่ให้ผู้ใช้ต้องออกจากเต็มจอเพื่อค้นใหม่
+const searchVisible = computed(() => props.searchable || (expanded.value && props.searchValue !== undefined));
+// maxHeight 60–70vh ใช้เฉพาะโหมดปกติ ตอนขยายให้กล่องเลื่อนเป็น flex-1 จนถึงขอบล่าง
+const scrollStyle = computed(() => {
+  if (expanded.value) return { maxHeight: "none" };
+  return props.maxHeight ? { maxHeight: props.maxHeight } : {};
+});
 const emit = defineEmits(["update:searchValue"]);
 const localSearch = ref("");
 const search = computed({
   get: () => props.searchValue ?? localSearch.value,
   set: (value) => { localSearch.value = value; emit("update:searchValue", value); },
+});
+const fullscreenContext = computed(() => {
+  if (!expanded.value) return "";
+  const entries = [...props.exportContext];
+  if (search.value) entries.push([t("ค้นหา"), search.value]);
+  return entries
+    .filter((entry) => Array.isArray(entry) && entry[1] !== "" && entry[1] !== null && entry[1] !== undefined)
+    .map(([label, value]) => `${label}: ${value}`)
+    .join(" · ");
 });
 
 /**
@@ -272,7 +289,8 @@ function toggleColumn(key) {
    ต้องการทั้งชุดที่กรองไว้ ไม่ใช่แค่ 20 แถวที่เห็นอยู่
    -------------------------------------------------------------------------- */
 async function exportExcel() {
-  const cols = visibleColumns.value;
+  // คอลัมน์ที่ซ่อนไว้เพื่อลดความรกบนจอแต่ยังต้องอยู่ในไฟล์ (alwaysExport) ส่งออกเสมอ
+  const cols = props.columns.filter((c) => !hiddenKeys.value.has(c.key) || c.alwaysExport);
   const header = cols.map((c) => c.label);
 
   const body = sortedRows.value.map((row) =>
@@ -293,20 +311,24 @@ async function exportExcel() {
 }
 defineExpose({
   containsRow: (key) => searchedRows.value.some((row) => row[props.rowKey] === key),
+  collapseExpanded,
 });
 </script>
 
 <template>
-  <div ref="tableRoot" class="flex flex-col min-w-0" :class="expanded && !fullscreenTarget && 'bg-surface h-screen overflow-auto p-5'">
+  <div ref="tableRoot" class="flex flex-col min-w-0" :class="expanded && 'bg-surface h-screen overflow-hidden p-5'">
     <p v-if="expandError" role="status">{{ expandError }}</p>
     <!-- แถบเครื่องมือ -->
     <div
       class="flex flex-wrap items-center gap-2 mb-3"
-      :class="!searchable && !$slots['toolbar-extra'] && !toolsInline && !(expanded && caption) && 'hidden'"
+      :class="!searchVisible && !$slots['toolbar-extra'] && !toolsInline && !(expanded && (caption || fullscreenContext)) && 'hidden'"
       data-print="hide"
     >
-      <h2 v-if="expanded && caption" class="text-lg font-semibold text-ink mr-2">{{ caption }}</h2>
-      <div v-if="searchable" class="min-w-[13rem] flex-1 max-w-sm">
+      <div v-if="expanded && (caption || fullscreenContext)" class="min-w-[18rem] flex-1 mr-2">
+        <h2 v-if="caption" class="text-lg font-semibold text-ink">{{ caption }}</h2>
+        <p v-if="fullscreenContext" class="mt-0.5 text-xs text-ink-mute whitespace-normal">{{ fullscreenContext }}</p>
+      </div>
+      <div v-if="searchVisible" class="min-w-[13rem] flex-1 max-w-sm">
         <!-- ต้องมี aria-label ไม่ใช่พึ่ง placeholder อย่างเดียว — placeholder หายไป
              ทันทีที่เริ่มพิมพ์ คนที่ใช้โปรแกรมอ่านหน้าจอจึงได้ยินแค่ "ช่องกรอก"
              เฉยๆ ทั้งที่ตารางในหน้าหนึ่งอาจมีมากกว่าหนึ่งช่อง (WCAG 3.3.2) -->
@@ -324,17 +346,19 @@ defineExpose({
 
       <Teleport defer :to="toolsTarget || 'body'" :disabled="toolsInline">
       <div role="group" :aria-label="t('เครื่องมือตาราง')" class="flex items-center gap-2 ml-auto">
-        <UiTooltip :content="expanded ? t('ย่อตาราง') : t('ขยายตาราง')">
-          <UiButton
-            size="sm"
-            variant="secondary"
-            icon-only
-            :label="expanded ? t('ย่อตาราง') : t('ขยายตาราง')"
-            @click="toggleExpanded"
-          >
-            <component :is="expanded ? Minimize2 : Maximize2" :size="15" />
-          </UiButton>
-        </UiTooltip>
+        <span v-if="showFullscreen" class="hidden sm:inline-flex">
+          <UiTooltip :content="expanded ? t('ย่อตาราง') : t('ขยายตาราง')">
+            <UiButton
+              size="sm"
+              variant="secondary"
+              icon-only
+              :label="expanded ? t('ย่อตาราง') : t('ขยายตาราง')"
+              @click="toggleExpanded"
+            >
+              <component :is="expanded ? Minimize2 : Maximize2" :size="15" />
+            </UiButton>
+          </UiTooltip>
+        </span>
         <UiMenu v-if="showColumnPicker" :label="t(&quot;แสดงคอลัมน์&quot;)">
           <template #trigger>
             <UiButton size="sm" variant="secondary" :label="t(&quot;เลือกคอลัมน์ที่จะแสดง&quot;)">
@@ -374,8 +398,11 @@ defineExpose({
     <div
       ref="scrollBox"
       class="hidden sm:block relative overflow-auto rounded-t-lg border border-line-soft bg-surface"
-      :class="!maxHeight && 'scroll-hint-x'"
-      :style="maxHeight ? { maxHeight } : {}"
+      :class="[
+        !maxHeight && 'scroll-hint-x',
+        expanded && 'flex-1 min-h-0',
+      ]"
+      :style="scrollStyle"
     >
       <table class="w-full text-sm border-collapse min-w-max">
         <caption v-if="caption" class="sr-only">{{ caption }}</caption>

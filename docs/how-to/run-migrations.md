@@ -31,6 +31,7 @@ mysql -u root -p your_database -e "DESCRIBE fiscal_year; DESCRIBE devices; SHOW 
 | 3 | `migration_add_device_location.sql` | `devices.location` |
 | 4 | `migration_add_device_location_history.sql` | ตารางประวัติการย้าย (ต้องมีข้อ 3 ก่อน) |
 | 5 | `migration_normalize_month_to_ce.sql` | แปลงเดือน พ.ศ. เป็น ค.ศ. และเพิ่ม `CHECK` |
+| 6 | `migration_update_page_deduction_to_two_percent.sql` | เปลี่ยน view รายงานให้หัก 2% จากจำนวนหน้าดิบ |
 
 ```sh
 mysql -u root -p your_database < database/migrations/migration_add_device_location.sql

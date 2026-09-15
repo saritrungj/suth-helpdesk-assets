@@ -57,7 +57,7 @@ router.get(
   "/overview",
   validate({ query: reportQuery }),
   asyncHandler(async (req, res) => {
-    const { fiscal_year_id, building_name } = req.query;
+    const { fiscal_year_id, building_name, contract_id } = req.query;
     const selectedMonths = [...req.query.month].sort();
 
     // ---------- ขอบเขตของปีงบ ----------
@@ -83,6 +83,8 @@ router.get(
       ? " AND CASE WHEN h.id IS NOT NULL THEN hb.name ELSE b.name END = ? "
       : "";
     const buildingParam = building_name ? [building_name] : [];
+    const contractClause = contract_id ? " AND d.contract_id = ? " : "";
+    const contractParam = contract_id ? [contract_id] : [];
     const monthClause = months.length ? " AND v.month IN (?) " : "";
     const monthParam = months.length ? [months] : [];
 
@@ -107,8 +109,8 @@ router.get(
            LEFT JOIN building b ON d.building_id = b.id
            ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
            LEFT JOIN building hb ON h.building_id = hb.id
-           WHERE 1=1 ${monthClause} ${usageBuildingClause}`,
-          [...monthParam, ...buildingParam]
+           WHERE 1=1 ${monthClause} ${usageBuildingClause} ${contractClause}`,
+          [...monthParam, ...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows[0]),
 
@@ -128,10 +130,10 @@ router.get(
                LEFT JOIN building b ON d.building_id = b.id
                ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
                LEFT JOIN building hb ON h.building_id = hb.id
-               WHERE v.month BETWEEN ? AND ? ${usageBuildingClause}
+               WHERE v.month BETWEEN ? AND ? ${usageBuildingClause} ${contractClause}
                GROUP BY v.month
                ORDER BY v.month`,
-              [range.start_month, range.end_month, ...buildingParam]
+              [range.start_month, range.end_month, ...buildingParam, ...contractParam]
             )
             .then(([rows]) => rows)
         : Promise.resolve([]),
@@ -142,9 +144,9 @@ router.get(
           `SELECT d.status, COUNT(*) AS count
            FROM devices d
            LEFT JOIN building b ON d.building_id = b.id
-           WHERE 1=1 ${buildingClause}
+           WHERE 1=1 ${buildingClause} ${contractClause}
            GROUP BY d.status`,
-          buildingParam
+          [...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows),
 
@@ -164,11 +166,11 @@ router.get(
            LEFT JOIN division divi ON CASE WHEN h.id IS NOT NULL THEN h.division_id ELSE d.division_id END = divi.id
            LEFT JOIN building b ON d.building_id = b.id
            LEFT JOIN building hb ON h.building_id = hb.id
-           WHERE 1=1 ${monthClause} ${usageBuildingClause}
+           WHERE 1=1 ${monthClause} ${usageBuildingClause} ${contractClause}
            GROUP BY CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END, dept.name, divi.name
            ORDER BY total_cost DESC
            LIMIT 8`,
-          [...monthParam, ...buildingParam]
+          [...monthParam, ...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows),
 
@@ -190,9 +192,9 @@ router.get(
                FROM print_transactions pt
                JOIN devices d ON pt.device_id = d.id AND d.status = 'active'
                LEFT JOIN building b ON d.building_id = b.id
-               WHERE pt.month BETWEEN ? AND ? ${buildingClause}
+               WHERE pt.month BETWEEN ? AND ? ${buildingClause} ${contractClause}
                GROUP BY pt.month`,
-              [range.start_month, range.end_month, ...buildingParam]
+              [range.start_month, range.end_month, ...buildingParam, ...contractParam]
             )
             .then(([rows]) => rows)
         : Promise.resolve([]),
@@ -223,8 +225,8 @@ router.get(
              AND d.price_override IS NULL
              AND (c.price_per_page IS NULL OR c.price_per_page = 0)
              AND COALESCE(pages_used.pages, 0) > 0
-             ${buildingClause}`,
-          [...(range ? [range.start_month, range.end_month] : []), ...buildingParam]
+             ${buildingClause} ${contractClause}`,
+          [...(range ? [range.start_month, range.end_month] : []), ...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows[0]),
 
@@ -237,14 +239,14 @@ router.get(
                FROM devices d
                LEFT JOIN building b ON d.building_id = b.id
                WHERE d.status = 'active'
-                 ${buildingClause}
+                 ${buildingClause} ${contractClause}
                  AND NOT EXISTS (
                    SELECT 1 FROM print_transactions pt
                    WHERE pt.device_id = d.id
                      AND pt.month BETWEEN ? AND ?
                      AND pt.pages > 0
                  )`,
-              [...buildingParam, range.start_month, range.end_month]
+              [...buildingParam, ...contractParam, range.start_month, range.end_month]
             )
             .then(([rows]) => rows[0])
         : Promise.resolve({ device_count: 0 }),

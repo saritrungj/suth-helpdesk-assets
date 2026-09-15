@@ -59,6 +59,7 @@ const floors = ref([]);
 const divisions = ref([]);
 const departments = ref([]);
 const brands = ref([]);
+const contracts = ref([]);
 
 const search = ref("");
 const reportMonths = ref([]);
@@ -69,6 +70,7 @@ const filters = ref({
   division: "",
   department: "",
   brand: "",
+  contract: "",
   deviceStatus: "",
   fillStatus: "",
 });
@@ -103,6 +105,9 @@ const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.
 const buildingOptions = computed(() => toOptions(buildings.value));
 const divisionOptions = computed(() => toOptions(divisions.value));
 const brandOptions = computed(() => toOptions(brands.value));
+const contractOptions = computed(() =>
+  contracts.value.map((contract) => ({ value: String(contract.id), label: contract.contract_no }))
+);
 
 const floorOptions = computed(() => {
   const building = buildings.value.find((b) => b.name === filters.value.building);
@@ -135,6 +140,7 @@ function resetFilters() {
     division: "",
     department: "",
     brand: "",
+    contract: "",
     deviceStatus: "",
     fillStatus: "",
   };
@@ -145,12 +151,13 @@ function resetFilters() {
    -------------------------------------------------------------------------- */
 async function loadMasterData() {
   try {
-    const [building, floor, division, department, brand] = await Promise.all([
+    const [building, floor, division, department, brand, contract] = await Promise.all([
       api.get("/buildings"),
       api.get("/floors"),
       api.get("/divisions"),
       api.get("/departments"),
       api.get("/brands"),
+      api.get("/contracts"),
     ]);
 
     buildings.value = building.data ?? [];
@@ -158,6 +165,7 @@ async function loadMasterData() {
     divisions.value = division.data ?? [];
     departments.value = department.data ?? [];
     brands.value = brand.data ?? [];
+    contracts.value = contract.data ?? [];
   } catch (err) {
     console.error("Load master data error:", err);
   }
@@ -279,6 +287,7 @@ const filteredDevices = computed(() => {
       (!f.division || d.division_name === f.division) &&
       (!f.department || d.department_name === f.department) &&
       (!f.brand || d.brand_name === f.brand) &&
+      (!f.contract || String(d.contract_id) === f.contract) &&
       (!f.deviceStatus || d.status === f.deviceStatus) &&
       (!f.fillStatus || fillStatusOf(d.id) === f.fillStatus)
     );
@@ -428,7 +437,7 @@ onMounted(async () => {
 
     <UiCard class="mb-4" :title="t(&quot;ตัวกรองรายงาน&quot;)" data-print="hide">
       <template #actions>
-        <UiButton v-if="hasActiveFilter" size="sm" variant="ghost" @click="resetFilters"> {{ t("ล้างตัวกรองทั้งหมด") }} </UiButton>
+        <UiButton v-if="hasActiveFilter" size="sm" variant="danger-ghost" @click="resetFilters"> {{ t("ล้างตัวกรอง") }} </UiButton>
       </template>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -464,6 +473,10 @@ onMounted(async () => {
 
         <UiField :label="t(&quot;ยี่ห้อ&quot;)">
           <UiCombobox v-model="filters.brand" :options="brandOptions" :placeholder="t(&quot;ทุกยี่ห้อ&quot;)" :any-label="t(&quot;ทุกยี่ห้อ&quot;)" />
+        </UiField>
+
+        <UiField :label="t(&quot;สัญญา&quot;)">
+          <UiCombobox v-model="filters.contract" :options="contractOptions" :placeholder="t(&quot;ทุกสัญญา&quot;)" :any-label="t(&quot;ทุกสัญญา&quot;)" />
         </UiField>
 
         <UiField :label="t(&quot;อาคาร&quot;)">
@@ -512,6 +525,7 @@ onMounted(async () => {
         export-filename="report-print-by-device"
         :export-context="reportContext({ months: displayMonths, filters })"
         :search-placeholder="t(&quot;ค้นหาในตาราง…&quot;)"
+        :caption="t(&quot;ยอดพิมพ์รายเดือนตามเครื่อง&quot;)"
         :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับตัวกรอง&quot;)"
         max-height="68vh"
         sticky-first
