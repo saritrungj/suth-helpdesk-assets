@@ -17,6 +17,7 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 
+DELETE FROM device_contract_history;
 DELETE FROM device_service_period;
 DELETE FROM device_location_history;
 DELETE FROM print_transactions;
@@ -31,6 +32,7 @@ DELETE FROM fiscal_year;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
+ALTER TABLE device_contract_history AUTO_INCREMENT = 1;
 ALTER TABLE device_service_period AUTO_INCREMENT = 1;
 ALTER TABLE device_location_history AUTO_INCREMENT = 1;
 ALTER TABLE print_transactions AUTO_INCREMENT = 1;
@@ -94,8 +96,20 @@ INSERT INTO department (id, division_id, name, status) VALUES
 (1, 1, 'หน่วยบริการผู้ป่วยนอกและประสานงานการรักษาต่อเนื่องกลุ่มงานเวชศาสตร์ฟื้นฟูและกายภาพบำบัดผู้ป่วยเรื้อรัง', 'active'),
 (2, 1, 'ฝ่ายบริหาร', 'active');
 
-INSERT INTO contracts (id, contract_no, fiscal_year_id, price_per_page) VALUES
-(1, CONCAT('SUTH-CI-', @fy_be_year), 1, 0.45);
+-- สัญญาสองฉบับโดยตั้งใจ (ADR-0019)
+--   ฉบับที่ 1 ยืนยันช่วงที่มีผลแล้ว → ยอดของเครื่องในสัญญานี้คิดเงินได้ตามปกติ
+--   ฉบับที่ 2 ยังไม่ยืนยัน → ยอดของเครื่องในสัญญานี้ขึ้นว่า "ยังยืนยันราคาไม่ได้"
+--
+-- ถ้าทุกฉบับยืนยันครบ ชุด db จะไม่เคยเดินผ่านเส้นทางราคาที่ยืนยันไม่ได้เลยสักครั้ง
+-- ซึ่งเป็นเส้นทางที่ผู้ใช้จริงจะเจอทันทีหลังรัน migration
+INSERT INTO contracts
+(id, contract_no, fiscal_year_id, price_per_page, effective_from, effective_to, price_source, price_verified_at)
+VALUES
+(1, CONCAT('SUTH-CI-', @fy_be_year), 1, 0.45,
+ STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'),
+ LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d')),
+ 'สัญญาตัวอย่างสำหรับชุดทดสอบ', CURRENT_TIMESTAMP),
+(2, CONCAT('SUTH-CI-PENDING-', @fy_be_year), 1, 0.50, NULL, NULL, NULL, NULL);
 
 -- ------------------------------------------------------------------------------
 -- Devices — device_id 3 คือเครื่องที่ย้ายแล้ว สังกัดแผนกชื่อยาว เพื่อชนสองเคส
@@ -165,7 +179,9 @@ SELECT
   CONCAT('จุดบริการ ', seq.n),
   1,
   1 + MOD(seq.n, 2),
-  1,
+  -- เครื่องสุดท้ายผูกกับสัญญาที่ยังไม่ยืนยันช่วงที่มีผล ยอดของมันจึงขึ้นว่า
+  -- "ยังยืนยันราคาไม่ได้" ซึ่งเป็นสถานะที่ผู้ใช้จริงเจอทันทีหลังรัน migration
+  IF(seq.n = 30, 2, 1),
   NULL,
   'active',
   'installed',
@@ -198,3 +214,23 @@ SELECT d.id, @month_prev, 200 + (d.id * 13) FROM devices d WHERE d.id >= 7;
 
 INSERT INTO print_transactions (device_id, month, pages)
 SELECT d.id, @month_this, 250 + (d.id * 11) FROM devices d WHERE d.id >= 7;
+
+-- ------------------------------------------------------------------------------
+-- ช่วงการคิดเงินของแต่ละเครื่อง (ADR-0019) — ตัวที่บอกว่าเดือนไหนใช้ราคาของสัญญาไหน
+-- ------------------------------------------------------------------------------
+-- สร้างให้ทุกเครื่องที่ผูกสัญญา ครอบคลุมช่วงของสัญญาฉบับนั้น เหมือนกับที่ระบบสร้าง
+-- ให้ตอนผู้ดูแลกดยืนยันช่วงที่สัญญามีผล
+--
+-- เครื่องที่ 30 อยู่สัญญาฉบับที่ยังไม่ยืนยัน มีช่วงการคิดเงินก็จริง แต่หาราคาไม่ได้
+-- เพราะสัญญายังไม่ถูกรับรอง — ต่างจาก "ไม่มีช่วงเลย" ซึ่งแปลว่าไม่รู้ว่าอยู่สัญญาไหน
+INSERT INTO device_contract_history
+(device_id, contract_id, price_override, effective_from, effective_to, note)
+SELECT
+  d.id,
+  d.contract_id,
+  d.price_override,
+  STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'),
+  LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d')),
+  'ช่วงตั้งต้นของชุดทดสอบ'
+FROM devices d
+WHERE d.contract_id IS NOT NULL;

@@ -57,8 +57,11 @@ async function withCapturedQueries(work) {
       }]];
     }
 
-    if (sql.includes("FROM print_transactions pt")) {
-      return [[{ device_id: 99, month: "2026-01", pages: 1000 }]];
+    // ยอดพิมพ์พร้อมค่าใช้จ่ายที่ view คำนวณไว้แล้ว — หน้าค่าใช้จ่ายไม่คิดเงินเอง
+    // อีกต่อไป ราคาที่มีผลของแต่ละเดือนและจุดปัดเศษอยู่ใน v_monthly_kpi ที่เดียว
+    // (ADR-0019) 1000 หน้า x 0.98 x 0.50 บาท = 490.00
+    if (sql.includes("FROM v_monthly_kpi")) {
+      return [[{ device_id: 99, month: "2026-01", pages: 1000, price_per_page: "0.50", total_cost: "490.00" }]];
     }
 
     return [[]];

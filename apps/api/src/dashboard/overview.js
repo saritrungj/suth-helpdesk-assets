@@ -95,7 +95,11 @@ router.get(
         .query(
           `SELECT
              COALESCE(SUM(v.net_pages), 0) AS total_pages,
+             -- SUM() ข้ามแถวที่ราคายังยืนยันไม่ได้ ยอดนี้จึงเป็น "ยอดที่ยืนยันแล้ว"
+             -- ไม่ใช่ค่าใช้จ่ายทั้งหมด — ต้องส่ง unpriced_readings ไปคู่กันเสมอ
+             -- ไม่งั้นหน้าจอจะนำเสนอยอดบางส่วนเป็นข้อสรุป (ADR-0019 Q27)
              COALESCE(SUM(v.total_cost), 0) AS total_cost,
+             SUM(CASE WHEN v.total_cost IS NULL THEN 1 ELSE 0 END) AS unpriced_readings,
              COUNT(DISTINCT v.device_id) AS reporting_devices,
              -- นับเฉพาะเครื่องที่ยังใช้งานอยู่ไว้ต่างหาก เพราะการ์ด "ความครบถ้วน"
              -- เทียบตัวเลขนี้กับจำนวนเครื่องที่ใช้งานอยู่ ถ้าใช้ reporting_devices
@@ -125,6 +129,7 @@ router.get(
                  v.month,
                  SUM(v.net_pages) AS net_pages,
                  SUM(v.total_cost) AS total_cost,
+                 SUM(CASE WHEN v.total_cost IS NULL THEN 1 ELSE 0 END) AS unpriced_readings,
                  COUNT(DISTINCT v.device_id) AS device_count
                FROM v_monthly_kpi v
                JOIN devices d ON v.device_id = d.id
@@ -193,32 +198,28 @@ router.get(
           })
         : Promise.resolve(null),
 
-      // ---------- 6) เครื่องที่พิมพ์อยู่แต่คิดเงินไม่ได้ ----------
+      // ---------- 6) ยอดพิมพ์ที่ยังหาราคาที่มีผลไม่ได้ ----------
       //
-      // ราคาที่ใช้จริงคือ COALESCE(price_override, contract.price_per_page, 0)
-      // เครื่องที่ไม่มีทั้งสองอย่างจะคิดเป็น 0 บาทเสมอ — ยอดพิมพ์ของมันหายไปจากงบ
-      // เงียบๆ โดยไม่มีอะไรเตือน นี่คือบั๊กทางบัญชีที่ระบบไม่เคยบอกใคร
+      // เดิมคำถามคือ "เครื่องไหนไม่มีราคาเลย" ซึ่งตอบได้จากค่าปัจจุบันของเครื่อง
+      // และสัญญา ตอนนี้ราคาผูกกับช่วงเวลาที่มีผลจริง (ADR-0019) คำถามที่ถูกจึงเป็น
+      // "ยอดของเดือนไหนที่หาราคาไม่ได้" ซึ่งครอบคลุมกรณีที่คำถามเดิมมองไม่เห็น เช่น
+      // เครื่องที่มีสัญญาแต่ช่วงของสัญญาไม่ครอบคลุมเดือนนั้น (issue #81) และสัญญา
+      // ที่ยังไม่มีใครยืนยันช่วงที่มีผล
       //
       // ⚠️ ชื่อ alias ของ subquery ต้องไม่ใช่ "usage" — เป็นคำสงวนใน MariaDB
       // (ฐานข้อมูลที่ระบบนี้รันอยู่จริง) แม้ MySQL จะยอมรับก็ตาม
       db
         .query(
           `SELECT
-             COUNT(*) AS device_count,
-             COALESCE(SUM(pages_used.pages), 0) AS unbilled_pages
-           FROM devices d
-           LEFT JOIN contracts c ON d.contract_id = c.id
+             COUNT(DISTINCT v.device_id) AS device_count,
+             COUNT(*) AS unbilled_readings,
+             COALESCE(SUM(v.pages_printed), 0) AS unbilled_pages,
+             COUNT(DISTINCT d.contract_id) AS contract_count
+           FROM v_monthly_kpi v
+           JOIN devices d ON d.id = v.device_id
            LEFT JOIN building b ON d.building_id = b.id
-           LEFT JOIN (
-             SELECT device_id, SUM(pages) AS pages
-             FROM print_transactions
-             ${range ? "WHERE month BETWEEN ? AND ?" : ""}
-             GROUP BY device_id
-           ) pages_used ON pages_used.device_id = d.id
-           WHERE d.status = 'active'
-             AND d.price_override IS NULL
-             AND (c.price_per_page IS NULL OR c.price_per_page = 0)
-             AND COALESCE(pages_used.pages, 0) > 0
+           WHERE v.total_cost IS NULL
+             ${range ? "AND v.month BETWEEN ? AND ?" : ""}
              ${buildingClause} ${contractClause}`,
           [...(range ? [range.start_month, range.end_month] : []), ...buildingParam, ...contractParam]
         )
@@ -316,11 +317,14 @@ router.get(
       attention.push({
         code: "unbilled_devices",
         severity: "critical",
-        title: `มี ${unbilled.device_count} เครื่องที่พิมพ์แล้วแต่คิดค่าใช้จ่ายไม่ได้`,
-        detail: `รวม ${Number(unbilled.unbilled_pages).toLocaleString("th-TH")} แผ่นที่ไม่ได้ถูกนับเป็นค่าใช้จ่าย เพราะเครื่องไม่มีสัญญาและไม่มีราคาเฉพาะเครื่อง`,
+        title: `มี ${unbilled.device_count} เครื่องที่ยังยืนยันราคาไม่ได้`,
+        detail: `${Number(unbilled.unbilled_readings).toLocaleString("th-TH")} รายการ รวม ${Number(unbilled.unbilled_pages).toLocaleString("th-TH")} แผ่น ยังไม่ถูกนับในยอดเงิน เพราะยังหาราคาที่มีผลกับเดือนนั้นไม่ได้`,
         count: Number(unbilled.device_count),
-        params: { pages: Number(unbilled.unbilled_pages) },
-        action: { label: "ดูเครื่องที่ยังไม่มีสัญญา", to: "/assets", query: { unassigned: "1" } },
+        params: {
+          pages: Number(unbilled.unbilled_pages),
+          readings: Number(unbilled.unbilled_readings),
+        },
+        action: { label: "ไปยืนยันช่วงที่สัญญามีผล", to: "/admin/contract-prices" },
       });
     }
 
@@ -382,6 +386,9 @@ router.get(
       totals: {
         total_pages: Number(totals.total_pages),
         total_cost: Number(totals.total_cost),
+        // จำนวนยอดพิมพ์ที่ยังหาราคาที่มีผลไม่ได้ — total_cost ด้านบนไม่ได้รวมรายการ
+        // เหล่านี้ หน้าจอต้องบอกทั้งสองอย่างคู่กัน (Q27)
+        unpriced_readings: Number(totals.unpriced_readings) || 0,
         reporting_devices: Number(totals.reporting_devices),
         reporting_active_devices: Number(totals.reporting_active_devices),
         active_devices: activeDevices,
@@ -397,7 +404,11 @@ router.get(
       series: series.map((row) => ({
         month: row.month,
         net_pages: Number(row.net_pages),
-        total_cost: Number(row.total_cost),
+        // เดือนที่ทุกรายการยังยืนยันราคาไม่ได้ ต้องเป็น null ไม่ใช่ 0 — จุดที่ค่า
+        // เป็นศูนย์บนกราฟแปลว่า "เดือนนั้นไม่มีค่าใช้จ่าย" ซึ่งคนละเรื่องกับ
+        // "ยังไม่รู้ว่าเท่าไหร่" (Q27)
+        total_cost: row.total_cost === null ? null : Number(row.total_cost),
+        unpriced_readings: Number(row.unpriced_readings) || 0,
         device_count: Number(row.device_count),
       })),
 

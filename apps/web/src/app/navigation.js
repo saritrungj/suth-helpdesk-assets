@@ -6,6 +6,7 @@ import {
   ChartColumnBig,
   CirclePlus,
   ClipboardCheck,
+  BadgeCheck,
   FolderTree,
   Gauge,
   Layers,
@@ -203,6 +204,13 @@ export const HIDDEN_NAV_ITEMS = [
     label: t("ตรวจยืนยันการติดตั้ง"),
     icon: ClipboardCheck,
     keywords: t("installation review ตรวจ ยืนยัน ติดตั้ง สถานะ ความครบถ้วน"),
+    admin: true,
+  },
+  {
+    to: "/admin/contract-prices",
+    label: t("ยืนยันช่วงที่สัญญามีผล"),
+    icon: BadgeCheck,
+    keywords: t("contract price review ยืนยัน ราคา สัญญา ช่วงที่มีผล"),
     admin: true,
   },
 ];

@@ -70,4 +70,32 @@ function fiscalYearMonths(range) {
   return months;
 }
 
-module.exports = { getFiscalYearRange, fiscalYearMonths, BE_OFFSET };
+/**
+ * ช่วง "วันที่" ของปีงบ — วันแรกของเดือนเริ่ม ถึงวันสุดท้ายของเดือนจบ
+ *
+ * ใช้เสนอช่วงที่สัญญามีผลเป็นค่าตั้งต้นให้ผู้ดูแลกดยืนยัน (ADR-0019) เอกสารสัญญา
+ * ระบุปีงบไว้อยู่แล้ว การเสนอช่วงของปีงบนั้นจึงไม่ใช่การเดา แต่ก็ยังไม่ใช่การยืนยัน
+ * — ระบบเสนอ คนกดรับรอง
+ *
+ * คำนวณวันสุดท้ายของเดือนจาก `new Date(year, month, 0)` ไม่ใช่ตารางจำนวนวันที่
+ * เขียนเอง เพื่อไม่ต้องจัดการปีอธิกสุรทินเอง (ก.พ. ของปีงบไม่ใช่เดือนจบก็จริง
+ * แต่ฟังก์ชันนี้รับช่วงใดก็ได้ ไม่ใช่เฉพาะปีงบราชการ)
+ *
+ * @param {{ startMonth: string, endMonth: string }} range ช่วงเดือน "YYYY-MM"
+ * @returns {{ from: string, to: string }|null} วันที่ "YYYY-MM-DD"
+ */
+function fiscalYearDateRange(range) {
+  if (!range || !range.startMonth || !range.endMonth) return null;
+
+  const [endYear, endMonth] = String(range.endMonth).split("-").map(Number);
+  if (!Number.isInteger(endYear) || !Number.isInteger(endMonth)) return null;
+
+  const lastDay = new Date(endYear, endMonth, 0).getDate();
+
+  return {
+    from: `${range.startMonth}-01`,
+    to: `${range.endMonth}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
+module.exports = { getFiscalYearRange, fiscalYearMonths, fiscalYearDateRange, BE_OFFSET };

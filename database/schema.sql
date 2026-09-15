@@ -78,7 +78,28 @@ CREATE TABLE contracts (
     contract_no VARCHAR(100) NOT NULL UNIQUE,
     fiscal_year_id INT,
     price_per_page DECIMAL(10,2),
-    FOREIGN KEY (fiscal_year_id) REFERENCES fiscal_year(id)
+
+    -- ช่วงที่สัญญาฉบับนี้ (และราคาของมัน) มีผลจริง — ADR-0019
+    --
+    -- ⚠️ effective_from IS NULL = "ยังไม่มีใครยืนยันช่วงที่มีผล" ไม่ใช่ "มีผลตลอดกาล"
+    -- ราคาที่เก็บไว้เฉยๆ ไม่ใช่หลักฐานว่าราคานั้นมีผลกับเดือนไหนบ้าง ยอดพิมพ์ของ
+    -- เดือนที่ไม่มีราคาซึ่งยืนยันแล้วครอบคลุม จะรายงานว่า "ยังยืนยันราคาไม่ได้"
+    -- ไม่ใช่คิดเป็น 0 บาท (Q27) — ศูนย์บาทกับไม่รู้ราคาเป็นคนละเรื่อง และการ
+    -- แทนที่ด้วยศูนย์ทำให้ยอดพิมพ์จริงหายออกจากงบเงียบๆ
+    effective_from DATE DEFAULT NULL,
+    effective_to DATE DEFAULT NULL,
+
+    -- ใครยืนยันช่วงและราคานี้ จากเอกสารอะไร (Q26 ให้ยึดเอกสารที่ตรวจสอบได้)
+    price_source VARCHAR(255) DEFAULT NULL,
+    price_verified_by INT DEFAULT NULL,
+    price_verified_at TIMESTAMP NULL DEFAULT NULL,
+
+    FOREIGN KEY (fiscal_year_id) REFERENCES fiscal_year(id),
+    FOREIGN KEY (price_verified_by) REFERENCES users(id),
+
+    CONSTRAINT chk_contracts_effective_order CHECK (
+        effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from
+    )
 );
 
 CREATE TABLE devices (
@@ -230,13 +251,66 @@ CREATE TABLE device_service_period (
     )
 );
 
+-- ประวัติว่าเครื่องถูกคิดเงินภายใต้สัญญาฉบับไหนและราคาเฉพาะเครื่องเท่าไหร่ ในช่วงไหน
+-- (ADR-0019) — มิเรอร์ของ devices.contract_id และ devices.price_override แบบเดียวกับ
+-- ที่ device_location_history เป็นมิเรอร์ของคอลัมน์ที่ตั้ง
+--
+-- ทำไมต้องมี: devices.contract_id เป็น "ค่าปัจจุบัน" ที่ถูกใช้ตอบคำถามย้อนหลัง
+-- ("เดือนมีนาคมเครื่องนี้คิดราคาเท่าไหร่") การย้ายเครื่องไปสัญญาของปีงบใหม่จึงเปลี่ยน
+-- ยอดเงินของเดือนเก่าไปด้วยทันที ทั้งที่เดือนเก่าถูกคิดเงินตามสัญญาเดิมไปแล้วจริงๆ
+-- (ดู issue #81 ซึ่งแก้ไม่ได้อย่างปลอดภัยถ้าไม่มีตารางนี้)
+--
+-- contract_id = NULL คือช่วงที่เครื่องไม่ได้ผูกสัญญา ซึ่งต่างจาก "ไม่มีข้อมูลช่วงนั้น"
+-- — อย่างแรกคือรู้ว่าไม่มีสัญญา อย่างหลังคือยังไม่รู้
+CREATE TABLE device_contract_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id INT NOT NULL,
+
+    contract_id INT NULL,
+    price_override DECIMAL(10,2) NULL,
+
+    effective_from DATE NOT NULL,
+    effective_to DATE NULL,
+
+    note VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
+    FOREIGN KEY (contract_id) REFERENCES contracts(id),
+
+    INDEX idx_device_contract (device_id, effective_from, effective_to),
+
+    CONSTRAINT chk_device_contract_history_order CHECK (
+        effective_to IS NULL OR effective_to >= effective_from
+    )
+);
+
 -- ==============================================================================
 -- Views
+-- ==============================================================================
+--
+-- ## ราคาที่ใช้คิดเงินของเดือนหนึ่ง มาจากช่วงที่มีผลจริง ไม่ใช่ค่าปัจจุบัน (ADR-0019)
+--
+-- ทุก view ด้านล่างหาราคาแบบเดียวกันสามขั้น
+--
+--   1. หา "ช่วงการคิดเงิน" ของเครื่องที่ครอบคลุมเดือนนั้น (device_contract_history)
+--      ช่วงที่เริ่มทีหลังชนะเมื่อซ้อนกัน โดยมี id เป็นตัวตัดสินสุดท้าย — กฎเดียวกับ
+--      device_location_history ดู ADR-0014
+--   2. ช่วงนั้นมีราคาเฉพาะเครื่องไหม ถ้ามีใช้เลย
+--   3. ถ้าไม่มี ใช้ราคาของสัญญาที่ช่วงนั้นระบุ **เฉพาะเมื่อช่วงที่สัญญามีผลครอบคลุม
+--      เดือนนั้นด้วย** ไม่งั้นถือว่ายังยืนยันราคาไม่ได้
+--
+-- price_per_page เป็น NULL แปลว่า "ยังยืนยันราคาไม่ได้" ไม่ใช่ "ราคาศูนย์"
+-- total_cost จึงเป็น NULL ตามไปด้วย และ SUM() จะข้ามแถวเหล่านั้น — ทุกจุดที่แสดง
+-- ยอดรวมต้องบอกจำนวนรายการที่ยังยืนยันราคาไม่ได้ควบคู่ไปเสมอ (Q27) ไม่งั้นผู้อ่าน
+-- จะเข้าใจว่ายอดที่เห็นคือค่าใช้จ่ายทั้งหมด
+--
+-- ⚠️ ROUND(..., 2) คร่อมค่าใช้จ่ายของแต่ละแถวเสมอ ห้ามถอด — จุดปัดเศษของทั้งระบบ
+-- อยู่ที่ "ทีละรายการยอดพิมพ์" ดู packages/domain/money.cjs
 -- ==============================================================================
 
 CREATE OR REPLACE VIEW v_monthly_kpi AS
 SELECT
-
     pt.device_id,
     d.serial_number,
     d.status AS device_status,
@@ -245,13 +319,29 @@ SELECT
 
     (pt.pages * 0.98) AS net_pages,
 
+    CASE
+        WHEN dch.price_override IS NOT NULL THEN dch.price_override
+        WHEN c.id IS NOT NULL
+             AND c.price_verified_at IS NOT NULL
+             AND c.effective_from IS NOT NULL
+             AND pt.month >= DATE_FORMAT(c.effective_from, '%Y-%m')
+             AND (c.effective_to IS NULL OR pt.month <= DATE_FORMAT(c.effective_to, '%Y-%m'))
+        THEN c.price_per_page
+        ELSE NULL
+    END AS price_per_page,
+
     ROUND(
         (pt.pages * 0.98) *
-        COALESCE(
-            d.price_override,
-            c.price_per_page,
-            0
-        ),
+        CASE
+            WHEN dch.price_override IS NOT NULL THEN dch.price_override
+            WHEN c.id IS NOT NULL
+                 AND c.price_verified_at IS NOT NULL
+                 AND c.effective_from IS NOT NULL
+                 AND pt.month >= DATE_FORMAT(c.effective_from, '%Y-%m')
+                 AND (c.effective_to IS NULL OR pt.month <= DATE_FORMAT(c.effective_to, '%Y-%m'))
+            THEN c.price_per_page
+            ELSE NULL
+        END,
         2
     ) AS total_cost
 
@@ -260,8 +350,19 @@ FROM print_transactions pt
 JOIN devices d
 ON pt.device_id = d.id
 
+LEFT JOIN device_contract_history dch
+ON dch.id = (
+    SELECT h.id
+    FROM device_contract_history h
+    WHERE h.device_id = pt.device_id
+      AND pt.month >= DATE_FORMAT(h.effective_from, '%Y-%m')
+      AND (h.effective_to IS NULL OR pt.month <= DATE_FORMAT(h.effective_to, '%Y-%m'))
+    ORDER BY h.effective_from DESC, h.id DESC
+    LIMIT 1
+)
+
 LEFT JOIN contracts c
-ON d.contract_id = c.id;
+ON c.id = dch.contract_id;
 
 
 CREATE OR REPLACE VIEW v_summary_by_building AS
@@ -269,30 +370,20 @@ SELECT
 
     b.name AS building_name,
 
-    SUM(pt.pages * 0.98) AS total_net_pages,
+    SUM(v.net_pages) AS total_net_pages,
 
-    SUM(
-        ROUND(
-            (pt.pages * 0.98) *
-            COALESCE(
-                d.price_override,
-                c.price_per_page,
-                0
-            ),
-            2
-        )
-    ) AS total_building_cost
+    SUM(v.total_cost) AS total_building_cost,
 
-FROM print_transactions pt
+    -- รายการที่ยังยืนยันราคาไม่ได้ในอาคารนี้ — ต้องแสดงคู่กับยอดเงินเสมอ (Q27)
+    SUM(CASE WHEN v.total_cost IS NULL THEN 1 ELSE 0 END) AS unpriced_readings
+
+FROM v_monthly_kpi v
 
 JOIN devices d
-ON pt.device_id = d.id
+ON v.device_id = d.id
 
 LEFT JOIN building b
 ON d.building_id = b.id
-
-LEFT JOIN contracts c
-ON d.contract_id = c.id
 
 GROUP BY b.name;
 
@@ -300,13 +391,13 @@ GROUP BY b.name;
 CREATE OR REPLACE VIEW v_compare_usage_costs AS
 SELECT
 
-    pt.month,
+    v.month,
 
     fy.year AS fiscal_year,
 
-    d.serial_number,
+    v.serial_number,
 
-    d.status AS device_status,
+    v.device_status,
 
     b.name AS building_name,
 
@@ -318,28 +409,16 @@ SELECT
 
     br.name AS brand_name,
 
-    (pt.pages * 0.98) AS net_pages,
+    v.net_pages,
 
-    COALESCE(
-        d.price_override,
-        c.price_per_page,
-        0
-    ) AS cost_per_page,
+    v.price_per_page AS cost_per_page,
 
-    ROUND(
-        (pt.pages * 0.98) *
-        COALESCE(
-            d.price_override,
-            c.price_per_page,
-            0
-        ),
-        2
-    ) AS total_cost
+    v.total_cost
 
-FROM print_transactions pt
+FROM v_monthly_kpi v
 
 JOIN devices d
-ON pt.device_id = d.id
+ON v.device_id = d.id
 
 LEFT JOIN contracts c
 ON d.contract_id = c.id
@@ -361,6 +440,7 @@ ON d.department_id = dept.id
 
 LEFT JOIN brand br
 ON d.brand_id = br.id;
+
 
 -- ==============================================================================
 -- Prototype User

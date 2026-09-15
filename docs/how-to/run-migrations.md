@@ -34,6 +34,13 @@ mysql -u root -p your_database -e "DESCRIBE fiscal_year; DESCRIBE devices; SHOW 
 | 6 | `migration_update_page_deduction_to_two_percent.sql` | เปลี่ยน view รายงานให้หัก 2% จากจำนวนหน้าดิบ |
 | 7 | `migration_add_device_service_period.sql` | สถานะการติดตั้ง ช่วงความรับผิดชอบ และ index ของเดือน |
 | 8 | `migration_round_cost_per_reading.sql` | ให้ view ปัดค่าใช้จ่ายทีละรายการ ให้ตรงกับที่โค้ดคำนวณ (ต้องรันหลังข้อ 6) |
+| 9 | `migration_add_effective_pricing.sql` | ราคาผูกกับช่วงที่มีผลจริง และประวัติว่าเครื่องคิดเงินภายใต้สัญญาไหน (ต้องรันหลังข้อ 8) |
+
+> ⚠️ **หลังรันข้อ 9 รายงานทุกหน้าจะแสดงค่าใช้จ่ายว่า "ยังยืนยันราคาไม่ได้"**
+>
+> เป็นพฤติกรรมที่ตั้งใจตาม [ADR-0019](../decisions/0019-effective-pricing-history.md) — ราคาที่เก็บไว้เฉยๆ ไม่ใช่หลักฐานว่ามีผลกับเดือนไหน
+>
+> เข้าหน้า **ยืนยันช่วงที่สัญญามีผล** (`/admin/contract-prices`) แล้วกดยืนยันทีละฉบับ ระบบเสนอช่วงของปีงบให้แล้ว ยอดเงินจะกลับมาครบทันทีที่ยืนยันครบ
 
 ```sh
 mysql --default-character-set=utf8mb4 -u root -p your_database < database/migrations/migration_add_device_location.sql

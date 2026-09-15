@@ -31,6 +31,7 @@ const {
 const cache = require("../shared/cache");
 const { DEVICE_STATUSES, INSTALLATION_STATUSES, MAX_LENGTH } = require("@suth/domain");
 const servicePeriod = require("./service-period");
+const { recordContractHistory } = require("./contract-history");
 
 // ============================================================
 // Schema ของข้อมูลขาเข้า
@@ -60,6 +61,13 @@ const deviceBody = z.object({
   // เครื่องที่เพิ่งติดตั้งวันนี้กับเครื่องที่อยู่มาก่อนแล้วเพิ่งมาลงทะเบียน ต่างกัน
   // ตรงนี้ และระบบเดาแทนไม่ได้ (Q21)
   installed_on: dateString.optional(),
+
+  // วันที่การคิดเงินตามสัญญา/ราคานี้เริ่มมีผล — ไม่ส่งมา = ใช้วันเดียวกับที่เริ่ม
+  // รับผิดชอบยอด ซึ่งเป็นกรณีปกติของเครื่องที่ลงทะเบียนพร้อมผูกสัญญา
+  //
+  // แยกช่องไว้เพราะสองเรื่องนี้ไม่จำเป็นต้องเริ่มพร้อมกัน — เครื่องที่ติดตั้งเดือน
+  // มกราแต่เพิ่งย้ายเข้าสัญญาใหม่เดือนตุลา มีวันเริ่มคนละวัน (ADR-0019)
+  billing_from: dateString.optional(),
 });
 
 // แก้ไขทรัพย์สินทั่วไป — ไม่รวมที่ตั้งและสังกัด การย้ายเครื่องใช้ moveBody แยกต่างหาก
@@ -75,6 +83,13 @@ const updateBody = deviceBody.omit({
   department_id: true,
   installation_status: true,
   installed_on: true,
+}).extend({
+  // ฟอร์มแก้ไขเปลี่ยนสัญญาและราคาเฉพาะเครื่องได้ ซึ่งเป็นการเปลี่ยน "วิธีคิดเงิน"
+  // ผู้ใช้จึงต้องบอกได้ว่ามีผลตั้งแต่เมื่อไหร่ ไม่ส่งมา = วันนี้ (เหตุการณ์ที่เพิ่งเกิด)
+  //
+  // นี่คือช่องที่ทำให้แก้ issue #81 ได้อย่างปลอดภัย: ย้ายเครื่องไปสัญญาปีงบปัจจุบัน
+  // โดยระบุว่ามีผลตั้งแต่ 1 ต.ค. แล้วเดือนก่อนหน้ายังคิดตามสัญญาเดิมเหมือนเดิม
+  billing_from: dateString.optional(),
 });
 
 /**
@@ -436,6 +451,16 @@ exports.create = async (req, res) => {
       userId: req.user?.id ?? null,
     });
 
+    // เปิดช่วงการคิดเงินช่วงแรก ไม่งั้นยอดของเครื่องนี้จะไม่มีราคาจนกว่าจะมีคน
+    // แก้สัญญาครั้งแรก — ยอดพิมพ์จริงจะขึ้นว่า "ยังยืนยันราคาไม่ได้" ทั้งที่เพิ่ง
+    // กรอกสัญญาไปเมื่อครู่ (ADR-0019)
+    await recordContractHistory(
+      conn,
+      result.insertId,
+      { contractId: data.contract_id ?? null, priceOverride: data.price_override ?? null },
+      data.billing_from || data.installed_on || servicePeriod.today()
+    );
+
     return result.insertId;
   });
 
@@ -446,7 +471,8 @@ exports.create = async (req, res) => {
 // PUT /api/devices/:id — แก้ไขทรัพย์สินทั่วไป (ไม่แตะที่ตั้ง/สังกัด)
 // ============================================================
 exports.update = async (req, res) => {
-  const { serial_number, brand_id, model, contract_id, price_override, status } = req.body;
+  const { serial_number, brand_id, model, contract_id, price_override, status, billing_from } =
+    req.body;
 
   await db.withTransaction(async (conn) => {
     const [result] = await conn.query(
@@ -473,6 +499,15 @@ exports.update = async (req, res) => {
       installationStatus: device.installation_status,
       deviceStatus: status,
     });
+
+    // เปลี่ยนสัญญาหรือราคาเฉพาะเครื่อง = เปลี่ยนวิธีคิดเงินตั้งแต่วันที่ระบุเป็นต้นไป
+    // เดือนก่อนหน้ายังคิดตามช่วงเดิมที่ปิดไปแล้ว ไม่ถูกแตะ (ADR-0019, issue #81)
+    await recordContractHistory(
+      conn,
+      Number(req.params.id),
+      { contractId: contract_id ?? null, priceOverride: price_override ?? null },
+      billing_from || servicePeriod.today()
+    );
   });
 
   res.json({ message: "บันทึกการแก้ไขเรียบร้อยแล้ว" });
