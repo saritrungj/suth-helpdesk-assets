@@ -54,6 +54,17 @@ const contracts = ref([]);
 const unassignedDevices = ref([]);
 const showUnassigned = ref(false);
 
+/*
+ * เครื่องที่พิมพ์ในปีงบนี้แต่สัญญาอยู่คนละปีงบ
+ *
+ * ยอดรวมของหน้านี้คิดจาก "สัญญาที่ขึ้นทะเบียนกับปีงบนี้" ส่วนแท็บตามฝ่าย/แผนก
+ * และแดชบอร์ดคิดจาก "เดือนของยอดพิมพ์" เครื่องที่ยังผูกสัญญาปีก่อนแต่ยังพิมพ์อยู่
+ * จึงตกจากยอดหน้านี้ไปทั้งก้อน ทั้งที่มีค่าใช้จ่ายจริง — ต้องเห็น ไม่ใช่ซ่อนไว้
+ */
+const outsideYearDevices = ref([]);
+const outsideYearTotal = ref(0);
+const showOutsideYear = ref(false);
+
 const monthsWithData = ref([]);
 const monthSelection = ref([]);
 const search = ref("");
@@ -202,12 +213,16 @@ async function loadExpense() {
 
     if (request !== requestId) return;
     contracts.value = res.data.contracts ?? [];
+    outsideYearDevices.value = res.data.outside_year_devices ?? [];
+    outsideYearTotal.value = Number(res.data.outside_year_total ?? 0);
     loadedContext = context;
   } catch (err) {
     if (request !== requestId) return;
     console.error("Load expense error:", err);
     loadError.value = t("โหลดข้อมูลค่าใช้จ่ายไม่สำเร็จ");
     contracts.value = [];
+    outsideYearDevices.value = [];
+    outsideYearTotal.value = 0;
   } finally {
     if (request === requestId) { loading.value = false; loaded = true; }
   }
@@ -305,7 +320,7 @@ onMounted(() => {
       <UiStat plain
         :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
         :unit="t(&quot;บาท&quot;)"
-        :hint="t(&quot;หัก 2% แล้ว&quot;)"
+        :hint="t(&quot;หัก 2% แล้ว · เฉพาะสัญญาของปีงบนี้&quot;)"
         :loading="loading"
       >
         {{ formatBahtValue(grandTotal) }}
@@ -507,6 +522,56 @@ onMounted(() => {
         </div>
       </section>
     </div>
+
+    <!-- เครื่องที่สัญญาอยู่คนละปีงบ — ยอดของกลุ่มนี้ไม่อยู่ในยอดรวมด้านบน แต่ไปโผล่
+         ในแท็บตามฝ่าย/แผนกและบนแดชบอร์ด ซึ่งคิดจากเดือนของยอดพิมพ์ ถ้าไม่บอกตรงนี้
+         คนที่เอาสองตัวเลขมาเทียบจะไม่มีทางรู้ว่าทำไมไม่เท่ากัน -->
+    <section v-if="outsideYearDevices.length" class="card overflow-hidden mt-4 border-warn-line">
+      <h2>
+        <button
+          type="button"
+          class="w-full flex items-center gap-3 px-4 py-3.5 text-left bg-warn-soft hover:brightness-[0.98] transition-all"
+          :aria-expanded="showOutsideYear"
+          aria-controls="outside-year-devices"
+          @click="showOutsideYear = !showOutsideYear"
+        >
+          <ChevronRight
+            :size="16"
+            class="shrink-0 text-warn-ink transition-transform duration-200"
+            :class="showOutsideYear && 'rotate-90'"
+            aria-hidden="true"
+          />
+
+          <TriangleAlert :size="16" class="shrink-0 text-warn-ink" aria-hidden="true" />
+
+          <span class="min-w-0 flex-1">
+            <span class="block font-medium text-warn-ink"> {{ t("เครื่องที่พิมพ์ในปีงบนี้ แต่สัญญาอยู่คนละปีงบ") }} </span>
+            <span class="block text-2xs text-warn-ink">
+              {{ t("ค่าใช้จ่าย {0} บาทของกลุ่มนี้ไม่ถูกนับในยอดรวมด้านบน แต่ถูกนับในแท็บตามฝ่าย/แผนกและบนแดชบอร์ด", [formatBahtValue(outsideYearTotal)]) }}
+            </span>
+          </span>
+
+          <UiBadge tone="warn" size="lg">
+            {{ formatCount(outsideYearDevices.length) }} {{ t("เครื่อง") }} </UiBadge>
+        </button>
+      </h2>
+
+      <ul v-if="showOutsideYear" id="outside-year-devices" class="list-none border-t border-warn-line">
+        <li
+          v-for="device in outsideYearDevices"
+          :key="device.id"
+          class="flex items-center justify-between gap-3 px-4 py-2.5 pl-10 border-b border-line-soft last:border-0"
+        >
+          <span class="min-w-0">
+            <span class="block font-mono text-sm text-ink">{{ device.serial_number }}</span>
+            <span class="block text-2xs text-ink-mute">
+              {{ t("สัญญา {0} · ปีงบ {1}", [device.contract_no, device.contract_fiscal_year ?? "—"]) }}
+            </span>
+          </span>
+          <span class="shrink-0 text-sm text-ink numeral">{{ formatBahtValue(device.total_cost) }} {{ t("บาท") }}</span>
+        </li>
+      </ul>
+    </section>
 
     <!-- เครื่องที่ยังไม่ผูกสัญญา — เดิมมองไม่เห็นจากหน้านี้เลย ทั้งที่เป็นสาเหตุ
          อันดับหนึ่งที่ยอดรวมไม่ตรงกับใบแจ้งหนี้ -->
