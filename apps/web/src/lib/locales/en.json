@@ -806,7 +806,7 @@
   "สาเหตุ": "Reason",
   "ดาวน์โหลดรายการที่ต้องแก้": "Download issues to fix",
   "ยังไม่ตรวจยืนยันสถานะการติดตั้งของเครื่องเดิม {0} เครื่อง ความครบถ้วนด้านบนจึงยังยืนยันไม่ได้": "Installation status is unverified for {0} existing devices, so the completeness figure above cannot be confirmed yet.",
-  "หัก 2% แล้ว · เฉพาะสัญญาของปีงบนี้": "After the 2% deduction · Contracts registered to this fiscal year only",
+  "หัก 2% แล้ว · เฉพาะสัญญาของปีงบนี้": "After 2% deduction · Contracts registered to this fiscal year only",
   "เครื่องที่พิมพ์ในปีงบนี้ แต่สัญญาอยู่คนละปีงบ": "Devices that printed in this fiscal year but whose contract belongs to another one",
   "ค่าใช้จ่าย {0} บาทของกลุ่มนี้ไม่ถูกนับในยอดรวมด้านบน แต่ถูกนับในแท็บตามฝ่าย/แผนกและบนแดชบอร์ด": "THB {0} from this group is excluded from the total above, but is included in the by-division/department tab and on the dashboard",
   "สัญญา {0} · ปีงบ {1}": "Contract {0} · FY {1}"
