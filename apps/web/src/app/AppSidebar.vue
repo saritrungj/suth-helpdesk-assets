@@ -19,6 +19,7 @@ import { APP_NAME, APP_NAME_SHORT, BRAND_ASSETS, ORG_NAME_SHORT } from "./brand"
 import { authState } from "../store/auth";
 import { closeMobileNav, toggleNavCollapsed, uiState } from "../store/ui";
 import { UiTooltip } from "../ui";
+import AppNotifications from "./AppNotifications.vue";
 
 const route = useRoute();
 
@@ -183,6 +184,10 @@ watch(
         </ul>
       </section>
     </nav>
+
+    <div class="shrink-0 border-t border-chrome-line p-2">
+      <AppNotifications />
+    </div>
 
     <!-- ปุ่มพับ — เฉพาะจอใหญ่ที่แถบเมนูอยู่ประจำที่ -->
     <div class="hidden lg:block shrink-0 border-t border-chrome-line p-2">

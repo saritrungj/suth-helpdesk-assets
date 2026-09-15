@@ -5,55 +5,27 @@ import { formatMonth } from "../lib/locale-format";
 
 import { t } from "../lib/locale";
 
-/**
- * Dashboard — หน้าแรกหลังเข้าระบบ
- *
- * ลำดับของข้อมูลบนหน้านี้เรียงตาม "คำถามที่คนเปิดหน้านี้ถามจริง" ไล่จากกว้างไปแคบ
- *
- *   1. มีอะไรที่ฉันต้องทำไหม                                   -> แถบสิ่งที่ต้องจัดการ
- *   2. ตอนนี้เราจ่ายไปเท่าไหร่แล้ว และมีเครื่องอยู่กี่เครื่อง   -> การ์ดตัวเลขสรุป
- *   3. ยอดขึ้นหรือลงจากช่วงก่อน                                -> กราฟแนวโน้ม
- *   4. ใครใช้เยอะ                                              -> อันดับแผนก/อาคาร/เครื่อง
- *
- * ข้อ 1 เคยไม่มีอยู่บนหน้านี้เลย และเป็นคำถามที่คนถามก่อนคำถามอื่นทั้งหมด — ถ้า
- * ไม่มีอะไรค้าง เขาปิดหน้าไปทำงานอื่น ถ้ามี เขาต้องรู้ทันทีว่าคืออะไรและกดตรงไหน
- * แดชบอร์ดเดิมตอบได้แค่ "ตัวเลขตอนนี้เป็นเท่าไหร่" ซึ่งเป็นคำถามอันดับสอง
- *
- * ตัวเลขค่าใช้จ่ายบนหน้านี้เป็น "ค่าใช้จ่ายสุทธิ" ที่หัก 2% แล้วตามกฎธุรกิจที่ยืนยัน
- * และเขียนกำกับไว้ทุกจุดที่แสดง เพราะเลขนี้ถูกเอาไปเทียบกับใบแจ้งหนี้จริง
- * ถ้าไม่บอกว่าหักแล้วจะกลายเป็นการรายงานผิด
- */
+// Executive overview: totals, monthly trend, and detailed breakdowns.
 import { computed, onMounted, ref } from "vue";
-import {
-  ArrowUpRight,
-  Boxes,
-  FileText,
-  Printer,
-  ReceiptText,
-  RefreshCw,
-  Wallet,
-} from "lucide-vue-next";
-import { fromSatang, sumSatang, toSatang } from "@suth/domain";
+import { ArrowUpRight, RefreshCw, Printer, FileText, Info } from "lucide-vue-next";
 import api from "../services/api";
 import { errorMessage } from "../lib/api-error";
 import { useOverview } from "../api/queries";
-import { activeFiscalYear, activeFiscalYearRange } from "../store/fiscalYear";
-import { formatBahtValue, formatCount, percentOf } from "../lib/format";
+import { activeFiscalYear } from "../store/fiscalYear";
+import { formatBahtValue, formatCount } from "../lib/format";
 import { exportSheet } from "../lib/export-xlsx";
-import AttentionPanel from "../components/AttentionPanel.vue";
-import DashboardHero from "../components/DashboardHero.vue";
 import DashboardFilter from "../components/DashboardFilter.vue";
 import UsageTrendChart from "../components/UsageTrendChart.vue";
 import {
   UiAlert,
-  UiBadge,
   UiButton,
-  UiCard,
   UiDrawer,
   UiEmpty,
-  UiMeter,
+  UiSegmented,
   UiSkeleton,
-  UiStat,
+  UiCard,
+  UiMetric,
+  UiRankList,
 } from "../ui";
 
 /* --------------------------------------------------------------------------
@@ -65,6 +37,9 @@ const highlightsLoading = ref(true);
 const highlightsError = ref("");
 const highlights = ref({ device_status: [], top_departments: [], top_devices: [], contracts: [] });
 
+/** หน่วยของกราฟ — ไม่เปลี่ยนขอบเขตข้อมูลของหน้า */
+const chartMetric = ref("cost");
+
 const departmentOrder = ref("desc");
 const deviceOrder = ref("desc");
 const detailOpen = ref(false);
@@ -74,31 +49,16 @@ const detailKind = ref("device");
 const detailRows = ref([]);
 
 const ORDER_OPTIONS = [
-  { value: "desc", label: t("มากสุด") },
-  { value: "asc", label: t("น้อยสุด") },
+  { value: "desc", label: t("สูงสุด") },
+  { value: "asc", label: t("ต่ำสุด") },
 ];
 
 /* --------------------------------------------------------------------------
    ค่าที่คำนวณจากข้อมูลที่โหลดมาแล้ว — ไม่ยิง API เพิ่ม
    -------------------------------------------------------------------------- */
 
-/** รวมเงินในหน่วยสตางค์ที่เป็นจำนวนเต็ม ไม่บวกทศนิยมลอยตัวของบาท (ดู packages/domain/money.cjs) */
-function sumCost(rows) {
-  return fromSatang(sumSatang((rows ?? []).map((r) => r.total_cost_satang ?? toSatang(r.total_cost))));
-}
-
-const netCostTotal = computed(() => sumCost(highlights.value.contracts));
-
-const topDepartmentMax = computed(() =>
-  Math.max(1, ...highlights.value.top_departments.map((d) => Number(d.total_cost || 0)))
-);
-
 const totalDeviceStatus = computed(() =>
   highlights.value.device_status.reduce((sum, s) => sum + Number(s.count || 0), 0)
-);
-
-const topDeviceMax = computed(() =>
-  Math.max(1, ...highlights.value.top_devices.map((d) => Number(d.total_pages || 0)))
 );
 
 const loading = computed(() => overviewLoading.value || highlightsLoading.value);
@@ -127,19 +87,9 @@ const {
 
 const totals = computed(() => overview.value?.totals ?? {});
 const comparison = computed(() => overview.value?.comparison ?? null);
-const attention = computed(() => overview.value?.attention ?? []);
+const metricChange = computed(() => comparison.value?.[chartMetric.value === "cost" ? "cost_change_percent" : "pages_change_percent"]);
 const coverage = computed(() => overview.value?.coverage ?? null);
 
-/**
- * เส้นแนวโน้มจิ๋วบนการ์ดตัวเลข
- *
- * ใช้ชุดข้อมูลก้อนเดียวกับที่การ์ดอื่นในหน้าใช้ จึงไม่มีคำขอเพิ่มแม้แต่คำขอเดียว
- * หน้าที่ของมันคือบอกว่าตัวเลขนี้กำลังขึ้นหรือลง ซึ่งเป็นบริบทที่ตัวเลขเดี่ยวๆ
- * ไม่มีทางบอกได้ — ตั้งใจไม่มีแกนและไม่มีตัวเลขกำกับ ค่าจริงอยู่ในกราฟใหญ่แล้ว
- *
- * ดึงทั้งปีงบเสมอ ไม่ใช่แค่ช่วงที่กรอง เพราะเส้นแนวโน้มที่มีจุดเดียว (ตอนเลือก
- * เดือนเดียว) ไม่ได้บอกอะไรเลย
- */
 /**
  * บอกว่า "เทียบกับช่วงไหน" ด้วยเดือนจริง ไม่ใช่คำว่า "ช่วงก่อนหน้า" ที่คลุมเครือ
  * ผู้ใช้ต้องรู้ว่าตัวเลข -12% ที่เห็นนั้นเทียบกับอะไร ถึงจะเชื่อมันได้
@@ -154,31 +104,22 @@ const comparisonHint = computed(() => {
 });
 
 /**
- * โทนสีของการ์ด "ความครบถ้วนของข้อมูล"
+ * ป้ายผลต่างจากช่วงก่อนหน้า
  *
- * นี่เป็นการวัดเทียบเพดานจริง (ควรกรอกครบทุกเดือนที่ผ่านไปแล้ว) ไม่ใช่การเทียบ
- * สัดส่วนระหว่างรายการ จึงใช้สีบอกสถานะได้อย่างถูกต้อง — ต่างจากแถบเทียบแผนก
- * ด้านล่างที่ห้ามใช้สีสถานะ เพราะการเป็นแผนกที่ใช้เยอะที่สุดไม่ใช่ "ความผิดพลาด"
- *
- * ⚠️ วัดจาก **เดือน** ไม่ใช่จาก reporting_active_devices/active_devices ซึ่งนับ
- * "เครื่องที่เคยมียอดอย่างน้อยหนึ่งเดือน" — เคยใช้ค่านั้นแล้วการ์ดขึ้นเขียวว่า
- * "18/18" ทั้งที่ยังกรอกไม่ครบ 5 เดือน
+ * `inverse` = การเพิ่มขึ้นเป็นเรื่องไม่ดี (ค่าใช้จ่าย) จึงกลับสี — ค่าใช้จ่ายที่
+ * เพิ่มขึ้นต้องไม่ขึ้นเป็นสีเขียวเพียงเพราะกราฟชี้ขึ้น
  */
-const dataCompletenessTone = computed(() => {
-  const elapsed = Number(coverage.value?.total_months || 0);
-  const complete = Number(coverage.value?.annual_complete_months || 0);
-  if (!elapsed || !coverage.value?.applicable) return "ink";
-  if (complete >= elapsed) return "ok";
-  return complete >= elapsed * 0.8 ? "warn" : "danger";
-});
+function deltaLabel(value) {
+  if (value === null || value === undefined) return "";
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  return `${sign}${Math.abs(value).toLocaleString("th-TH", { maximumFractionDigits: 1 })}%`;
+}
 
-const trend = computed(() => {
-  const series = overview.value?.series ?? [];
-  return {
-    pages: series.map((row) => row.net_pages),
-    cost: series.map((row) => row.total_cost),
-  };
-});
+function deltaTone(value, inverse = false) {
+  if (value === null || value === undefined || value === 0) return "text-ink-mute bg-surface-3";
+  const good = inverse ? value < 0 : value > 0;
+  return good ? "text-ok-ink bg-ok-soft" : "text-danger-ink bg-danger-soft";
+}
 
 /* --------------------------------------------------------------------------
    โหลดข้อมูล
@@ -292,329 +233,149 @@ async function exportDetails() {
   });
 }
 
+const departmentRanks = computed(() => highlights.value.top_departments.map((row) => ({
+  key: row.department_id ?? row.department_name,
+  label: row.department_name || t("ไม่ระบุแผนก"),
+  detail: row.division_name || "",
+  value: Number(row.total_cost || 0),
+  displayValue: formatBahtValue(row.total_cost),
+})));
+const contractPreview = computed(() => highlights.value.contracts.slice(0, 4));
+
 onMounted(loadHighlights);
 </script>
 
 <template>
-  <div>
-    <DashboardHero
-      :fiscal-year="activeFiscalYear"
-      :range="activeFiscalYearRange"
-      :coverage="coverage"
-      :loading="overviewLoading"
-    />
+  <div class="flex flex-col gap-5">
+    <header class="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 pt-1 pb-2">
+      <div>
+        <h1 class="text-3xl font-semibold tracking-tight text-ink">{{ t("ภาพรวมการพิมพ์") }}</h1>
+        <p class="text-sm text-ink-mute mt-2">{{ t("ค่าใช้จ่ายและการใช้เครื่องพิมพ์") }}<span v-if="activeFiscalYear"> · {{ t("ปีงบ") }} {{ yearLabel(activeFiscalYear.year) }}</span></p>
+      </div>
+      <div class="flex flex-wrap items-end gap-2 min-w-0">
+        <DashboardFilter bare class="min-w-0" @filter="onFilter" />
+        <UiButton variant="secondary" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="loading" @click="reload"><template #icon><RefreshCw :size="16" /></template></UiButton>
+      </div>
+    </header>
 
-    <!--
-      อยู่เหนือทุกอย่างเพราะเป็นคำถามแรกที่คนเปิดหน้านี้ถาม และอยู่เหนือแถวตัวกรอง
-      เพราะ "งานที่ค้าง" ไม่ควรถูกซ่อนด้วยตัวกรองที่ผู้ใช้เผลอตั้งไว้จากครั้งก่อน
-    -->
-    <AttentionPanel :items="attention" :loading="overviewLoading" class="mb-5" />
-
-    <!-- ปุ่มรีเฟรชอยู่ติดแถบตัวกรอง เพราะสิ่งที่มันโหลดใหม่คือข้อมูล "ของตัวกรอง
-         ชุดที่ตั้งอยู่ตอนนี้" ไม่ใช่ทั้งหน้าแบบไม่มีเงื่อนไข -->
-    <div class="flex items-start gap-3 mb-5">
-      <DashboardFilter class="flex-1 min-w-0" @filter="onFilter" />
-
-      <UiButton
-        variant="secondary"
-        icon-only
-        :label="t(&quot;โหลดข้อมูลใหม่&quot;)"
-        :loading="loading"
-        class="mt-px shrink-0"
-        @click="reload"
-      >
-        <template #icon><RefreshCw :size="15" /></template>
-      </UiButton>
-    </div>
-
-    <UiAlert v-if="overviewIsError" tone="danger" class="mb-4">
+    <UiAlert v-if="overviewIsError" tone="danger">
       {{ errorMessage(overviewError, t("โหลดภาพรวมไม่สำเร็จ")) }}
-      <template #actions>
-        <UiButton size="sm" variant="secondary" @click="refetchOverview"> {{ t("ลองใหม่") }} </UiButton>
-      </template>
+      <template #actions><UiButton size="sm" variant="secondary" @click="refetchOverview">{{ t("ลองใหม่") }}</UiButton></template>
     </UiAlert>
-
-    <!-- ตัวเลขสรุป — ค่าใช้จ่ายสุทธิเป็นใบที่เน้น เพราะเป็นตัวเลขที่ผู้บริหารถามถึงก่อนเสมอ -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
-      <UiStat
-        :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
-        :unit="t(&quot;บาท&quot;)"
-        :hint="t(&quot;ทุกสัญญา หลังหัก 2%&quot;)"
-        tone="ink"
-        :loading="overviewLoading"
-        :trend="trend.cost"
-        :delta="comparison?.cost_change_percent ?? null"
-        delta-inverse
-      >
-        {{ formatBahtValue(totals.total_cost) }}
-        <template #icon><Wallet :size="16" class="text-brand-ink opacity-70" /></template>
-      </UiStat>
-
-      <UiStat
-        :label="t(&quot;จำนวนหน้าที่พิมพ์&quot;)"
-        :unit="t(&quot;หน้า&quot;)"
-        :hint="comparisonHint"
-        tone="ink"
-        :loading="overviewLoading"
-        :trend="trend.pages"
-        :delta="comparison?.pages_change_percent ?? null"
-        delta-inverse
-      >
-        {{ formatCount(totals.total_pages) }}
-        <template #icon><Printer :size="16" class="text-ink-faint" /></template>
-      </UiStat>
-
-      <UiStat
-        :label="t(&quot;อุปกรณ์ในทะเบียน&quot;)"
-        :unit="t(&quot;เครื่อง&quot;)"
-        :hint="t(&quot;ใช้งานอยู่ {0} เครื่อง&quot;, [formatCount(totals.active_devices)])"
-        tone="ink"
-        :loading="overviewLoading"
-      >
-        {{ formatCount(totals.total_devices) }}
-        <template #icon><Boxes :size="16" class="text-ink-faint" /></template>
-      </UiStat>
-
-      <!--
-        เดิมการ์ดใบนี้แสดง "จำนวนรายการที่บันทึกไว้" ซึ่งเป็นจำนวนแถวในฐานข้อมูล —
-        เป็นตัวเลขที่ไม่ตอบคำถามอะไรของใครเลย เปลี่ยนเป็นความครบถ้วนของข้อมูลแทน
-        ซึ่งบอกได้ทันทีว่าตัวเลขทั้งหน้านี้เชื่อถือได้แค่ไหน
-      -->
-      <UiStat
-        :label="t(&quot;ความครบถ้วนของข้อมูล&quot;)"
-        :unit="t(&quot;เดือน&quot;)"
-        :hint="t(&quot;ทั้งปีงบ · ค้าง {0} เดือน · ยังไม่ถึงกำหนด {1} เดือน&quot;, [formatCount(coverage?.incomplete_months), formatCount(coverage?.not_due_months)])"
-        :tone="dataCompletenessTone"
-        :loading="overviewLoading"
-      >
-        {{ formatCount(coverage?.annual_complete_months) }}/{{ formatCount(coverage?.total_months) }}
-        <template #icon><FileText :size="16" class="text-ink-faint" /></template>
-      </UiStat>
-    </div>
-
-    <p
-      v-if="!highlightsLoading && totalDeviceStatus"
-      class="mb-4 text-xs text-ink-mute"
-    >
-      {{ t("ยังไม่ตรวจยืนยันสถานะการติดตั้งของเครื่องเดิม {0} เครื่อง ความครบถ้วนด้านบนจึงยังยืนยันไม่ได้", [formatCount(totalDeviceStatus)]) }}
-      <RouterLink to="/assets" class="text-brand-ink hover:underline">{{ t("เปิดทะเบียนทรัพย์สิน") }}</RouterLink>
-    </p>
-
-    <!-- ยอดพิมพ์และค่าใช้จ่ายใช้ช่วงและสัญญาเดียวกัน วางคู่กันเพื่อเทียบได้ทันที -->
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
-      <UiCard
-        :eyebrow="t(&quot;ยอดพิมพ์ตามช่วงที่เลือก&quot;)"
-        :title="t(&quot;ยอดพิมพ์รายเดือน&quot;)"
-      >
-        <UsageTrendChart :filter="filter" metric="pages" height="19rem" />
-      </UiCard>
-
-      <UiCard
-        :eyebrow="t(&quot;ค่าใช้จ่ายตามช่วงที่เลือก&quot;)"
-        :title="t(&quot;ค่าใช้จ่ายสุทธิรายเดือน&quot;)"
-      >
-        <UsageTrendChart :filter="filter" metric="cost" height="19rem" />
-      </UiCard>
-    </div>
-    <div class="grid grid-cols-1 gap-4 mb-4">
-      <UiCard
-        :eyebrow="t(&quot;ค่าใช้จ่ายสุทธิ (หัก 2%)&quot;)"
-        :title="departmentOrder === 'desc' ? t(&quot;แผนกที่ใช้งบสูงสุด&quot;) : t(&quot;แผนกที่ใช้งบน้อยสุด&quot;)"
-      >
-        <template #actions>
-          <UiSegmented
-            v-model="departmentOrder"
-            :options="ORDER_OPTIONS"
-            size="sm"
-            :label="t(&quot;เรียงลำดับแผนก&quot;)"
-            @update:model-value="loadHighlights"
-          />
-        </template>
-
-        <div v-if="highlightsLoading" class="flex flex-col gap-4">
-          <UiSkeleton v-for="n in 5" :key="n" height="2.25rem" />
-        </div>
-
-        <UiEmpty
-          v-else-if="!highlights.top_departments.length"
-          :title="t(&quot;ไม่มีข้อมูลในช่วงที่เลือก&quot;)"
-          :description="t(&quot;ลองขยายช่วงเดือน หรือเลือกทุกอาคาร&quot;)"
-          variant="search"
-          compact
-        />
-
-        <ol v-else class="flex flex-col gap-3.5 list-none">
-          <li
-            v-for="(dept, index) in highlights.top_departments"
-            :key="dept.department_id ?? dept.department_name"
-            class="flex items-start gap-3"
-          >
-            <span class="w-5 shrink-0 pt-0.5 text-2xs font-semibold text-ink-mute numeral text-right">
-              {{ index + 1 }}
-            </span>
-
-            <div class="min-w-0 flex-1">
-              <div class="flex items-baseline justify-between gap-3">
-                <p class="text-sm text-ink-soft truncate">
-                  {{ dept.department_name || t("ไม่ระบุแผนก") }}
-                  <span v-if="dept.division_name" class="text-ink-mute">· {{ dept.division_name }}</span>
-                </p>
-                <p class="text-sm font-semibold text-ink numeral shrink-0">
-                  {{ formatBahtValue(dept.total_cost) }}
-                </p>
-              </div>
-
-              <!-- แถบนี้เทียบสัดส่วนระหว่างแผนก ไม่ใช่การใช้งบเทียบเพดาน
-                   จึงใช้สีเดียวตลอด — สีแดงตรงนี้จะสื่อผิดว่าแผนกอันดับหนึ่งใช้เกิน -->
-              <UiMeter
-                :value="Number(dept.total_cost || 0)"
-                :max="topDepartmentMax"
-                size="sm"
-                tone="brand"
-                hide-value
-                class="mt-1.5"
-                :label="t(&quot;สัดส่วนของ {0}&quot;, [dept.department_name || 'แผนก'])"
-              />
-            </div>
-          </li>
-        </ol>
-
-        <template #footer>
-          <UiButton :to="{ path: '/expense', query: { tab: 'department' } }" variant="ghost" size="sm"> {{ t("ดูรายละเอียดทุกแผนก") }} <template #trailing><ArrowUpRight :size="14" /></template>
-          </UiButton>
-        </template>
-      </UiCard>
-    </div>
-
-    <UiAlert v-if="highlightsError" tone="danger" class="mb-4">
+    <UiAlert v-if="highlightsError" tone="danger">
       {{ highlightsError }}
-      <template #actions>
-        <UiButton size="sm" variant="secondary" @click="loadHighlights"> {{ t("ลองใหม่") }} </UiButton>
-      </template>
+      <template #actions><UiButton size="sm" variant="secondary" @click="loadHighlights">{{ t("ลองใหม่") }}</UiButton></template>
     </UiAlert>
 
-    <!-- เครื่องที่ใช้งานหนัก + สัญญา -->
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <UiCard
-        :eyebrow="t(&quot;รายเครื่อง&quot;)"
-        :title="deviceOrder === 'desc' ? t(&quot;เครื่องที่พิมพ์มากที่สุด&quot;) : t(&quot;เครื่องที่พิมพ์น้อยที่สุด&quot;)"
-      >
-        <template #actions>
-          <UiSegmented
-            v-model="deviceOrder"
-            :options="ORDER_OPTIONS"
-            size="sm"
-            :label="t(&quot;เรียงลำดับเครื่อง&quot;)"
-            @update:model-value="loadHighlights"
-          />
-        </template>
-
-        <div v-if="highlightsLoading" class="flex flex-col gap-2">
-          <UiSkeleton v-for="n in 5" :key="n" height="2.5rem" />
-        </div>
-
-        <UiEmpty
-          v-else-if="!highlights.top_devices.length"
-          :title="t(&quot;ไม่มีข้อมูลการพิมพ์ในช่วงที่เลือก&quot;)"
-          variant="search"
-          compact
-        />
-
-        <ol v-else class="flex flex-col list-none divide-y divide-line-soft">
-          <li
-            v-for="(device, index) in highlights.top_devices"
-            :key="device.device_id"
-            class="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
-          >
-            <span
-              class="grid place-items-center shrink-0 w-6 h-6 rounded-md bg-brand-soft text-brand-ink text-2xs font-semibold numeral"
-            >
-              {{ index + 1 }}
-            </span>
-
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-ink-soft font-mono truncate">
-                <RouterLink :to="{ path: `/assets/${device.device_id}`, query: { fy: activeFiscalYear?.id } }" class="inline-flex items-center min-h-6 underline">{{ device.serial_number || device.asset_code || "—" }}</RouterLink>
-              </p>
-              <!-- ชื่อแผนกตรงนี้พอดีบรรทัดที่ระยะห่างปกติ แต่ล้นเมื่อผู้ใช้เพิ่ม
-                   letter/word-spacing ตาม 1.4.12 จึงให้ขึ้นบรรทัดใหม่แทนการตัดทิ้ง -->
-              <p class="text-2xs text-ink-mute break-words">
-                {{ device.department_name || t("ไม่ระบุแผนก") }}
-                <span class="block whitespace-normal">{{ deviceLocationLabel(device.locations) }}</span>
-              </p>
+    <div class="report-grid">
+      <div class="report-column">
+        <UiCard flush class="order-1">
+          <div class="p-5 sm:p-6 pb-0 sm:pb-0">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <UiMetric :label="chartMetric === 'cost' ? t('ค่าใช้จ่ายสุทธิ') : t('ยอดพิมพ์สุทธิ')" :value="overviewIsError ? '—' : chartMetric === 'cost' ? formatBahtValue(totals.total_cost) : formatCount(totals.total_pages)" :unit="chartMetric === 'cost' ? t('บาท') : t('หน้า')" :loading="overviewLoading" size="hero">
+                <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span v-if="metricChange != null" class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" :class="chartMetric === 'cost' ? deltaTone(metricChange, true) : 'bg-surface-3 text-ink-soft'">{{ deltaLabel(metricChange) }}</span>
+                  <span v-if="metricChange != null">{{ comparisonHint }}</span>
+                  <span v-else>{{ t("รวมตามช่วงเวลาที่เลือก") }}</span>
+                </div>
+              </UiMetric>
+              <UiSegmented v-model="chartMetric" :options="[{ value: 'cost', label: t('ค่าใช้จ่าย') }, { value: 'pages', label: t('ยอดพิมพ์') }]" :label="t('ข้อมูลที่แสดงในกราฟ')" size="sm" />
             </div>
-
-            <div class="shrink-0 text-right">
-              <p class="text-sm font-semibold text-ink numeral">
-                {{ formatCount(device.total_pages) }}
-                <span class="text-2xs font-normal text-ink-mute"> {{ t("หน้า") }} </span>
-              </p>
-              <div class="w-16 h-1 mt-1 rounded-full bg-surface-3 overflow-hidden ml-auto">
-                <div
-                  class="h-full rounded-full bg-brand"
-                  :style="{ width: `${percentOf(device.total_pages, topDeviceMax)}%` }"
-                  aria-hidden="true"
-                ></div>
-              </div>
+            <div class="mt-6 mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 class="text-sm text-ink-soft font-medium">{{ chartMetric === 'cost' ? t("ค่าใช้จ่ายสุทธิรายเดือน") : t("ยอดพิมพ์รายเดือน") }}</h2>
+              <div id="dashboard-chart-controls"></div>
             </div>
-          </li>
-        </ol>
-
-        <template #footer>
-          <UiButton variant="ghost" size="sm" @click="openDetails('device')">{{ t("ดูรายละเอียดรายเครื่อง") }} <template #trailing><ArrowUpRight :size="14" /></template></UiButton>
-        </template>
-      </UiCard>
-
-      <UiCard :eyebrow="t(&quot;สัญญาเช่า&quot;)" :title="t(&quot;ค่าใช้จ่ายแยกตามสัญญา&quot;)">
-        <div v-if="highlightsLoading" class="flex flex-col gap-2">
-          <UiSkeleton v-for="n in 3" :key="n" height="2.75rem" />
-        </div>
-
-        <UiEmpty
-          v-else-if="!highlights.contracts.length"
-          :title="t(&quot;ยังไม่มีสัญญาในระบบ&quot;)"
-          :description="t(&quot;สร้างสัญญาก่อนเพื่อให้ระบบคิดค่าใช้จ่ายต่อแผ่นได้&quot;)"
-          compact
-        >
-          <template #actions>
-            <UiButton to="/admin/contracts" variant="primary" size="sm"> {{ t("ไปสร้างสัญญา") }} </UiButton>
-          </template>
-        </UiEmpty>
-
-        <ul v-else class="flex flex-col list-none divide-y divide-line-soft">
-          <li
-            v-for="contract in highlights.contracts"
-            :key="contract.id"
-            class="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
-          >
-            <span
-              class="grid place-items-center shrink-0 w-8 h-8 rounded-lg bg-surface-3 text-ink-mute"
-              aria-hidden="true"
-            >
-              <ReceiptText :size="15" />
-            </span>
-
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-ink-soft truncate">{{ contract.contract_no }}</p>
-              <p class="flex items-center gap-1.5 text-2xs text-ink-mute">
-                <UiBadge v-if="contract.fiscal_year" size="sm" tone="neutral"> {{ t("ปีงบ") }} {{ yearLabel(contract.fiscal_year) }}
-                </UiBadge>
-                <span class="numeral">{{ formatCount(contract.device_count) }} {{ t("เครื่อง") }} </span>
-              </p>
+            <UsageTrendChart :filter="filter" :metric="chartMetric" height="15rem" controls-target="#dashboard-chart-controls" />
+            <p class="mt-3 mb-5 text-xs text-ink-mute">{{ t("เฉพาะเดือนที่บันทึกข้อมูลแล้ว · ยอดสุทธิหลังหักจำนวนหน้า 2%") }}</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 border-t border-line divide-y sm:divide-y-0 sm:divide-x divide-line">
+            <div class="p-5 sm:px-6">
+              <UiMetric :label="chartMetric === 'cost' ? t('ยอดพิมพ์สุทธิ') : t('ค่าใช้จ่ายสุทธิ')" :value="overviewIsError ? '—' : chartMetric === 'cost' ? formatCount(totals.total_pages) : formatBahtValue(totals.total_cost)" :unit="chartMetric === 'cost' ? t('หน้า') : t('บาท')" :loading="overviewLoading" />
             </div>
+            <div class="p-5 sm:px-6">
+              <UiMetric :label="t('เครื่องพิมพ์ทั้งหมด')" :value="overviewIsError ? '—' : formatCount(totals.total_devices)" :unit="t('เครื่อง')" :loading="overviewLoading" />
+              <p class="mt-1.5 text-xs text-ink-mute">{{ t("ใช้งานอยู่ {0} เครื่อง", [formatCount(totals.active_devices)]) }}</p>
+            </div>
+            <div class="p-5 sm:px-6">
+              <UiMetric :label="t('เดือนที่บันทึกครบ')" :value="overviewIsError ? '—' : `${formatCount(coverage?.annual_complete_months)} / ${formatCount(coverage?.total_months)}`" :loading="overviewLoading" />
+              <p class="mt-1.5 text-xs text-ink-mute">{{ totalDeviceStatus ? t("ทั้งปีงบ · รอยืนยันการติดตั้ง") : t("ความครบถ้วนของข้อมูลทั้งปีงบ") }}</p>
+            </div>
+          </div>
+        </UiCard>
+        <UiCard flush class="order-3">
+          <div class="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-6 mb-4">
+            <div>
+              <h2 class="text-lg font-semibold text-ink">{{ deviceOrder === 'desc' ? t("เครื่องที่ใช้งานมากที่สุด") : t("เครื่องที่ใช้งานน้อยที่สุด") }}</h2>
+              <p class="text-xs text-ink-mute mt-1">{{ t("จัดอันดับจากยอดพิมพ์สุทธิในช่วงที่เลือก") }}</p>
+            </div>
+            <UiSegmented v-model="deviceOrder" :options="ORDER_OPTIONS" size="sm" :label="t('เรียงลำดับเครื่อง')" @update:model-value="loadHighlights" />
+          </div>
+          <div v-if="highlightsLoading" class="px-6 pb-6 flex flex-col gap-3"><UiSkeleton v-for="n in 5" :key="n" height="3rem" /></div>
+          <UiEmpty v-else-if="!highlights.top_devices.length" :title="t('ไม่มีข้อมูลการพิมพ์ในช่วงที่เลือก')" compact />
+          <div v-else class="overflow-x-auto px-5 sm:px-6">
+            <table class="w-full text-sm">
+              <caption class="sr-only">{{ t("ยอดพิมพ์ตามเครื่อง") }}</caption>
+              <thead><tr class="text-ink-mute border-b border-line"><th scope="col" class="text-left py-2 font-normal">{{ t("เครื่อง / แผนก") }}</th><th scope="col" class="text-right py-2 font-normal whitespace-nowrap">{{ t("หน้าสุทธิ") }}</th></tr></thead>
+              <tbody>
+                <tr v-for="device in highlights.top_devices" :key="device.device_id" class="border-b border-line-soft last:border-0">
+                  <td class="py-3 pr-3">
+                    <div class="flex items-start gap-3">
+                      <span class="hidden sm:grid size-9 shrink-0 place-items-center rounded-lg bg-surface-3 text-ink-mute"><Printer :size="17" aria-hidden="true" /></span>
+                      <div class="min-w-0">
+                        <RouterLink :to="{ path: `/assets/${device.device_id}`, query: { fy: activeFiscalYear?.id } }" class="text-ink font-medium underline underline-offset-4 decoration-line">{{ device.serial_number || device.asset_code || "—" }}</RouterLink>
+                        <p class="text-xs text-ink-mute mt-0.5 break-words">{{ device.department_name || t("ไม่ระบุแผนก") }}</p>
+                        <p v-if="device.locations?.length" class="text-xs text-ink-mute break-words">{{ deviceLocationLabel(device.locations) }}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="text-right font-semibold text-ink numeral whitespace-nowrap">{{ formatCount(device.total_pages) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="border-t border-line px-5 py-3 sm:px-6"><UiButton variant="ghost" size="sm" @click="openDetails('device')">{{ t("ดูทุกเครื่อง") }}<template #trailing><ArrowUpRight :size="14" /></template></UiButton></div>
+        </UiCard>
+      </div>
+      <div class="report-column">
+        <UiCard flush class="order-2">
+          <div class="p-5 sm:p-6">
+            <div class="flex items-start justify-between gap-3 mb-1">
+              <h2 class="text-lg font-semibold text-ink">{{ t("ค่าใช้จ่ายตามแผนก") }}</h2>
+              <UiButton to="/by-department" variant="ghost" size="sm" icon-only :label="t('ดูทุกแผนก')"><template #icon><ArrowUpRight :size="17" /></template></UiButton>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-5">
+              <p class="text-xs text-ink-mute">{{ t("ค่าใช้จ่ายสุทธิ · บาท") }}</p>
+              <UiSegmented v-model="departmentOrder" :options="ORDER_OPTIONS" size="sm" :label="t('เรียงลำดับแผนก')" @update:model-value="loadHighlights" />
+            </div>
+            <div v-if="highlightsLoading" class="flex flex-col gap-3"><UiSkeleton v-for="n in 5" :key="n" height="3rem" /></div>
+            <UiEmpty v-else-if="!departmentRanks.length" :title="t('ไม่มีข้อมูลในช่วงที่เลือก')" compact />
+            <UiRankList v-else :items="departmentRanks" :label="t('ค่าใช้จ่ายตามแผนก')" />
+          </div>
+          <div class="border-t border-line px-5 py-3 sm:px-6">
+            <UiButton to="/by-department" variant="ghost" size="sm">{{ t("ดูทุกแผนก") }}<template #trailing><ArrowUpRight :size="14" /></template></UiButton>
+          </div>
+        </UiCard>
+        <UiCard flush class="order-4">
+          <div class="p-5 sm:p-6 pb-3 sm:pb-3">
+            <div class="flex items-center justify-between gap-2"><h2 class="text-lg font-semibold text-ink">{{ t("ค่าใช้จ่ายตามสัญญา") }}</h2><FileText :size="18" class="text-ink-mute" aria-hidden="true" /></div>
+            <p class="text-xs text-ink-mute mt-1">{{ t("ยอดสุทธิตามช่วงเวลาที่เลือก") }}</p>
+          </div>
+          <div v-if="highlightsLoading" class="px-6 pb-6 flex flex-col gap-3"><UiSkeleton v-for="n in 3" :key="n" height="3rem" /></div>
+          <UiEmpty v-else-if="!contractPreview.length" :title="t('ไม่มีข้อมูลสัญญาในช่วงที่เลือก')" compact />
+          <ul v-else class="list-none px-5 sm:px-6 divide-y divide-line-soft">
+            <li v-for="contract in contractPreview" :key="contract.id" class="py-4">
+              <div class="flex items-baseline justify-between gap-3"><p class="text-sm font-semibold text-ink break-all">{{ contract.contract_no }}</p><p class="text-sm font-semibold text-ink numeral shrink-0">{{ formatBahtValue(contract.total_cost) }}</p></div>
+              <div class="flex justify-between gap-3 mt-1 text-xs text-ink-mute"><p>{{ formatCount(contract.device_count) }} {{ t("เครื่อง") }}<span v-if="contract.fiscal_year"> · {{ t("ปีงบ") }} {{ yearLabel(contract.fiscal_year) }}</span></p><span>{{ t("บาท") }}</span></div>
+            </li>
+          </ul>
+          <div class="border-t border-line px-5 py-3 sm:px-6"><UiButton variant="ghost" size="sm" @click="openDetails('contract')">{{ t("ดูทุกสัญญา") }}<template #trailing><ArrowUpRight :size="14" /></template></UiButton></div>
+        </UiCard>
+      </div>
+    </div>
 
-            <p class="shrink-0 text-sm font-semibold text-ink numeral">
-              {{ formatBahtValue(contract.total_cost) }}
-              <span class="text-2xs font-normal text-ink-mute"> {{ t("บาท") }} </span>
-            </p>
-          </li>
-        </ul>
-
-        <template #footer>
-          <UiButton variant="ghost" size="sm" @click="openDetails('contract')"> {{ t("ดูรายละเอียดทุกสัญญา") }} <template #trailing><ArrowUpRight :size="14" /></template>
-          </UiButton>
-        </template>
-      </UiCard>
+    <div v-if="!highlightsLoading && totalDeviceStatus" class="flex items-start gap-2 text-xs text-ink-mute">
+      <Info :size="14" class="shrink-0 mt-0.5" aria-hidden="true" />
+      <p>{{ t("ความครบถ้วนของข้อมูลยังยืนยันไม่ได้ จนกว่าจะตรวจสถานะการติดตั้งเครื่องเดิม {0} เครื่อง", [formatCount(totalDeviceStatus)]) }} <RouterLink to="/assets" class="underline text-brand-ink">{{ t("ตรวจสอบทะเบียน") }}</RouterLink></p>
     </div>
 
     <UiDrawer
@@ -629,7 +390,7 @@ onMounted(loadHighlights);
         <div v-else-if="detailLoading" class="flex flex-col gap-2"><UiSkeleton v-for="n in 6" :key="n" height="2.75rem" /></div>
         <UiEmpty v-else-if="!detailRows.length" :title="t(&quot;ไม่มีข้อมูลตามตัวกรองนี้&quot;)" compact />
         <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm">
+          <table class="w-full text-base">
             <thead><tr class="border-b border-line-soft text-left text-ink-mute"><th class="py-2">{{ detailKind === 'device' ? 'Serial' : t('สัญญา') }}</th><th v-if="detailKind === 'device'">{{ t("รุ่น / แผนก") }}</th><th v-else class="text-right">{{ t("เครื่อง") }}</th><th class="text-right">{{ t("หน้าสุทธิ") }}</th><th class="text-right">{{ t("ค่าใช้จ่ายสุทธิ") }}</th></tr></thead>
             <tbody><tr v-for="row in detailRows" :key="row.key" class="border-b border-line-soft"><td class="py-2" :class="detailKind === 'device' && 'font-mono'">{{ detailKind === 'device' ? row.serial_number : row.contract_no }}</td><td v-if="detailKind === 'device'">{{ row.model }}<span class="block text-xs text-ink-mute">{{ row.department_name }}</span></td><td v-else class="text-right numeral">{{ formatCount(row.device_count) }}</td><td class="text-right numeral">{{ formatCount(row.total_pages) }}</td><td class="text-right numeral">{{ formatBahtValue(row.total_cost) }}</td></tr></tbody>
           </table>

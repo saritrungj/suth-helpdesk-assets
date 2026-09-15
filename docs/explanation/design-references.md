@@ -27,6 +27,20 @@
 
 ## 1. Layout และการจัดลำดับสายตา
 
+### Dashboard — ปรับใหม่ 15 กันยายน 2026
+
+เจ้าของระบบไม่รับงาน Dashboard รุ่นการ์ด KPI สี่ใบ จึงเปิดดูต้นฉบับจริงใหม่ก่อนปรับโครงหน้า สี และข้อความ รอบนี้ยังรอเจ้าของระบบตรวจรับหน้าตา ผลทดสอบทางเทคนิคไม่ถือเป็นการรับรองงานออกแบบ
+
+| ต้นฉบับที่ตรวจ | สิ่งที่นำมาใช้ | จุดใช้จริง |
+|---|---|---|
+| [Plausible live dashboard](https://plausible.io/plausible.io) | ตัวเลขและกราฟเป็นพื้นที่ต่อเนื่องกัน; รายการอันดับใช้แถบสีอ่อนรองหลังข้อมูล | `Dashboard.vue`, `UiMetric.vue`, `UiRankList.vue` |
+| [Linear Insights](https://linear.app/insights) — ภาพ Dashboard บนหน้า product | แผงข้อมูลมีขอบบาง ขนาดตามเนื้อหา และใช้ชื่อ metric ตรงๆ | `Dashboard.vue`, `design/report.css`; แยกแผนก เครื่อง และสัญญาออกจากแท็บ |
+| [Stripe Dashboard documentation](https://docs.stripe.com/dashboard/basics) | ใช้ภาพรวมเป็นจุดเริ่มต้นก่อนเปิดรายงานและข้อมูลรายการ | รักษาแผงรายละเอียดรายเครื่อง/สัญญาและการส่งออกใน `Dashboard.vue`; แหล่งนี้ใช้อ้างพฤติกรรม ไม่ได้ใช้เป็นหลักฐานภาพหน้าจอ |
+
+สีของ Dashboard รอบนี้เป็น neutral/indigo ที่กำหนดผ่าน semantic tokens ใน `tokens.css` ใช้เฉพาะ `.report-workspace` บนเส้นทาง Dashboard; กฎสีแบรนด์ของหน้าธุรกิจอื่นยังอยู่ตามเดิม ภาพอ้างอิงภายนอกเก็บใน `output/playwright/reference-*.png` เพื่อเทียบงานบนเครื่อง ไม่ได้บรรจุเป็น asset ของผลิตภัณฑ์
+
+หัวข้อด้านล่างเป็นที่มาขององค์ประกอบเดิมและหน้าธุรกิจอื่น ไม่ใช่คำอธิบาย layout ล่าสุดของ Dashboard
+
 | แหล่ง | ที่มา | เอามาใช้ที่ |
 |---|---|---|
 | [Linear — Design Refresh](https://linear.app/now/behind-the-latest-design-refresh) | บทความจากทีมออกแบบผลิตภัณฑ์จริง | `app/AppSidebar.vue` — แถบเมนูเป็นพื้นหลังของงาน, แบ่งหมวดตามจังหวะใช้งาน, active มีทั้งแผ่นพื้น/ขีด/`aria-current` และย่อเป็น rail ได้ |

@@ -37,6 +37,21 @@
    ค่าเหล่านี้เหมือนกันทั้งสองโหมด ตัวที่สลับตามโหมดคือชั้น semantic ด้านล่าง
    --------------------------------------------------------------------------- */
 :root {
+  /* Neutral ink and indigo for analytical workspaces. */
+  --slate-50: oklch(0.985 0.002 270);
+  --slate-100: oklch(0.965 0.004 270);
+  --slate-200: oklch(0.925 0.007 270);
+  --slate-500: oklch(0.600 0.025 270);
+  --slate-600: oklch(0.500 0.025 270);
+  --slate-700: oklch(0.420 0.030 270);
+  --slate-900: oklch(0.235 0.024 270);
+  --slate-950: oklch(0.180 0.020 270);
+  --indigo-50: oklch(0.969 0.014 280);
+  --indigo-200: oklch(0.885 0.052 280);
+  --indigo-400: oklch(0.740 0.130 280);
+  --indigo-600: oklch(0.540 0.210 280);
+  --indigo-700: oklch(0.470 0.190 280);
+  --indigo-950: oklch(0.255 0.065 280);
   /* neutral — เทาอมฟ้าเย็นบางๆ (hue 220) ให้กลมกลืนกับ teal ไม่ใช่เทากลางที่ดูตาย */
   --n-50: oklch(0.985 0.003 220);
   --n-100: oklch(0.968 0.006 220);
@@ -663,4 +678,59 @@
     from { background-position: 200% 0; }
     to { background-position: -200% 0; }
   }
+}
+
+/* Report workspace semantic palette — scoped to the dashboard route.
+   White/slate text surfaces with a single indigo action accent. */
+.report-workspace {
+  --chart-6: var(--indigo-600);
+  --brand-ring: var(--indigo-600);
+  --canvas: var(--slate-50);
+  --chrome: var(--slate-50);
+  --chrome-line: var(--slate-200);
+  --chrome-hover: var(--slate-100);
+  --surface: white;
+  --surface-2: var(--slate-50);
+  --surface-3: var(--slate-100);
+  --line: var(--slate-200);
+  --line-soft: var(--slate-100);
+  --ink: var(--slate-950);
+  --ink-soft: var(--slate-700);
+  --ink-mute: var(--slate-600);
+  --field-line: var(--slate-500);
+  --field-line-strong: var(--slate-600);
+  --brand: var(--indigo-600);
+  --brand-hover: var(--indigo-700);
+  --brand-active: var(--indigo-700);
+  --brand-on: white;
+  --brand-ink: var(--indigo-700);
+  --brand-soft: var(--indigo-50);
+  --brand-soft-hover: var(--indigo-200);
+  --brand-line: var(--indigo-200);
+}
+[data-mode="dark"] .report-workspace {
+  --chart-6: var(--indigo-400);
+  --brand-ring: var(--indigo-400);
+  --canvas: var(--slate-950);
+  --chrome: var(--slate-950);
+  --chrome-line: var(--slate-700);
+  --chrome-hover: var(--slate-900);
+  --surface: var(--slate-900);
+  --surface-2: var(--slate-950);
+  --surface-3: var(--slate-700);
+  --line: var(--slate-700);
+  --line-soft: var(--slate-700);
+  --ink: var(--slate-50);
+  --ink-soft: var(--slate-200);
+  --ink-mute: var(--indigo-200);
+  --field-line: var(--slate-500);
+  --field-line-strong: var(--indigo-400);
+  --brand: var(--indigo-400);
+  --brand-hover: var(--indigo-200);
+  --brand-active: var(--indigo-200);
+  --brand-on: var(--slate-950);
+  --brand-ink: var(--indigo-200);
+  --brand-soft: var(--indigo-950);
+  --brand-soft-hover: var(--slate-700);
+  --brand-line: var(--indigo-600);
 }

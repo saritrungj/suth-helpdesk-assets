@@ -1,34 +1,12 @@
 <script setup>
 import { t } from "../lib/locale";
 
-/**
- * AttentionPanel — "มีอะไรที่ต้องทำไหม"
- *
- * ## ทำไมสิ่งนี้อยู่บนสุดของหน้าแรก
- *
- * แดชบอร์ดเดิมตอบได้แค่ "ตัวเลขตอนนี้เป็นเท่าไหร่" ซึ่งเป็นคำถามที่คนถามเป็น
- * อันดับสอง คำถามแรกที่คนเปิดระบบมาถามจริงคือ "มีอะไรค้างที่ฉันต้องทำหรือเปล่า"
- * — ถ้าไม่มี เขาปิดหน้าไปทำอย่างอื่น ถ้ามี เขาต้องรู้ทันทีว่าคืออะไรและกดตรงไหน
- *
- * หลักการออกแบบแดชบอร์ดที่ใช้กันจริง (NN/g) บอกตรงกันว่าให้เอาสิ่งที่ต้องลงมือทำ
- * ขึ้นก่อนตัวเลขเฉยๆ และการเตือนต้องมี "บริบท" กับ "ก้าวถัดไป" ไม่ใช่แค่แจ้งว่า
- * มีปัญหา — คำเตือนที่ไม่บอกทางแก้จะถูกเพิกเฉยภายในสองสัปดาห์
- *
- * ## กฎที่บังคับไว้ในนี้
- *
- * 1. **ทุกรายการต้องมีปุ่มที่พาไปแก้ได้จริง** ไม่ใช่แค่บอกว่ามีปัญหา
- * 2. **ไม่เกิน 6 รายการ** (API ตัดมาให้แล้ว) — แดชบอร์ดที่เตือนยี่สิบเรื่องคือ
- *    แดชบอร์ดที่ไม่มีใครอ่านคำเตือนเลย
- * 3. **เมื่อไม่มีอะไรค้าง ต้องบอกว่าไม่มี** ไม่ใช่หายไปเฉยๆ — ช่องว่างตรงที่เคยมี
- *    คำเตือนทำให้คนสงสัยว่าระบบพังหรือเปล่า การยืนยันว่า "ตรวจแล้ว ไม่มีอะไรค้าง"
- *    คือข้อมูลที่มีค่าพอๆ กับตัวคำเตือนเอง
- * 4. **สีไม่ใช่ตัวบอกความหมายเพียงอย่างเดียว** ทุกระดับมีไอคอนและคำกำกับของตัวเอง
- */
+// รายการติดตามในลิ้นชักแจ้งเตือน พร้อมความสำคัญและลิงก์ไปจัดการแต่ละเรื่อง
 import { locale } from "../lib/locale";
 import { formatMonth } from "../lib/locale-format";
 import { computed } from "vue";
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from "lucide-vue-next";
-import { UiButton, UiCard, UiSkeleton } from "../ui";
+import { UiButton, UiSkeleton } from "../ui";
 
 const props = defineProps({
   /** รายการจาก /api/dashboard/overview — ดู apps/api/src/dashboard/overview.js */
@@ -46,21 +24,21 @@ const SEVERITY = {
   critical: {
     label: t("ต้องแก้ทันที"),
     icon: CircleAlert,
-    ring: "ring-danger-line",
+    edge: "border-danger-ink",
     tint: "bg-danger-soft",
     ink: "text-danger-ink",
   },
   warning: {
     label: t("มีงานค้าง"),
     icon: TriangleAlert,
-    ring: "ring-warn-line",
+    edge: "border-warn-ink",
     tint: "bg-warn-soft",
     ink: "text-warn-ink",
   },
   info: {
     label: t("น่าตรวจสอบ"),
     icon: Info,
-    ring: "ring-line",
+    edge: "border-line",
     tint: "bg-surface-2",
     ink: "text-ink-soft",
   },
@@ -103,62 +81,60 @@ const hasItems = computed(() => props.items.length > 0);
 
     <!--
       ไม่มีอะไรค้าง — ยืนยันให้เห็นชัดว่า "ตรวจแล้ว" ไม่ใช่ปล่อยว่าง
-      ใช้การ์ดโทนเดียวกับรายการอื่นเพื่อไม่ให้ความสูงของหน้ากระโดดเวลาสถานะเปลี่ยน
+      ใช้ทรงเดียวกับรายการที่ค้างเพื่อไม่ให้ความสูงของหน้ากระโดดเวลาสถานะเปลี่ยน
     -->
-    <UiCard v-else-if="!hasItems" class="flex items-center gap-3 px-4 py-3.5">
-      <span class="grid size-9 shrink-0 place-items-center rounded-full bg-ok-soft text-ok-ink">
-        <CircleCheck class="size-5" aria-hidden="true" />
-      </span>
-      <div class="min-w-0">
-        <p class="font-medium text-ink"> {{ t("ไม่มีงานค้าง") }} </p>
-        <p class="text-xs text-ink-mute"> {{ t("กรอกยอดพิมพ์ครบทุกเดือนที่ถึงกำหนดแล้ว และไม่พบเครื่องที่คิดค่าใช้จ่ายไม่ได้") }} </p>
-      </div>
-    </UiCard>
+    <p
+      v-else-if="!hasItems"
+      class="flex items-center gap-2.5 border-l-[3px] border-ok-ink bg-ok-soft rounded-r-lg py-2.5 pl-3 pr-4"
+    >
+      <CircleCheck class="size-4 shrink-0 text-ok-ink" aria-hidden="true" />
+      <span class="text-base font-medium text-ink"> {{ t("ไม่มีงานค้าง") }} </span>
+      <span class="text-sm text-ink-mute"> {{ t("กรอกยอดพิมพ์ครบทุกเดือนที่ถึงกำหนดแล้ว และไม่พบเครื่องที่คิดค่าใช้จ่ายไม่ได้") }} </span>
+    </p>
 
+    <!--
+      แต่ละรายการเป็นแถบขีดข้างเดียว ไม่ใช่การ์ดที่มีกรอบรอบตัว
+
+      รอบที่ 6 วัดหน้านี้เทียบกับ Plausible/Catalyst แล้วพบว่าของที่มีกรอบรอบตัว
+      เหนือบรรทัดพับมีถึง 10 ชิ้น การ์ดสามชั้น (กรอบ + วงกลมไอคอน + พื้นสี) ทำให้
+      แถบเตือนหนึ่งรายการสูง 106px ทั้งที่เนื้อความมีสองบรรทัด ขีดข้างเดียวบอก
+      ระดับความสำคัญได้เท่ากันโดยใช้เส้นเส้นเดียว และเหลือพื้นที่ให้ตัวเลขจริง
+    -->
     <ul v-else class="grid gap-2">
-      <li v-for="item in localizedItems" :key="item.code">
-        <UiCard
-          flush
-          class="ring-1"
-          :class="meta(item.severity).ring"
+      <li
+        v-for="item in localizedItems"
+        :key="item.code"
+        class="flex flex-col gap-2 border-l-[3px] rounded-r-lg py-2.5 pl-3 pr-3 sm:flex-row sm:items-center sm:gap-4"
+        :class="[meta(item.severity).edge, meta(item.severity).tint]"
+      >
+        <div class="min-w-0 flex-1">
+          <p class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <!--
+              คำกำกับระดับความสำคัญเป็นข้อความจริง ไม่ใช่แค่สีของขีด — จำเป็นทั้ง
+              กับคนที่แยกสีไม่ออกและกับโปรแกรมอ่านหน้าจอ
+            -->
+            <span class="inline-flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide" :class="meta(item.severity).ink">
+              <component :is="meta(item.severity).icon" class="size-3.5" aria-hidden="true" />
+              {{ meta(item.severity).label }}
+            </span>
+            <span class="text-base font-semibold text-ink">{{ item.title }}</span>
+          </p>
+          <p class="text-sm text-ink-soft">{{ item.detail }}</p>
+        </div>
+
+        <!--
+          ปุ่มพาไปยังหน้าที่แก้เรื่องนี้ได้จริง พร้อมพารามิเตอร์ที่เจาะจงถึงเดือน
+          หรือตัวกรองที่เกี่ยวข้อง — ไม่ใช่พาไปหน้าเปล่าแล้วให้ผู้ใช้ไล่หาเอง
+        -->
+        <UiButton
+          v-if="item.action"
+          :to="{ path: item.action.to, query: item.action.query }"
+          variant="secondary"
+          size="sm"
+          class="shrink-0 self-start sm:self-auto"
         >
-          <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center">
-          <span
-            class="grid size-9 shrink-0 place-items-center rounded-full"
-            :class="[meta(item.severity).tint, meta(item.severity).ink]"
-          >
-            <component :is="meta(item.severity).icon" class="size-5" aria-hidden="true" />
-          </span>
-
-          <div class="min-w-0 flex-1">
-            <p class="flex flex-col items-start gap-1">
-              <!--
-                คำกำกับระดับความสำคัญเป็นข้อความจริง ไม่ใช่แค่สีของกรอบ — จำเป็นทั้ง
-                กับคนที่แยกสีไม่ออกและกับโปรแกรมอ่านหน้าจอ
-              -->
-              <span class="text-2xs font-semibold uppercase tracking-wide" :class="meta(item.severity).ink">
-                {{ meta(item.severity).label }}
-              </span>
-              <span class="text-base font-semibold text-ink">{{ item.title }}</span>
-            </p>
-            <p class="mt-2 text-sm text-ink-soft">{{ item.detail }}</p>
-          </div>
-
-          <!--
-            ปุ่มพาไปยังหน้าที่แก้เรื่องนี้ได้จริง พร้อมพารามิเตอร์ที่เจาะจงถึงเดือน
-            หรือตัวกรองที่เกี่ยวข้อง — ไม่ใช่พาไปหน้าเปล่าแล้วให้ผู้ใช้ไล่หาเอง
-          -->
-          <UiButton
-            v-if="item.action"
-            :to="{ path: item.action.to, query: item.action.query }"
-            variant="secondary"
-            size="sm"
-            class="shrink-0 self-start sm:self-auto"
-          >
-            {{ item.action.label }}
-          </UiButton>
-          </div>
-        </UiCard>
+          {{ item.action.label }}
+        </UiButton>
       </li>
     </ul>
   </section>

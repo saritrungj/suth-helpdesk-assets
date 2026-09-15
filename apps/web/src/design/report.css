@@ -1,0 +1,42 @@
+/* Analytical workspace: restrained surfaces and one accent, after the live
+   Plausible dashboard and Linear Insights. Colors live in tokens.css. */
+.report-workspace {
+  --shell-sidebar-width: 208px;
+}
+
+.report-workspace .card {
+  border-color: var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: none;
+}
+
+.report-workspace main {
+  border-radius: 0;
+}
+
+.report-workspace .eyebrow {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.report-workspace .report-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.report-workspace .report-column {
+  display: contents;
+}
+
+@media (min-width: 1280px) {
+  .report-workspace .report-grid {
+    grid-template-columns: minmax(0, 1.9fr) minmax(320px, 1fr);
+  }
+  .report-workspace .report-column {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 20px;
+  }
+}

@@ -23,6 +23,17 @@ import { UiCombobox, UiField } from "../ui";
 
 const emit = defineEmits(["filter"]);
 
+/**
+ * `bare` = ไม่มีกล่องของตัวเอง
+ *
+ * บนแดชบอร์ดแถบนี้อยู่บรรทัดเดียวกับหัวหน้า เพราะตัวกรองคือ "ขอบเขตของตัวเลข
+ * ทั้งหน้า" ไม่ใช่เครื่องมือแยกที่ต้องมีกล่องมาคั่น — กล่องของมันเคยกินความสูง
+ * 98px ก่อนจะถึงตัวเลขตัวแรก หน้าอื่นที่ยังวางมันเป็นก้อนแยกใช้ค่าเริ่มต้นเดิม
+ */
+defineProps({
+  bare: { type: Boolean, default: false },
+});
+
 const route = useRoute();
 const router = useRouter();
 const contractId = ref(typeof route.query.contract === "string" ? route.query.contract : "");
@@ -80,8 +91,12 @@ watch(range, (value, previous) => {
 </script>
 
 <template>
-  <div class="card p-3 flex flex-wrap items-end gap-3" data-print="hide">
-    <UiField :label="t(&quot;สัญญา&quot;)" class="w-56">
+  <div
+    class="flex flex-wrap items-end gap-3"
+    :class="!bare && 'card p-3'"
+    data-print="hide"
+  >
+    <UiField :label="t(&quot;สัญญา&quot;)" class="w-56 max-w-full">
       <UiCombobox
         v-model="contractId"
         :options="contractOptions"
@@ -90,7 +105,7 @@ watch(range, (value, previous) => {
       />
     </UiField>
 
-    <UiField :label="t(&quot;เดือน (ปีงบ {0})&quot;, [formatFiscalYearRange(range)])" class="w-56">
+    <UiField :label="t(&quot;เดือน (ปีงบ {0})&quot;, [formatFiscalYearRange(range)])" class="w-56 max-w-full">
       <PeriodPicker
         v-model="monthSelection"
         :options="monthOptions"

@@ -14,6 +14,8 @@ export { default as UiAlert } from "./UiAlert.vue";
 export { default as UiBadge } from "./UiBadge.vue";
 export { default as UiButton } from "./UiButton.vue";
 export { default as UiCard } from "./UiCard.vue";
+export { default as UiMetric } from "./UiMetric.vue";
+export { default as UiRankList } from "./UiRankList.vue";
 export { default as UiChart } from "./UiChart.vue";
 export { default as UiCheckbox } from "./UiCheckbox.vue";
 export { default as UiCombobox } from "./UiCombobox.vue";

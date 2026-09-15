@@ -1,4 +1,4 @@
-import { computed } from "vue";
+import { computed, unref } from "vue";
 import { modeState } from "../store/theme";
 
 /**
@@ -16,33 +16,36 @@ import { modeState } from "../store/theme";
  * ไม่ได้ตั้งใจ (ดู tokens.css)
  */
 
-function cssVar(name, fallback) {
+function cssVar(name, fallback, element) {
   if (typeof window === "undefined") return fallback;
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const value = getComputedStyle(element || document.documentElement).getPropertyValue(name).trim();
   return value || fallback;
 }
 
-export function useChartTheme() {
+export function useChartTheme(element) {
   const colors = computed(() => {
     // อ่านตรงนี้เพื่อบอก Vue ว่าต้องคำนวณใหม่ทุกครั้งที่สลับโหมด
     void modeState.current;
+    // Read the chart's own surface so a scoped workspace palette also applies
+    // to the canvas, grid and tooltip. Callers without a root retain defaults.
+    const color = (name, fallback) => cssVar(name, fallback, unref(element));
 
     return {
-      ink: cssVar("--ink", "#1f2937"),
-      text: cssVar("--ink-mute", "#4b5563"),
-      grid: cssVar("--line-soft", "#e5e7eb"),
-      surface: cssVar("--surface", "#ffffff"),
-      surfaceFloat: cssVar("--surface-float", "#ffffff"),
-      border: cssVar("--line", "#d1d5db"),
+      ink: color("--ink", "#1f2937"),
+      text: color("--ink-mute", "#4b5563"),
+      grid: color("--line-soft", "#e5e7eb"),
+      surface: color("--surface", "#ffffff"),
+      surfaceFloat: color("--surface-float", "#ffffff"),
+      border: color("--line", "#d1d5db"),
       series: [
-        cssVar("--chart-1", "#0f766e"),
-        cssVar("--chart-2", "#c2410c"),
-        cssVar("--chart-3", "#0369a1"),
-        cssVar("--chart-4", "#a16207"),
-        cssVar("--chart-5", "#6d28d9"),
-        cssVar("--chart-6", "#15803d"),
-        cssVar("--chart-7", "#b91c1c"),
-        cssVar("--chart-8", "#6b7280"),
+        color("--chart-1", "#0f766e"),
+        color("--chart-2", "#c2410c"),
+        color("--chart-3", "#0369a1"),
+        color("--chart-4", "#a16207"),
+        color("--chart-5", "#6d28d9"),
+        color("--chart-6", "#15803d"),
+        color("--chart-7", "#b91c1c"),
+        color("--chart-8", "#6b7280"),
       ],
     };
   });

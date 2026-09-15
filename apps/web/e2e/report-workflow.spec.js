@@ -16,8 +16,9 @@ for (const language of ["th", "en"]) {
       if (response.url().includes("/api/") && response.status() >= 500) errors.push(`API ${response.status()}: ${response.url()}`);
     });
     await page.goto("/dashboard");
-    await expect(page.locator("h1")).toContainText(language === "en" ? "Printer and expense overview" : "ภาพรวมเครื่องพิมพ์");
-    await expect(page.getByText(language === "en" ? "Full-year entry completion" : "กรอกยอดพิมพ์ครบทั้งปีงบ")).toBeVisible();
+    await expect(page.locator("h1")).toContainText(language === "en" ? "Print overview" : "ภาพรวมการพิมพ์");
+    // ความครบถ้วนของปีงบยังมีให้ดูใต้กราฟหลัก และแปลตามภาษาที่เลือก
+    await expect(page.getByText(language === "en" ? "Complete months" : "เดือนที่บันทึกครบ")).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${language}.png`), fullPage: true });
     await page.goto("/compare");
     await expect(page.locator("h1")).toBeVisible();
@@ -116,20 +117,22 @@ test("fullscreen is limited to long data tables", async ({ page }) => {
   await expect(page.getByRole("button", { name: "ขยายตาราง", exact: true })).toBeHidden();
 });
 
-test("graph selection retains annual context and overdue links retain their scope", async ({ page }) => {
+test("graph selection retains the filter and follow-up links retain their scope", async ({ page }) => {
   await page.goto("/dashboard");
-  const trend = page.locator("section").filter({ has: page.getByRole("heading", { name: "ยอดพิมพ์รายเดือน", exact: true }) });
+  const trend = page.locator("section").filter({ has: page.getByRole("heading", { name: "ค่าใช้จ่ายสุทธิรายเดือน", exact: true }) });
   await trend.getByRole("radio", { name: "ตาราง", exact: true }).click();
   const months = trend.locator("tbody button");
-  await expect(months).toHaveCount(12);
-  await months.first().click();
-  await expect(page).toHaveURL(/months=\d{4}-10/);
-  await expect(months).toHaveCount(12);
-  await expect(months.first()).toHaveAttribute("aria-pressed", "true");
-  const selectedUrl = page.url();
-  await page.reload();
-  await expect(page.locator("h1")).toBeVisible();
-  await expect(page).toHaveURL(selectedUrl);
+  await expect(trend.locator("canvas")).toHaveCount(1);
+  const count = await months.count();
+  const filterUrl = page.url();
+  if (count) {
+    await months.first().click();
+    await expect(page).toHaveURL(filterUrl);
+    await expect(months).toHaveCount(count);
+    await expect(months.first()).toHaveAttribute("aria-pressed", "true");
+  }
+  await page.getByRole("button", { name: "งานที่ต้องติดตาม", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
   const overdue = page.getByRole("link", { name: "ไปกรอกยอดพิมพ์", exact: true });
   if (await overdue.count()) {
     await overdue.click();
@@ -165,7 +168,7 @@ test("language preference survives a reload", async ({ page }) => {
   await page.getByRole("radio", { name: "English", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "เปลี่ยนภาษา", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.locator("h1")).toContainText("Printer and expense overview");
+  await expect(page.locator("h1")).toContainText("Print overview");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });

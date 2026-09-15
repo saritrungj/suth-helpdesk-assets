@@ -76,9 +76,12 @@ const props = defineProps({
   /** หัวคอลัมน์แรกของมุมมองตาราง */
   categoryLabel: { type: String, default: t("ช่วงเวลา") },
   loading: { type: Boolean, default: false },
+  controlsTarget: { type: String, default: "" },
+  maxBarThickness: { type: Number, default: 24 },
 });
 
-const { baseChartOptions, colors } = useChartTheme();
+const chartRoot = useTemplateRef("chartRoot");
+const { baseChartOptions, colors } = useChartTheme(chartRoot);
 
 const view = ref("chart");
 const VIEW_OPTIONS = [
@@ -113,7 +116,7 @@ const chartData = computed(() => ({
         // ปลายมนเฉพาะด้านที่เป็นยอดของแท่ง ฐานยังเหลี่ยมและอยู่บนเส้นศูนย์เดียวกัน
         borderRadius: 4,
         borderSkipped: "start",
-        maxBarThickness: 24,
+        maxBarThickness: props.maxBarThickness,
         // ช่องว่างสีพื้นระหว่างแท่งที่ติดกัน — ใช้ช่องว่างแยก ไม่ใช่ตีเส้นขอบ
         categoryPercentage: 0.82,
         barPercentage: 0.9,
@@ -229,9 +232,10 @@ onBeforeUnmount(() => sizeWatcher?.disconnect());
 </script>
 
 <template>
-  <div class="flex flex-col min-w-0">
+  <div ref="chartRoot" class="flex flex-col min-w-0">
     <!-- แถวหัว: คำอธิบายสี (ถ้ามีตั้งแต่ 2 ชุด) + ปุ่มสลับมุมมอง -->
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+    <Teleport :to="controlsTarget || 'body'" :disabled="!controlsTarget" defer>
+    <div class="flex flex-wrap items-center justify-between gap-3" :class="!controlsTarget && 'mb-3'">
       <ul v-if="hasLegend" class="flex flex-wrap items-center gap-x-4 gap-y-1.5 list-none min-w-0">
         <li v-for="s in painted" :key="s.key ?? s.label" class="flex items-center gap-1.5 min-w-0">
           <span
@@ -253,6 +257,7 @@ onBeforeUnmount(() => sizeWatcher?.disconnect());
         class="shrink-0"
       />
     </div>
+    </Teleport>
 
     <!-- มุมมองกราฟ — ตอนโหลดใหม่ให้ค้างของเดิมไว้แบบจาง ไม่กระพริบเป็นโครงร่าง -->
     <div
@@ -262,8 +267,8 @@ onBeforeUnmount(() => sizeWatcher?.disconnect());
       class="relative transition-opacity duration-200"
       :class="loading && 'opacity-45'"
     >
-      <Bar v-if="kind === 'bar'" ref="chartEl" :data="chartData" :options="chartOptions" />
-      <Line v-else ref="chartEl" :data="chartData" :options="chartOptions" />
+      <Bar v-if="kind === 'bar'" ref="chartEl" :data="chartData" :options="chartOptions" :aria-label="series.map(s => s.label).join(', ')" />
+      <Line v-else ref="chartEl" :data="chartData" :options="chartOptions" :aria-label="series.map(s => s.label).join(', ')" />
     </div>
 
     <!-- มุมมองตาราง — ช่องทางอ่านค่าที่ไม่ต้องพึ่งสีและไม่ต้องชี้เมาส์ -->

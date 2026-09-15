@@ -20,10 +20,12 @@ import { t } from "../lib/locale";
 import AppCommandPalette from "../app/AppCommandPalette.vue";
 import AppSidebar from "../app/AppSidebar.vue";
 import AppTopbar from "../app/AppTopbar.vue";
+import { useRoute } from "vue-router";
+const route = useRoute();
 </script>
 
 <template>
-  <div class="flex min-h-dvh bg-chrome">
+  <div class="flex min-h-dvh bg-chrome" :class="route.path === '/dashboard' && 'report-workspace'">
     <a
       href="#main-content"
       class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200]
