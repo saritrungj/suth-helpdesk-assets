@@ -8,7 +8,7 @@ import { formatBahtValue, formatCount } from "../../lib/format";
  *
  * ## หน้านี้มีไว้ทำไม
  *
- * ราคาต่อแผ่นที่เก็บไว้ในสัญญา ไม่ใช่หลักฐานว่าราคานั้นมีผลกับเดือนไหนบ้าง (Q26)
+ * ราคาต่อหน้าที่เก็บไว้ในสัญญา ไม่ใช่หลักฐานว่าราคานั้นมีผลกับเดือนไหนบ้าง (Q26)
  * ระบบจึงไม่คิดเงินให้เดือนใดจนกว่าจะมีคนยืนยันว่า "สัญญาฉบับนี้ครอบคลุมช่วงนี้
  * ด้วยราคานี้ ตามเอกสารฉบับนั้น"
  *
@@ -61,7 +61,7 @@ const columns = [
   { key: "fiscal_year", label: t("ปีงบประมาณ"), value: (row) => row.fiscal_year || "—" },
   {
     key: "price_per_page",
-    label: t("ราคา/แผ่น (บาท)"),
+    label: t("ราคา/หน้า (บาท)"),
     align: "right",
     value: (row) => (row.price_per_page == null ? "—" : formatBahtValue(row.price_per_page)),
   },
@@ -201,7 +201,7 @@ onMounted(load);
     >
       <div class="flex flex-col gap-4">
         <UiAlert v-if="target" tone="info">
-          {{ t("ราคาที่จะใช้คิดเงินคือ {0} บาทต่อแผ่น กับเครื่อง {1} เครื่องที่ผูกกับสัญญานี้", [
+          {{ t("ราคาที่จะใช้คิดเงินคือ {0} บาทต่อหน้า กับเครื่อง {1} เครื่องที่ผูกกับสัญญานี้", [
             target.price_per_page == null ? "—" : formatBahtValue(target.price_per_page),
             formatCount(target.device_count),
           ]) }}

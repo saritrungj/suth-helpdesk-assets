@@ -620,7 +620,7 @@ const usageColumns = [
   { key: "locations", label: t("ตำแหน่งที่ตั้งตามเดือน"), value: (d) => deviceLocationLabel(d.locations) },
   { key: "divisionName", label: t("ฝ่าย") },
   { key: "departmentName", label: t("แผนก") },
-  { key: "total_pages", label: t("ยอดพิมพ์สุทธิ"), align: "right", value: (d) => Number(d.total_pages || 0) },
+  { key: "total_pages", label: t("จำนวนหน้าสุทธิ"), align: "right", value: (d) => Number(d.total_pages || 0) },
   { key: "total_cost", label: t("ค่าใช้จ่ายสุทธิ"), align: "right", value: (d) => Number(d.total_cost || 0) },
 ];
 
@@ -628,7 +628,7 @@ const usageColumns = [
    ส่งออก Excel
    -------------------------------------------------------------------------- */
 async function exportTreeExcel() {
-  const header = [t("ฝ่าย"), t("แผนก"), "Serial", t("รุ่น"), t("ยี่ห้อ"), t("จำนวนหน้ารวมทั้งปีงบ"), t("ค่าใช้จ่ายสุทธิทั้งปีงบ")];
+  const header = [t("ฝ่าย"), t("แผนก"), "Serial", t("รุ่น"), t("ยี่ห้อ"), t("จำนวนหน้าดิบทั้งปีงบ"), t("ค่าใช้จ่ายสุทธิทั้งปีงบ")];
 
   const rows = filteredDivisions.value.flatMap((division) =>
     (division.departments ?? []).flatMap((department) =>

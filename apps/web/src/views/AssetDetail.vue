@@ -166,16 +166,16 @@ const statusMeta = computed(
 );
 
 /**
- * ราคาต่อแผ่นที่ใช้จริงกับเครื่องนี้
+ * ราคาต่อหน้าที่ใช้จริงกับเครื่องนี้
  *
- * ราคาเฉพาะเครื่อง (`price_override`) ชนะราคาของสัญญาเสมอ — ลำดับนี้เป็นกฎธุรกิจ
+ * ราคาพิเศษเฉพาะเครื่อง (`price_override`) ชนะราคาของสัญญาเสมอ — ลำดับนี้เป็นกฎธุรกิจ
  * ที่ฝั่ง API ใช้ตอนคิดเงิน ที่นี่แค่บอกให้ผู้ใช้เห็นว่าตอนนี้ใช้ตัวไหนอยู่
  * และ **ต้องบอกว่ามาจากไหน** ไม่งั้นคนเห็นเลขไม่ตรงกับสัญญาแล้วคิดว่าระบบผิด
  */
 const effectivePrice = computed(() => {
   if (!device.value) return null;
   if (device.value.price_override != null) {
-    return { value: Number(device.value.price_override), source: t("ราคาเฉพาะเครื่อง") };
+    return { value: Number(device.value.price_override), source: t("ราคาพิเศษเฉพาะเครื่อง") };
   }
   if (device.value.price_per_page != null) {
     return { value: Number(device.value.price_per_page), source: t("สัญญา {0}", [device.value.contract_no]) };
@@ -337,7 +337,7 @@ const usageSeries = computed(() => [
             </div>
 
             <div>
-              <dt class="text-xs text-ink-mute mb-0.5"> {{ t("ราคาต่อแผ่นที่ใช้จริง") }} </dt>
+              <dt class="text-xs text-ink-mute mb-0.5"> {{ t("ราคาต่อหน้าที่ใช้จริง") }} </dt>
               <dd v-if="effectivePrice" class="text-ink-soft">
                 <span class="numeral font-semibold text-ink">
                   {{ effectivePrice.value.toFixed(2) }}

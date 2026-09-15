@@ -127,7 +127,7 @@ function costSatangAt(pages, priceSatang) {
 
 /**
  * ราคาต่อหน้าที่มีผลจริง เรียงลำดับความสำคัญ:
- * ราคาเฉพาะเครื่อง -> ราคาตามสัญญา -> ไม่มีราคา (0)
+ * ราคาพิเศษเฉพาะเครื่อง -> ราคาตามสัญญา -> ไม่มีราคา (0)
  *
  * @param {string|number|null|undefined} priceOverride devices.price_override
  * @param {string|number|null|undefined} contractPrice contracts.price_per_page

@@ -153,7 +153,7 @@ const optionalId = z
   .optional()
   .transform((value) => value ?? null);
 
-/** จำนวนเงินต่อหน่วย เช่น ราคาต่อแผ่น — ห้ามติดลบ และจำกัดเพดานกันพิมพ์ผิด */
+/** จำนวนเงินต่อหน่วย เช่น ราคาต่อหน้า — ห้ามติดลบ และจำกัดเพดานกันพิมพ์ผิด */
 const optionalMoney = z
   .preprocess(
     blankToNull,

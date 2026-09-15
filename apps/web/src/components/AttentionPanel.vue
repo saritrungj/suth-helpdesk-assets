@@ -55,9 +55,14 @@ const localizedItems = computed(() => props.items.map((item) => {
       action: t("บันทึกยอดพิมพ์"),
     },
     unbilled_devices: {
-      title: t("มี {0} เครื่องที่มียอดพิมพ์แต่ไม่มีราคา", [item.count]),
-      detail: t("ยังคิดค่าใช้จ่ายไม่ได้ {0} หน้า เพราะไม่มีข้อมูลราคา", [item.params?.pages ?? "—"]),
-      action: t("ตรวจเครื่องที่ไม่มีสัญญา"),
+      title: t("มี {0} เครื่องที่ยังยืนยันราคาไม่ได้", [item.count]),
+      detail: t("{0} รายการ รวม {1} หน้า ยังไม่ถูกนับในยอดเงิน", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
+      action: t("ยืนยันช่วงที่สัญญามีผล"),
+    },
+    unverified_installation: {
+      title: t("มี {0} เครื่องที่ยังไม่ได้ตรวจยืนยันสถานะการติดตั้ง", [item.count]),
+      detail: t("ยืนยันความครบถ้วนของยอดพิมพ์ไม่ได้จนกว่าจะตรวจครบ"),
+      action: t("ตรวจยืนยันการติดตั้ง"),
     },
     idle_devices: {
       title: t("มี {0} เครื่องที่ไม่มียอดพิมพ์ในปีงบนี้", [item.count]),
@@ -72,7 +77,14 @@ const hasItems = computed(() => props.items.length > 0);
 
 <template>
   <section aria-labelledby="attention-heading">
-    <h2 id="attention-heading" class="eyebrow mb-2"> {{ t("สิ่งที่ต้องจัดการ") }} </h2>
+    <!--
+      หัวข้อนี้เป็น 14px ไม่ใช่ eyebrow 11px ตัวใหญ่พิมพ์
+      บนแดชบอร์ดรายการนี้คือเนื้อหาหลักของหน้า ไม่ใช่ป้ายกำกับของส่วนย่อย —
+      หัวข้อขนาด eyebrow ทำให้สิ่งที่สำคัญที่สุดบนหน้าเบากว่าชื่อการ์ดทุกใบที่อยู่ใต้มัน
+    -->
+    <h2 id="attention-heading" class="text-base font-semibold text-ink mb-2">
+      {{ t("สิ่งที่ต้องจัดการ") }}
+    </h2>
 
     <div v-if="loading" class="grid gap-2">
       <UiSkeleton height="4.5rem" />
@@ -104,7 +116,7 @@ const hasItems = computed(() => props.items.length > 0);
       <li
         v-for="item in localizedItems"
         :key="item.code"
-        class="flex flex-col gap-2 border-l-[3px] rounded-r-lg py-2.5 pl-3 pr-3 sm:flex-row sm:items-center sm:gap-4"
+        class="flex flex-col gap-1.5 border-l-[3px] rounded-r-lg py-2 pl-3 pr-3 sm:flex-row sm:items-center sm:gap-4"
         :class="[meta(item.severity).edge, meta(item.severity).tint]"
       >
         <div class="min-w-0 flex-1">

@@ -166,7 +166,7 @@ exports.importDevices = asyncHandler(async (req, res) => {
             const departmentName = String(row.department || row.Department || row.แผนก || "").trim();
             const contractNo = String(row.contract_no || row["Contract No"] || row.เลขที่สัญญา || "").trim();
             const priceOverrideRaw = String(
-                row.price_override ?? row["Price Override"] ?? row.ราคาเฉพาะเครื่อง ?? ""
+                row.price_override ?? row["Price Override"] ?? row.ราคาพิเศษเฉพาะเครื่อง ?? ""
             ).trim();
             const location = String(row.location || row.Location || row.ตำแหน่ง || "").trim();
 
@@ -238,7 +238,7 @@ exports.importDevices = asyncHandler(async (req, res) => {
             if (priceOverrideRaw !== "") {
                 const parsedPrice = Number(priceOverrideRaw);
                 if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
-                    reasons.push(`ราคาเฉพาะเครื่อง "${priceOverrideRaw}" ไม่ใช่ตัวเลข`);
+                    reasons.push(`ราคาพิเศษเฉพาะเครื่อง "${priceOverrideRaw}" ไม่ใช่ตัวเลข`);
                 } else {
                     price_override = parsedPrice;
                 }

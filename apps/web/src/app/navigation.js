@@ -126,7 +126,7 @@ export const ADMIN_GROUPS = [
         to: "/admin/contracts",
         label: t("สัญญา"),
         icon: ReceiptText,
-        keywords: t("contract สัญญา ราคาต่อแผ่น"),
+        keywords: t("contract สัญญา ราคาต่อหน้า"),
         admin: true,
       },
       {

@@ -122,6 +122,20 @@ const totalDevices = computed(() =>
   contracts.value.reduce((sum, contract) => sum + (contract.devices ?? []).length, 0)
 );
 
+/**
+ * ยอดพิมพ์ที่ยังหาราคาที่มีผลไม่ได้ในขอบเขตที่แสดงอยู่ (ADR-0019 Q27)
+ *
+ * ยอดรวมด้านบนไม่รวมรายการเหล่านี้ ถ้าไม่บอกจำนวนไว้ข้างกัน ผู้อ่านจะเข้าใจว่า
+ * ตัวเลขที่เห็นคือค่าใช้จ่ายทั้งหมด ทั้งที่เป็นเพียงส่วนที่ยืนยันราคาได้แล้ว
+ */
+const unpricedReadings = computed(() =>
+  contracts.value.reduce(
+    (sum, contract) =>
+      sum + (contract.devices ?? []).reduce((n, device) => n + Number(device.unpriced_readings || 0), 0),
+    0
+  )
+);
+
 function devicePages(device) {
   return (device.monthly ?? []).reduce((sum, m) => sum + Number(m.pages || 0), 0);
 }
@@ -235,13 +249,13 @@ async function loadExpense() {
 async function exportExcel() {
   const header = [
     t("เลขที่สัญญา"),
-    t("ราคาสัญญาต่อแผ่น (บาท)"),
-    t("ราคาที่ใช้จริง (บาท/แผ่น)"),
+    t("ราคาสัญญาต่อหน้า (บาท)"),
+    t("ราคาที่ใช้จริง (บาท/หน้า)"),
     t("แหล่งราคา"),
     "Serial",
     t("ยี่ห้อ"),
     t("รุ่น"),
-    t("จำนวนหน้ารวม"),
+    t("จำนวนหน้าดิบ"),
     t("ค่าใช้จ่ายสุทธิ (หัก 2%)"),
   ];
 
@@ -250,7 +264,7 @@ async function exportExcel() {
       contract.contract_no,
       Number(contract.price_per_page || 0),
       Number(device.effective_price || 0),
-      device.price_source === "device_override" ? t("ราคาพิเศษของเครื่อง") : t("ราคาตามสัญญา"),
+      device.price_source === "device_override" ? t("ราคาพิเศษเฉพาะเครื่อง") : t("ราคาตามสัญญา"),
       device.serial_number || "",
       device.brand_name || "",
       device.model || "",
@@ -318,15 +332,17 @@ onMounted(() => {
     <!-- ยอดรวม — แถบเดียวแบ่งสามช่อง ไม่ใช่การ์ดสามใบ (รอบที่ 3 ของ #51) -->
     <div v-if="!loadError" class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4">
       <UiStat plain
-        :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
+        :label="unpricedReadings ? t('ค่าใช้จ่ายที่ยืนยันแล้ว') : t('ค่าใช้จ่ายสุทธิ')"
         :unit="t(&quot;บาท&quot;)"
-        :hint="t(&quot;หัก 2% แล้ว · เฉพาะสัญญาของปีงบนี้&quot;)"
+        :hint="unpricedReadings
+          ? t('ยังยืนยันราคาไม่ได้ {0} รายการ · ยอดนี้ยังไม่ครบ', [formatCount(unpricedReadings)])
+          : t('หัก 2% แล้ว · เฉพาะสัญญาของปีงบนี้')"
         :loading="loading"
       >
         {{ formatBahtValue(grandTotal) }}
       </UiStat>
 
-      <UiStat plain :label="t(&quot;จำนวนหน้ารวม&quot;)" :unit="t(&quot;หน้า&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;จำนวนหน้าดิบ&quot;)" :unit="t(&quot;หน้า&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 
@@ -428,7 +444,7 @@ onMounted(() => {
                 {{ formatCount(group.count) }} {{ t("เครื่อง ·") }}
                 {{ group.source === "device_override" ? t("ราคาพิเศษ") : t("ราคาสัญญา") }}
                 {{ group.price === null || group.price === undefined ? "—" : formatBahtValue(group.price) }}
-                {{ t("บาท/แผ่น") }}
+                {{ t("บาท/หน้า") }}
               </span>
             </span>
 
@@ -478,8 +494,8 @@ onMounted(() => {
                 <span class="block text-xs text-ink-mute font-sans">{{ deviceLocationLabel(device.monthly) }}</span>
                 </span>
                 <span class="block text-xs text-ink-mute numeral">
-                  {{ t("ราคาที่ใช้จริง") }} {{ formatBahtValue(device.effective_price) }} {{ t("บาท/แผ่น") }} ·
-                  {{ device.price_source === "device_override" ? t("ราคาพิเศษของเครื่อง") : t("ราคาตามสัญญา") }}
+                  {{ t("ราคาที่ใช้จริง") }} {{ formatBahtValue(device.effective_price) }} {{ t("บาท/หน้า") }} ·
+                  {{ device.price_source === "device_override" ? t("ราคาพิเศษเฉพาะเครื่อง") : t("ราคาตามสัญญา") }}
                 </span>
               </span>
 

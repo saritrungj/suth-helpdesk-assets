@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue';
 import { ArrowDownToLine, ArrowUpRight, ChevronRight, FileImage, RefreshCw } from 'lucide-vue-next';
 import { useContracts, useMonthlyKpi, useOverview } from '../api/queries';
 import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths } from '../store/fiscalYear';
-import { authState } from '../store/auth';
 import { t } from '../lib/locale';
 import { formatMonth, yearLabel } from '../lib/locale-format';
 import { formatBahtValue, formatCompact, formatCount, percentOf } from '../lib/format';
@@ -12,6 +11,7 @@ import { exportSummaryCard } from '../ui/export-summary-card';
 import { UiAlert, UiButton, UiCard, UiChart, UiEmpty, UiSegmented, UiSkeleton, UiPageHeader, UiStat } from '../ui';
 import DashboardFilter from './DashboardFilter.vue';
 import ExecutiveDetails from './ExecutiveDetails.vue';
+import AttentionPanel from './AttentionPanel.vue';
 import { groupReport, reportTotals } from './executive-report';
 
 const root = ref(null);
@@ -60,8 +60,18 @@ const topDepartment = computed(() => departments.value[0]);
 const topShare = computed(() => percentOf(topDepartment.value?.cost, totals.value.cost));
 const groupLabel = row => row.label || t('ไม่ระบุ');
 const monthLabel = row => `${formatMonth(row.key)}${row.unpriced ? ` · ${t('รอราคา {0}', [formatCount(row.unpriced)])}` : ''}`;
-const monthlySeries = computed(() => [{ key: metric.value, label: metric.value === 'cost' ? costTitle.value : t('ยอดพิมพ์สุทธิ'), data: months.value.map(row => metric.value === 'cost' ? row.cost : row.pages), slot: 1 }]);
+const monthlySeries = computed(() => [{ key: metric.value, label: metric.value === 'cost' ? costTitle.value : t('จำนวนหน้าสุทธิ'), data: months.value.map(row => metric.value === 'cost' ? row.cost : row.pages), slot: 1 }]);
 const coverageLabel = computed(() => coverage.value.verifiable === false ? t('รอยืนยันข้อมูล') : `${formatCount(coverage.value.annual_complete_months)} / ${formatCount(coverage.value.total_months)}`);
+
+/**
+ * งานที่ต้องลงมือทำ — วางไว้เหนือตัวเลขทั้งหมด
+ *
+ * คนเปิดแดชบอร์ดมาถามว่า "วันนี้ต้องทำอะไร" ก่อนถามว่า "ตัวเลขเป็นเท่าไหร่" เสมอ
+ * และตัวเลขบนหน้านี้จะเชื่อได้ก็ต่อเมื่องานค้างเหล่านี้ถูกเคลียร์แล้ว (เครื่องที่
+ * ยังไม่ตรวจยืนยันทำให้ความครบถ้วนสรุปไม่ได้ สัญญาที่ยังไม่ยืนยันทำให้ยอดเงินไม่ครบ)
+ * การวางตัวเลขไว้ก่อนจึงเป็นการนำเสนอข้อสรุปก่อนบอกว่ามันยังไม่สมบูรณ์
+ */
+const attention = computed(() => overview.data.value?.attention ?? []);
 function onFilter(next) { filter.value = { ...next }; }
 watch(params, () => { detailOpen.value = false; exportError.value = ''; });
 function openDetails(dimension = 'department', item = null) {
@@ -81,7 +91,7 @@ async function exportCard() {
   const color = name => style.getPropertyValue(name).trim();
   const spec = {
     title: t('ภาพรวมการพิมพ์'), context: period.value,
-    metrics: [{ label: costTitle.value, value: money(totals.value.cost), unit: t('บาท') }, { label: t('ยอดพิมพ์สุทธิ'), value: formatCount(totals.value.pages), unit: t('หน้า') }, { label: t('เครื่องที่มีข้อมูล'), value: formatCount(totals.value.devices), unit: t('เครื่อง') }],
+    metrics: [{ label: costTitle.value, value: money(totals.value.cost), unit: t('บาท') }, { label: t('จำนวนหน้าสุทธิ'), value: formatCount(totals.value.pages), unit: t('หน้า') }, { label: t('เครื่องที่มีข้อมูล'), value: formatCount(totals.value.devices), unit: t('เครื่อง') }],
     chartTitle: totals.value.unpriced ? t('ค่าใช้จ่ายที่ยืนยันแล้วรายเดือน') : t('ค่าใช้จ่ายสุทธิรายเดือน'),
     bars: months.value.map(row => ({ label: monthLabel(row), value: row.cost, displayValue: money(row.cost) })),
     footnote: `${t('ข้อมูลเฉพาะเดือนที่บันทึกแล้ว')} · ${t('ยังยืนยันราคาไม่ได้ {0} รายการ', [formatCount(totals.value.unpriced)])} · ${new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: 'Asia/Bangkok' }).format(new Date())} (Asia/Bangkok)`,
@@ -107,9 +117,11 @@ async function exportCard() {
       </template>
     </UiPageHeader>
 
-    <div class="flex flex-wrap items-end gap-2 mb-3" data-print="hide">
+    <!-- แถวตัวกรอง: ทุกชิ้นนั่งบนเส้นฐานเดียวกัน (items-end) รวมข้อความบอกเดือน
+         ล่าสุดและปุ่มโหลดใหม่ ซึ่งเดิมลอยอยู่คนละระดับกับช่องกรอง -->
+    <div class="flex flex-wrap items-end gap-x-3 gap-y-2 mb-4" data-print="hide">
       <DashboardFilter bare @filter="onFilter" />
-      <p class="text-xs text-ink-mute ml-auto">{{ months.length ? t('ข้อมูลล่าสุด {0}', [formatMonth(months.at(-1).key)]) : '' }}</p>
+      <p class="text-xs text-ink-mute ml-auto pb-2">{{ months.length ? t('ข้อมูลล่าสุด {0}', [formatMonth(months.at(-1).key)]) : '' }}</p>
       <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value || overview.isFetching.value" @click="reload"><RefreshCw :size="16" /></UiButton>
     </div>
 
@@ -119,6 +131,9 @@ async function exportCard() {
     </UiAlert>
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
+    <!-- งานที่ต้องลงมือทำมาก่อนตัวเลขเสมอ — ดูเหตุผลที่ตัวแปร attention ด้านบน -->
+    <AttentionPanel v-if="!failed" :items="attention" :loading="loading" class="mb-4" />
+
     <section class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading">
       <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring rounded-l-lg" :disabled="!ready || !rows.length" :aria-label="t('ดูที่มาของค่าใช้จ่าย')" @click="openDetails()">
         <UiStat plain :label="costTitle" :value="failed ? '—' : money(totals.cost)" :unit="t('บาท')" :loading="loading" :delta="ready ? change ?? null : null" delta-inverse
@@ -127,7 +142,7 @@ async function exportCard() {
         </UiStat>
       </button>
       <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring" :disabled="!ready || !rows.length" :aria-label="t('วิเคราะห์รายเครื่อง')" @click="openDetails('device')">
-        <UiStat plain tone="ink" :label="t('ยอดพิมพ์สุทธิ')" :value="ready ? formatCount(totals.pages) : '—'" :unit="t('หน้า')" :hint="t('หน้า · หลังหัก 2%')" :loading="loading">
+        <UiStat plain tone="ink" :label="t('จำนวนหน้าสุทธิ')" :value="ready ? formatCount(totals.pages) : '—'" :unit="t('หน้า')" :hint="t('หน้า · หลังหัก 2%')" :loading="loading">
           <template #icon><ArrowUpRight :size="16" class="text-brand-ink" /></template>
         </UiStat>
       </button>
@@ -200,9 +215,12 @@ async function exportCard() {
         <template #footer><p class="text-xs text-ink-mute">{{ t('เลือกแผนกหรือสัญญาเพื่อดูรายการรายเครื่อง ค้นหา และส่งออก Excel ตามขอบเขตที่เลือก') }}</p></template>
       </UiCard>
     </div>
+    <!-- หมายเหตุขอบเขตของตัวเลขบนหน้านี้
+         งานค้างไม่อยู่ตรงนี้แล้ว — ย้ายขึ้นไปเป็นรายการแรกของหน้า (AttentionPanel)
+         การบอกว่า "ยืนยันไม่ได้" ไว้ใต้สุดหลังตัวเลขทั้งหมด คือการให้คนอ่านข้อสรุป
+         จนจบก่อนแล้วค่อยบอกว่ามันยังไม่สมบูรณ์ -->
     <footer class="text-xs text-ink-mute leading-relaxed">
       <p>{{ t('ข้อมูลเฉพาะเดือนที่บันทึกแล้ว') }} · {{ t('เดือนที่บันทึกเป็นศูนย์ยังแสดงในรายงาน') }}</p>
-      <p v-if="ready && coverage.verifiable === false">{{ t('ความครบถ้วนของข้อมูลยังยืนยันไม่ได้ จนกว่าจะตรวจสถานะการติดตั้งเครื่องเดิม {0} เครื่อง', [formatCount(coverage.unreviewed_devices)]) }} <RouterLink v-if="authState.user?.role === 'admin'" to="/admin/installation-review" class="underline text-brand-ink">{{ t('ตรวจยืนยันการติดตั้ง') }}</RouterLink></p>
     </footer>
     <ExecutiveDetails v-model:open="detailOpen" :rows="rows" :scope="detailScope" :context="period" :initial-group="detailGroup" />
   </div>

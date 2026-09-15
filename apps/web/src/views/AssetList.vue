@@ -82,7 +82,7 @@ function emptyFilters() {
     department: "",
     fiscalYear: "",
     status: "",
-    // "ยังไม่ผูกสัญญา" — เครื่องกลุ่มนี้คิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาเฉพาะเครื่อง
+    // "ยังไม่ผูกสัญญา" — เครื่องกลุ่มนี้คิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาพิเศษเฉพาะเครื่อง
     // ยอดพิมพ์ของมันจึงหายไปจากงบเงียบๆ แดชบอร์ดเตือนเรื่องนี้แล้วลิงก์มาที่นี่
     contract: "",
   };
@@ -265,7 +265,7 @@ onMounted(() => {
   }
 });
 
-/** ราคาที่ใช้จริง — ราคาเฉพาะเครื่องมีศักดิ์สูงกว่าราคาตามสัญญา */
+/** ราคาที่ใช้จริง — ราคาพิเศษเฉพาะเครื่องมีศักดิ์สูงกว่าราคาตามสัญญา */
 function effectivePrice(asset) {
   const price = asset.price_override ?? asset.price_per_page;
   return price === null || price === undefined ? null : Number(price);
@@ -286,7 +286,7 @@ const columns = [
   { key: "contract_no", label: t("สัญญา") },
   {
     key: "effective_price",
-    label: t("ราคา/แผ่น"),
+    label: t("ราคา/หน้า"),
     // ซ่อนบนจอไว้ก่อน (รอบที่ 3 ของ #51) — เกือบทุกแถวเท่าราคาตามสัญญา เปิดได้จากปุ่มคอลัมน์
     // แต่ยังอยู่ใน Excel เสมอ เพราะไฟล์ใช้ตรวจค่าใช้จ่ายกับสัญญา
     hidden: true,
@@ -461,7 +461,7 @@ onMounted(async () => {
         <UiSegmented v-model="filters.status" :options="STATUS_OPTIONS" size="sm" :label="t(&quot;กรองตามสถานะเครื่อง&quot;)" />
 
         <!--
-          เครื่องที่ยังไม่ผูกสัญญาคิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาเฉพาะเครื่อง —
+          เครื่องที่ยังไม่ผูกสัญญาคิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาพิเศษเฉพาะเครื่อง —
           ยอดพิมพ์ของมันหายไปจากงบเงียบๆ จึงต้องมีทางกรองดูได้โดยตรง ไม่ใช่ต้อง
           ไล่กวาดสายตาหาช่องสัญญาที่ว่างในตารางเป็นร้อยแถว
         -->
@@ -577,9 +577,9 @@ onMounted(async () => {
         <span>{{ effectivePrice(row) === null ? "—" : formatBahtValue(effectivePrice(row)) }}</span>
         <UiTooltip
           v-if="row.price_override !== null && row.price_override !== undefined"
-          :content="t(&quot;เครื่องนี้ตั้งราคาต่อแผ่นเฉพาะตัว ไม่ได้ใช้ราคาตามสัญญา&quot;)"
+          :content="t(&quot;เครื่องนี้ตั้งราคาต่อหน้าเฉพาะตัว ไม่ได้ใช้ราคาตามสัญญา&quot;)"
         >
-          <span class="block text-2xs text-accent-ink cursor-help"> {{ t("ราคาเฉพาะเครื่อง") }} </span>
+          <span class="block text-2xs text-accent-ink cursor-help"> {{ t("ราคาพิเศษเฉพาะเครื่อง") }} </span>
         </UiTooltip>
       </template>
 

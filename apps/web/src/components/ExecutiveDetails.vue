@@ -47,7 +47,7 @@ async function exportRows() {
       <div class="flex flex-col gap-5">
         <div class="grid grid-cols-2 gap-4 pb-5 border-b border-line-soft">
           <UiMetric :label="totals.unpriced ? t('ค่าใช้จ่ายที่ยืนยันแล้ว') : t('ค่าใช้จ่ายสุทธิ')" :value="money(totals.cost)" :unit="t('บาท')" />
-          <UiMetric :label="t('ยอดพิมพ์สุทธิ')" :value="formatCount(totals.pages)" :unit="t('หน้า')" />
+          <UiMetric :label="t('จำนวนหน้าสุทธิ')" :value="formatCount(totals.pages)" :unit="t('หน้า')" />
         </div>
         <p v-if="totals.unpriced" class="text-sm text-ink-soft">{{ t('ยังยืนยันราคาไม่ได้ {0} รายการ · ยอดเงินยังไม่ครบ', [formatCount(totals.unpriced)]) }}</p>
         <UiSegmented v-model="group" :options="options" :label="t('แยกรายละเอียดตาม')" size="sm" />

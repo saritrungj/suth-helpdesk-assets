@@ -117,13 +117,13 @@ const contractOptions = computed(() =>
 /** ราคาที่จะถูกใช้จริงถ้าบันทึกตามที่กรอกอยู่ตอนนี้ — แสดงให้เห็นก่อนกดบันทึก */
 const effectivePriceHint = computed(() => {
   if (form.value.price_override !== "" && form.value.price_override !== null) {
-    return t("จะใช้ราคาเฉพาะเครื่อง {0} บาท/แผ่น แทนราคาตามสัญญา", [Number(form.value.price_override).toLocaleString("th-TH", {
+    return t("จะใช้ราคาพิเศษเฉพาะเครื่อง {0} บาท/หน้า แทนราคาตามสัญญา", [Number(form.value.price_override).toLocaleString("th-TH", {
       minimumFractionDigits: 2,
     })]);
   }
   const contract = contracts.value.find((c) => Number(c.id) === Number(form.value.contract_id));
   if (contract?.price_per_page !== undefined && contract?.price_per_page !== null) {
-    return t("เว้นว่างไว้ = ใช้ราคาตามสัญญา {0} บาท/แผ่น", [Number(contract.price_per_page).toLocaleString("th-TH", {
+    return t("เว้นว่างไว้ = ใช้ราคาตามสัญญา {0} บาท/หน้า", [Number(contract.price_per_page).toLocaleString("th-TH", {
       minimumFractionDigits: 2,
     })]);
   }
@@ -210,7 +210,7 @@ function validate() {
     return { field: "installation_status", message: t("เลือกว่าเครื่องนี้ติดตั้งแล้วหรือยัง") };
   }
   if (form.value.price_override !== "" && Number(form.value.price_override) < 0) {
-    return { field: "price_override", message: t("ราคาต่อแผ่นติดลบไม่ได้") };
+    return { field: "price_override", message: t("ราคาต่อหน้าติดลบไม่ได้") };
   }
   return "";
 }
@@ -396,7 +396,7 @@ defineExpose({ reset, submit, saving, loading, ready });
           />
         </UiField>
 
-        <UiField :label="t(&quot;ราคาต่อแผ่นเฉพาะเครื่อง&quot;)" :hint="effectivePriceHint" :error="errors.price_override">
+        <UiField :label="t(&quot;ราคาพิเศษเฉพาะเครื่อง&quot;)" :hint="effectivePriceHint" :error="errors.price_override">
           <UiInput v-model="form.price_override" type="number" step="0.0001" min="0" :suffix="t(&quot;บาท&quot;)" />
         </UiField>
       </fieldset>
