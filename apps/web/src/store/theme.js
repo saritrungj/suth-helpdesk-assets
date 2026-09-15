@@ -78,13 +78,6 @@ export function setMode(pref) {
   paint();
 }
 
-/** วนตามลำดับ สว่าง -> มืด -> ตามเครื่อง สำหรับปุ่มกดเดียว */
-export function cycleMode() {
-  const order = ["light", "dark", "system"];
-  const next = order[(order.indexOf(modeState.pref) + 1) % order.length];
-  setMode(next);
-}
-
 export function setDensity(density) {
   modeState.density = DENSITIES.includes(density) ? density : "default";
   write(DENSITY_KEY, modeState.density);

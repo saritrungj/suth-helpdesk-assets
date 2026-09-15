@@ -66,20 +66,6 @@ export function errorMessage(error, fallback = t("เกิดข้อผิด
 }
 
 /**
- * คำอธิบายเพิ่มเติม — วางเป็นบรรทัดรองใต้ข้อความหลัก
- * มักเป็นวิธีแก้ เช่น "ย้ายข้อมูลที่อ้างถึงรายการนี้ออกก่อน"
- *
- * @param {unknown} error
- * @returns {string}
- */
-export function errorDetail(error) {
-  const data = error?.response?.data;
-  if (locale.value === "en") return "";
-  // ไม่ซ้ำกับข้อความหลัก — บางกรณี API ส่ง detail เท่ากับ title
-  return data?.detail && data.detail !== data.title ? data.detail : "";
-}
-
-/**
  * ข้อผิดพลาดรายช่องของฟอร์ม — คืนเป็น object ที่ค้นด้วยชื่อช่องได้ตรงๆ
  *
  * ทำให้ฟอร์มวางข้อความไว้ "ใต้ช่องที่ผิด" ได้ แทนที่จะโยนทุกอย่างขึ้น toast
@@ -94,30 +80,4 @@ export function fieldErrors(error) {
   if (!Array.isArray(errors)) return {};
 
   return Object.fromEntries(errors.map((entry) => [entry.field, locale.value === "en" ? t("กรอกข้อมูลที่ถูกต้องในช่องนี้") : entry.message]));
-}
-
-/**
- * รหัสข้อผิดพลาดที่โค้ดเอาไปเทียบได้ โดยไม่ต้องอ่านข้อความ
- *
- * ใช้ตอนที่ต้องทำอะไรต่างกันจริงๆ ตามชนิดของปัญหา เช่น "still_referenced"
- * ควรเสนอให้ผู้ใช้ไปดูว่าอะไรอ้างถึงอยู่ ส่วน "conflict" ควรโฟกัสกลับไปที่ช่องที่ซ้ำ
- *
- * @param {unknown} error
- * @returns {string|null}
- */
-export function errorCode(error) {
-  return error?.response?.data?.code ?? null;
-}
-
-/**
- * รหัสอ้างอิงของคำขอ — มีเฉพาะตอนเกิดข้อผิดพลาดระดับระบบ (500)
- *
- * โชว์ให้ผู้ใช้เห็นเพื่อให้แจ้งผู้ดูแลได้ตรงตัว แทนที่จะบอกว่า "กดแล้วมันขึ้น error"
- * แล้วไม่มีใครหาบรรทัดในล็อกเจอ
- *
- * @param {unknown} error
- * @returns {string|null}
- */
-export function errorReference(error) {
-  return error?.response?.data?.request_id ?? error?.response?.headers?.["x-request-id"] ?? null;
 }

@@ -19,13 +19,6 @@ export function t(source, values = []) {
   return message.replace(/\{(\d+)\}/g, (token, index) => values[index] ?? token);
 }
 
-export function setLocale(value) {
-  if (!["th", "en"].includes(value) || value === locale.value) return;
-  locale.value = value;
-  saveLocale(value);
-  document.documentElement.lang = value;
-}
-
 export function installLocale(app) {
   app.config.globalProperties.$t = t;
   document.documentElement.lang = locale.value;

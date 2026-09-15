@@ -53,7 +53,6 @@ export const keys = {
     Number(deviceId),
     fiscalYearId ?? null,
   ],
-  locationHistory: () => ["devices", "location-history"],
   monthlyKpi: (params) => ["dashboard", "monthly-kpi", params],
   summaryByBuilding: (params) => ["dashboard", "summary-by-building", params],
   overview: (params) => ["dashboard", "overview", params],
@@ -118,31 +117,6 @@ export const useBrands = () =>
 
 export const useContracts = () =>
   useQuery({ queryKey: keys.contracts(), queryFn: () => get("/contracts"), ...REFERENCE });
-
-/**
- * ทะเบียนเครื่อง
- *
- * ไม่ส่ง params มา = ดึงทั้งหมด ซึ่งเป็นสิ่งที่หน้าที่กรองเองในเบราว์เซอร์ต้องการ
- * ส่ง params มา = ให้ API กรองให้ ซึ่งเร็วกว่ามากเมื่อจำนวนเครื่องโตขึ้น
- * (ดูพารามิเตอร์ที่รับได้ใน docs/reference/api.md)
- */
-export function useDevices(params) {
-  const key = computed(() => keys.devices(unref(params)));
-
-  return useQuery({
-    queryKey: key,
-    queryFn: () => get("/devices", unref(params) ?? {}),
-    placeholderData: (previous) => previous,
-    ...OPERATIONAL,
-  });
-}
-
-export const useLocationHistory = () =>
-  useQuery({
-    queryKey: keys.locationHistory(),
-    queryFn: () => get("/devices/location-history"),
-    ...OPERATIONAL,
-  });
 
 /**
  * ยอดรายเดือน — ใช้ร่วมกันหลายที่ในหน้าเดียว (กราฟแนวโน้ม, เส้นจิ๋วบนการ์ด KPI,
