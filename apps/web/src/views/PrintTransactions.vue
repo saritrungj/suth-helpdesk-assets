@@ -333,16 +333,14 @@ async function changeMonth(next) {
  *
  * เลือก "เดือนที่ค้างนานที่สุดที่ผ่านไปแล้ว" ไม่ใช่เดือนล่าสุด เพราะงานที่ค้างนาน
  * ที่สุดคืองานที่เสี่ยงถูกลืมที่สุด และเป็นตัวที่ทำให้ปิดยอดทั้งปีไม่ได้
+ * ถ้าไม่มีงานค้าง จะได้เดือนล่าสุดที่จบแล้วไว้ให้แก้ย้อนหลัง
  *
- * API คำนวณมาให้แล้วใน `next_incomplete_month` — ใช้ค่านั้นตรงๆ ไม่คำนวณซ้ำ
- * ที่นี่ ไม่งั้นสองที่จะตอบไม่ตรงกันสักวัน
+ * API คำนวณมาให้ครบใน `default_entry_month` — ใช้ค่านั้นตรงๆ ห้ามคำนวณ fallback
+ * ซ้ำที่นี่ เดิมบรรทัดนี้เขียนเตือนไว้แล้วว่า "ไม่งั้นสองที่จะตอบไม่ตรงกันสักวัน"
+ * แต่ยังมี fallback ของตัวเองอยู่ดี แล้ววันนั้นก็มาถึงจริง
  */
 function defaultEntryMonth() {
-  if (coverage.value?.next_incomplete_month) return coverage.value.next_incomplete_month;
-
-  // ครบหมดแล้ว — เปิดเดือนล่าสุดที่จบแล้วไว้ให้แก้ย้อนหลังได้
-  const finished = (coverage.value?.months ?? []).filter((row) => !row.in_progress);
-  return finished.at(-1)?.month ?? fyMonths.value.at(-1) ?? "";
+  return coverage.value?.default_entry_month ?? fyMonths.value.at(-1) ?? "";
 }
 
 /**

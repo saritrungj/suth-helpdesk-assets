@@ -54,9 +54,30 @@ test("overview exposes annual and overdue coverage separately", async () => {
   expect(overview.coverage.total_months).toBe(12);
   expect(overview.coverage.months).toHaveLength(12);
   expect(overview.coverage.annual_complete_months).toBeLessThanOrEqual(12);
-  if (overview.coverage.applicable) {
-    expect(overview.coverage.annual_complete_months + overview.coverage.incomplete_months + overview.coverage.not_due_months).toBe(12);
-  }
+
+  // ทั้งห้าสถานะต้องแบ่ง 12 เดือนออกจากกันพอดี ไม่ซ้อนและไม่เหลือ
+  //
+  // เดิมยืนยันแค่สามตัวแรกบวกกันได้ 12 ซึ่งจริงตอนที่ยังไม่มีสถานะ "ยืนยันไม่ได้"
+  // ถ้าปล่อยไว้แบบเดิม เดือนที่ยืนยันไม่ได้จะหายไปจากสมการเงียบๆ แล้วเทสจะแดงด้วย
+  // เหตุผลที่ไม่เกี่ยวกับสิ่งที่มันตั้งใจตรวจ — ดู ADR-0018
+  const { coverage } = overview;
+  expect(
+    coverage.annual_complete_months +
+      coverage.incomplete_months +
+      coverage.not_due_months +
+      coverage.indeterminate_months +
+      coverage.not_applicable_months
+  ).toBe(12);
+
+  // เดือนที่ยังมีเครื่องซึ่งไม่รู้ว่าต้องกรอกหรือไม่ ห้ามถูกประกาศว่า "ครบ" หรือ "ค้าง"
+  //
+  // เขียนเป็นกฎรายเดือน ไม่ใช่กฎรวมทั้งปี เพราะการยืนยันเป็นรายเครื่องและรายช่วง
+  // ผู้ดูแลที่ยืนยันย้อนหลังได้ถึงเดือนมกราคม ทำให้เดือนหลังจากนั้นสรุปได้ตามปกติ
+  // ขณะที่เดือนก่อนหน้ายังยืนยันไม่ได้ — ทั้งสองอย่างอยู่ในปีเดียวกันได้
+  const wronglyConcluded = coverage.months.filter(
+    (month) => month.unverified_devices > 0 && ["complete", "overdue"].includes(month.status)
+  );
+  expect(wronglyConcluded).toEqual([]);
 });
 
 test("report table uses the remaining viewport when expanded", async ({ page }) => {

@@ -116,9 +116,16 @@ function computeCoverage({
     incompleteMonths,
     coverage: {
       total_months: fyMonths.length,
+
+      // ห้าตัวนี้แบ่ง 12 เดือนออกจากกันหมดพอดี ไม่ซ้อนและไม่เหลือ —
+      //   annual_complete + incomplete + not_due + indeterminate + not_applicable = total
+      // เดิมมีแค่สามตัวแรกและบวกกันได้ 12 พอดี เทสของ E2E จึงเขียนยืนยันไว้แบบนั้น
+      // การเพิ่ม indeterminate ทำให้สมการเดิมไม่จริงอีกต่อไป จึงต้องเปิดเผยตัวที่
+      // เหลือด้วย ไม่งั้นผู้เรียกจะบวกสามตัวแล้วสรุปเองว่าเดือนที่หายไปคือ "ครบ"
       annual_complete_months: countOf(MONTH_STATUS.COMPLETE),
       not_due_months: countOf(MONTH_STATUS.NOT_DUE),
       indeterminate_months: countOf(MONTH_STATUS.INDETERMINATE),
+      not_applicable_months: countOf(MONTH_STATUS.NOT_APPLICABLE),
 
       // ขอบเขตนี้มีเครื่องที่ต้องกรอกอยู่หรือไม่ (รวมเครื่องที่ยังยืนยันไม่ได้ ซึ่ง
       // อาจต้องกรอกก็ได้) — false แปลว่าไม่มีอะไรให้ทำ ไม่ใช่ "ทำครบแล้ว"

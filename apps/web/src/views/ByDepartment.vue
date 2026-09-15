@@ -841,8 +841,11 @@ onMounted(async () => {
 
     <div v-else-if="!loadError" class="flex flex-col gap-2">
       <section v-for="division in filteredDivisions" :key="division.id" class="card overflow-hidden">
-        <!-- ระดับ 1: ฝ่าย -->
-        <h3>
+        <!-- ระดับ 1: ฝ่าย
+             เป็น h2 เพราะเป็นหัวข้อระดับบนสุดใต้ชื่อหน้า (h1 มาจาก UiPageHeader ของ
+             UsageReport.vue) — เดิมเป็น h3 ทำให้โปรแกรมอ่านหน้าจอเจอลำดับหัวข้อ
+             ที่ข้ามระดับ แล้วผู้ใช้ที่ไล่ฟังหัวข้อจะเข้าใจว่ามีหัวข้อที่ตัวเองพลาดไป -->
+        <h2>
           <button
             type="button"
             class="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-2 transition-colors"
@@ -868,7 +871,7 @@ onMounted(async () => {
               <span class="text-2xs font-normal text-ink-mute"> {{ t("บาท") }} </span>
             </span>
           </button>
-        </h3>
+        </h2>
 
         <!-- ระดับ 2: แผนก -->
         <div v-if="openDivisions.has(division.id)" class="border-t border-line-soft">

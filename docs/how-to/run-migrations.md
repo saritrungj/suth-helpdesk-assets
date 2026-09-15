@@ -33,6 +33,7 @@ mysql -u root -p your_database -e "DESCRIBE fiscal_year; DESCRIBE devices; SHOW 
 | 5 | `migration_normalize_month_to_ce.sql` | แปลงเดือน พ.ศ. เป็น ค.ศ. และเพิ่ม `CHECK` |
 | 6 | `migration_update_page_deduction_to_two_percent.sql` | เปลี่ยน view รายงานให้หัก 2% จากจำนวนหน้าดิบ |
 | 7 | `migration_add_device_service_period.sql` | สถานะการติดตั้ง ช่วงความรับผิดชอบ และ index ของเดือน |
+| 8 | `migration_round_cost_per_reading.sql` | ให้ view ปัดค่าใช้จ่ายทีละรายการ ให้ตรงกับที่โค้ดคำนวณ (ต้องรันหลังข้อ 6) |
 
 ```sh
 mysql --default-character-set=utf8mb4 -u root -p your_database < database/migrations/migration_add_device_location.sql

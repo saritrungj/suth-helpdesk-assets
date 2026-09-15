@@ -142,6 +142,44 @@ VALUES
 (3, 2, 2, 'เคาน์เตอร์ประสานงาน', 1, 1, DATE_SUB(@today, INTERVAL 2 MONTH), NULL);
 
 -- ------------------------------------------------------------------------------
+-- เครื่องเติมจำนวน เพื่อให้ตารางยาวพอที่การแบ่งหน้าจะทำงานจริง
+-- ------------------------------------------------------------------------------
+-- ชุด db มีเทสที่ตรวจว่าตารางเต็มจอใช้พื้นที่ที่เหลือจริง และแถบล่างถูกตรึงไว้
+-- ด้านล่าง ซึ่งพิสูจน์อะไรไม่ได้เลยถ้าตารางมีไม่กี่แถว (เทสรอข้อความ "แสดง 1–20
+-- จาก …" ที่จะขึ้นก็ต่อเมื่อมีเกิน 20 แถว)
+--
+-- เดิม seed นี้มี 5 เครื่อง เทสสองข้อนั้นจึงล้มทุกครั้งที่รันกับ seed ของตัวเอง
+-- ไม่ใช่เพราะโค้ดผิด แต่เพราะข้อมูลไม่ถึงเกณฑ์ที่เทสตั้งไว้
+--
+-- เครื่องกลุ่มนี้อยู่อาคารผู้ป่วยนอกและตรวจยืนยันแล้วทั้งหมด ทำให้ขอบเขต
+-- "อาคารผู้ป่วยนอก" ยืนยันความครบถ้วนได้เต็มที่ ขณะที่ขอบเขตทั้งระบบยังยืนยัน
+-- ไม่ได้เพราะเครื่อง 6 ที่อาคารใหม่ — ชุด db จึงเดินผ่านทั้งสองเส้นทางในการรันเดียว
+INSERT INTO devices
+(id, serial_number, brand_id, model, building_id, floor_id, location, division_id, department_id, contract_id, price_override, status, installation_status, service_unverified_before)
+SELECT
+  seq.n,
+  CONCAT('CI-SN-', LPAD(seq.n, 3, '0')),
+  1 + MOD(seq.n, 2),
+  'Office 400',
+  1, 1,
+  CONCAT('จุดบริการ ', seq.n),
+  1,
+  1 + MOD(seq.n, 2),
+  1,
+  NULL,
+  'active',
+  'installed',
+  NULL
+FROM (
+  WITH RECURSIVE counter AS (SELECT 7 AS n UNION ALL SELECT n + 1 FROM counter WHERE n < 30)
+  SELECT n FROM counter
+) seq;
+
+INSERT INTO device_service_period (device_id, effective_from, effective_to, verified_by, verified_at)
+SELECT d.id, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP
+FROM devices d WHERE d.id >= 7;
+
+-- ------------------------------------------------------------------------------
 -- ยอดพิมพ์ — สองเดือนล่าสุด ให้แดชบอร์ด/รายงาน/เปรียบเทียบมีข้อมูลจริงให้ตรวจ
 -- ------------------------------------------------------------------------------
 
@@ -152,3 +190,11 @@ INSERT INTO print_transactions (device_id, month, pages) VALUES
 (2, @month_this, 950),
 (3, @month_prev, 300),
 (3, @month_this, 420);
+
+-- เครื่องเติมจำนวนมียอดด้วย ไม่งั้นรายงานตามเครื่องจะมีแถวว่างยาวเหยียดซึ่งไม่
+-- เหมือนข้อมูลจริง และตารางที่กรองเฉพาะเครื่องที่มียอดจะกลับไปสั้นเหมือนเดิม
+INSERT INTO print_transactions (device_id, month, pages)
+SELECT d.id, @month_prev, 200 + (d.id * 13) FROM devices d WHERE d.id >= 7;
+
+INSERT INTO print_transactions (device_id, month, pages)
+SELECT d.id, @month_this, 250 + (d.id * 11) FROM devices d WHERE d.id >= 7;

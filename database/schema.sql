@@ -245,13 +245,14 @@ SELECT
 
     (pt.pages * 0.98) AS net_pages,
 
-    (
+    ROUND(
         (pt.pages * 0.98) *
         COALESCE(
             d.price_override,
             c.price_per_page,
             0
-        )
+        ),
+        2
     ) AS total_cost
 
 FROM print_transactions pt
@@ -271,11 +272,14 @@ SELECT
     SUM(pt.pages * 0.98) AS total_net_pages,
 
     SUM(
-        (pt.pages * 0.98) *
-        COALESCE(
-            d.price_override,
-            c.price_per_page,
-            0
+        ROUND(
+            (pt.pages * 0.98) *
+            COALESCE(
+                d.price_override,
+                c.price_per_page,
+                0
+            ),
+            2
         )
     ) AS total_building_cost
 
@@ -322,13 +326,14 @@ SELECT
         0
     ) AS cost_per_page,
 
-    (
+    ROUND(
         (pt.pages * 0.98) *
         COALESCE(
             d.price_override,
             c.price_per_page,
             0
-        )
+        ),
+        2
     ) AS total_cost
 
 FROM print_transactions pt
