@@ -140,7 +140,10 @@ test("fullscreen is limited to long data tables", async ({ page }) => {
 
 test("graph selection retains the filter and follow-up links retain their scope", async ({ page }) => {
   await page.goto("/dashboard");
-  const trend = page.locator("section").filter({ has: page.getByRole("heading", { name: "ค่าใช้จ่ายสุทธิรายเดือน", exact: true }) });
+  // หัวข้อการ์ดเปลี่ยนตามสถานะราคาโดยตั้งใจ — เป็น "ค่าใช้จ่ายที่ยืนยันแล้วรายเดือน"
+  // เมื่อยังมีรายการที่ยืนยันราคาไม่ได้ (ADR-0019 Q27) จับด้วยรูปแบบ ไม่ใช่ข้อความตรงตัว
+  // ไม่งั้นเทสจะแดงเพราะข้อมูลในฐานเปลี่ยนสถานะ ไม่ใช่เพราะพฤติกรรมที่มันตรวจพัง
+  const trend = page.locator("section").filter({ has: page.getByRole("heading", { name: /รายเดือน$/ }) });
   await trend.getByRole("radio", { name: "ตาราง", exact: true }).click();
   const months = trend.locator("tbody button");
   await expect(trend.locator("canvas")).toHaveCount(1);
@@ -148,9 +151,16 @@ test("graph selection retains the filter and follow-up links retain their scope"
   const filterUrl = page.url();
   if (count) {
     await months.first().click();
+
+    // คลิกเดือนบนกราฟ = เปิดแผงรายละเอียดของเดือนนั้น ไม่ใช่เปลี่ยนตัวกรองของทั้งหน้า
+    // ความต่างนี้สำคัญ: ตัวกรองที่เปลี่ยนเองตอนกดดูรายละเอียด ทำให้ตัวเลขทุกใบบน
+    // หน้าขยับตามโดยที่ผู้ใช้ไม่ได้สั่ง แล้วภาพรวมที่กำลังอ่านอยู่ก็หายไป
+    await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page).toHaveURL(filterUrl);
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
     await expect(months).toHaveCount(count);
-    await expect(months.first()).toHaveAttribute("aria-pressed", "true");
   }
   await page.getByRole("button", { name: "งานที่ต้องติดตาม", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
