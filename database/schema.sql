@@ -170,10 +170,10 @@ SELECT
     pt.month,
     pt.pages AS pages_printed,
 
-    (pt.pages * 0.8) AS net_pages,
+    (pt.pages * 0.98) AS net_pages,
 
     (
-        (pt.pages * 0.8) *
+        (pt.pages * 0.98) *
         COALESCE(
             d.price_override,
             c.price_per_page,
@@ -195,10 +195,10 @@ SELECT
 
     b.name AS building_name,
 
-    SUM(pt.pages * 0.8) AS total_net_pages,
+    SUM(pt.pages * 0.98) AS total_net_pages,
 
     SUM(
-        (pt.pages * 0.8) *
+        (pt.pages * 0.98) *
         COALESCE(
             d.price_override,
             c.price_per_page,
@@ -241,7 +241,7 @@ SELECT
 
     br.name AS brand_name,
 
-    (pt.pages * 0.8) AS net_pages,
+    (pt.pages * 0.98) AS net_pages,
 
     COALESCE(
         d.price_override,
@@ -250,7 +250,7 @@ SELECT
     ) AS cost_per_page,
 
     (
-        (pt.pages * 0.8) *
+        (pt.pages * 0.98) *
         COALESCE(
             d.price_override,
             c.price_per_page,
