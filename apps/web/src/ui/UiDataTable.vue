@@ -32,6 +32,10 @@ import { t } from "../lib/locale";
  *   - แถวสลับสี (NHS) เป็นเงาในบนเซลล์ จึงซ้อนกับสีแถวที่หน้ากำหนดเองผ่าน rowClass ได้
  *   - ปุ่มขยายตารางเป็นไอคอนพร้อม tooltip ส่วนคอลัมน์/Excel คงข้อความ
  *   - caption ของตาราง (GOV.UK / NHS) เป็นหัวเรื่องตอนขยายเต็มจอด้วย
+ *   - toolsTarget ย้ายกลุ่มเครื่องมือ (ขยาย/คอลัมน์/Excel) ไปวางในแถบตัวกรองของหน้า
+ *     ด้วย Teleport ให้ตัวกรองกับเครื่องมือตารางอยู่แถวเดียวกัน โดยหน้าไม่ต้องย้าย
+ *     ตัวกรองเข้ามาในตาราง — ตอนขยายตารางแบบไม่มี fullscreenTarget แถบตัวกรองอยู่
+ *     นอกจอ เครื่องมือจึงกลับมาอยู่ในตารางเอง
  *
  * นิยามคอลัมน์: { key, label, align?, sortable?, hidden?, width?,
  *                 value?: (row) => any, csv?: (row) => any }
@@ -89,9 +93,12 @@ const props = defineProps({
   fullscreenTarget: { type: Object, default: null },
   /** ชื่อตาราง — เป็น <caption> ให้โปรแกรมอ่านหน้าจอ และเป็นหัวเรื่องตอนขยายเต็มจอ */
   caption: { type: String, default: "" },
+  /** selector ของจุดวางกลุ่มเครื่องมือในแถบตัวกรองของหน้า เช่น "#registry-table-tools" */
+  toolsTarget: { type: String, default: "" },
 });
 const fullscreenRoot = computed(() => props.fullscreenTarget || tableRoot.value);
 const { expanded, expandError, toggleExpanded } = useFullscreen(fullscreenRoot);
+const toolsInline = computed(() => !props.toolsTarget || (expanded.value && !props.fullscreenTarget));
 const emit = defineEmits(["update:searchValue"]);
 const localSearch = ref("");
 const search = computed({
@@ -293,7 +300,11 @@ defineExpose({
   <div ref="tableRoot" class="flex flex-col min-w-0" :class="expanded && !fullscreenTarget && 'bg-surface h-screen overflow-auto p-5'">
     <p v-if="expandError" role="status">{{ expandError }}</p>
     <!-- แถบเครื่องมือ -->
-    <div class="flex flex-wrap items-center gap-2 mb-3" data-print="hide">
+    <div
+      class="flex flex-wrap items-center gap-2 mb-3"
+      :class="!searchable && !$slots['toolbar-extra'] && !toolsInline && !(expanded && caption) && 'hidden'"
+      data-print="hide"
+    >
       <h2 v-if="expanded && caption" class="text-lg font-semibold text-ink mr-2">{{ caption }}</h2>
       <div v-if="searchable" class="min-w-[13rem] flex-1 max-w-sm">
         <!-- ต้องมี aria-label ไม่ใช่พึ่ง placeholder อย่างเดียว — placeholder หายไป
@@ -311,6 +322,7 @@ defineExpose({
 
       <slot name="toolbar-extra" />
 
+      <Teleport defer :to="toolsTarget || 'body'" :disabled="toolsInline">
       <div role="group" :aria-label="t('เครื่องมือตาราง')" class="flex items-center gap-2 ml-auto">
         <UiTooltip :content="expanded ? t('ย่อตาราง') : t('ขยายตาราง')">
           <UiButton
@@ -355,6 +367,7 @@ defineExpose({
           <span class="hidden sm:inline">Excel</span>
         </UiButton>
       </div>
+      </Teleport>
     </div>
 
     <!-- ตาราง (จอ >= sm) -->

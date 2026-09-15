@@ -47,7 +47,6 @@ import {
   UiAlert,
   UiBadge,
   UiButton,
-  UiCard,
   UiCombobox,
   UiDataTable,
   UiEmpty,
@@ -388,14 +387,14 @@ const entryColumns = computed(() => [
   },
   {
     key: "previous_month",
-    label: previousMonth.value ? t("ยอด{0}", [formatMonth(previousMonth.value)]) : t("เดือนก่อนหน้า"),
+    label: previousMonth.value ? t("ยอด {0}", [formatMonth(previousMonth.value)]) : t("เดือนก่อนหน้า"),
     align: "right",
     width: "9rem",
     value: (d) => previousPages.value[d.id] ?? null,
   },
   {
     key: "entry",
-    label: filters.value.month ? t("ยอด{0}", [formatMonth(filters.value.month)]) : t("ยอดพิมพ์"),
+    label: filters.value.month ? t("ยอด {0}", [formatMonth(filters.value.month)]) : t("ยอดพิมพ์"),
     align: "right",
     width: "9rem",
     sortable: false,
@@ -858,37 +857,32 @@ onUnmounted(unregisterFiscalYearGuard);
 
 <template>
   <div ref="workspace" class="ui-fullscreen-context">
-    <UiPageHeader
-      :eyebrow="t(&quot;บันทึกข้อมูล&quot;)"
-      :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
-      :description="t(&quot;เลือกเดือน กรอกยอด แล้วตรวจจำนวนรายการก่อนบันทึก&quot;)"
-    />
-
-    <!-- ความคืบหน้าของทั้งปีงบ -->
-    <UiCard class="mb-4" flush>
-      <template #header>
+    <!-- หัวหน้าแถวเดียว (รอบที่ 3 ของ #51): ความคืบหน้าของทั้งปีงบเป็นบรรทัดสรุปข้างชื่อหน้า
+         ส่วนสลับโหมดอยู่ขวาสุด เหนือทุกอย่างที่มันเปลี่ยน เพราะมันเปลี่ยนทั้งหน้า -->
+    <UiPageHeader :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)">
+      <template #badge>
         <p class="text-sm text-ink-soft">
           {{ t("ปีงบ {0}", [displayYearBE]) }}
           <span v-if="!summaryError && !summaryLoading && !loading && !pageError"> · {{ t("กรอกครบแล้ว {0} จาก {1} เครื่อง", [formatCount(progress.done), formatCount(progress.total)]) }}</span>
         </p>
-      </template>
-      <template #actions>
         <UiButton size="sm" variant="ghost" :aria-expanded="yearExpanded" aria-controls="year-progress" @click="yearExpanded = !yearExpanded">
           {{ t("รายละเอียดความคืบหน้าปี") }}
           <ChevronDown :size="14" :class="yearExpanded && 'rotate-180'" aria-hidden="true" />
         </UiButton>
-        <UiButton
-          v-if="yearExpanded && progress.total - progress.done > 0"
-          size="sm"
-          :variant="filters.fillStatus === 'done' ? 'secondary' : 'soft'"
-          @click="filters.fillStatus = filters.fillStatus === 'partial' ? '' : 'partial'"
-        >
-          <template #icon><ClipboardList :size="15" /></template>
-          {{ filters.fillStatus === "partial" ? t("แสดงทุกเครื่อง") : t("ดูเฉพาะที่ยังไม่ครบ") }}
-        </UiButton>
       </template>
+      <template #actions>
+        <UiSegmented
+          :model-value="mode"
+          :options="MODE_OPTIONS"
+          size="sm"
+          :label="t(&quot;โหมดการทำงาน&quot;)"
+          @update:model-value="setMode"
+        />
+      </template>
+    </UiPageHeader>
 
-      <div id="year-progress" v-show="yearExpanded" class="px-4 py-3">
+    <div id="year-progress" v-show="yearExpanded" class="card mb-4">
+      <div class="px-4 py-3">
         <UiSkeleton v-if="loading || summaryLoading" height="2.5rem" />
 
         <div v-else-if="!summaryError && !pageError" class="flex flex-col gap-3">
@@ -917,9 +911,20 @@ onUnmounted(unregisterFiscalYearGuard);
               <span class="numeral font-semibold text-ink">{{ formatCount(progress.pending) }}</span>
             </li>
           </ul>
+
+          <div v-if="progress.total - progress.done > 0">
+            <UiButton
+              size="sm"
+              :variant="filters.fillStatus === 'done' ? 'secondary' : 'soft'"
+              @click="filters.fillStatus = filters.fillStatus === 'partial' ? '' : 'partial'"
+            >
+              <template #icon><ClipboardList :size="15" /></template>
+              {{ filters.fillStatus === "partial" ? t("แสดงทุกเครื่อง") : t("ดูเฉพาะที่ยังไม่ครบ") }}
+            </UiButton>
+          </div>
         </div>
       </div>
-    </UiCard>
+    </div>
     <UiAlert v-if="summaryError" tone="danger" class="mb-4">
       {{ summaryError }}
       <template #actions><UiButton variant="secondary" size="sm" @click="loadSummary">{{ t("ลองใหม่") }}</UiButton></template>
@@ -929,15 +934,6 @@ onUnmounted(unregisterFiscalYearGuard);
       <template #actions><UiButton variant="secondary" size="sm" @click="init">{{ t("ลองใหม่") }}</UiButton></template>
     </UiAlert>
 
-    <!-- สลับโหมด — วางเหนือทุกอย่างที่มันเปลี่ยน เพราะมันเปลี่ยนทั้งหน้า -->
-    <UiSegmented
-      :model-value="mode"
-      :options="MODE_OPTIONS"
-      :label="t(&quot;โหมดการทำงาน&quot;)"
-      class="mb-4"
-      @update:model-value="setMode"
-    />
-
     <UiAlert v-if="!canEdit" tone="info" class="mb-4"> {{ t("บัญชีของคุณมีสิทธิ์ดูอย่างเดียว จึงเปิดดูยอดที่บันทึกไว้ได้ แต่แก้ไขไม่ได้") }} </UiAlert>
 
     <!-- ตัวกรอง — ค้นหากับเดือนอยู่ในสายตาเสมอ ที่เหลือซ่อนอยู่หลังปุ่ม
@@ -945,21 +941,24 @@ onUnmounted(unregisterFiscalYearGuard);
          แทบไม่ถูกแตะเลย แต่กินความสูงจนตารางที่คนมากรอกหลุดใต้เส้นพับ -->
     <UiFilterBar :chips="filterChips" @remove="removeFilter" @clear="resetFilters">
       <template #primary>
-        <UiField :label="t(&quot;ค้นหา&quot;)" class="flex-1 min-w-[16rem]">
-          <UiInput v-model="search" clearable :placeholder="t(&quot;Serial, รุ่น, ตำแหน่ง, แผนก…&quot;)">
+        <!-- แถวเดียวกับทะเบียน (รอบที่ 3 ของ #51) — ชื่อของช่องมาจาก aria-label
+             และเครื่องมือของตารางที่แสดงอยู่ (รายเดือนหรือทั้งปี) ต่อท้ายแถวนี้ -->
+        <div class="flex-1 min-w-[16rem] max-w-md">
+          <UiInput v-model="search" clearable :aria-label="t(&quot;ค้นหา&quot;)" :placeholder="t(&quot;Serial, รุ่น, ตำแหน่ง, แผนก…&quot;)">
             <template #icon><Search :size="15" /></template>
           </UiInput>
-        </UiField>
+        </div>
 
-        <UiField :label="t(&quot;ดูยอดของเดือน&quot;)" class="w-full sm:w-56">
-          <UiSelect
-            :model-value="filters.month"
-            :options="monthOptions"
-            value-key="value"
-            label-key="label"
-            @update:model-value="changeMonth"
-          />
-        </UiField>
+        <UiSelect
+          class="w-full sm:w-56"
+          :model-value="filters.month"
+          :options="monthOptions"
+          value-key="value"
+          label-key="label"
+          :aria-label="t(&quot;ดูยอดของเดือน&quot;)"
+          @update:model-value="changeMonth"
+        />
+        <div id="entry-table-tools" class="ml-auto"></div>
       </template>
 
       <UiField :label="t(&quot;สถานะการกรอก&quot;)">
@@ -1039,6 +1038,8 @@ onUnmounted(unregisterFiscalYearGuard);
           :export-context="reportContext({ months: filters.month ? [filters.month] : [], filters, labels: FILTER_LABELS })"
           :searchable="false"
           :fullscreen-target="workspace"
+          tools-target="#entry-table-tools"
+          :caption="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
           :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
           :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
           max-height="60vh"
@@ -1097,6 +1098,8 @@ onUnmounted(unregisterFiscalYearGuard);
       :export-context="reportContext({ months: filters.month ? [filters.month] : [], filters, labels: FILTER_LABELS })"
       :searchable="false"
       :fullscreen-target="workspace"
+      tools-target="#entry-table-tools"
+      :caption="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
       :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
       :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
       max-height="68vh"

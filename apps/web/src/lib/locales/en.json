@@ -684,7 +684,7 @@
   "ถ้าเปลี่ยนเดือนตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด": "Changing months now will discard these entries.",
   "ถ้าออกจากโหมดกรอกตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด": "Leaving entry mode now will discard these entries.",
   "ที่ตั้ง / แผนก": "Location / department",
-  "ยอด{0}": "Usage: {0}",
+  "ยอด {0}": "Usage: {0}",
   "เดือนก่อนหน้า": "Previous month",
   "ยอดพิมพ์": "Print usage",
   "โหลดข้อมูลไม่สำเร็จ": "Unable to load data",

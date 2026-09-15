@@ -71,7 +71,7 @@ test("staff opens the API's pending month after coverage arrives", async ({ page
   await page.goto("/print-transactions");
   await expect(page.getByRole("textbox", { name: "ยอดพิมพ์ของ SUTH-001", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "ยอดพิมพ์ของ SUTH-001", exact: true })).toHaveValue("100");
-  await expect(page.getByRole("columnheader", { name: /ยอดส.ค./ })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /ยอด ส\.ค\./ })).toBeVisible();
 });
 
 test("expense keeps search and expanded detail across tabs and browser back", async ({ page }) => {
@@ -221,7 +221,7 @@ test("explicit month survives late coverage and yearly detail keeps the draft", 
   await toggle.press("Enter");
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(input).toHaveValue("250");
-  await expect(page.getByRole("columnheader", { name: /ยอดก.ย./ })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /ยอด ก\.ย\./ })).toBeVisible();
 });
 
 test("expense side data that fails to load is reported instead of silently disappearing", async ({ page }) => {

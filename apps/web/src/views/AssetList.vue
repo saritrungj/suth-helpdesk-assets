@@ -398,16 +398,16 @@ onMounted(async () => {
 
 <template>
   <div ref="registryRoot" class="ui-fullscreen-context">
-    <UiPageHeader
-      :eyebrow="t(&quot;ทรัพย์สิน&quot;)"
-      :title="t(&quot;ทะเบียนเครื่องพิมพ์&quot;)"
-      :description="t(&quot;เครื่องพิมพ์และเครื่องถ่ายเอกสารทั้งหมดที่อยู่ในความดูแล พร้อมที่ตั้งและสัญญาที่ผูกอยู่&quot;)"
-    >
-      <template #meta>
-        <p class="text-xs text-ink-mute mt-2">
-          <span class="numeral font-semibold text-ink-soft">{{ formatCount(filteredAssets.length) }}</span> {{ t("เครื่องที่ตรงกับเงื่อนไข") }} <span v-if="filteredAssets.length !== assets.length" class="text-ink-mute"> {{ t("(จากทั้งหมด") }} {{ formatCount(assets.length) }})
-          </span>
-        </p>
+    <!-- หัวหน้าแถวเดียว (รอบที่ 3 ของ #51, Primer): จำนวนเป็นป้ายข้างชื่อหน้า
+         ไม่ใช่บรรทัดคำอธิบายที่ดันตารางลงไปใต้เส้นพับ -->
+    <UiPageHeader :title="t(&quot;ทะเบียนเครื่องพิมพ์&quot;)">
+      <template #badge>
+        <UiBadge tone="neutral" class="numeral">
+          {{ formatCount(filteredAssets.length) }} {{ t("เครื่อง") }}
+          <template v-if="filteredAssets.length !== assets.length">
+            {{ t("(จากทั้งหมด") }} {{ formatCount(assets.length) }})
+          </template>
+        </UiBadge>
       </template>
 
       <template #actions>
@@ -437,28 +437,27 @@ onMounted(async () => {
          เหมือนกันหน้าตาไม่เหมือนกัน และเวลาแก้พฤติกรรมต้องแก้สองที่ -->
     <UiFilterBar :chips="filterChips" @remove="clearFilter" @clear="resetFilters">
       <template #primary>
-        <UiField :label="t('ค้นหา')" class="flex-1 min-w-[14rem]">
+        <!-- แถวเดียวไม่มีป้ายเหนือช่อง (รอบที่ 3 ของ #51) — ชื่อที่โปรแกรมอ่านหน้าจออ่าน
+             มาจาก aria-label ของแต่ละช่อง ส่วนเครื่องมือตารางถูกย้ายมาต่อท้ายแถวนี้ -->
+        <div class="flex-1 min-w-[14rem] max-w-md">
           <UiInput ref="searchInput" v-model="search" clearable :aria-label="t('ค้นหา Serial, รุ่น, ตำแหน่ง…')" :placeholder="t('ค้นหา Serial, รุ่น, ตำแหน่ง…')">
             <template #icon><Search :size="15" /></template>
           </UiInput>
-        </UiField>
-        <UiField :label="t(&quot;สถานะเครื่อง&quot;)">
-          <UiSegmented v-model="filters.status" :options="STATUS_OPTIONS" size="sm" :label="t(&quot;กรองตามสถานะเครื่อง&quot;)" />
-        </UiField>
+        </div>
+        <UiSegmented v-model="filters.status" :options="STATUS_OPTIONS" size="sm" :label="t(&quot;กรองตามสถานะเครื่อง&quot;)" />
 
         <!--
           เครื่องที่ยังไม่ผูกสัญญาคิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาเฉพาะเครื่อง —
           ยอดพิมพ์ของมันหายไปจากงบเงียบๆ จึงต้องมีทางกรองดูได้โดยตรง ไม่ใช่ต้อง
           ไล่กวาดสายตาหาช่องสัญญาที่ว่างในตารางเป็นร้อยแถว
         -->
-        <UiField :label="t(&quot;สัญญา&quot;)">
-          <UiSegmented
-            v-model="filters.unassigned"
-            :options="CONTRACT_OPTIONS"
-            size="sm"
-            :label="t(&quot;กรองตามการผูกสัญญา&quot;)"
-          />
-        </UiField>
+        <UiSegmented
+          v-model="filters.unassigned"
+          :options="CONTRACT_OPTIONS"
+          size="sm"
+          :label="t(&quot;กรองตามการผูกสัญญา&quot;)"
+        />
+        <div id="registry-table-tools" class="ml-auto"></div>
       </template>
 
       <UiField :label="t(&quot;ยี่ห้อ&quot;)">
@@ -500,6 +499,8 @@ onMounted(async () => {
       v-show="!loadError"
       ref="table"
       :fullscreen-target="registryRoot"
+      tools-target="#registry-table-tools"
+      :caption="t(&quot;ทะเบียนเครื่องพิมพ์&quot;)"
       v-model:search-value="search"
       :searchable="false"
       preserve-page-on-refresh
@@ -542,14 +543,16 @@ onMounted(async () => {
         <span class="block text-2xs text-ink-mute">{{ row.model || "" }}</span>
       </template>
 
+      <!-- ข้อความยาวตัดที่ 2 บรรทัด (รอบที่ 3 ของ #51) แถวจึงสูงเท่ากันพอให้ไล่ตาได้
+           ข้อความเต็มอยู่ใน title และในหน้ารายละเอียดเครื่อง -->
       <template #cell-department_name="{ row }">
-        <span class="block w-52 whitespace-normal break-words">{{ row.department_name || '—' }}</span>
+        <span class="block w-52 whitespace-normal break-words line-clamp-2" :title="row.department_name">{{ row.department_name || '—' }}</span>
       </template>
       <template #cell-division_name="{ row }">
-        <span class="block w-44 whitespace-normal break-words">{{ row.division_name || '—' }}</span>
+        <span class="block w-44 whitespace-normal break-words line-clamp-2" :title="row.division_name">{{ row.division_name || '—' }}</span>
       </template>
       <template #cell-location="{ row }">
-        <span class="block w-40 whitespace-normal break-words">{{ row.location || '—' }}</span>
+        <span class="block w-40 whitespace-normal break-words line-clamp-2" :title="row.location">{{ row.location || '—' }}</span>
       </template>
 
       <template #cell-contract_no="{ row }">

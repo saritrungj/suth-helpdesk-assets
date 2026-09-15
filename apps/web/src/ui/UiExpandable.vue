@@ -24,12 +24,14 @@ const { expanded, expandError, toggleExpanded } = useFullscreen(root);
 
 <template>
   <div ref="root" class="min-w-0" :class="expanded && 'bg-surface h-screen overflow-auto p-5'">
-    <div class="flex flex-wrap items-center gap-2 mb-3" data-print="hide">
+    <!-- items-end: ช่องในแถบเครื่องมือของหน้ามีป้ายชื่ออยู่ด้านบน ปุ่มจึงต้องชิดล่างให้ตรงกับช่อง
+         ถ้าหน้าส่งแถบเครื่องมือมา ปุ่มกลุ่มขวาของหน้าเป็นตัวดัน (ml-auto) ปุ่มขยายจึงต่อท้ายติดกัน -->
+    <div class="flex flex-wrap items-end gap-2 mb-3" data-print="hide">
       <h2 v-if="expanded && title" class="text-lg font-semibold text-ink mr-2">{{ title }}</h2>
       <slot name="toolbar" />
       <UiTooltip :content="expanded ? t('ย่อตาราง') : t('ขยายตาราง')">
         <UiButton
-          class="ml-auto"
+          :class="!$slots.toolbar && 'ml-auto'"
           size="sm"
           variant="secondary"
           icon-only
