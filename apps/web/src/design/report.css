@@ -1,9 +1,11 @@
 /* Analytical workspace: restrained surfaces and one accent, after the live
-   Plausible dashboard and Linear Insights. Colors live in tokens.css. */
-.report-workspace {
-  --shell-sidebar-width: 208px;
-}
+   Plausible dashboard and Linear Insights. Colors live in tokens.css.
 
+   ขอบเขตของไฟล์นี้คือ "พื้นที่เนื้อหา" ของหน้าเชิงวิเคราะห์เท่านั้น ห้ามทับ token
+   ระดับเปลือกแอป (แถบเมนู แถบบน) เพราะ .report-workspace ถูกติดที่ตัวครอบทั้งหน้า
+   ตาม route — การทับความกว้างแถบเมนูที่นี่ทำให้แถบเมนูซึ่งเป็นองค์ประกอบเดียวกัน
+   ตลอดทั้งแอป เปลี่ยนความกว้างเองทุกครั้งที่ผู้ใช้เข้าและออกจากแดชบอร์ด
+   (เคยเกิดจริง: ทับไว้ที่ 208px ขณะที่ทั้งระบบใช้ 232px) */
 .report-workspace .card {
   border-color: var(--line);
   border-radius: var(--radius-xl);

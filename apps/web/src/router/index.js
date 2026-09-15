@@ -106,6 +106,14 @@ const routes = [
   { path: "/admin/add-asset", name: "AddAsset", component: () => import("../views/admin/AddAsset.vue") },
   { path: "/admin/users", name: "Users", component: () => import("../views/admin/Users.vue") },
 
+  // ตรวจยืนยันสถานะการติดตั้งของเครื่องเดิม (ADR-0018) — ไม่มีรายการในเมนูถาวร
+  // เพราะเป็นงานที่ทำครั้งเดียวแล้วจบ เข้าจากคำเตือนบนแดชบอร์ดหรือ Ctrl+K
+  {
+    path: "/admin/installation-review",
+    name: "InstallationReview",
+    component: () => import("../views/admin/InstallationReview.vue"),
+  },
+
   // การนำเข้าไฟล์กลายเป็นแท็บในหน้าเพิ่มทรัพย์สินแล้ว — เก็บ path เดิมไว้ redirect
   {
     path: "/admin/import-devices",

@@ -95,6 +95,32 @@ CREATE TABLE devices (
     price_override DECIMAL(10,2) DEFAULT NULL,
     status ENUM('active','repair','retired') DEFAULT 'active',
 
+    -- สถานะการติดตั้ง แยกจากสถานะการใช้งานด้านบน เพราะตอบคนละคำถาม (ADR-0018)
+    --   status               ใช้งานอยู่ / ซ่อม / ปลดระวาง
+    --   installation_status  ติดตั้งแล้ว / ยังไม่ได้ติดตั้ง
+    --
+    -- ⚠️ NULL = "ยังไม่ตรวจยืนยัน" ไม่ใช่ "ยังไม่ได้ติดตั้ง" และต้องไม่มี DEFAULT
+    -- เครื่องที่ย้ายมาจากข้อมูลเดิมยังไม่มีใครตรวจ ระบบจึงยังไม่รู้คำตอบ การตั้ง
+    -- DEFAULT เป็นค่าใดค่าหนึ่งคือการเดาแทนผู้ดูแล ซึ่ง Q14/Q19/Q21 ห้ามไว้ และ
+    -- จะทำให้ความครบถ้วนของยอดผิดไปเงียบๆ ทั้งปี
+    installation_status ENUM('installed','not_installed') DEFAULT NULL,
+
+    -- เส้นแบ่งระหว่าง "รู้ว่าไม่ต้องกรอก" กับ "ไม่รู้ว่าต้องกรอกหรือเปล่า"
+    --
+    --   NULL   = ยืนยันครบทุกช่วงเวลา — เดือนที่ไม่มีช่วงความรับผิดชอบครอบคลุม
+    --            แปลว่า "รู้แล้วว่าเครื่องนี้ไม่ต้องกรอกเดือนนั้น"
+    --   วันที่ = ก่อนวันนี้ยังยืนยันไม่ได้ ระบบรายงานเดือนก่อนหน้าว่า "ยังยืนยันไม่ได้"
+    --            ไม่ใช่ "ไม่ต้องกรอก" (ADR-0018 Q21)
+    --
+    -- ทำไมต้องมีคอลัมน์นี้แยกจาก device_service_period: ผู้ดูแลที่เดินไปดูเครื่อง
+    -- ตอบได้ทันทีว่า "ตอนนี้ติดตั้งอยู่" แต่ตอบว่า "เริ่มเมื่อไหร่" ได้ต่อเมื่อมี
+    -- เอกสาร ถ้าเก็บแค่ช่วง เดือนย้อนหลังจะไม่มีช่วงครอบคลุมแล้วถูกนับเป็น
+    -- "ไม่ต้องกรอก" ซึ่งเป็นการสรุปแทนการบอกว่าไม่รู้
+    --
+    -- ค่าเริ่มต้นเป็น NULL เพราะเครื่องที่บันทึกผ่านระบบมีข้อมูลครบตั้งแต่แรกอยู่แล้ว
+    -- เฉพาะเครื่องเดิมที่ตรวจได้แค่ปัจจุบันเท่านั้นที่ต้องใส่วันที่
+    service_unverified_before DATE DEFAULT NULL,
+
     FOREIGN KEY (brand_id) REFERENCES brand(id),
     FOREIGN KEY (building_id) REFERENCES building(id),
     FOREIGN KEY (floor_id) REFERENCES floor(id),
@@ -119,6 +145,11 @@ CREATE TABLE print_transactions (
 
     FOREIGN KEY (device_id) REFERENCES devices(id),
     UNIQUE KEY uq_device_month (device_id, month),
+
+    -- คอลัมน์นำของ uq_device_month คือ device_id คิวรี่ที่กรองด้วยช่วงเดือนอย่างเดียว
+    -- (`WHERE month BETWEEN ? AND ?` ซึ่งเป็นรูปแบบของแทบทุกรายงาน) จึงใช้คีย์นั้น
+    -- ไม่ได้เลยและต้องอ่านทั้งตาราง — ตารางนี้โตขึ้นทุกเดือนแบบไม่มีเพดาน
+    KEY idx_print_transactions_month (month),
 
     -- เดือนเก็บเป็น ค.ศ. "YYYY-MM" เท่านั้น — รับ พ.ศ. เข้ามาได้ แต่ normalize ตั้งแต่ขาเข้า
     -- (backend/utils/month.js) ถ้าปล่อยให้เก็บทั้ง "2568-10" และ "2025-10" ปนกัน UNIQUE KEY
@@ -155,6 +186,48 @@ CREATE TABLE device_location_history (
     FOREIGN KEY (department_id) REFERENCES department(id),
 
     INDEX idx_device_effective (device_id, effective_from, effective_to)
+);
+
+-- ช่วงเวลาที่เครื่อง "ติดตั้งแล้วและใช้งานอยู่" จึงต้องบันทึกยอดพิมพ์ของเดือนนั้น
+-- (ADR-0018 ข้อ Q15 และ Q17) — ตารางนี้คือตัวส่วนของความครบถ้วนรายเดือน
+--
+-- ทำไมต้องเป็นตาราง ไม่ใช่คอลัมน์ installed_at/removed_at สองช่อง: เครื่องถูกถอด
+-- ไปซ่อมแล้วนำกลับมาติดตั้งใหม่ได้หลายรอบ สองช่องเก็บได้แค่รอบล่าสุดแล้วประวัติ
+-- รอบก่อนหายไป ทำให้เดือนเก่าที่เคยต้องกรอกกลายเป็นไม่ต้องกรอกย้อนหลัง ซึ่งคือ
+-- บั๊กเดียวกับ issue #79 ในทิศทางกลับกัน
+--
+-- effective_to = NULL คือช่วงที่ยังรับผิดชอบอยู่ถึงปัจจุบัน
+--
+-- ⚠️ ปลายช่วงนับ "รวมเดือนนั้นด้วย" ต่างจาก device_location_history ที่ไม่รวม
+-- เหตุผลอยู่ใน packages/domain/service-period.cjs — สองตารางตอบคนละคำถาม
+--
+-- ไม่มีการเติมข้อมูลย้อนหลังอัตโนมัติตอน migrate เครื่องเดิมทุกเครื่องเริ่มต้นที่
+-- "ยังไม่ตรวจยืนยัน" จนกว่าผู้ดูแลจะยืนยันรายเครื่อง (Q14, Q21)
+CREATE TABLE device_service_period (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id INT NOT NULL,
+
+    effective_from DATE NOT NULL,
+    effective_to DATE NULL,
+
+    note VARCHAR(255) NULL,
+
+    -- ใครเป็นคนยืนยันและเมื่อไหร่ — ต้องตอบได้ว่าตัวเลขความครบถ้วนมาจากหลักฐานของใคร
+    verified_by INT NULL,
+    verified_at TIMESTAMP NULL DEFAULT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
+    FOREIGN KEY (verified_by) REFERENCES users(id),
+
+    INDEX idx_device_service (device_id, effective_from, effective_to),
+
+    -- ช่วงที่สิ้นสุดก่อนเริ่มคือข้อมูลที่เป็นไปไม่ได้ และจะทำให้เดือนนั้นหายไปจาก
+    -- ตัวส่วนเงียบๆ แทนที่จะฟ้องตอนบันทึก
+    CONSTRAINT chk_device_service_period_order CHECK (
+        effective_to IS NULL OR effective_to >= effective_from
+    )
 );
 
 -- ==============================================================================

@@ -217,6 +217,28 @@ const booleanQuery = z.preprocess(
   ])
 );
 
+/**
+ * วันที่ในรูปแบบ "YYYY-MM-DD" ที่มีอยู่จริงในปฏิทิน
+ *
+ * ตรวจสองชั้นเพราะ regex อย่างเดียวปล่อย "2026-02-31" ผ่าน แล้ว MySQL จะเก็บเป็น
+ * '0000-00-00' หรือปฏิเสธเงียบๆ ขึ้นกับโหมดของเซิร์ฟเวอร์ — ทั้งสองทางทำให้ช่วง
+ * ความรับผิดชอบของเครื่องนั้นหายไปจากตัวส่วนโดยไม่มีอะไรฟ้อง
+ *
+ * ไม่รับ Date object และไม่ใช้ `new Date(text)` แปลง เพราะการ parse ผ่าน Date
+ * จะเลื่อนวันตาม timezone ของเครื่องที่รัน ซึ่งเป็นบั๊กที่ทั้ง repo นี้เลี่ยงมาตลอด
+ * (ดู mysql2 `dateStrings: true` ใน shared/db.js)
+ */
+const dateString = z
+  .string({ error: "กรุณาระบุวันที่" })
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "วันที่ต้องอยู่ในรูปแบบ YYYY-MM-DD")
+  .refine((text) => {
+    const [year, month, day] = text.split("-").map(Number);
+    if (month < 1 || month > 12 || day < 1) return false;
+    // วันสุดท้ายของเดือนนั้นจริงๆ — `new Date(y, m, 0)` คือวันสุดท้ายของเดือน m
+    return day <= new Date(year, month, 0).getDate();
+  }, "ไม่มีวันที่นี้อยู่จริงในปฏิทิน");
+
 module.exports = {
   validate,
   blankToNull,
@@ -229,4 +251,5 @@ module.exports = {
   monthString,
   monthListQuery,
   booleanQuery,
+  dateString,
 };

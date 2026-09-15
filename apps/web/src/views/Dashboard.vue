@@ -11,6 +11,7 @@ import { ArrowUpRight, RefreshCw, Printer, FileText, Info } from "lucide-vue-nex
 import api from "../services/api";
 import { errorMessage } from "../lib/api-error";
 import { useOverview } from "../api/queries";
+import { authState } from "../store/auth";
 import { activeFiscalYear } from "../store/fiscalYear";
 import { formatBahtValue, formatCount } from "../lib/format";
 import { exportSheet } from "../lib/export-xlsx";
@@ -57,10 +58,6 @@ const ORDER_OPTIONS = [
    ค่าที่คำนวณจากข้อมูลที่โหลดมาแล้ว — ไม่ยิง API เพิ่ม
    -------------------------------------------------------------------------- */
 
-const totalDeviceStatus = computed(() =>
-  highlights.value.device_status.reduce((sum, s) => sum + Number(s.count || 0), 0)
-);
-
 const loading = computed(() => overviewLoading.value || highlightsLoading.value);
 
 /**
@@ -89,6 +86,25 @@ const totals = computed(() => overview.value?.totals ?? {});
 const comparison = computed(() => overview.value?.comparison ?? null);
 const metricChange = computed(() => comparison.value?.[chartMetric.value === "cost" ? "cost_change_percent" : "pages_change_percent"]);
 const coverage = computed(() => overview.value?.coverage ?? null);
+
+/** ลิงก์ไปหน้าตรวจยืนยันขึ้นเฉพาะคนที่กดเข้าไปทำได้จริง — API บังคับสิทธิ์อยู่แล้ว */
+const isAdmin = computed(() => authState.user?.role === "admin");
+
+/**
+ * เครื่องที่ยังไม่มีใครตรวจยืนยันสถานะการติดตั้ง (ADR-0018)
+ *
+ * ก่อนหน้านี้บรรทัดนี้ใช้ "จำนวนเครื่องทั้งหมด" เป็นค่าประมาณ เพราะตอนนั้นยังไม่มี
+ * ใครตรวจสักเครื่อง ตอนนี้ API ตอบตัวเลขจริง และมันจะลดลงตามที่ผู้ดูแลไล่ตรวจ
+ */
+const unreviewedDevices = computed(() => Number(coverage.value?.unreviewed_devices || 0));
+
+/**
+ * ตัวเลขความครบถ้วนทั้งปียืนยันได้หรือยัง
+ *
+ * false = ห้ามแสดงเป็นข้อสรุป ต้องขึ้น "—" พร้อมบอกว่าทำไม ไม่ใช่แสดงตัวเลขที่
+ * นับได้จากเครื่องที่ยืนยันแล้วเฉยๆ ซึ่งจะอ่านเหมือนเป็นคำตอบทั้งที่ยังไม่ใช่
+ */
+const coverageVerifiable = computed(() => coverage.value?.verifiable !== false);
 
 /**
  * บอกว่า "เทียบกับช่วงไหน" ด้วยเดือนจริง ไม่ใช่คำว่า "ช่วงก่อนหน้า" ที่คลุมเครือ
@@ -297,8 +313,8 @@ onMounted(loadHighlights);
               <p class="mt-1.5 text-xs text-ink-mute">{{ t("ใช้งานอยู่ {0} เครื่อง", [formatCount(totals.active_devices)]) }}</p>
             </div>
             <div class="p-5 sm:px-6">
-              <UiMetric :label="t('เดือนที่บันทึกครบ')" :value="overviewIsError ? '—' : `${formatCount(coverage?.annual_complete_months)} / ${formatCount(coverage?.total_months)}`" :loading="overviewLoading" />
-              <p class="mt-1.5 text-xs text-ink-mute">{{ totalDeviceStatus ? t("ทั้งปีงบ · รอยืนยันการติดตั้ง") : t("ความครบถ้วนของข้อมูลทั้งปีงบ") }}</p>
+              <UiMetric :label="t('เดือนที่บันทึกครบ')" :value="overviewIsError || !coverageVerifiable ? '—' : `${formatCount(coverage?.annual_complete_months)} / ${formatCount(coverage?.total_months)}`" :loading="overviewLoading" />
+              <p class="mt-1.5 text-xs text-ink-mute">{{ coverageVerifiable ? t("ความครบถ้วนของข้อมูลทั้งปีงบ") : t("ยังยืนยันไม่ได้ · รอตรวจสถานะการติดตั้ง") }}</p>
             </div>
           </div>
         </UiCard>
@@ -373,9 +389,13 @@ onMounted(loadHighlights);
       </div>
     </div>
 
-    <div v-if="!highlightsLoading && totalDeviceStatus" class="flex items-start gap-2 text-xs text-ink-mute">
+    <div v-if="!overviewLoading && !coverageVerifiable" class="flex items-start gap-2 text-xs text-ink-mute">
       <Info :size="14" class="shrink-0 mt-0.5" aria-hidden="true" />
-      <p>{{ t("ความครบถ้วนของข้อมูลยังยืนยันไม่ได้ จนกว่าจะตรวจสถานะการติดตั้งเครื่องเดิม {0} เครื่อง", [formatCount(totalDeviceStatus)]) }} <RouterLink to="/assets" class="underline text-brand-ink">{{ t("ตรวจสอบทะเบียน") }}</RouterLink></p>
+      <p>
+        <template v-if="unreviewedDevices">{{ t("ความครบถ้วนของข้อมูลยังยืนยันไม่ได้ จนกว่าจะตรวจสถานะการติดตั้งเครื่องเดิม {0} เครื่อง", [formatCount(unreviewedDevices)]) }}</template>
+        <template v-else>{{ t("บางเดือนยังยืนยันความครบถ้วนไม่ได้ เพราะยังไม่ทราบว่าเครื่องบางเครื่องต้องบันทึกยอดของเดือนนั้นหรือไม่") }}</template>
+        <RouterLink v-if="isAdmin" to="/admin/installation-review" class="underline text-brand-ink">{{ t("ไปตรวจยืนยันการติดตั้ง") }}</RouterLink>
+      </p>
     </div>
 
     <UiDrawer

@@ -23,6 +23,10 @@ router.get("/", devices.validators.list, asyncHandler(devices.getAll));
 
 router.get("/location-history", asyncHandler(devices.getAllLocationHistory));
 
+// รายการเครื่องที่รอตรวจยืนยันสถานะการติดตั้ง — ต้องประกาศก่อน "/:id" ด้วยเหตุผล
+// เดียวกับ "/location-history" ด้านบน
+router.get("/installation-review", requireAdmin, asyncHandler(devices.getInstallationReview));
+
 router.get("/:id", devices.validators.byId, asyncHandler(devices.getOne));
 
 router.get("/:id/history", devices.validators.byId, asyncHandler(devices.getHistory));
@@ -38,6 +42,15 @@ router.put("/:id", requireAdmin, devices.validators.update, asyncHandler(devices
 // ย้ายเครื่อง — แยกจากการแก้ไขทั่วไปด้านบน เพราะการย้ายเขียนประวัติการย้ายด้วย
 // และเป็นการกระทำที่ผู้ใช้ตั้งใจทำคนละครั้งกับการแก้ข้อมูลทรัพย์สิน
 router.put("/:id/move", requireAdmin, devices.validators.move, asyncHandler(devices.move));
+
+// ตรวจยืนยันสถานะการติดตั้ง — แยกจากการแก้ไขทั่วไปเพราะเป็นการยืนยันข้อเท็จจริง
+// ที่ต้องระบุวันมีผลและระดับความมั่นใจย้อนหลัง ไม่ใช่การแก้ค่าในฟอร์ม (ADR-0018)
+router.put(
+  "/:id/installation",
+  requireAdmin,
+  devices.validators.installation,
+  asyncHandler(devices.reviewInstallation)
+);
 
 router.delete("/:id", requireAdmin, devices.validators.byId, asyncHandler(devices.remove));
 

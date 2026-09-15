@@ -50,6 +50,18 @@ const STATUS_OPTIONS = [
   { value: "retired", label: t("ปลดระวาง") },
 ];
 
+/**
+ * สถานะการติดตั้ง — คนละคำถามกับสถานะเครื่องด้านบน (ADR-0018)
+ *
+ * ไม่มีค่าตั้งต้นและไม่มีตัวเลือก "ยังไม่ทราบ" โดยตั้งใจ: ข้อ Q18 บังคับว่าผู้กรอก
+ * ต้องตอบเองก่อนบันทึกเครื่องใหม่ เพราะคำตอบนี้กลายเป็นตัวส่วนของความครบถ้วนทั้งปี
+ * ค่าตั้งต้นจะถูกกดผ่านไปโดยไม่มีใครอ่าน แล้วไม่มีใครรู้ว่ามันมาจากไหน
+ */
+const INSTALLATION_OPTIONS = [
+  { value: "installed", label: t("ติดตั้งแล้ว") },
+  { value: "not_installed", label: t("ยังไม่ได้ติดตั้ง") },
+];
+
 const emptyForm = () => ({
   serial_number: "",
   asset_code: "",
@@ -63,6 +75,8 @@ const emptyForm = () => ({
   contract_id: "",
   price_override: "",
   status: "active",
+  installation_status: "",
+  installed_on: "",
 });
 
 const form = ref(emptyForm());
@@ -190,6 +204,11 @@ onMounted(reset);
 function validate() {
   if (!form.value.serial_number.trim()) return { field: "serial_number", message: t("กรอกหมายเลข Serial ของเครื่องก่อน") };
   if (!form.value.brand_id) return { field: "brand_id", message: t("เลือกยี่ห้อของเครื่องก่อน") };
+  // เฉพาะตอนเพิ่มเครื่องใหม่ — การแก้ไขเครื่องเดิมไม่แตะสถานะการติดตั้ง ซึ่งมี
+  // เส้นทางของตัวเองที่หน้าตรวจยืนยัน (ADR-0018 Q18)
+  if (!isEdit.value && !form.value.installation_status) {
+    return { field: "installation_status", message: t("เลือกว่าเครื่องนี้ติดตั้งแล้วหรือยัง") };
+  }
   if (form.value.price_override !== "" && Number(form.value.price_override) < 0) {
     return { field: "price_override", message: t("ราคาต่อแผ่นติดลบไม่ได้") };
   }
@@ -238,7 +257,14 @@ async function submit() {
       await api.put(`/devices/${props.assetId}/move`, placement);
       toastSuccess(t("บันทึกการแก้ไขเรียบร้อย"));
     } else {
-      res = await api.post("/devices", { ...core, ...placement });
+      res = await api.post("/devices", {
+        ...core,
+        ...placement,
+        installation_status: form.value.installation_status,
+        // ไม่ระบุวัน = ติดตั้งวันนี้ ซึ่ง API เติมให้ — เครื่องที่อยู่มาก่อนแล้วเพิ่ง
+        // มาลงทะเบียน ต้องระบุวันจริง ไม่งั้นยอดเดือนเก่าจะไม่ถูกนับว่าต้องกรอก
+        installed_on: form.value.installed_on || undefined,
+      });
       toastSuccess(t("เพิ่มเครื่องเข้าทะเบียนเรียบร้อย"));
     }
 
@@ -382,6 +408,31 @@ defineExpose({ reset, submit, saving, loading, ready });
         <UiField :label="t('สถานะเครื่อง')">
           <UiSegmented v-model="form.status" :options="STATUS_OPTIONS" :label="t('สถานะของเครื่อง')" />
         </UiField>
+
+        <template v-if="!isEdit">
+          <UiField
+            :label="t('สถานะการติดตั้ง')"
+            :hint="t('ใช้กำหนดว่าเครื่องนี้ต้องบันทึกยอดพิมพ์ของเดือนไหนบ้าง')"
+            :error="errors.installation_status"
+            required
+            class="mt-4"
+          >
+            <UiSegmented
+              v-model="form.installation_status"
+              :options="INSTALLATION_OPTIONS"
+              :label="t('สถานะการติดตั้งของเครื่อง')"
+            />
+          </UiField>
+
+          <UiField
+            v-if="form.installation_status === 'installed'"
+            :label="t('ติดตั้งตั้งแต่วันที่')"
+            :hint="t('เว้นว่างไว้ถ้าเพิ่งติดตั้งวันนี้ ระบุวันจริงถ้าเครื่องอยู่มาก่อนแล้ว')"
+            class="mt-4"
+          >
+            <UiInput v-model="form.installed_on" type="date" />
+          </UiField>
+        </template>
       </fieldset>
 
       <button type="submit" class="hidden" tabindex="-1" aria-hidden="true"></button>

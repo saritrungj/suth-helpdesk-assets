@@ -22,6 +22,31 @@ test("all translations preserve their interpolation placeholders", () => {
   }
 });
 
+/**
+ * รูปแบบการเรียก t() ที่นับว่าเป็นข้อความของแอป
+ *
+ * ต้องมีทั้งสองแบบ: โค้ดใน `<script setup>` ส่งข้อความในเครื่องหมายคำพูดคู่ ส่วน
+ * attribute ใน template ที่ถูกครอบด้วยคำพูดคู่อยู่แล้ว ต้องใช้คำพูดเดี่ยวข้างใน
+ *
+ * ตอนที่ตัวตรวจจับแค่แบบคำพูดคู่ ข้อความใน attribute ทั้งหมดหลุดออกจากชุดตรวจ และ
+ * ยังเป็นภาษาไทยในโหมดอังกฤษโดยไม่มีอะไรฟ้อง — ความผิดพลาดที่ไม่มีทางเห็นจนกว่า
+ * จะมีคนสลับภาษาแล้วอ่านเจอเอง
+ *
+ * (เลี่ยงการเขียนตัวอย่างการเรียกจริงไว้ในคอมเมนต์นี้ เพราะตัวตรวจอ่านไฟล์ตัวเอง
+ * ด้วย แล้วจะนับตัวอย่างในคอมเมนต์เป็นข้อความที่ต้องแปล)
+ */
+const TRANSLATION_CALLS = [
+  /\bt\(\s*("(?:[^"\\]|\\.)*")/g,
+  /\bt\(\s*('(?:[^'\\]|\\.)*')/g,
+];
+
+/** อ่านค่า string literal ของ JavaScript ทั้งแบบ " และ ' ให้เป็นข้อความจริง */
+function literalValue(text) {
+  return text.startsWith("'")
+    ? text.slice(1, -1).replace(/\\(['\\])/g, "$1")
+    : JSON.parse(text);
+}
+
 test("every literal translation used by the app has an English entry", () => {
   const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
   const missing = new Set();
@@ -36,9 +61,11 @@ test("every literal translation used by the app has an English entry", () => {
       if (![".js", ".vue"].includes(extname(entry.name))) continue;
 
       const source = readFileSync(file, "utf8");
-      for (const match of source.matchAll(/\bt\(\s*("(?:[^"\\]|\\.)*")/g)) {
-        const key = JSON.parse(match[1]);
-        if (!(key in english)) missing.add(key);
+      for (const pattern of TRANSLATION_CALLS) {
+        for (const match of source.matchAll(pattern)) {
+          const key = literalValue(match[1]);
+          if (!(key in english)) missing.add(key);
+        }
       }
     }
   }

@@ -37,16 +37,17 @@ const { validate } = require("../shared/validate");
 const cache = require("../shared/cache");
 const { notFound } = require("../shared/http-error");
 const { effectiveLocationJoin } = require("../shared/effective-location-sql");
+const { readCoverageScope } = require("../shared/coverage-scope");
 const { reportQuery } = require("./filters");
-const { fiscalYearMonths, formatMonthTH, fromSatang, toSatang, sumSatang, computeCoverage } = require("@suth/domain");
-
-/** เดือนปัจจุบัน "YYYY-MM" (ค.ศ.) — ใช้ตัดเดือนอนาคตออกจากงานที่ "ค้าง" */
-function currentMonth() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit",
-  }).formatToParts(new Date());
-  return `${parts.find((p) => p.type === "year").value}-${parts.find((p) => p.type === "month").value}`;
-}
+const {
+  fiscalYearMonths,
+  formatMonthTH,
+  fromSatang,
+  toSatang,
+  sumSatang,
+  computeCoverage,
+  currentMonth,
+} = require("@suth/domain");
 
 /** จำนวนรายการเตือนสูงสุดที่ส่งกลับไป */
 const MAX_ATTENTION_ITEMS = 6;
@@ -88,7 +89,7 @@ router.get(
     const monthClause = months.length ? " AND v.month IN (?) " : "";
     const monthParam = months.length ? [months] : [];
 
-    const [totals, series, statusRows, byDepartment, gaps, unbilled, idle] = await Promise.all([
+    const [totals, series, statusRows, byDepartment, coverageScope, unbilled, idle] = await Promise.all([
       // ---------- 1) ยอดรวมของช่วงที่เลือก ----------
       db
         .query(
@@ -174,30 +175,23 @@ router.get(
         )
         .then(([rows]) => rows),
 
-      // ---------- 5) เดือนที่ยังกรอกไม่ครบ ----------
-      // นับเฉพาะเครื่องที่ยังใช้งานอยู่ — เครื่องที่ปลดระวางหรือส่งซ่อมไม่มีมิเตอร์
-      // ให้ไปอ่าน การนับรวมจะทำให้ความคืบหน้าไม่มีวันถึงครบ แล้วตัวเลขนั้นจะถูกเมิน
+      // ---------- 5) ความครบถ้วนของยอด ----------
+      // ตัวเศษ ตัวส่วน และจำนวนเครื่องที่ยังไม่ตรวจยืนยัน ออกมาจากฟังก์ชันเดียว
+      // เพื่อให้กรองด้วยขอบเขตชุดเดียวกันโดยไม่มีทางหลุด — เหตุผลเต็มอยู่ใน
+      // shared/coverage-scope.js
       //
-      // ⚠️ ต้องมี ${buildingClause} เหมือนกับคิวรี่ที่นับ active_devices (ข้อ 3)
-      // เป๊ะๆ — ตัวเศษกับตัวส่วนของ "ความครบถ้วน" ต้องมาจากขอบเขตเดียวกันเสมอ
-      //
-      // บั๊กที่เคยเกิด: คิวรี่นี้ไม่มีตัวกรองอาคาร แต่ข้อ 3 มี พอผู้ใช้เลือกอาคาร
-      // ที่มีเครื่อง 3 เครื่อง ตัวส่วนกลายเป็น 3 ส่วนตัวเศษยังเป็นยอดรวมทุกอาคาร
-      // (18) เงื่อนไข 18 < 3 เป็นเท็จ เดือนนั้นจึงถูกนับว่า "ครบแล้ว" ทั้งที่อาคาร
-      // นั้นอาจยังไม่ได้กรอกสักเครื่องเดียว — เป็นการรายงานว่างานเสร็จทั้งที่ยังไม่ทำ
+      // ตัวส่วนคือ "เครื่องที่ต้องกรอกในเดือนนั้น" ตามช่วงความรับผิดชอบจริง
+      // ไม่ใช่จำนวนเครื่องที่ใช้งานอยู่ ณ ตอนนี้ ซึ่งเคยทำให้การเพิ่มเครื่องใหม่
+      // กลางปีทำให้เดือนเก่าที่กรอกครบแล้วกลายเป็นค้างย้อนหลัง (issue #79)
       range
-        ? db
-            .query(
-              `SELECT pt.month, COUNT(*) AS filled
-               FROM print_transactions pt
-               JOIN devices d ON pt.device_id = d.id AND d.status = 'active'
-               LEFT JOIN building b ON d.building_id = b.id
-               WHERE pt.month BETWEEN ? AND ? ${buildingClause} ${contractClause}
-               GROUP BY pt.month`,
-              [range.start_month, range.end_month, ...buildingParam, ...contractParam]
-            )
-            .then(([rows]) => rows)
-        : Promise.resolve([]),
+        ? readCoverageScope({
+            months: fyMonths,
+            startMonth: range.start_month,
+            endMonth: range.end_month,
+            buildingName: building_name,
+            contractId: contract_id,
+          })
+        : Promise.resolve(null),
 
       // ---------- 6) เครื่องที่พิมพ์อยู่แต่คิดเงินไม่ได้ ----------
       //
@@ -263,8 +257,6 @@ router.get(
     // ---------- ประกอบรายการที่ต้องลงมือทำ ----------
     const attention = [];
 
-    // เดือนที่ยังกรอกไม่ครบ (ไม่นับเดือนอนาคต)
-    const filledByMonth = new Map(gaps.map((row) => [row.month, Number(row.filled)]));
     const today = currentMonth();
 
     // เดือนปัจจุบันยังไม่จบ จึงยังไม่ถือว่า "ค้าง" — มิเตอร์ของเดือนนี้อ่านได้ก็ต่อ
@@ -272,14 +264,35 @@ router.get(
     // งานที่ยังไม่ถึงเวลาทำ ซึ่งเป็นวิธีที่เร็วที่สุดในการสอนให้ผู้ใช้เมินคำเตือน
     const { coverage, incompleteMonths } = computeCoverage({
       fyMonths,
-      filledByMonth,
-      activeDevices,
+      filledByMonth: coverageScope?.filledByMonth ?? new Map(),
+      requiredByMonth: coverageScope?.requiredByMonth ?? new Map(),
+      unverifiedByMonth: coverageScope?.unverifiedByMonth ?? new Map(),
+      unreviewedDevices: coverageScope?.unreviewedDevices ?? 0,
       today,
     });
 
-    if (incompleteMonths.length && activeDevices > 0) {
+    // เครื่องที่ยังไม่มีใครตรวจยืนยันสถานะการติดตั้ง
+    //
+    // ต้องมาก่อนงานค้างรายเดือนเสมอ เพราะตราบใดที่ยังตรวจไม่ครบ ตัวเลขงานค้างยัง
+    // ยืนยันไม่ได้ (ดู coverage.cjs) การไล่กรอกยอดก่อนตรวจจึงเป็นการทำงานบนตัวเลข
+    // ที่ยังไม่รู้ว่าถูกหรือไม่ — งานที่ถูกลำดับคือไปตรวจยืนยันให้ครบก่อน
+    if (coverage.unreviewed_devices > 0) {
+      attention.push({
+        code: "unverified_installation",
+        severity: "warning",
+        title: `มี ${coverage.unreviewed_devices} เครื่องที่ยังไม่ได้ตรวจยืนยันสถานะการติดตั้ง`,
+        detail:
+          "ยืนยันความครบถ้วนของยอดพิมพ์ไม่ได้จนกว่าจะตรวจครบ ระบบไม่เดาให้ว่าเครื่องเหล่านี้ติดตั้งแล้วหรือยัง",
+        count: coverage.unreviewed_devices,
+        action: { label: "ไปตรวจยืนยันการติดตั้ง", to: "/admin/installation-review" },
+      });
+    }
+
+    if (incompleteMonths.length) {
       const oldest = incompleteMonths[0];
-      const missing = activeDevices - (filledByMonth.get(oldest) || 0);
+      // อ่านจากผลของ computeCoverage ไม่คำนวณซ้ำเอง — ตัวเลข "ขาดอีกกี่เครื่อง"
+      // ที่ขึ้นบนคำเตือนต้องเป็นตัวเดียวกับที่ขึ้นในตารางความครบถ้วนเสมอ
+      const missing = coverage.months.find((m) => m.month === oldest)?.missing_devices ?? 0;
 
       attention.push({
         code: "missing_readings",

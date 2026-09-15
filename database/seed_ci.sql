@@ -17,6 +17,7 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 
+DELETE FROM device_service_period;
 DELETE FROM device_location_history;
 DELETE FROM print_transactions;
 DELETE FROM devices;
@@ -30,6 +31,7 @@ DELETE FROM fiscal_year;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
+ALTER TABLE device_service_period AUTO_INCREMENT = 1;
 ALTER TABLE device_location_history AUTO_INCREMENT = 1;
 ALTER TABLE print_transactions AUTO_INCREMENT = 1;
 ALTER TABLE devices AUTO_INCREMENT = 1;
@@ -100,16 +102,36 @@ INSERT INTO contracts (id, contract_no, fiscal_year_id, price_per_page) VALUES
 -- ร้ายพร้อมกัน (ตรงกับที่ฐาน QA48 เจอจริง — ดู docs/reference/accessibility.md)
 -- ------------------------------------------------------------------------------
 
+-- installation_status: เครื่อง 1-4 ตรวจยืนยันแล้ว ส่วนเครื่อง 6 จงใจปล่อยเป็น NULL
+-- = "ยังไม่ตรวจยืนยัน" เพื่อให้ชุด db ตรวจเส้นทาง "ความครบถ้วนยังยืนยันไม่ได้" ได้จริง
+-- ถ้าทุกเครื่องตรวจครบ เส้นทางนั้นจะไม่เคยถูกเรียกใน CI เลยแม้แต่ครั้งเดียว
 INSERT INTO devices
-(id, serial_number, brand_id, model, building_id, floor_id, location, division_id, department_id, contract_id, price_override, status)
+(id, serial_number, brand_id, model, building_id, floor_id, location, division_id, department_id, contract_id, price_override, status, installation_status, service_unverified_before)
 VALUES
-(1, 'CI-SN-001', 1, 'Office 400', 1, 1, 'เคาน์เตอร์พยาบาล', 1, 2, 1, NULL, 'active'),
-(2, 'CI-SN-002', 1, 'Office 400', 1, 1, 'ห้องตรวจ 3', 1, 2, 1, NULL, 'active'),
+(1, 'CI-SN-001', 1, 'Office 400', 1, 1, 'เคาน์เตอร์พยาบาล', 1, 2, 1, NULL, 'active', 'installed', NULL),
+(2, 'CI-SN-002', 1, 'Office 400', 1, 1, 'ห้องตรวจ 3', 1, 2, 1, NULL, 'active', 'installed', NULL),
 -- ย้ายจากอาคารผู้ป่วยนอก (ชั้น 2) ไปอาคารใหม่ (ชั้น 1) แล้ว — building_id/floor_id
 -- ปัจจุบันต้องตรงกับ interval ล่าสุดใน device_location_history ด้านล่าง
-(3, 'CI-SN-003', 2, 'Office 400', 2, 2, 'เคาน์เตอร์ประสานงาน', 1, 1, 1, NULL, 'active'),
-(4, 'CI-SN-004', 2, 'Office 400', 1, 1, 'ห้องเวชระเบียน', 1, 1, 1, NULL, 'repair'),
-(5, 'CI-SN-005', 1, 'Office 400', 1, 1, 'คลังพัสดุ', 1, 2, 1, NULL, 'retired');
+(3, 'CI-SN-003', 2, 'Office 400', 2, 2, 'เคาน์เตอร์ประสานงาน', 1, 1, 1, NULL, 'active', 'installed', NULL),
+(4, 'CI-SN-004', 2, 'Office 400', 1, 1, 'ห้องเวชระเบียน', 1, 1, 1, NULL, 'repair', 'installed', NULL),
+(5, 'CI-SN-005', 1, 'Office 400', 1, 1, 'คลังพัสดุ', 1, 2, 1, NULL, 'retired', 'installed', NULL),
+(6, 'CI-SN-006', 1, 'Office 400', 2, 2, 'ห้องพักเจ้าหน้าที่', 1, 2, 1, NULL, 'active', NULL, NULL);
+
+-- ------------------------------------------------------------------------------
+-- ช่วงความรับผิดชอบ (ADR-0018) — ตัวส่วนของความครบถ้วนรายเดือน
+-- ------------------------------------------------------------------------------
+-- เครื่อง 1-3 รับผิดชอบมาตั้งแต่ต้นปีงบ ส่วนเครื่อง 4 กับ 5 ปิดช่วงไปแล้ว (ส่งซ่อม
+-- และปลดระวาง) ยอดเดือนเก่าของทั้งคู่ยังอยู่ครบและยังคิดเงินตามปกติ
+--
+-- เครื่อง 6 ไม่มีช่วงเลยเพราะยังไม่มีใครตรวจ — ตั้งใจให้เป็นแบบนั้น ไม่ใช่ข้อมูลตกหล่น
+INSERT INTO device_service_period
+(device_id, effective_from, effective_to, verified_by, verified_at)
+VALUES
+(1, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
+(2, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
+(3, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
+(4, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), DATE_SUB(@today, INTERVAL 1 MONTH), NULL, CURRENT_TIMESTAMP),
+(5, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), DATE_SUB(@today, INTERVAL 3 MONTH), NULL, CURRENT_TIMESTAMP);
 
 -- interval เก่า (ปิดแล้ว) + interval ปัจจุบัน (effective_to = NULL) ของ device 3
 -- effective_from ยึดจากวันที่รันจริงเช่นกัน ไม่ตรึงวันที่ตายตัว

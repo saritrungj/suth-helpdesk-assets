@@ -32,10 +32,23 @@ mysql -u root -p your_database -e "DESCRIBE fiscal_year; DESCRIBE devices; SHOW 
 | 4 | `migration_add_device_location_history.sql` | ตารางประวัติการย้าย (ต้องมีข้อ 3 ก่อน) |
 | 5 | `migration_normalize_month_to_ce.sql` | แปลงเดือน พ.ศ. เป็น ค.ศ. และเพิ่ม `CHECK` |
 | 6 | `migration_update_page_deduction_to_two_percent.sql` | เปลี่ยน view รายงานให้หัก 2% จากจำนวนหน้าดิบ |
+| 7 | `migration_add_device_service_period.sql` | สถานะการติดตั้ง ช่วงความรับผิดชอบ และ index ของเดือน |
 
 ```sh
-mysql -u root -p your_database < database/migrations/migration_add_device_location.sql
+mysql --default-character-set=utf8mb4 -u root -p your_database < database/migrations/migration_add_device_location.sql
 ```
+
+> ⚠️ **ต้องมี `--default-character-set=utf8mb4` ทุกครั้ง**
+>
+> client ของ MySQL/MariaDB บน Windows ใช้ charset ของ console เป็นค่าเริ่มต้น
+> (มักเป็น cp874 หรือ cp1252) การ pipe ไฟล์ SQL เข้าไปโดยไม่ระบุ charset จะทำให้
+> ข้อความไทยทุกตัวถูกเข้ารหัสซ้อนตอนเขียนลงฐาน
+>
+> ที่อันตรายคือมัน **ไม่ error และดูปกติเมื่ออ่านผ่าน client ตัวเดิม** เพราะแปลง
+> กลับด้วยวิธีเดียวกัน แต่แอปที่ต่อด้วย utf8mb4 จะอ่านได้เป็นอักขระขยะ ชื่ออาคาร
+> และแผนกจะไม่ตรงกับตัวกรอง แล้วรายงานจะว่างเปล่าโดยไม่มีอะไรฟ้อง
+>
+> ใช้กับทุกคำสั่งในหน้านี้ รวมถึง `mysqldump` ตอนสำรองและตอนกู้คืน
 
 ## 4. ตรวจผล
 

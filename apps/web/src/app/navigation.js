@@ -5,6 +5,7 @@ import {
   CalendarRange,
   ChartColumnBig,
   CirclePlus,
+  ClipboardCheck,
   FolderTree,
   Gauge,
   Layers,
@@ -193,6 +194,15 @@ export const HIDDEN_NAV_ITEMS = [
     label: t("เพิ่มทรัพย์สิน"),
     icon: CirclePlus,
     keywords: t("add new เพิ่ม สร้าง import นำเข้า เครื่องใหม่"),
+    admin: true,
+  },
+  // งานที่ทำครั้งเดียวแล้วจบ — พอตรวจครบทุกเครื่องหน้านี้จะว่างเปล่าตลอดไป
+  // จึงไม่ควรกินที่ถาวรในเมนู คนเข้าถึงได้จากคำเตือนบนแดชบอร์ดและ Ctrl+K
+  {
+    to: "/admin/installation-review",
+    label: t("ตรวจยืนยันการติดตั้ง"),
+    icon: ClipboardCheck,
+    keywords: t("installation review ตรวจ ยืนยัน ติดตั้ง สถานะ ความครบถ้วน"),
     admin: true,
   },
 ];
