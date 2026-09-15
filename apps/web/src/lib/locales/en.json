@@ -580,7 +580,6 @@
   "ความครบถ้วนของข้อมูล": "Data completeness",
   "ทั้งปีงบ · ค้าง {0} เดือน · ยังไม่ถึงกำหนด {1} เดือน": "Full fiscal year · Overdue months: {0} · Not yet due: {1}",
   "ค่าใช้จ่ายรายเดือน": "Monthly expenses",
-  "ทะเบียนอุปกรณ์": "Device register",
   "เปิดทะเบียนทรัพย์สิน": "Open asset register",
   "ค่าใช้จ่ายสุทธิ (หัก 2%)": "Net cost (after 2% deduction)",
   "แผนกที่ใช้งบสูงสุด": "Highest-cost departments",
@@ -776,7 +775,6 @@
   "{0} แสน": "{0} hundred thousand",
   "กำลังตรวจไฟล์…": "Checking file…",
   "กำลังบันทึก…": "Saving…",
-  "ข้อมูลเดิมยังไม่มีหลักฐานสถานะการติดตั้ง จึงไม่จัดเป็นติดตั้งแล้วหรือยังไม่ติดตั้งโดยอัตโนมัติ": "Existing records do not contain verified installation status, so they are not classified automatically.",
   "ค่าเดิม": "Previous value",
   "ค่าเดิม ไม่เปลี่ยน": "Unchanged",
   "ค่าใช้จ่ายสุทธิ (บาท)": "Net expense (THB)",
@@ -791,12 +789,10 @@
   "ตรวจไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง": "Could not check the file. Try again.",
   "ตัวอย่างข้อมูลที่จะเขียนทับ": "Preview of overwritten values",
   "ตามอาคาร": "By building",
-  "ติดตั้งแล้ว": "Installed",
   "ทุกสัญญา": "All contracts",
   "นำเข้าไม่สำเร็จ กรุณาตรวจไฟล์อีกครั้ง": "Import failed. Check the file again.",
   "ยังบันทึกไม่ได้ พบข้อมูลที่ต้องแก้ {0} จุด": "Cannot save yet. Fix {0} issues.",
   "ยังไม่ตรวจยืนยัน": "Unverified",
-  "ยังไม่ติดตั้ง": "Not installed",
   "ยืนยันบันทึก": "Confirm and save",
   "ราคาพิเศษ": "Special price",
   "รายการใหม่": "New entries",
@@ -808,5 +804,6 @@
   "โหลดรายละเอียดไม่สำเร็จ": "Could not load details",
   "แถว": "Row",
   "สาเหตุ": "Reason",
-  "ดาวน์โหลดรายการที่ต้องแก้": "Download issues to fix"
+  "ดาวน์โหลดรายการที่ต้องแก้": "Download issues to fix",
+  "ยังไม่ตรวจยืนยันสถานะการติดตั้งของเครื่องเดิม {0} เครื่อง ความครบถ้วนด้านบนจึงยังยืนยันไม่ได้": "Installation status is unverified for {0} existing devices, so the completeness figure above cannot be confirmed yet."
 }

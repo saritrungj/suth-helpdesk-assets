@@ -392,35 +392,13 @@ onMounted(loadHighlights);
       </UiStat>
     </div>
 
-    <UiCard class="mb-4" :eyebrow="t(&quot;ทะเบียนอุปกรณ์&quot;)" :title="t(&quot;สถานะการติดตั้ง&quot;)">
-      <div v-if="highlightsLoading" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <UiSkeleton v-for="n in 3" :key="n" height="3.5rem" />
-      </div>
-      <UiEmpty v-else-if="!totalDeviceStatus" :title="t(&quot;ยังไม่มีเครื่องในทะเบียน&quot;)" compact />
-      <div v-else>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div class="rounded-lg border border-line-soft bg-surface-2 px-4 py-3">
-            <p class="text-xs text-ink-mute">{{ t("ติดตั้งแล้ว") }}</p>
-            <p class="mt-1 text-lg font-semibold text-ink numeral">—</p>
-          </div>
-          <div class="rounded-lg border border-line-soft bg-surface-2 px-4 py-3">
-            <p class="text-xs text-ink-mute">{{ t("ยังไม่ติดตั้ง") }}</p>
-            <p class="mt-1 text-lg font-semibold text-ink numeral">—</p>
-          </div>
-          <div class="rounded-lg border border-warn-line bg-warn-soft px-4 py-3">
-            <p class="text-xs text-warn-ink">{{ t("ยังไม่ตรวจยืนยัน") }}</p>
-            <p class="mt-1 text-lg font-semibold text-warn-ink numeral">{{ formatCount(totalDeviceStatus) }} {{ t("เครื่อง") }}</p>
-          </div>
-        </div>
-        <p class="mt-3 text-xs text-ink-mute">
-          {{ t("ข้อมูลเดิมยังไม่มีหลักฐานสถานะการติดตั้ง จึงไม่จัดเป็นติดตั้งแล้วหรือยังไม่ติดตั้งโดยอัตโนมัติ") }}
-        </p>
-        <UiButton to="/assets" variant="secondary" size="sm" class="mt-3">
-          {{ t("เปิดทะเบียนทรัพย์สิน") }}
-          <template #trailing><ArrowUpRight :size="14" /></template>
-        </UiButton>
-      </div>
-    </UiCard>
+    <p
+      v-if="!highlightsLoading && totalDeviceStatus"
+      class="mb-4 text-xs text-ink-mute"
+    >
+      {{ t("ยังไม่ตรวจยืนยันสถานะการติดตั้งของเครื่องเดิม {0} เครื่อง ความครบถ้วนด้านบนจึงยังยืนยันไม่ได้", [formatCount(totalDeviceStatus)]) }}
+      <RouterLink to="/assets" class="text-brand-ink hover:underline">{{ t("เปิดทะเบียนทรัพย์สิน") }}</RouterLink>
+    </p>
 
     <!-- ยอดพิมพ์และค่าใช้จ่ายใช้ช่วงและสัญญาเดียวกัน วางคู่กันเพื่อเทียบได้ทันที -->
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
