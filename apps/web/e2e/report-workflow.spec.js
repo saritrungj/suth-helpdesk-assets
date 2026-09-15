@@ -23,12 +23,14 @@ for (const language of ["th", "en"]) {
     await expect(page.locator("h1")).toBeVisible();
     await expect(page.getByText(language === "en" ? "Comparison table" : "ตารางเปรียบเทียบ", { exact: true })).toBeVisible();
     await page.goto("/assets");
-    const search = page.getByRole("textbox", { name: language === "en" ? "Search serial, model, location…" : "ค้นหา Serial, รุ่น, ตำแหน่ง…" });
+    const searchName = language === "en" ? "Search serial, model, location…" : "ค้นหา Serial, รุ่น, ตำแหน่ง…";
+    const search = page.getByRole("textbox", { name: searchName }).first();
     await expect(search).toBeVisible();
     await search.fill("HP");
     await page.getByRole("button", { name: language === "en" ? "Expand table" : "ขยายตาราง", exact: true }).click();
     await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(true);
-    await expect(search).toHaveValue("HP");
+    const fullscreenSearch = page.locator(":fullscreen").getByRole("textbox", { name: searchName });
+    await expect(fullscreenSearch).toHaveValue("HP");
     await page.getByRole("button", { name: language === "en" ? "Columns" : "คอลัมน์" }).click();
     await expect(page.getByRole("menu")).toBeVisible();
     await expect.poll(() => page.getByRole("menu").evaluate((el) => document.fullscreenElement.contains(el))).toBe(true);
@@ -54,6 +56,64 @@ test("overview exposes annual and overdue coverage separately", async () => {
   if (overview.coverage.applicable) {
     expect(overview.coverage.annual_complete_months + overview.coverage.incomplete_months + overview.coverage.not_due_months).toBe(12);
   }
+});
+
+test("report table uses the remaining viewport when expanded", async ({ page }) => {
+  await page.goto("/report");
+  await expect(page.getByRole("heading", { name: "ยอดพิมพ์รายเดือนตามเครื่อง", exact: true })).toBeVisible();
+
+  const tableScroll = page.locator("div.relative.overflow-auto").first();
+  await expect(tableScroll).toBeVisible();
+  const before = await tableScroll.boundingBox();
+  await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+
+  const after = await tableScroll.boundingBox();
+  expect(after.height).toBeGreaterThan(before.height + 100);
+  await expect(page.getByText(/แสดง\s+1–20\s+จาก/)).toBeVisible();
+
+  await page.getByRole("button", { name: "ย่อตาราง", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+});
+
+test("fullscreen is limited to long data tables", async ({ page }) => {
+  for (const route of ["/expense", "/compare", "/admin/users", "/admin/brands"]) {
+    await page.goto(route);
+    await expect(page.locator("h1")).toBeVisible();
+    await expect(page.getByRole("button", { name: "ขยายตาราง", exact: true })).toHaveCount(0);
+  }
+
+  for (const route of ["/assets", "/report", "/print-transactions", "/expense?tab=department"]) {
+    await page.goto(route);
+    await expect(page.locator("h1")).toBeVisible();
+    const expand = page.getByRole("button", { name: "ขยายตาราง", exact: true });
+    await expect(expand).toHaveCount(1);
+    await expand.click();
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+    const layout = await page.evaluate(() => {
+      const root = document.fullscreenElement;
+      const scroll = root.querySelector("div.relative.overflow-auto");
+      const footer = root.querySelector('[aria-live="polite"]')?.parentElement;
+      return {
+        rootHeight: root.getBoundingClientRect().height,
+        viewportHeight: window.innerHeight,
+        tableInside: Boolean(root.querySelector("table")),
+        scrollHeight: scroll?.getBoundingClientRect().height ?? 0,
+        footerGap: footer ? window.innerHeight - footer.getBoundingClientRect().bottom : null,
+      };
+    });
+    expect(layout.tableInside).toBe(true);
+    expect(layout.rootHeight).toBeCloseTo(layout.viewportHeight, 0);
+    expect(layout.scrollHeight).toBeGreaterThan(100);
+    expect(layout.footerGap).toBeGreaterThanOrEqual(0);
+    expect(layout.footerGap).toBeLessThanOrEqual(24);
+    await page.getByRole("button", { name: "ย่อตาราง", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/report");
+  await expect(page.getByRole("button", { name: "ขยายตาราง", exact: true })).toBeHidden();
 });
 
 test("graph selection retains annual context and overdue links retain their scope", async ({ page }) => {

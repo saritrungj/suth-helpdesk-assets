@@ -55,7 +55,6 @@ const loadError = ref("");
 const filterError = ref("");
 const search = ref("");
 const table = ref(null);
-const registryRoot = ref(null);
 const searchInput = ref(null);
 const refreshNotice = ref("");
 const refreshing = ref(false);
@@ -66,6 +65,7 @@ const buildings = ref([]);
 const floors = ref([]);
 const divisions = ref([]);
 const departments = ref([]);
+const contracts = ref([]);
 
 
 /**
@@ -84,7 +84,7 @@ function emptyFilters() {
     status: "",
     // "ยังไม่ผูกสัญญา" — เครื่องกลุ่มนี้คิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาเฉพาะเครื่อง
     // ยอดพิมพ์ของมันจึงหายไปจากงบเงียบๆ แดชบอร์ดเตือนเรื่องนี้แล้วลิงก์มาที่นี่
-    unassigned: "",
+    contract: "",
   };
 }
 
@@ -103,10 +103,10 @@ const STATUS_OPTIONS = [
   { value: "retired", label: t("ปลดระวาง") },
 ];
 
-const CONTRACT_OPTIONS = [
-  { value: "", label: t("ทั้งหมด") },
-  { value: "1", label: t("ยังไม่ผูกสัญญา") },
-];
+const contractOptions = computed(() => [
+  { value: "__unassigned__", label: t("ยังไม่ผูกสัญญา") },
+  ...contracts.value.map((contract) => ({ value: String(contract.id), label: contract.contract_no })),
+]);
 
 /* --------------------------------------------------------------------------
    ตัวเลือกของตัวกรอง
@@ -153,7 +153,7 @@ const FILTER_LABELS = {
   department: t("แผนก"),
   fiscalYear: t("ปีงบ"),
   status: t("สถานะ"),
-  unassigned: t("สัญญา"),
+  contract: t("สัญญา"),
 };
 
 const activeFilters = computed(() =>
@@ -165,8 +165,10 @@ const activeFilters = computed(() =>
       value:
         key === "status"
           ? (STATUS_META[value]?.label ?? value)
-          : key === "unassigned"
+          : key === "contract" && value === "__unassigned__"
             ? t("ยังไม่ผูกสัญญา")
+            : key === "contract"
+              ? (contractOptions.value.find((option) => option.value === value)?.label ?? value)
             : value,
     }))
 );
@@ -178,7 +180,7 @@ const activeFilters = computed(() =>
  * ตลอดอยู่แล้ว — การมีป้ายซ้ำอีกทำให้มีสองที่ที่เอาตัวกรองเดียวกันออกได้
  * ซึ่งชวนสับสนมากกว่าช่วย (หน้าบันทึกยอดพิมพ์ตัดช่องเลือกเดือนออกด้วยเหตุผลเดียวกัน)
  */
-const CHIP_HIDDEN_KEYS = new Set(["status", "unassigned"]);
+const CHIP_HIDDEN_KEYS = new Set(["status"]);
 
 const filterChips = computed(() =>
   activeFilters.value
@@ -215,7 +217,8 @@ const filteredAssets = computed(() =>
       (!filters.value.department || a.department_name === filters.value.department) &&
       (!filters.value.fiscalYear || String(a.fiscal_year) === filters.value.fiscalYear) &&
       (!filters.value.status || a.status === filters.value.status) &&
-      (!filters.value.unassigned || !a.contract_no)
+      (!filters.value.contract ||
+        (filters.value.contract === "__unassigned__" ? !a.contract_id : String(a.contract_id) === filters.value.contract))
   )
 );
 
@@ -240,7 +243,7 @@ onMounted(() => {
   }
 
   if (route.query.unassigned) {
-    filters.value.unassigned = "1";
+    filters.value.contract = "__unassigned__";
   }
 
   /**
@@ -318,16 +321,21 @@ async function loadAssets({ refresh = false } = {}) {
 }
 async function refreshAfterSave() {
   const previousFocus = document.activeElement;
+  let filteredOut = false;
   refreshing.value = true;
   refreshNotice.value = "";
   const loaded = await loadAssets({ refresh: true });
   await nextTick();
   if (loaded && !table.value?.containsRow(activeAssetId.value)) {
+    filteredOut = true;
     refreshNotice.value = t("บันทึกแล้ว เครื่องนี้ไม่ตรงกับคำค้นหาหรือตัวกรองปัจจุบัน");
+    // ถ้าแถวที่เพิ่งแก้หายจากผลลัพธ์ ให้กลับออกจากเต็มจอเพื่อให้ผู้ใช้เห็นเหตุผล
+    // และช่องค้นหาที่จะรับโฟกัส แทนการค้างอยู่กับตารางที่เปลี่ยนไปโดยไม่มีคำอธิบาย
+    await table.value?.collapseExpanded({ restoreFocus: false });
   }
   refreshing.value = false;
   await nextTick();
-  if (!moveOpen.value && (document.activeElement === document.body || !previousFocus?.isConnected)) {
+  if (!moveOpen.value && (filteredOut || document.activeElement === document.body || !previousFocus?.isConnected)) {
     searchInput.value?.focus();
   }
 }
@@ -335,13 +343,14 @@ async function refreshAfterSave() {
 async function loadFilterData() {
   filterError.value = "";
   try {
-    const [fy, brand, building, floor, division, department] = await Promise.all([
+    const [fy, brand, building, floor, division, department, contract] = await Promise.all([
       api.get("/fiscal-years"),
       api.get("/brands"),
       api.get("/buildings"),
       api.get("/floors"),
       api.get("/divisions"),
       api.get("/departments"),
+      api.get("/contracts"),
     ]);
 
     fiscalYears.value = fy.data ?? [];
@@ -350,6 +359,7 @@ async function loadFilterData() {
     floors.value = floor.data ?? [];
     divisions.value = division.data ?? [];
     departments.value = department.data ?? [];
+    contracts.value = contract.data ?? [];
   } catch (err) {
     console.error("Load filter data error:", err);
     filterError.value = t("โหลดข้อมูลอ้างอิงไม่สำเร็จ");
@@ -401,7 +411,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div ref="registryRoot" class="ui-fullscreen-context">
+  <div>
     <!-- หัวหน้าแถวเดียว (รอบที่ 3 ของ #51, Primer): จำนวนเป็นป้ายข้างชื่อหน้า
          ไม่ใช่บรรทัดคำอธิบายที่ดันตารางลงไปใต้เส้นพับ -->
     <UiPageHeader :title="t(&quot;ทะเบียนเครื่องพิมพ์&quot;)">
@@ -455,11 +465,13 @@ onMounted(async () => {
           ยอดพิมพ์ของมันหายไปจากงบเงียบๆ จึงต้องมีทางกรองดูได้โดยตรง ไม่ใช่ต้อง
           ไล่กวาดสายตาหาช่องสัญญาที่ว่างในตารางเป็นร้อยแถว
         -->
-        <UiSegmented
-          v-model="filters.unassigned"
-          :options="CONTRACT_OPTIONS"
-          size="sm"
-          :label="t(&quot;กรองตามการผูกสัญญา&quot;)"
+        <UiCombobox
+          v-model="filters.contract"
+          class="w-full sm:w-56"
+          :options="contractOptions"
+          :placeholder="t(&quot;ทุกสัญญา&quot;)"
+          :any-label="t(&quot;ทุกสัญญา&quot;)"
+          :aria-label="t(&quot;กรองตามสัญญา&quot;)"
         />
         <div id="registry-table-tools" class="ml-auto"></div>
       </template>
@@ -502,7 +514,6 @@ onMounted(async () => {
     <UiDataTable
       v-show="!loadError"
       ref="table"
-      :fullscreen-target="registryRoot"
       tools-target="#registry-table-tools"
       :caption="t(&quot;ทะเบียนเครื่องพิมพ์&quot;)"
       v-model:search-value="search"

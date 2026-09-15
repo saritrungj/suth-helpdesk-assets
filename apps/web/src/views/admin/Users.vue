@@ -210,6 +210,8 @@ onMounted(load);
       :rows="users"
       :columns="columns"
       :loading="loading"
+      :caption="t(&quot;จัดการผู้ใช้งานระบบ&quot;)"
+      :show-fullscreen="false"
       row-key="id"
       export-filename="users"
       :search-placeholder="t(&quot;ค้นหาชื่อผู้ใช้…&quot;)"

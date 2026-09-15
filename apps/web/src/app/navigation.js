@@ -5,7 +5,6 @@ import {
   CalendarRange,
   ChartColumnBig,
   CirclePlus,
-  FileSpreadsheet,
   FolderTree,
   Gauge,
   Layers,
@@ -94,7 +93,7 @@ export const NAV_GROUPS = [
       },
       {
         to: "/compare",
-        label: t("เปรียบเทียบรายเดือน"),
+        label: t("เปรียบเทียบ"),
         icon: ChartColumnBig,
         keywords: t("compare เทียบ เดือน month"),
       },
@@ -213,9 +212,6 @@ export const ALL_NAV_ITEMS = [
     groupLabel: ADMIN_GROUPS[0].label,
   })),
 ];
-
-/** ไอคอนของหน้านำเข้าไฟล์ ใช้ในปุ่มลัดของแดชบอร์ด */
-export const IMPORT_ICON = FileSpreadsheet;
 
 function pathOf(to) {
   return typeof to === "string" ? to : to.path;

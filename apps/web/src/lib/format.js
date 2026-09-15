@@ -36,9 +36,10 @@ export function formatCompact(value) {
   const n = Number(value ?? 0);
   if (locale.value === "en") return new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 }).format(n);
   if (Math.abs(n) >= 1_000_000) return t("{0} ล้าน", [(n / 1_000_000).toLocaleString(TH(), { maximumFractionDigits: 1 })]);
-  if (Math.abs(n) >= 10_000) return t("{0} หมื่น", [(n / 10_000).toLocaleString(TH(), { maximumFractionDigits: 1 })]);
+  if (Math.abs(n) >= 100_000) return t("{0} แสน", [(n / 100_000).toLocaleString(TH(), { maximumFractionDigits: 2 })]);
+  if (Math.abs(n) >= 10_000) return t("{0} หมื่น", [(n / 10_000).toLocaleString(TH(), { maximumFractionDigits: 2 })]);
   if (Math.abs(n) >= 1_000) return t("{0} พัน", [(n / 1_000).toLocaleString(TH(), { maximumFractionDigits: 1 })]);
-  return n.toLocaleString(TH(), { maximumFractionDigits: 0 });
+  return n.toLocaleString(TH(), { maximumFractionDigits: Math.abs(n) < 10 ? 2 : 1 });
 }
 
 /** เปอร์เซ็นต์ที่ปลอดภัยจากการหารด้วยศูนย์ */

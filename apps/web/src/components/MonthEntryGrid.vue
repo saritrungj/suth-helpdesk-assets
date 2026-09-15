@@ -40,6 +40,7 @@ import { toastError, toastSuccess } from "../store/toast";
 import { formatCount } from "../lib/format";
 import { describePaste, parseNumbers } from "../lib/paste-numbers";
 import { UiAlert, UiButton, UiInput } from "../ui";
+import { usePortalTarget } from "../ui/portal-target";
 
 const props = defineProps({
   /** เครื่องทั้งหมดที่ผ่านตัวกรองแล้ว เรียงตามที่แสดงบนตาราง */
@@ -88,6 +89,9 @@ const saving = ref(false);
 const inFlight = ref(new Map());
 const saveError = ref("");
 const saveBar = ref(null);
+// Native fullscreen แสดงเฉพาะ element ที่ขยายกับลูกของมัน แถบบันทึกจึงต้องย้าย
+// เข้าไปเป็นลูกของตารางชั่วคราว ไม่เช่นนั้นผู้ใช้แก้ตัวเลขได้แต่กดบันทึกไม่ได้
+const saveBarTarget = usePortalTarget();
 
 // Native focus scrolling does not account for a sticky sibling covering the
 // focused row. Only reposition when it actually overlaps the save bar.
@@ -450,15 +454,16 @@ defineExpose({ isDirty, dirtyCount, discard });
       ปักไว้เพราะตารางยาวกว่าหน้าจอเสมอ ถ้าปุ่มบันทึกอยู่ท้ายตาราง คนที่แก้แถวที่ 3
       ต้องเลื่อนลงไปสุดเพื่อกดบันทึก แล้วเลื่อนกลับขึ้นมาทำงานต่อ
     -->
-    <Transition name="savebar">
-      <div
-        v-if="isDirty && canEdit"
-        ref="saveBar"
-        class="sticky bottom-0 z-20 -mx-3 sm:-mx-6 mt-3 px-3 sm:px-6 py-3
-               border-t border-line bg-surface-float/95 backdrop-blur
-               flex flex-wrap items-center gap-3 shadow-e3"
-        data-print="hide"
-      >
+    <Teleport :to="saveBarTarget" :disabled="saveBarTarget === 'body'">
+      <Transition name="savebar">
+        <div
+          v-if="isDirty && canEdit"
+          ref="saveBar"
+          class="z-20 px-3 sm:px-6 py-3 border-t border-line bg-surface-float/95 backdrop-blur
+                 flex flex-wrap items-center gap-3 shadow-e3"
+          :class="saveBarTarget === 'body' ? 'sticky bottom-0 -mx-3 sm:-mx-6 mt-3' : 'shrink-0 mt-2 rounded-lg border'"
+          data-print="hide"
+        >
         <p class="text-sm text-ink flex-1 min-w-0"> {{ t("แก้ไว้") }} <span class="numeral font-semibold">{{ dirtyCount }}</span> {{ t("รายการ") }} <span class="text-ink-mute"> {{ t("· เดือน") }} {{ formatMonth(month, { long: true }) }}</span>
           <span v-if="clearingCount" class="block text-xs text-danger-ink mt-0.5">
             <TriangleAlert :size="12" class="inline align-[-1px]" aria-hidden="true" /> {{ t("ในนั้นมี") }} {{ clearingCount }} {{ t("รายการที่จะถูกลบยอดเดิมทิ้ง") }} </span>
@@ -469,8 +474,9 @@ defineExpose({ isDirty, dirtyCount, discard });
 
         <UiButton variant="primary" :loading="saving" @click="save">
           <template #icon><Save :size="15" /></template> {{ t("บันทึก") }} {{ dirtyCount }} {{ t("รายการ") }} </UiButton>
-      </div>
-    </Transition>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 

@@ -149,7 +149,12 @@ const chartOptions = computed(() => {
     // 5% ดูเหมือนต่างกันเท่าตัว — ส่วนกราฟเส้นอ่านจาก "ความชัน" ไม่ใช่ระยะจากฐาน
     // การบังคับให้เริ่มที่ศูนย์จึงอัดเส้นไปกองอยู่แถบบนจนมองไม่เห็นว่าขึ้นหรือลง
     beginAtZero: props.kind === "bar",
-    ticks: { ...base.scales.y.ticks, callback: (v) => axisFormat(v) },
+    ticks: {
+      ...base.scales.y.ticks,
+      autoSkip: true,
+      maxTicksLimit: 6,
+      callback: (v) => axisFormat(v),
+    },
   };
   const categoryScale = { ...base.scales.x, ticks: { ...base.scales.x.ticks, autoSkip: !props.horizontal } };
 

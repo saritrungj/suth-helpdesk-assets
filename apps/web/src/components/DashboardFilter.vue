@@ -7,11 +7,8 @@ import { t } from "../lib/locale";
  * DashboardFilter — แถบตัวกรองของหน้าแรก
  *
  * ตั้งใจให้เป็นแถบเดียวที่กระชับ ไม่ใช่การ์ดตัวกรองแบบเดิมที่กางไว้ตลอดเวลา
- * เพราะหน้านี้มีแค่สองตัวกรองจริง (อาคาร, เดือน) บวกตัวสลับหน่วยของกราฟ — ไม่ถึงจุด
+ * เพราะหน้านี้มีแค่สองตัวกรองจริง (สัญญา, เดือน) — ไม่ถึงจุด
  * ที่ต้องซ่อนตัวกรองส่วนเกินไว้หลังปุ่มแบบ UiFilterBar
- *
- * ตัวสลับหน่วย (จำนวนหน้า/ค่าใช้จ่าย) อยู่ในแถบนี้ ไม่ใช่ในการ์ดกราฟแต่ละใบ เพราะ
- * ทั้งกราฟแนวโน้มและกราฟรายอาคารต้องพูดถึงหน่วยเดียวกันเสมอ ให้สลับที่เดียวคุมทั้งคู่
  *
  * เดือนที่เลือกได้จำกัดเฉพาะเดือนที่ "มีข้อมูลจริง" ของปีงบที่ active อยู่ (จาก
  * useMonthlyKpi แบบไม่กรอง) ไม่ใช่เปิดให้เลือกทั้ง 12 เดือนเสมอไป — ป้องกันคนเลือก
@@ -19,40 +16,31 @@ import { t } from "../lib/locale";
  */
 import { useRoute, useRouter } from "vue-router";
 import { computed, ref, watch } from "vue";
-import { Printer, Wallet } from "lucide-vue-next";
-
-import { useBuildings, useMonthlyKpi } from "../api/queries";
+import { useContracts, useMonthlyKpi } from "../api/queries";
 import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
 import PeriodPicker from "./PeriodPicker.vue";
-import { UiCombobox, UiField, UiSegmented } from "../ui";
+import { UiCombobox, UiField } from "../ui";
 
-defineProps({
-  /** "pages" = จำนวนหน้า | "cost" = ค่าใช้จ่าย — คุมทั้งกราฟแนวโน้มและกราฟรายอาคาร */
-  metric: { type: String, default: "pages" },
-});
-
-const emit = defineEmits(["update:metric", "filter"]);
-
-const METRIC_OPTIONS = [
-  { value: "pages", label: t("จำนวนหน้า"), icon: Printer },
-  { value: "cost", label: t("ค่าใช้จ่าย"), icon: Wallet },
-];
+const emit = defineEmits(["filter"]);
 
 const route = useRoute();
 const router = useRouter();
-const buildingName = ref(typeof route.query.building === "string" ? route.query.building : "");
+const contractId = ref(typeof route.query.contract === "string" ? route.query.contract : "");
 const monthSelection = ref(String(route.query.months || "").split(",").filter((m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m)));
-watch([buildingName, monthSelection], () => {
-  router.replace({ query: { ...route.query, building: buildingName.value || undefined, months: monthSelection.value.length ? monthSelection.value.join(",") : undefined } });
+watch([contractId, monthSelection], () => {
+  const { building: _removedBuilding, ...query } = route.query;
+  router.replace({ query: { ...query, contract: contractId.value || undefined, months: monthSelection.value.length ? monthSelection.value.join(",") : undefined } });
 });
-defineExpose({ selectMonth: (month) => { monthSelection.value = [month]; } });
 
 // ช่วงเดือนตามปีงบที่ active อยู่ตอนนี้เสมอ (global, เลือกที่ Navbar)
 const range = computed(() => activeFiscalYearRange.value);
 
-const { data: buildings } = useBuildings();
-const buildingOptions = computed(() =>
-  (buildings.value ?? []).map((b) => ({ value: b.name, label: b.name }))
+const { data: contracts } = useContracts();
+const contractOptions = computed(() =>
+  (contracts.value ?? []).map((contract) => ({
+    value: String(contract.id),
+    label: contract.contract_no,
+  }))
 );
 
 // เดือนทั้งหมดที่เคยมีข้อมูลจริง (ทุกอาคาร ทุกปี) — ยิงแบบไม่กรอง ใช้จำกัดตัวเลือกใน
@@ -76,12 +64,12 @@ const month = computed(() => {
 });
 
 function sendFilter() {
-  emit("filter", { building_name: buildingName.value, month: month.value });
+  emit("filter", { contract_id: contractId.value, month: month.value });
 }
 
 // immediate:true เพราะค่าเริ่มต้นของ month คือทั้งปีงบ (ไม่ใช่ "" ว่างๆ) ต้อง emit ให้
 // Dashboard ตั้งแต่โหลดหน้าครั้งแรกเลย ไม่ใช่รอผู้ใช้แตะตัวกรองก่อน
-watch([buildingName, month], sendFilter, { immediate: true });
+watch([contractId, month], sendFilter, { immediate: true });
 
 // ปีงบเปลี่ยน (จาก Navbar) → เดือนที่เคยเลือกไว้อาจเป็นของปีงบเก่า ใช้ต่อไม่ได้แล้ว
 // ล้างทิ้งให้เริ่มเลือกใหม่ (PeriodPicker เองก็ watch ปีงบแล้วเคลียร์ตัวเองอยู่แล้ว
@@ -93,25 +81,22 @@ watch(range, (value, previous) => {
 
 <template>
   <div class="card p-3 flex flex-wrap items-end gap-3" data-print="hide">
-    <UiField :label="t(&quot;อาคาร&quot;)" class="w-48">
+    <UiField :label="t(&quot;สัญญา&quot;)" class="w-56">
       <UiCombobox
-        v-model="buildingName"
-        :options="buildingOptions"
-        :placeholder="t(&quot;ทุกอาคาร&quot;)"
-        :any-label="t(&quot;ทุกอาคาร&quot;)"
+        v-model="contractId"
+        :options="contractOptions"
+        :placeholder="t(&quot;ทุกสัญญา&quot;)"
+        :any-label="t(&quot;ทุกสัญญา&quot;)"
       />
     </UiField>
 
     <UiField :label="t(&quot;เดือน (ปีงบ {0})&quot;, [formatFiscalYearRange(range)])" class="w-56">
-      <PeriodPicker v-model="monthSelection" :options="monthOptions" />
+      <PeriodPicker
+        v-model="monthSelection"
+        :options="monthOptions"
+        mode="multi"
+        :all-label="t(&quot;ดูทั้งปีงบ&quot;)"
+      />
     </UiField>
-
-    <UiSegmented
-      :model-value="metric"
-      :options="METRIC_OPTIONS"
-      :label="t(&quot;หน่วยของกราฟ&quot;)"
-      class="ml-auto"
-      @update:model-value="emit('update:metric', $event)"
-    />
   </div>
 </template>

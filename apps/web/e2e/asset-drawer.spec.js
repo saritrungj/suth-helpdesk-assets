@@ -133,7 +133,7 @@ test("saving a filtered-out device clamps the last page and explains the change"
   await drawer.getByRole("button", { name: "บันทึกการแก้ไข" }).click();
   await expect(drawer).not.toBeVisible();
   await expect(page.getByText("บันทึกแล้ว เครื่องนี้ไม่ตรงกับคำค้นหาหรือตัวกรองปัจจุบัน")).toBeVisible();
-  await expect.poll(() => page.getByText("บันทึกแล้ว เครื่องนี้ไม่ตรงกับคำค้นหาหรือตัวกรองปัจจุบัน").evaluate((el) => document.fullscreenElement.contains(el))).toBe(true);
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
   await expect(page.getByRole("link", { name: "SUTH-001", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "ค้นหา Serial, รุ่น, ตำแหน่ง…" })).toBeFocused();
 });
@@ -288,11 +288,10 @@ test("move options failure retries; dirty Escape and pending preserve values", a
 test("drawer in fullscreen traps focus and returns to the row without losing scroll", async ({ page }) => {
   await assetFixture(page);
   await page.goto("/assets");
-  await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
   const search = page.getByRole("textbox", { name: "ค้นหา Serial, รุ่น, ตำแหน่ง…" });
-  await expect.poll(() => search.evaluate((el) => document.fullscreenElement.contains(el))).toBe(true);
-  await expect.poll(() => page.getByRole("radio", { name: "ใช้งานอยู่", exact: true }).evaluate((el) => document.fullscreenElement.contains(el))).toBe(true);
   await search.fill("SUTH");
+  await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
+  await expect.poll(() => page.getByRole("table").evaluate((el) => document.fullscreenElement.contains(el))).toBe(true);
   await expect(page.getByRole("button", { name: "Excel", exact: true })).toBeEnabled();
   const edit = page.getByRole("button", { name: "แก้ไข SUTH-005", exact: true });
   await edit.click();

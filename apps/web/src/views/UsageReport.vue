@@ -75,7 +75,7 @@ onUnmounted(() => window.removeEventListener("scroll", rememberScroll));
       ในระบบที่หน้าตาไม่เข้าชุดกับหน้าอื่นที่ใช้ UiPageHeader ทั้งหมด
     -->
     <!-- หัวหน้าแถวเดียวแบบเดียวกับทะเบียนและบันทึกยอด (รอบที่ 3 ของ #51) -->
-    <UiPageHeader :title="t(&quot;ค่าใช้จ่าย&quot;)">
+    <UiPageHeader :title="t(&quot;ค่าใช้จ่ายและยอดพิมพ์&quot;)">
       <!--
         ปีงบไม่ขึ้นซ้ำบนจอ เพราะแถบบนบอกอยู่แล้ว — แต่รายงานหน้านี้ถูกพิมพ์ออกกระดาษ
         ส่งผู้บริหารจริง และแถบบนกับแถบเลือกช่วงเวลาไม่ติดไปกับกระดาษ ถ้าไม่มีป้ายนี้
@@ -98,7 +98,7 @@ onUnmounted(() => window.removeEventListener("scroll", rememberScroll));
 
       <template #department>
         <KeepAlive>
-          <ByDepartment v-if="visited.has('department')" />
+          <ByDepartment v-if="visited.has('department')" :show-comparison="false" />
         </KeepAlive>
       </template>
     </UiTabs>

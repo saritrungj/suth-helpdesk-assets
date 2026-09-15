@@ -107,7 +107,10 @@ watch(
       </li>
 
       <li>
-        <UiButton size="xs" variant="ghost" @click="emit('clear')"> {{ t("ล้างทั้งหมด") }} </UiButton>
+        <UiButton size="xs" variant="danger-ghost" @click="emit('clear')">
+          <template #icon><X :size="13" /></template>
+          {{ t("ล้างตัวกรอง") }}
+        </UiButton>
       </li>
     </ul>
 

@@ -225,9 +225,3 @@
 @media (prefers-reduced-motion: reduce) {
   .ui-drawer[data-state="open"] { animation: none; }
 }
-/* Owners may include their search, filters and feedback in table fullscreen. */
-.ui-fullscreen-context:fullscreen {
-  overflow: auto;
-  padding: calc(var(--spacing) * 6);
-  background: var(--surface);
-}

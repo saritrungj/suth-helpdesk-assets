@@ -30,6 +30,43 @@ test("paste preview follows sort and page with serial and previous/new values", 
   await expect(page.getByRole("textbox", { name: "ยอดพิมพ์ของ SUTH-023", exact: true })).toHaveValue("300");
 });
 
+test("print usage import checks the file before the user confirms a write", async ({ page }) => {
+  await prototypeFixture(page, "admin");
+  const modes = [];
+  await page.route("**/api/print-transactions/import", async (route) => {
+    const body = route.request().postData() || "";
+    const mode = body.includes("\r\n\r\ncommit\r\n") ? "commit" : "preview";
+    modes.push(mode);
+    if (mode === "preview") {
+      return route.fulfill({ json: {
+        valid: true,
+        preview_token: "checked-file",
+        months_found: ["2025-10"],
+        new_rows: [{ device_id: 1, serial_number: "SUTH-001", month: "2025-10", pages: 0 }],
+        overwrite_rows: [{ device_id: 2, serial_number: "SUTH-002", month: "2025-10", previous_pages: 100, pages: 120 }],
+        unchanged_rows: [],
+        errors: [],
+      } });
+    }
+    return route.fulfill({ json: { rows_upserted: 2, months_found: ["2025-10"] } });
+  });
+
+  await page.goto("/print-transactions");
+  await page.getByRole("button", { name: "นำเข้ายอดพิมพ์", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "นำเข้ายอดพิมพ์", exact: true });
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: "usage.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("SN.,meter 10/68\nSUTH-001,0"),
+  });
+  await dialog.getByRole("button", { name: "ตรวจไฟล์", exact: true }).click();
+  await expect(dialog.getByText("จะเขียนทับข้อมูลเดิม", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("SUTH-002", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "ยืนยันบันทึก", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(modes).toEqual(["preview", "commit"]);
+});
+
 test("annual paste can undo without saving", async ({ page }) => {
   const state = await prototypeFixture(page);
   await page.goto("/print-transactions");
@@ -59,7 +96,11 @@ for (const density of ["compact", "default", "relaxed"]) {
     expect(box.x + box.width).toBeLessThanOrEqual(1280);
     await input.fill("250");
     await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
-    await expect(page.getByRole("button", { name: "บันทึก 1 รายการ", exact: true })).toBeVisible();
+    const save = page.getByRole("button", { name: "บันทึก 1 รายการ", exact: true });
+    await expect(save).toBeVisible();
+    await expect.poll(() => save.evaluate((el) => document.fullscreenElement.contains(el))).toBe(true);
+    await expect(page.getByText(/ช่วงเวลา: .*2569/)).toBeVisible();
+    await expect(page.locator(":fullscreen")).not.toContainText("month: 2026-");
     await expect(input).toHaveValue("250");
     await page.screenshot({ path: test.info().outputPath(`entry-${density}-dirty-fullscreen.png`) });
   });
@@ -164,13 +205,13 @@ test("expense retains each tab's scroll position", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/expense?tab=department");
   await expect(page.getByText("เครื่องที่ใช้งานหนักที่สุด", { exact: true })).toBeVisible();
-  await page.evaluate(() => window.scrollTo(0, 420));
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   /* จำตำแหน่งที่เบราว์เซอร์หยุดให้จริง ไม่ยึด 420 เป๊ะ — Chromium ขยับตำแหน่งเลื่อนเอง
      ได้เป็นพิกเซลจาก scroll anchoring เมื่อกราฟที่อยู่เหนือ viewport วาดเสร็จทีหลัง
      สิ่งที่เทสนี้ต้องรับประกันคือ "กลับมาที่เดิม" ไม่ใช่ค่าตัวเลขค่าหนึ่ง (เคยทำ
      pre-push ล้มด้วย 421 ทั้งที่พฤติกรรมถูก) ใช้ระยะเผื่อ 2px เท่ากับเทสตำแหน่งเลื่อน
      ของทะเบียนใน asset-drawer.spec.js */
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
   const parked = await page.evaluate(() => window.scrollY);
   // Dispatch activation without the test runner scrolling the tab into view first.
   await page.getByRole("tab", { name: "ตามสัญญา", exact: true }).dispatchEvent("mousedown", { button: 0, ctrlKey: false });
@@ -269,9 +310,9 @@ test("expense Excel export carries the search context and the on-screen amounts"
   const context = XLSX.utils.sheet_to_json(workbook.Sheets["บริบทรายงาน"], { header: 1 });
   expect(context).toContainEqual(["ค้นหา", "SUTH-001"]);
   const [header, ...rows] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
-  expect(header).toContain("ค่าใช้จ่ายสุทธิ (หัก 20%)");
+  expect(header).toContain("ค่าใช้จ่ายสุทธิ (หัก 2%)");
   expect(rows).toHaveLength(1);
-  expect([rows[0][0], rows[0][1], rows[0][2], rows[0][5], rows[0][6]]).toEqual(["SUTH-2569", 0.45, "SUTH-001", 1000, 360]);
+  expect([rows[0][0], rows[0][1], rows[0][4], rows[0][7], rows[0][8]]).toEqual(["SUTH-2569", 0.45, "SUTH-001", 1000, 360]);
 });
 
 test("department chart table adds up to the same totals as the division tree", async ({ page }) => {
@@ -285,8 +326,7 @@ test("department chart table adds up to the same totals as the division tree", a
     { id: 1, name: "หน่วยบริการผู้ป่วยนอก", total_cost: 360.35, total_pages: 800, devices: [first] },
     { id: 2, name: "หน่วยไตเทียม", total_cost: 90.05, total_pages: 200, devices: [second] },
   ] }] };
-  await page.goto("/expense?tab=department");
-  await expect(page.getByText("450.40", { exact: true }).first()).toBeVisible();
+  await page.goto("/compare?type=department");
   // trigger ของ UiCombobox ยังไม่มีชื่อที่ผูกกับ label (ปัญหา a11y ของ shared UI อยู่ใน #58)
   // จึงกดจากข้อความ placeholder แทน getByLabel
   await page.getByText("เลือกฝ่าย", { exact: true }).click();
@@ -325,7 +365,7 @@ test("expense price, discount and unit copy is translated while the amounts stay
   await page.goto("/expense");
   await expect(page.getByText("Total net cost", { exact: true })).toBeVisible();
   // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือแค่ส่วนลด (รอบที่ 3 ของ #51)
-  await expect(page.getByText("After 20% discount", { exact: true })).toBeVisible();
+  await expect(page.getByText("After 2% deduction", { exact: true })).toBeVisible();
   await expect(page.getByText(/0\.45\s+THB\/page/)).toBeVisible();
   await expect(page.getByText("360.00", { exact: true }).first()).toBeVisible();
   await page.getByRole("tab", { name: "By division / department", exact: true }).click();
@@ -354,12 +394,22 @@ test("ค่าใช้จ่ายที่พิมพ์ออกกระ�
 
 test("บันทึกยอดที่ขยายเต็มจอยังบอกว่ากำลังดูปีงบไหน", async ({ page }) => {
   await prototypeFixture(page, "viewer");
-  await page.goto("/print-transactions");
+  await page.goto("/print-transactions?fill=empty");
   await expect(page.getByRole("radio", { name: "ภาพรวมทั้งปี", exact: true })).toHaveAttribute("aria-checked", "true");
   const year = page.getByText("ปีงบ 2569", { exact: true });
   await expect(year).toBeHidden();
   await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
-  await expect(year).toBeVisible();
+  await expect(page.getByRole("heading", { name: "ภาพรวมทั้งปี", exact: true })).toBeVisible();
+  await expect(page.getByText(/ปีงบประมาณ: 2569/)).toBeVisible();
+  await expect(page.locator(":fullscreen")).toContainText("ช่วงเวลา: ทั้งปีงบ");
+  await expect(page.locator(":fullscreen")).not.toContainText("active");
+  await expect(page.locator(":fullscreen")).not.toContainText("none");
+  await expect(page.locator(":fullscreen")).toContainText("สถานะการกรอก: ยังไม่กรอก");
+  await expect(page.locator(":fullscreen")).toContainText("สถานะเครื่อง: ใช้งานอยู่");
+  const fullscreenSearch = page.locator(":fullscreen").getByRole("textbox", { name: "ค้นหาในตาราง...", exact: true });
+  await fullscreenSearch.fill("SUTH-045");
+  await expect(page.locator(":fullscreen").getByRole("table").getByText("SUTH-045", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "ย่อตาราง", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "ค้นหา", exact: true })).toHaveValue("SUTH-045");
   await expect(year).toBeHidden();
 });

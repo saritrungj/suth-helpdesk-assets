@@ -238,6 +238,7 @@ router.get(
         // ราคาที่ใช้จริงหลังพิจารณาราคาเฉพาะเครื่องแล้ว — ส่งออกไปด้วยเพื่อให้หน้าเว็บ
         // อธิบายได้ว่าเครื่องนี้คิดที่ราคาเท่าไหร่ โดยไม่ต้องคำนวณกฎ COALESCE ซ้ำเอง
         effective_price: fromSatang(priceSatang),
+        price_source: row.price_override != null ? "device_override" : "contract",
         ...summarise(readings.get(row.device_id) ?? [], priceSatang),
       });
     }
