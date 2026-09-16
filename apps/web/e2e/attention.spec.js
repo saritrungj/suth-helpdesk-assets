@@ -53,6 +53,13 @@ async function attentionFixture(page, attention = ATTENTION) {
 
 const bellOf = (page) => page.getByRole("button", { name: "งานที่ต้องติดตาม", exact: true });
 
+async function openAttentionDrawer(page) {
+  await attentionFixture(page);
+  await page.goto("/dashboard");
+  await bellOf(page).click();
+  return page.getByRole("dialog");
+}
+
 test("งานที่ต้องติดตามไม่ขึ้นซ้ำบนแดชบอร์ด", async ({ page }) => {
   await attentionFixture(page);
   await page.goto("/dashboard");
@@ -66,11 +73,7 @@ test("งานที่ต้องติดตามไม่ขึ้นซ�
 });
 
 test("ลิ้นชักจัดรายการเป็นกลุ่มตามความด่วน และไม่ตั้งชื่อตัวเองซ้ำ", async ({ page }) => {
-  await attentionFixture(page);
-  await page.goto("/dashboard");
-  await bellOf(page).click();
-
-  const drawer = page.getByRole("dialog");
+  const drawer = await openAttentionDrawer(page);
   await expect(drawer).toBeVisible();
 
   // ชื่อเดียวต่อของหนึ่งสิ่ง — หัวลิ้นชักตั้งชื่อไว้แล้ว แผงข้างในไม่ตั้งซ้ำ
@@ -87,8 +90,16 @@ test("ลิ้นชักจัดรายการเป็นกลุ่�
   const urgent = drawer.getByRole("region", { name: /ต้องแก้ทันที/ });
   await expect(urgent.getByText(CRITICAL)).toBeVisible();
   await expect(urgent.getByRole("link")).toHaveCount(1);
-  await expect(urgent.getByRole("link", { name: "ไปยืนยันช่วงที่สัญญามีผล", exact: true }))
+  await expect(urgent.getByRole("link", { name: /ไปยืนยันช่วงที่สัญญามีผล/ }))
     .toHaveAttribute("href", /contract-prices/);
+});
+
+test("กดรายการราคาที่ยังไม่ยืนยันแล้วไปยังหน้าที่แก้ไขได้", async ({ page }) => {
+  const drawer = await openAttentionDrawer(page);
+  const urgentItem = drawer.getByText(CRITICAL).locator("xpath=ancestor::li");
+  await urgentItem.getByText(CRITICAL).click();
+
+  await expect(page).toHaveURL(/\/admin\/contract-prices$/);
 });
 
 test("ป้ายบนกระดิ่งบอกได้ว่ามีเรื่องต้องแก้ทันทีหรือไม่", async ({ page }) => {

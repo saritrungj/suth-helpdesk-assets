@@ -6,7 +6,7 @@ import { locale } from "../lib/locale";
 import { formatMonth } from "../lib/locale-format";
 import { computed } from "vue";
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from "lucide-vue-next";
-import { UiButton, UiSkeleton } from "../ui";
+import { UiActionRow, UiSkeleton } from "../ui";
 
 const props = defineProps({
   /** รายการจาก /api/dashboard/overview — ดู apps/api/src/dashboard/overview.js */
@@ -149,29 +149,19 @@ const hasItems = computed(() => props.items.length > 0);
           <li
             v-for="item in group.items"
             :key="item.code"
-            class="border-l-[3px] rounded-r-lg py-2.5 pl-3 pr-3"
+            class="border-l-[3px] rounded-r-lg"
             :class="[group.edge, group.tint]"
           >
-            <p class="text-base font-semibold text-ink">{{ item.title }}</p>
-            <p class="mt-0.5 text-sm text-ink-soft">{{ item.detail }}</p>
-
             <!--
-              ปุ่มพาไปยังหน้าที่แก้เรื่องนี้ได้จริง พร้อมพารามิเตอร์ที่เจาะจงถึงเดือน
-              หรือตัวกรองที่เกี่ยวข้อง — ไม่ใช่พาไปหน้าเปล่าแล้วให้ผู้ใช้ไล่หาเอง
-
-              หนึ่งรายการมีปุ่มเดียวตามที่ Carbon กำหนดไว้สำหรับ actionable notification
-              ปุ่มอยู่ใต้เนื้อความ ไม่ใช่ท้ายแถวเดียวกัน เพราะในลิ้นชักกว้าง 560px
-              การวางปุ่มไว้ขวาสุดบีบข้อความให้ตัดบรรทัดเร็วขึ้นโดยไม่ได้อะไรกลับมา
+              ทั้งแถบเป็นลิงก์จริง ไม่ใช่แค่ปุ่มเล็กด้านล่าง เพราะผู้ใช้กดข้อความหรือ
+              พื้นที่ของ notification ตามธรรมชาติ ต้องได้ผลเดียวกัน UiActionRow ใช้
+              ลิงก์จริง จึงรองรับ Tab/Enter และเปิดแท็บใหม่โดยไม่เขียน handler ซ้ำที่นี่
             -->
-            <UiButton
-              v-if="item.action"
-              :to="{ path: item.action.to, query: item.action.query }"
-              variant="secondary"
-              size="sm"
-              class="mt-2"
-            >
-              {{ item.action.label }}
-            </UiButton>
+            <UiActionRow :to="item.action ? { path: item.action.to, query: item.action.query } : null">
+              <p class="text-base font-semibold text-ink">{{ item.title }}</p>
+              <p class="mt-0.5 text-sm text-ink-soft">{{ item.detail }}</p>
+              <template v-if="item.action" #action>{{ item.action.label }}</template>
+            </UiActionRow>
           </li>
         </ul>
       </section>
