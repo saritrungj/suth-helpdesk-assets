@@ -7,18 +7,32 @@
 ## 1. สำรองข้อมูลก่อน
 
 ```sh
-mysqldump -u root -p your_database > backup-before-migration.sql
+mysqldump --default-character-set=utf8mb4 --routines --triggers --single-transaction -u root -p your_database > backup-before-migration.sql
 ```
 
 migration เหล่านี้เป็น one-time change ไม่ได้ออกแบบให้รันซ้ำได้ ถ้าพลาดต้องกู้จาก backup
 
 ## 2. ตรวจว่าฐานข้อมูลขาดตัวไหน
 
-ดูโครงสร้างปัจจุบันก่อนแล้วเลือกเฉพาะที่ยังขาด อย่ารันทั้งชุดโดยไม่ตรวจ
+**ไม่ต้องไล่ดูเอง — สตาร์ต API แล้วมันบอก**
 
 ```sh
-mysql -u root -p your_database -e "DESCRIBE fiscal_year; DESCRIBE devices; SHOW INDEX FROM print_transactions;"
+npm run dev:api
 ```
+
+ถ้าฐานข้อมูลตามโค้ดไม่ทัน เซิร์ฟเวอร์จะ**ไม่เปิด** และพิมพ์ออกมาว่าขาดอะไรและต้องรันไฟล์ไหนตามลำดับไหน:
+
+```text
+ฐานข้อมูลยังไม่ได้อัปเดตให้ตรงกับโค้ดรุ่นนี้ ต้องรัน migration ที่ค้างอยู่ก่อน:
+
+  migration_add_device_service_period.sql
+      - ไม่มีคอลัมน์ devices.installation_status
+      - ไม่มีตาราง device_service_period
+```
+
+ด่านนี้อยู่ที่ [`apps/api/src/shared/schema-check.js`](../../apps/api/src/shared/schema-check.js) — มีไว้เพราะของเดิมไม่มีอะไรฟ้องเลย เซิร์ฟเวอร์เปิดขึ้นมาปกติแล้วผู้ใช้เป็นคนไปเจอเองทีละหน้าในรูปของ `เกิดข้อผิดพลาดในระบบ` กับ HTTP 500 ที่ไม่บอกสาเหตุ
+
+> **เพิ่ม migration ใหม่ต้องเพิ่มบรรทัดใน `schema-check.js` ด้วย** ถ้าลืม ฐานที่ตามไม่ทันจะกลับไปพังเป็น 500 เงียบๆ เหมือนเดิม — มีเทสผูก `schema.sql` กับรายการนั้นไว้ แต่เทสตรวจได้แค่ว่า "ของที่ประกาศไว้มีจริง" ไม่ได้ตรวจว่า "ประกาศครบ"
 
 ## 3. รันตามลำดับ
 
