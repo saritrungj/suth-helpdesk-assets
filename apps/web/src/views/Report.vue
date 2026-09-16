@@ -37,6 +37,7 @@ import {
   UiBadge,
   UiButton,
   UiCard,
+  UiFilterBar,
   UiCombobox,
   UiDataTable,
   UiEmpty,
@@ -131,6 +132,38 @@ watch(() => filters.value.building, () => (filters.value.floor = ""));
 watch(() => filters.value.division, () => (filters.value.department = ""));
 
 const hasActiveFilter = computed(() => search.value !== "" || Object.values(filters.value).some(Boolean));
+
+/**
+ * ป้ายตัวกรองที่ใช้อยู่ ส่งให้ UiFilterBar
+ *
+ * ตัดเดือนกับสถานะการกรอกออก เพราะสองอันนั้นอยู่ในแถบหลักที่เห็นตลอดอยู่แล้ว
+ * การมีป้ายซ้ำอีกทำให้มีสองที่ที่เอาตัวกรองเดียวกันออกได้ (เหตุผลเดียวกับหน้าทะเบียน)
+ */
+const CHIP_LABELS = {
+  building: t("อาคาร"),
+  floor: t("ชั้น"),
+  division: t("ฝ่าย"),
+  department: t("แผนก"),
+  brand: t("ยี่ห้อ"),
+  contract: t("สัญญา"),
+  deviceStatus: t("สถานะเครื่อง"),
+};
+
+const chipValue = (key, value) => {
+  if (key === "contract") return contractOptions.value.find((o) => o.value === value)?.label ?? value;
+  if (key === "deviceStatus") return DEVICE_STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value;
+  return value;
+};
+
+const filterChips = computed(() =>
+  Object.entries(filters.value)
+    .filter(([key, value]) => value && CHIP_LABELS[key])
+    .map(([key, value]) => ({ key, label: `${CHIP_LABELS[key]}: ${chipValue(key, value)}` }))
+);
+
+function clearFilter(key) {
+  filters.value[key] = "";
+}
 
 function resetFilters() {
   search.value = "";
@@ -434,72 +467,75 @@ onMounted(async () => {
       :description="t(&quot;ยอดมิเตอร์ดิบของแต่ละเครื่องในปีงบ {0} — เครื่องที่ย้ายที่ตั้งกลางปีจะถูกแยกเป็นคนละแถวตามช่วงที่ตั้ง&quot;, [displayYearBE])"
     />
 
-    <UiCard class="mb-4" :title="t(&quot;ตัวกรองรายงาน&quot;)" data-print="hide">
-      <template #actions>
-        <UiButton v-if="hasActiveFilter" size="sm" variant="danger-ghost" @click="resetFilters"> {{ t("ล้างตัวกรอง") }} </UiButton>
-      </template>
+    <!--
+      ตัวกรองเป็นแถวเดียว ไม่ใช่การ์ดก้อนใหญ่ (#90)
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <UiField :label="t(&quot;เดือนที่แสดงในตาราง&quot;)" :hint="t(&quot;ไม่เลือก = แสดงครบทั้งปีงบ&quot;)">
-          <PeriodPicker v-model="reportMonths" :options="fyMonths" />
-        </UiField>
+      เดิมหน้านี้ใช้การ์ด "ตัวกรองรายงาน" สูงราว 420px ใส่ dropdown แปดตัวที่
+      ส่วนใหญ่เป็น "ทุก..." ก่อนจะถึงตารางซึ่งเป็นเนื้อหาจริงของหน้า เหลือที่ให้
+      ข้อมูลจริงเหนือเส้นพับแค่สี่แถว ขณะที่หน้าทะเบียนและหน้าบันทึกยอดซึ่งทำงาน
+      แบบเดียวกันใช้แถบเดียวสูง ~56px แล้วเห็นแปดถึงเก้าแถว
 
-        <UiField :label="t(&quot;ค้นหา&quot;)" class="lg:col-span-2">
-          <UiInput v-model="search" clearable :placeholder="t(&quot;Serial, รุ่น, แผนก หรือเลขที่สัญญา…&quot;)">
+      ระบบเดียวจึงมีสองแบบแผน คนที่เรียนแถบเดียวจากสามหน้าแรกต้องเรียนใหม่ที่นี่
+      ตอนนี้ใช้ UiFilterBar ตัวเดียวกับหน้าทะเบียน และเครื่องมือตารางมาต่อท้ายแถว
+    -->
+    <UiFilterBar :chips="filterChips" data-print="hide" @remove="clearFilter" @clear="resetFilters">
+      <template #primary>
+        <div class="flex-1 min-w-[14rem] max-w-md">
+          <UiInput
+            v-model="search"
+            clearable
+            :aria-label="t('ค้นหา Serial, รุ่น, แผนก หรือเลขที่สัญญา…')"
+            :placeholder="t('ค้นหา Serial, รุ่น, แผนก หรือเลขที่สัญญา…')"
+          >
             <template #icon><Search :size="15" /></template>
           </UiInput>
-        </UiField>
-      </div>
+        </div>
 
-      <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mt-4 pt-4 border-t border-line-soft">
-        <UiField :label="t(&quot;สถานะการกรอก (ปีงบ {0})&quot;, [displayYearBE])">
-          <UiSelect
-            v-model="filters.fillStatus"
-            :options="FILL_STATUS_OPTIONS"
-            value-key="value"
-            label-key="label"
-          />
-        </UiField>
+        <!-- จำกัดความกว้าง ไม่งั้นตัวเลือกช่วงเวลายืดเต็มแถวแล้วดันตัวอื่นตกบรรทัด -->
+        <div class="w-full sm:w-64">
+          <PeriodPicker v-model="reportMonths" :options="fyMonths" :aria-label="t('เดือนที่แสดงในตาราง')" />
+        </div>
 
-        <UiField :label="t(&quot;สถานะเครื่อง&quot;)">
-          <UiSelect
-            v-model="filters.deviceStatus"
-            :options="DEVICE_STATUS_OPTIONS"
-            value-key="value"
-            label-key="label"
-          />
-        </UiField>
+        <UiSelect
+          v-model="filters.fillStatus"
+          class="w-full sm:w-52"
+          :options="FILL_STATUS_OPTIONS"
+          value-key="value"
+          label-key="label"
+          :aria-label="t('กรองตามสถานะการกรอก')"
+        />
 
-        <UiField :label="t(&quot;ยี่ห้อ&quot;)">
-          <UiCombobox v-model="filters.brand" :options="brandOptions" :placeholder="t(&quot;ทุกยี่ห้อ&quot;)" :any-label="t(&quot;ทุกยี่ห้อ&quot;)" />
-        </UiField>
+        <div id="report-table-tools" class="ml-auto"></div>
+      </template>
 
-        <UiField :label="t(&quot;สัญญา&quot;)">
-          <UiCombobox v-model="filters.contract" :options="contractOptions" :placeholder="t(&quot;ทุกสัญญา&quot;)" :any-label="t(&quot;ทุกสัญญา&quot;)" />
-        </UiField>
+      <UiField :label="t(&quot;สถานะเครื่อง&quot;)">
+        <UiSelect v-model="filters.deviceStatus" :options="DEVICE_STATUS_OPTIONS" value-key="value" label-key="label" />
+      </UiField>
 
-        <UiField :label="t(&quot;อาคาร&quot;)">
-          <UiCombobox v-model="filters.building" :options="buildingOptions" :placeholder="t(&quot;ทุกอาคาร&quot;)" :any-label="t(&quot;ทุกอาคาร&quot;)" />
-        </UiField>
+      <UiField :label="t(&quot;ยี่ห้อ&quot;)">
+        <UiCombobox v-model="filters.brand" :options="brandOptions" :placeholder="t(&quot;ทุกยี่ห้อ&quot;)" :any-label="t(&quot;ทุกยี่ห้อ&quot;)" />
+      </UiField>
 
-        <UiField :label="t(&quot;ชั้น&quot;)">
-          <UiCombobox v-model="filters.floor" :options="floorOptions" :placeholder="t(&quot;ทุกชั้น&quot;)" :any-label="t(&quot;ทุกชั้น&quot;)" />
-        </UiField>
+      <UiField :label="t(&quot;สัญญา&quot;)">
+        <UiCombobox v-model="filters.contract" :options="contractOptions" :placeholder="t(&quot;ทุกสัญญา&quot;)" :any-label="t(&quot;ทุกสัญญา&quot;)" />
+      </UiField>
 
-        <UiField :label="t(&quot;ฝ่าย&quot;)">
-          <UiCombobox v-model="filters.division" :options="divisionOptions" :placeholder="t(&quot;ทุกฝ่าย&quot;)" :any-label="t(&quot;ทุกฝ่าย&quot;)" />
-        </UiField>
+      <UiField :label="t(&quot;อาคาร&quot;)">
+        <UiCombobox v-model="filters.building" :options="buildingOptions" :placeholder="t(&quot;ทุกอาคาร&quot;)" :any-label="t(&quot;ทุกอาคาร&quot;)" />
+      </UiField>
 
-        <UiField :label="t(&quot;แผนก&quot;)" class="lg:col-span-1">
-          <UiCombobox
-            v-model="filters.department"
-            :options="departmentOptions"
-            :placeholder="t(&quot;ทุกแผนก&quot;)"
-            :any-label="t(&quot;ทุกแผนก&quot;)"
-          />
-        </UiField>
-      </div>
-    </UiCard>
+      <UiField :label="t(&quot;ชั้น&quot;)">
+        <UiCombobox v-model="filters.floor" :options="floorOptions" :placeholder="t(&quot;ทุกชั้น&quot;)" :any-label="t(&quot;ทุกชั้น&quot;)" />
+      </UiField>
+
+      <UiField :label="t(&quot;ฝ่าย&quot;)">
+        <UiCombobox v-model="filters.division" :options="divisionOptions" :placeholder="t(&quot;ทุกฝ่าย&quot;)" :any-label="t(&quot;ทุกฝ่าย&quot;)" />
+      </UiField>
+
+      <UiField :label="t(&quot;แผนก&quot;)">
+        <UiCombobox v-model="filters.department" :options="departmentOptions" :placeholder="t(&quot;ทุกแผนก&quot;)" :any-label="t(&quot;ทุกแผนก&quot;)" />
+      </UiField>
+    </UiFilterBar>
 
     <UiCard v-if="!fiscalYearState.activeId">
       <UiEmpty
@@ -517,6 +553,9 @@ onMounted(async () => {
       </UiAlert>
 
       <UiDataTable
+        tools-target="#report-table-tools"
+        v-model:search-value="search"
+        :searchable="false"
         :rows="reportRows"
         :columns="columns"
         :loading="loading"

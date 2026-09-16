@@ -987,5 +987,8 @@
   "เว้นว่างไว้ถ้าทราบแค่ว่าตอนนี้เป็นแบบนี้ ระบบจะใช้วันนี้": "Leave blank if only the current status is known. The system will use today's date.",
   "ไม่มีเครื่องที่รอตรวจ": "No devices awaiting review",
   "กำลังโหลดงานที่ต้องติดตาม": "Loading items that need follow-up",
-  "หัวข้อ รวมเรื่องที่ต้องแก้ทันที": "items, including issues that need immediate action"
+  "หัวข้อ รวมเรื่องที่ต้องแก้ทันที": "items, including issues that need immediate action",
+  "ค้นหา Serial, รุ่น, แผนก หรือเลขที่สัญญา…": "Search serial, model, department or contract number…",
+  "กรองตามอาคาร": "Filter by building",
+  "กรองตามชั้น": "Filter by floor"
 }

@@ -33,6 +33,7 @@ import {
   UiAlert,
   UiButton,
   UiCard,
+  UiFilterBar,
   UiChart,
   UiCombobox,
   UiEmpty,
@@ -414,55 +415,71 @@ onMounted(async () => {
       :description="t(&quot;ยอดรวมของสองเดือนต่างกันได้เองเมื่อจำนวนเครื่องที่บันทึกยอดไม่เท่ากัน หรือเมื่อยังยืนยันราคาไม่ครบ&quot;)"
     />
 
-    <UiSegmented v-model="comparisonType" :options="COMPARISON_TYPES" :label="t(&quot;รูปแบบการเปรียบเทียบ&quot;)" class="mb-4" />
+    <!--
+      ตัวกรองเป็นแถวเดียว ไม่ใช่การ์ด (#90)
 
+      เดิมหน้านี้ใช้การ์ด "เลือกช่วงที่จะเปรียบเทียบ" สูงราว 290px ใส่ตัวกรองแค่
+      สองตัว โดยมีที่ว่างเปล่าเกินครึ่งการ์ด ผลคือสรุปและตารางเปรียบเทียบซึ่งเป็น
+      เนื้อหาจริงของหน้า ตกไปอยู่ใต้เส้นพับทั้งหมด
+
+      ใช้ UiFilterBar ตัวเดียวกับหน้าอื่น แต่ปิด collapsible เพราะตัวกรองของหน้านี้
+      มีน้อยและขึ้นกับรูปแบบที่เลือก ไม่มีอะไรเหลือให้ซ่อนในแผงพับ
+    -->
+    <UiFilterBar :collapsible="false" class="mb-4">
+      <template #primary>
+        <UiSegmented v-model="comparisonType" :options="COMPARISON_TYPES" size="sm" :label="t(&quot;รูปแบบการเปรียบเทียบ&quot;)" />
+
+        <div v-if="comparisonType !== 'department'" class="w-full sm:w-72">
+          <PeriodPicker
+            v-model="selectedMonths"
+            :options="monthsWithData"
+            mode="multi"
+            :all-label="t(&quot;ทุกเดือนที่มีข้อมูล&quot;)"
+            :all-emits-empty="false"
+            :aria-label="t('เดือนที่จะเปรียบเทียบ')"
+          />
+        </div>
+
+        <UiCombobox
+          v-if="comparisonType === 'building'"
+          v-model="filters.building"
+          class="w-full sm:w-52"
+          :options="buildingOptions"
+          :placeholder="t(&quot;ทุกอาคาร&quot;)"
+          :any-label="t(&quot;ทุกอาคาร&quot;)"
+          :aria-label="t(&quot;กรองตามอาคาร&quot;)"
+        />
+
+        <UiCombobox
+          v-if="comparisonType === 'building'"
+          v-model="filters.floor"
+          class="w-full sm:w-44"
+          :options="floorOptions"
+          :placeholder="t(&quot;ทุกชั้น&quot;)"
+          :any-label="t(&quot;ทุกชั้น&quot;)"
+          :aria-label="t(&quot;กรองตามชั้น&quot;)"
+        />
+
+        <UiCombobox
+          v-if="comparisonType === 'contract'"
+          v-model="filters.contract"
+          class="w-full sm:w-56"
+          :options="contractOptions"
+          :placeholder="t(&quot;ทุกสัญญา&quot;)"
+          :any-label="t(&quot;ทุกสัญญา&quot;)"
+          :aria-label="t(&quot;กรองตามสัญญา&quot;)"
+        />
+
+        <UiButton v-if="hasActiveFilter" size="sm" variant="danger-ghost" class="ml-auto" @click="resetFilters">
+          {{ t("ล้างตัวกรอง") }}
+        </UiButton>
+      </template>
+    </UiFilterBar>
+
+    <!-- มุมมองฝ่าย/แผนกมีหน้าของตัวเอง ใช้ตัวกรองและกราฟชุดของ ByDepartment -->
     <ByDepartment v-if="comparisonType === 'department'" comparison-only />
 
     <template v-else>
-
-    <!-- ตัวกรอง -->
-    <UiCard class="mb-4" :title="t(&quot;เลือกช่วงที่จะเปรียบเทียบ&quot;)">
-      <template #actions>
-        <UiButton v-if="hasActiveFilter" size="sm" variant="danger-ghost" @click="resetFilters"> {{ t("ล้างตัวกรอง") }} </UiButton>
-      </template>
-
-      <UiField
-        :label="t(&quot;เดือนที่จะเปรียบเทียบ&quot;)"
-        :hint="t(&quot;เลือกได้หลายเดือน — ระบบจะเรียงตามเวลาและเทียบกับเดือนก่อนหน้าในรายการให้เอง&quot;)"
-        class="max-w-sm mb-4"
-      >
-        <PeriodPicker
-          v-model="selectedMonths"
-          :options="monthsWithData"
-          mode="multi"
-          :all-label="t(&quot;ทุกเดือนที่มีข้อมูล&quot;)"
-          :all-emits-empty="false"
-        />
-      </UiField>
-
-      <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 pt-4 border-t border-line-soft">
-        <UiField v-if="comparisonType === 'building'" :label="t(&quot;อาคาร&quot;)">
-          <UiCombobox v-model="filters.building" :options="buildingOptions" :placeholder="t(&quot;ทุกอาคาร&quot;)" :any-label="t(&quot;ทุกอาคาร&quot;)" />
-        </UiField>
-
-        <UiField v-if="comparisonType === 'building'" :label="t(&quot;ชั้น&quot;)">
-          <UiCombobox v-model="filters.floor" :options="floorOptions" :placeholder="t(&quot;ทุกชั้น&quot;)" :any-label="t(&quot;ทุกชั้น&quot;)" />
-        </UiField>
-
-        <UiField v-if="comparisonType === 'department'" :label="t(&quot;ฝ่าย&quot;)">
-          <UiCombobox v-model="filters.division" :options="divisionOptions" :placeholder="t(&quot;ทุกฝ่าย&quot;)" :any-label="t(&quot;ทุกฝ่าย&quot;)" />
-        </UiField>
-
-        <UiField v-if="comparisonType === 'department'" :label="t(&quot;แผนก&quot;)">
-          <UiCombobox v-model="filters.department" :options="departmentOptions" :placeholder="t(&quot;ทุกแผนก&quot;)" :any-label="t(&quot;ทุกแผนก&quot;)" />
-        </UiField>
-
-        <UiField v-if="comparisonType === 'contract'" :label="t(&quot;สัญญา&quot;)">
-          <UiCombobox v-model="filters.contract" :options="contractOptions" :placeholder="t(&quot;ทุกสัญญา&quot;)" :any-label="t(&quot;ทุกสัญญา&quot;)" />
-        </UiField>
-      </div>
-    </UiCard>
-
     <UiAlert v-if="loadError" tone="danger" class="mb-4">
       {{ loadError }}
       <template #actions>
