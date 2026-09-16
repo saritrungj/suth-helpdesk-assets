@@ -201,7 +201,7 @@ test("ไม่มีหน้าหรือไม่มีราคา ค่�
   assert.equal(costSatang(1000, ""), 0);
 });
 
-test("ราคาเฉพาะเครื่องมีผลเหนือราคาตามสัญญา", () => {
+test("ราคาพิเศษเฉพาะเครื่องมีผลเหนือราคาตามสัญญา", () => {
   assert.equal(effectivePriceSatang("0.30", "0.45"), 30);
   assert.equal(effectivePriceSatang(null, "0.45"), 45);
   assert.equal(effectivePriceSatang("", "0.45"), 45);

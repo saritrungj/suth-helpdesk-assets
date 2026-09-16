@@ -14,6 +14,7 @@ const constraints = require("./constraints.cjs");
 
 module.exports = {
   ...require("./coverage.cjs"),
+  ...require("./service-period.cjs"),
   ...require("./locale-format.cjs"),
   ...month,
   ...fiscalYear,

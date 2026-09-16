@@ -75,7 +75,7 @@ test("accordion, rail tooltip และ command search ใช้คีย์บ�
   await page.keyboard.press("Control+k");
   const search = page.getByPlaceholder("พิมพ์ชื่อหน้าที่ต้องการไป…");
   await expect(search).toBeFocused();
-  await search.fill("ราคาต่อแผ่น");
+  await search.fill("ราคาต่อหน้า");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/admin\/contracts$/);
   await expect(page.getByRole("complementary", { name: "เมนูหลัก" })).toHaveCSS("width", "64px");

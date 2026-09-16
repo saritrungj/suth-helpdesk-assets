@@ -26,9 +26,12 @@ const {
   optionalId,
   optionalMoney,
   booleanQuery,
+  dateString,
 } = require("../shared/validate");
 const cache = require("../shared/cache");
-const { DEVICE_STATUSES, MAX_LENGTH } = require("@suth/domain");
+const { DEVICE_STATUSES, INSTALLATION_STATUSES, MAX_LENGTH } = require("@suth/domain");
+const servicePeriod = require("./service-period");
+const { recordContractHistory } = require("./contract-history");
 
 // ============================================================
 // Schema ของข้อมูลขาเข้า
@@ -46,16 +49,64 @@ const deviceBody = z.object({
   contract_id: optionalId,
   price_override: optionalMoney,
   status: z.enum(DEVICE_STATUSES).default("active"),
+
+  // ⚠️ ไม่มี .default() โดยตั้งใจ — ADR-0018 ข้อ Q18 บังคับว่าผู้กรอกต้องเลือก
+  // สถานะการติดตั้งเองก่อนบันทึกเครื่องใหม่ ระบบไม่เลือกให้ ค่า default ใดๆ ที่นี่
+  // จะกลายเป็นคำตอบที่ไม่มีใครตั้งใจตอบ แล้วไปเป็นตัวส่วนของความครบถ้วนทั้งปี
+  installation_status: z.enum(INSTALLATION_STATUSES, {
+    error: "กรุณาระบุว่าเครื่องนี้ติดตั้งแล้วหรือยัง",
+  }),
+
+  // วันที่เริ่มรับผิดชอบยอด — ไม่บังคับ ไม่ส่งมา = วันนี้
+  // เครื่องที่เพิ่งติดตั้งวันนี้กับเครื่องที่อยู่มาก่อนแล้วเพิ่งมาลงทะเบียน ต่างกัน
+  // ตรงนี้ และระบบเดาแทนไม่ได้ (Q21)
+  installed_on: dateString.optional(),
+
+  // วันที่การคิดเงินตามสัญญา/ราคานี้เริ่มมีผล — ไม่ส่งมา = ใช้วันเดียวกับที่เริ่ม
+  // รับผิดชอบยอด ซึ่งเป็นกรณีปกติของเครื่องที่ลงทะเบียนพร้อมผูกสัญญา
+  //
+  // แยกช่องไว้เพราะสองเรื่องนี้ไม่จำเป็นต้องเริ่มพร้อมกัน — เครื่องที่ติดตั้งเดือน
+  // มกราแต่เพิ่งย้ายเข้าสัญญาใหม่เดือนตุลา มีวันเริ่มคนละวัน (ADR-0019)
+  billing_from: dateString.optional(),
 });
 
 // แก้ไขทรัพย์สินทั่วไป — ไม่รวมที่ตั้งและสังกัด การย้ายเครื่องใช้ moveBody แยกต่างหาก
 // เพื่อไม่ให้กด "บันทึก" ที่ฟอร์มแก้ไขธรรมดาแล้วเผลอย้ายเครื่องพร้อมเขียนประวัติการย้าย
+// สถานะการติดตั้งไม่อยู่ในฟอร์มแก้ไขทั่วไปด้วยเหตุผลเดียวกับที่ที่ตั้งไม่อยู่ —
+// การเปลี่ยนมันคือการยืนยันข้อเท็จจริงที่ต้องระบุวันที่มีผลและระดับความมั่นใจ
+// ย้อนหลัง ซึ่งมีเส้นทางของตัวเองที่ PUT /:id/installation
 const updateBody = deviceBody.omit({
   building_id: true,
   floor_id: true,
   location: true,
   division_id: true,
   department_id: true,
+  installation_status: true,
+  installed_on: true,
+}).extend({
+  // ฟอร์มแก้ไขเปลี่ยนสัญญาและราคาพิเศษเฉพาะเครื่องได้ ซึ่งเป็นการเปลี่ยน "วิธีคิดเงิน"
+  // ผู้ใช้จึงต้องบอกได้ว่ามีผลตั้งแต่เมื่อไหร่ ไม่ส่งมา = วันนี้ (เหตุการณ์ที่เพิ่งเกิด)
+  //
+  // นี่คือช่องที่ทำให้แก้ issue #81 ได้อย่างปลอดภัย: ย้ายเครื่องไปสัญญาปีงบปัจจุบัน
+  // โดยระบุว่ามีผลตั้งแต่ 1 ต.ค. แล้วเดือนก่อนหน้ายังคิดตามสัญญาเดิมเหมือนเดิม
+  billing_from: dateString.optional(),
+});
+
+/**
+ * ผลการตรวจยืนยันสถานะการติดตั้งของเครื่องหนึ่ง (ADR-0018 Q14, Q19, Q21)
+ *
+ * `history_known` คือคำถามที่ระบบต้องถามและห้ามเดาคำตอบ — ผู้ดูแลที่เดินไปดูเครื่อง
+ * ตอบได้ทันทีว่าตอนนี้ติดตั้งอยู่ไหม แต่จะตอบว่า "ก่อนหน้านี้เป็นยังไง" ได้ต่อเมื่อ
+ * มีเอกสาร ถ้าไม่ถาม ระบบจะต้องเลือกให้เองว่าเดือนเก่าคือ "ไม่ต้องกรอก" (ซึ่งทำให้
+ * ความครบถ้วนดูดีเกินจริง) หรือ "ค้าง" (ซึ่งสร้างงานที่อาจไม่มีอยู่)
+ */
+const installationBody = z.object({
+  installation_status: z.enum(INSTALLATION_STATUSES, {
+    error: "กรุณาระบุว่าเครื่องนี้ติดตั้งแล้วหรือยัง",
+  }),
+  effective_from: dateString.optional(),
+  history_known: z.boolean({ error: "กรุณาระบุว่ายืนยันข้อมูลย้อนหลังได้หรือไม่" }),
+  note: optionalText(255),
 });
 
 const moveBody = z.object({
@@ -108,6 +159,8 @@ const DEVICE_SELECT = `
     d.model,
     d.location,
     d.status,
+    d.installation_status,
+    d.service_unverified_before,
     d.price_override,
     d.brand_id,
     d.building_id,
@@ -375,6 +428,7 @@ exports.create = async (req, res) => {
       "contract_id",
       "price_override",
       "status",
+      "installation_status",
     ];
 
     const [result] = await conn.query(
@@ -386,6 +440,27 @@ exports.create = async (req, res) => {
     // รายงานที่อิงประวัติการย้ายจะมองไม่เห็นเครื่องนี้จนกว่าจะมีการย้ายครั้งแรก
     await recordLocationHistory(conn, result.insertId, data);
 
+    // เครื่องที่บันทึกผ่านฟอร์มมีคนตอบสถานะการติดตั้งไว้แล้ว จึงยืนยันครบทุกช่วงเวลา
+    // (service_unverified_before คงเป็น NULL) ต่างจากเครื่องที่ย้ายมาจากข้อมูลเดิม
+    // หรือมาจากไฟล์นำเข้า ซึ่งยังไม่มีใครตอบและต้องผ่านหน้าตรวจยืนยันก่อน
+    await servicePeriod.recordInstallationReview(conn, result.insertId, {
+      installationStatus: data.installation_status,
+      effectiveFrom: data.installed_on || servicePeriod.today(),
+      historyKnown: true,
+      deviceStatus: data.status,
+      userId: req.user?.id ?? null,
+    });
+
+    // เปิดช่วงการคิดเงินช่วงแรก ไม่งั้นยอดของเครื่องนี้จะไม่มีราคาจนกว่าจะมีคน
+    // แก้สัญญาครั้งแรก — ยอดพิมพ์จริงจะขึ้นว่า "ยังยืนยันราคาไม่ได้" ทั้งที่เพิ่ง
+    // กรอกสัญญาไปเมื่อครู่ (ADR-0019)
+    await recordContractHistory(
+      conn,
+      result.insertId,
+      { contractId: data.contract_id ?? null, priceOverride: data.price_override ?? null },
+      data.billing_from || data.installed_on || servicePeriod.today()
+    );
+
     return result.insertId;
   });
 
@@ -396,18 +471,104 @@ exports.create = async (req, res) => {
 // PUT /api/devices/:id — แก้ไขทรัพย์สินทั่วไป (ไม่แตะที่ตั้ง/สังกัด)
 // ============================================================
 exports.update = async (req, res) => {
-  const { serial_number, brand_id, model, contract_id, price_override, status } = req.body;
+  const { serial_number, brand_id, model, contract_id, price_override, status, billing_from } =
+    req.body;
 
-  const [result] = await db.query(
-    `UPDATE devices
-     SET serial_number = ?, brand_id = ?, model = ?, contract_id = ?, price_override = ?, status = ?
-     WHERE id = ?`,
-    [serial_number, brand_id, model, contract_id, price_override, status, req.params.id]
-  );
+  await db.withTransaction(async (conn) => {
+    const [result] = await conn.query(
+      `UPDATE devices
+       SET serial_number = ?, brand_id = ?, model = ?, contract_id = ?, price_override = ?, status = ?
+       WHERE id = ?`,
+      [serial_number, brand_id, model, contract_id, price_override, status, req.params.id]
+    );
 
-  if (!result.affectedRows) throw notFound("ไม่พบเครื่องที่ต้องการแก้ไข");
+    if (!result.affectedRows) throw notFound("ไม่พบเครื่องที่ต้องการแก้ไข");
+
+    // ส่งเครื่องไปซ่อมหรือปลดระวาง = เลิกรับผิดชอบยอดตั้งแต่วันนี้ ส่วนการกลับมา
+    // ใช้งาน = เริ่มรับผิดชอบอีกครั้ง ทั้งสองอย่างเป็นเหตุการณ์ที่ผู้ดูแลเพิ่งลงมือ
+    // ทำ พร้อมวันที่ที่รู้แน่นอน จึงบันทึกได้โดยไม่ขัดข้อห้ามเรื่องการเดาอดีต
+    //
+    // ยอดของเดือนก่อนหน้าไม่ถูกแตะ — ช่วงที่ปิดไปแล้วยังอยู่ครบ งานค้างเดือนเก่า
+    // จึงไม่หายไปเพราะวันนี้เครื่องเข้าซ่อม (Q17)
+    const [[device]] = await conn.query(
+      "SELECT installation_status FROM devices WHERE id = ?",
+      [req.params.id]
+    );
+
+    await servicePeriod.syncServicePeriodWithStatus(conn, req.params.id, {
+      installationStatus: device.installation_status,
+      deviceStatus: status,
+    });
+
+    // เปลี่ยนสัญญาหรือราคาพิเศษเฉพาะเครื่อง = เปลี่ยนวิธีคิดเงินตั้งแต่วันที่ระบุเป็นต้นไป
+    // เดือนก่อนหน้ายังคิดตามช่วงเดิมที่ปิดไปแล้ว ไม่ถูกแตะ (ADR-0019, issue #81)
+    await recordContractHistory(
+      conn,
+      Number(req.params.id),
+      { contractId: contract_id ?? null, priceOverride: price_override ?? null },
+      billing_from || servicePeriod.today()
+    );
+  });
 
   res.json({ message: "บันทึกการแก้ไขเรียบร้อยแล้ว" });
+};
+
+// ============================================================
+// GET /api/devices/installation-review — เครื่องที่ยังไม่ได้ตรวจยืนยัน
+// ============================================================
+//
+// รายการงานของผู้ดูแลตาม Q14 — เรียงเครื่องที่มียอดพิมพ์แล้วขึ้นก่อน เพราะเครื่อง
+// ที่มีคนกรอกยอดให้อยู่คือเครื่องที่กำลังกระทบตัวเลขค่าใช้จ่ายจริง ณ ตอนนี้
+exports.getInstallationReview = async (req, res) => {
+  const [rows] = await db.query(
+    `SELECT
+       d.id,
+       d.serial_number,
+       d.model,
+       d.status,
+       d.installation_status,
+       d.service_unverified_before,
+       br.name AS brand_name,
+       b.name AS building_name,
+       dept.name AS department_name,
+       COUNT(pt.id) AS reading_count,
+       MIN(pt.month) AS first_month,
+       MAX(pt.month) AS last_month
+     FROM devices d
+     LEFT JOIN brand br ON d.brand_id = br.id
+     LEFT JOIN building b ON d.building_id = b.id
+     LEFT JOIN department dept ON d.department_id = dept.id
+     LEFT JOIN print_transactions pt ON pt.device_id = d.id
+     WHERE d.installation_status IS NULL
+     GROUP BY d.id
+     ORDER BY reading_count DESC, d.serial_number`
+  );
+
+  cache.operationalData(res);
+  res.json({ pending: rows.length, devices: rows });
+};
+
+// ============================================================
+// PUT /api/devices/:id/installation — บันทึกผลการตรวจยืนยัน
+// ============================================================
+exports.reviewInstallation = async (req, res) => {
+  const { installation_status, effective_from, history_known, note } = req.body;
+
+  await db.withTransaction(async (conn) => {
+    const [[device]] = await conn.query("SELECT id, status FROM devices WHERE id = ?", [req.params.id]);
+    if (!device) throw notFound("ไม่พบเครื่องที่ต้องการตรวจยืนยัน");
+
+    await servicePeriod.recordInstallationReview(conn, device.id, {
+      installationStatus: installation_status,
+      effectiveFrom: effective_from || servicePeriod.today(),
+      historyKnown: history_known,
+      deviceStatus: device.status,
+      userId: req.user?.id ?? null,
+      note,
+    });
+  });
+
+  res.json({ message: "บันทึกผลการตรวจยืนยันแล้ว" });
 };
 
 // ============================================================
@@ -604,4 +765,5 @@ exports.validators = {
   create: validate({ body: deviceBody }),
   update: validate({ params: idParam, body: updateBody }),
   move: validate({ params: idParam, body: moveBody }),
+  installation: validate({ params: idParam, body: installationBody }),
 };

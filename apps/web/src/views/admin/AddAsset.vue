@@ -54,7 +54,7 @@ async function save(goBack) {
 <template>
   <div>
     <UiPageHeader
-      :eyebrow="t(&quot;ผู้ดูแลระบบ · อุปกรณ์&quot;)"
+      :eyebrow="t(&quot;ตั้งค่าระบบ&quot;)"
       :title="t(&quot;เพิ่มเครื่องเข้าทะเบียน&quot;)"
       :description="t(&quot;กรอกทีละเครื่องสำหรับของที่เพิ่งรับเข้ามา หรือนำเข้าทั้งล็อตจากไฟล์ที่มีอยู่แล้ว&quot;)"
     >

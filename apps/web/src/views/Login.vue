@@ -174,7 +174,7 @@ async function login() {
   min-height: 100dvh;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  /* Same base surface and theme-aware artwork as DashboardHero. */
+  /* Same base surface and theme-aware artwork the dashboard banner used before it was removed. */
   background: var(--surface);
   color: var(--ink);
 }

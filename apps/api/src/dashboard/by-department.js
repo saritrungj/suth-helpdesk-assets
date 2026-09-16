@@ -159,6 +159,10 @@ router.get(
           // SQL คืน DECIMAL เป็น string ที่เป๊ะอยู่แล้ว แปลงเป็นจำนวนเต็มสตางค์ทันที
           // เพื่อให้ทุกการบวกต่อจากนี้เป็นจำนวนเต็ม ไม่ใช่ float (ดู money.cjs)
           total_cost_satang: toSatang(row.total_cost),
+          // NULL = หาราคาที่มีผลกับเดือนนี้ไม่ได้ ซึ่ง toSatang แปลงเป็น 0 ไปแล้ว
+          // บรรทัดบน — เก็บข้อเท็จจริงนั้นไว้ต่างหาก ไม่งั้นมันหายไปตลอดทางที่เหลือ
+          // และยอดที่ไม่ครบจะถูกนำเสนอเป็นยอดจริง (ADR-0019 Q27)
+          unpriced: row.total_cost === null ? 1 : 0,
         });
       }
     }
@@ -167,6 +171,7 @@ router.get(
       device.total_pages = device.monthly.reduce((sum, row) => sum + Number(row.net_pages || 0), 0);
       device.total_cost_satang = sumSatang(device.monthly.map((row) => row.total_cost_satang));
       device.total_cost = fromSatang(device.total_cost_satang);
+      device.unpriced_readings = device.monthly.reduce((sum, row) => sum + row.unpriced, 0);
       device.moved_during_period = (departmentsPerDevice.get(device.id) || 1) > 1;
 
       if (currentMonths.length) {
@@ -200,6 +205,7 @@ router.get(
       department.total_pages = department.devices.reduce((sum, d) => sum + d.total_pages, 0);
       department.total_cost_satang = sumSatang(department.devices.map((d) => d.total_cost_satang));
       department.total_cost = fromSatang(department.total_cost_satang);
+      department.unpriced_readings = department.devices.reduce((sum, d) => sum + d.unpriced_readings, 0);
 
       if (!currentMonths.length) continue;
 
@@ -251,11 +257,18 @@ router.get(
       division.total_pages = division.departments.reduce((sum, d) => sum + d.total_pages, 0);
       division.total_cost_satang = sumSatang(division.departments.map((d) => d.total_cost_satang));
       division.total_cost = fromSatang(division.total_cost_satang);
+      division.unpriced_readings = division.departments.reduce((sum, d) => sum + d.unpriced_readings, 0);
       division.device_count = division.departments.reduce((sum, d) => sum + d.device_count, 0);
       division.departments.sort((a, b) => b.total_cost - a.total_cost);
     }
 
     divisionList.sort((a, b) => b.total_cost - a.total_cost);
+
+    // การเรียงลำดับข้างบนยังทำอยู่แม้ราคาไม่ครบ เพราะหน้าจอต้องเรียงแถวด้วย
+    // ลำดับใดลำดับหนึ่งเสมอ แต่ Q30 ห้าม**นำเสนอ**ว่านี่คืออันดับค่าใช้จ่ายจนกว่า
+    // ราคาจะครบ — จำนวนนี้คือสิ่งที่หน้าเว็บใช้ตัดสินว่าพูดคำว่า "อันดับ" ได้หรือยัง
+    const unpricedReadings = divisionList.reduce((sum, d) => sum + d.unpriced_readings, 0)
+      + unassignedDevices.reduce((sum, d) => sum + d.unpriced_readings, 0);
 
     cache.operationalData(res);
     res.json({
@@ -266,6 +279,7 @@ router.get(
       fiscal_year_id: fiscal_year_id ?? null,
       divisions: divisionList,
       unassignedDevices,
+      unpriced_readings: unpricedReadings,
     });
   })
 );

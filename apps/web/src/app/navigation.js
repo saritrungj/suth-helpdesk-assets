@@ -5,6 +5,8 @@ import {
   CalendarRange,
   ChartColumnBig,
   CirclePlus,
+  ClipboardCheck,
+  BadgeCheck,
   FolderTree,
   Gauge,
   Layers,
@@ -124,7 +126,7 @@ export const ADMIN_GROUPS = [
         to: "/admin/contracts",
         label: t("สัญญา"),
         icon: ReceiptText,
-        keywords: t("contract สัญญา ราคาต่อแผ่น"),
+        keywords: t("contract สัญญา ราคาต่อหน้า"),
         admin: true,
       },
       {
@@ -193,6 +195,22 @@ export const HIDDEN_NAV_ITEMS = [
     label: t("เพิ่มทรัพย์สิน"),
     icon: CirclePlus,
     keywords: t("add new เพิ่ม สร้าง import นำเข้า เครื่องใหม่"),
+    admin: true,
+  },
+  // งานที่ทำครั้งเดียวแล้วจบ — พอตรวจครบทุกเครื่องหน้านี้จะว่างเปล่าตลอดไป
+  // จึงไม่ควรกินที่ถาวรในเมนู คนเข้าถึงได้จากคำเตือนบนแดชบอร์ดและ Ctrl+K
+  {
+    to: "/admin/installation-review",
+    label: t("ตรวจยืนยันการติดตั้ง"),
+    icon: ClipboardCheck,
+    keywords: t("installation review ตรวจ ยืนยัน ติดตั้ง สถานะ ความครบถ้วน"),
+    admin: true,
+  },
+  {
+    to: "/admin/contract-prices",
+    label: t("ยืนยันช่วงที่สัญญามีผล"),
+    icon: BadgeCheck,
+    keywords: t("contract price review ยืนยัน ราคา สัญญา ช่วงที่มีผล"),
     admin: true,
   },
 ];

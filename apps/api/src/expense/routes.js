@@ -21,11 +21,15 @@
 //
 // ## เรื่องเงิน
 //
-// ทุกยอดคิดเป็นจำนวนเต็มสตางค์ใน JS ไม่คิดใน SQL (ดู packages/domain/money.cjs)
-// ราคาที่ใช้จริงคือ COALESCE(device.price_override, contract.price_per_page, 0)
-// ให้ตรงกับ v_monthly_kpi ใน schema.sql — เดิมโค้ดตรงนี้อิงแค่ราคาของสัญญา ทำให้
-// สัญญาที่ไม่ได้กรอกราคาต่อแผ่นแสดงค่าใช้จ่ายเป็น 0.00 ทั้งหน้า ทั้งที่หลายเครื่อง
-// มีราคาเฉพาะเครื่องของตัวเองอยู่แล้ว
+// ไฟล์นี้ไม่คำนวณค่าใช้จ่ายเองอีกแล้ว — อ่านยอดที่ `v_monthly_kpi` คิดไว้ต่อหนึ่ง
+// เครื่องหนึ่งเดือน แล้วบวกกันในหน่วยสตางค์ที่เป็นจำนวนเต็ม
+//
+// เดิมหน้านี้หาราคาเองจากค่าปัจจุบันของเครื่องและสัญญา ซึ่งเป็นเส้นทางคำนวณเงิน
+// เส้นที่สองของระบบ พอราคาผูกกับช่วงเวลาที่มีผลจริง (ADR-0019) เส้นทางนั้นจะตอบ
+// คนละคำตอบกับแดชบอร์ดทันที เพราะใช้ราคา ณ ปัจจุบันกับทุกเดือนย้อนหลัง
+//
+// ยอดที่เป็น `null` แปลว่า "ยังยืนยันราคาไม่ได้" ไม่ใช่ศูนย์บาท — ทุกยอดรวมจึงมา
+// พร้อม `unpriced_readings` เสมอ (ADR-0019 Q27)
 
 const express = require("express");
 const { z } = require("zod");
@@ -38,27 +42,46 @@ const { validate, monthListQuery } = require("../shared/validate");
 const { notFound } = require("../shared/http-error");
 const cache = require("../shared/cache");
 const { effectiveLocationJoin } = require("../shared/effective-location-sql");
-const { costSatangAt, effectivePriceSatang, fromSatang, sumSatang } = require("@suth/domain");
+const { toSatang, fromSatang, sumSatang } = require("@suth/domain");
 
 router.use(requireAuth);
 
 /**
  * รวมยอดพิมพ์รายเดือนของเครื่องหนึ่งให้เป็นก้อนพร้อมค่าใช้จ่าย
  *
- * @param {{ month: string, pages: number }[]} transactions
- * @param {number} priceSatang ราคาต่อแผ่นในหน่วยสตางค์
+ * ## ค่าใช้จ่ายมาจาก v_monthly_kpi ไม่ได้คำนวณซ้ำที่นี่
+ *
+ * เดิมไฟล์นี้หาราคาเองด้วย `effectivePriceSatang(price_override, contract_price)`
+ * จากค่าปัจจุบัน แล้วคูณเอง ซึ่งเป็นการคำนวณเงินเส้นทางที่สองของระบบ พอราคาเปลี่ยน
+ * มาผูกกับช่วงเวลาที่มีผลจริง (ADR-0019) เส้นทางนี้จะตอบคนละคำตอบกับแดชบอร์ดทันที
+ * เพราะมันยังใช้ราคา ณ ปัจจุบันกับทุกเดือน
+ *
+ * ตอนนี้อ่านยอดที่ view คำนวณไว้แล้วมาบวกกัน — จุดปัดเศษและกฎการหาราคาจึงมีชุดเดียว
+ *
+ * `cost` เป็น `null` แปลว่า "ยังยืนยันราคาไม่ได้" ไม่ใช่ศูนย์บาท และไม่ถูกนับรวม
+ * ในยอดรวม ผู้เรียกต้องแสดง `unpriced_readings` ควบคู่เสมอ (Q27)
+ *
+ * @param {{ month: string, pages: number, total_cost: string|null }[]} transactions
  */
-function summarise(transactions, priceSatang) {
+function summarise(transactions) {
   const monthly = transactions.map((row) => {
-    const satang = costSatangAt(row.pages, priceSatang);
-    return { ...row, month: row.month, pages: row.pages, cost_satang: satang, cost: fromSatang(satang) };
+    const satang = row.total_cost === null || row.total_cost === undefined ? null : toSatang(row.total_cost);
+    return { ...row, cost_satang: satang, cost: satang === null ? null : fromSatang(satang) };
   });
 
-  const total_cost_satang = sumSatang(monthly.map((m) => m.cost_satang));
+  const priced = monthly.filter((m) => m.cost_satang !== null);
+  const total_cost_satang = sumSatang(priced.map((m) => m.cost_satang));
+
+  // ราคาที่ใช้จริงในช่วงนี้ — มีได้หลายราคาถ้าสัญญาเปลี่ยนกลางปีงบ ส่งไปทั้งชุดเพื่อ
+  // ไม่ให้หน้าเว็บต้องเดาว่าตัวไหนคือ "ราคาของเครื่องนี้"
+  const prices = [...new Set(priced.map((m) => String(m.price_per_page)).filter(Boolean))];
 
   return {
     monthly,
     total_pages: monthly.reduce((sum, m) => sum + Number(m.pages || 0), 0),
+    unpriced_readings: monthly.length - priced.length,
+    effective_prices: prices,
+    effective_price: prices.length === 1 ? Number(prices[0]) : null,
     total_cost_satang,
     total_cost: fromSatang(total_cost_satang),
   };
@@ -77,32 +100,43 @@ async function readingsByDevice(deviceIds, startMonth, endMonth, monthsFilter) {
   if (!deviceIds.length) return new Map();
 
   const params = [deviceIds, startMonth, endMonth];
+
+  // อ่านค่าใช้จ่ายจาก v_monthly_kpi ไม่คำนวณเอง — ราคาที่มีผลของแต่ละเดือนและ
+  // จุดปัดเศษอยู่ในนั้นที่เดียว (ดูหมายเหตุที่ summarise)
   let sql = `
-    SELECT pt.device_id, pt.month, pt.pages,
+    SELECT v.device_id, v.month, v.pages_printed AS pages, v.price_per_page, v.total_cost,
       eb.name AS building_name, ef.name AS floor_name,
       CASE WHEN h.id IS NOT NULL THEN h.location ELSE d.location END AS location
-    FROM print_transactions pt
-    JOIN devices d ON d.id = pt.device_id
-    ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "pt.month", historyAlias: "h" })}
+    FROM v_monthly_kpi v
+    JOIN devices d ON d.id = v.device_id
+    ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
     LEFT JOIN building eb ON eb.id = CASE WHEN h.id IS NOT NULL THEN h.building_id ELSE d.building_id END
     LEFT JOIN floor ef ON ef.id = CASE WHEN h.id IS NOT NULL THEN h.floor_id ELSE d.floor_id END
-    WHERE pt.device_id IN (?) AND pt.month BETWEEN ? AND ?
+    WHERE v.device_id IN (?) AND v.month BETWEEN ? AND ?
   `;
 
   // ตัวกรองเดือนซ้อนอยู่ใน "ช่วงปีงบ" อีกชั้นเสมอ — เผื่อผู้ใช้ส่งเดือนนอกปีงบมา
   // ยอดของปีอื่นจะได้ไม่หลุดเข้ามาปนในหน้าที่พาดหัวว่าเป็นปีงบนี้
   if (monthsFilter.length) {
-    sql += " AND pt.month IN (?)";
+    sql += " AND v.month IN (?)";
     params.push(monthsFilter);
   }
 
-  sql += " ORDER BY pt.month";
+  sql += " ORDER BY v.month";
 
   const [rows] = await db.query(sql, params);
 
   const grouped = new Map(deviceIds.map((id) => [id, []]));
   for (const row of rows) {
-    grouped.get(row.device_id)?.push({ month: row.month, pages: row.pages, building_name: row.building_name, floor_name: row.floor_name, location: row.location });
+    grouped.get(row.device_id)?.push({
+      month: row.month,
+      pages: row.pages,
+      price_per_page: row.price_per_page,
+      total_cost: row.total_cost,
+      building_name: row.building_name,
+      floor_name: row.floor_name,
+      location: row.location,
+    });
   }
 
   return grouped;
@@ -114,7 +148,7 @@ async function readingsByDevice(deviceIds, startMonth, endMonth, monthsFilter) {
 // เครื่องที่ยังไม่ได้ผูกกับสัญญาใดๆ — ต้องประกาศก่อน "/:fiscal_year_id" ไม่งั้น
 // Express จะจับ "unassigned-devices" เป็นค่าของพารามิเตอร์แทน
 //
-// กลุ่มนี้สำคัญกว่าที่เห็น: เครื่องที่ไม่มีสัญญาและไม่มีราคาเฉพาะเครื่อง จะคิด
+// กลุ่มนี้สำคัญกว่าที่เห็น: เครื่องที่ไม่มีสัญญาและไม่มีราคาพิเศษเฉพาะเครื่อง จะคิด
 // ค่าใช้จ่ายได้ 0 บาทเสมอ — ยอดพิมพ์ของมันหายไปจากงบโดยไม่มีใครรู้ หน้าเว็บจึง
 // ต้องเห็นกลุ่มนี้แยกออกมาชัดๆ ไม่ใช่ซ่อนไว้
 // ============================================================
@@ -135,7 +169,8 @@ router.get(
     const readings = devices.length
       ? await (async () => {
           const [rows] = await db.query(
-            "SELECT device_id, month, pages FROM print_transactions WHERE device_id IN (?) ORDER BY month",
+            `SELECT device_id, month, pages_printed AS pages, price_per_page, total_cost
+             FROM v_monthly_kpi WHERE device_id IN (?) ORDER BY month`,
             [devices.map((d) => d.id)]
           );
           const grouped = new Map(devices.map((d) => [d.id, []]));
@@ -145,15 +180,18 @@ router.get(
       : new Map();
 
     for (const device of devices) {
-      // ไม่มีสัญญา จึงมีได้แค่ราคาเฉพาะเครื่อง
-      const priceSatang = effectivePriceSatang(device.price_override, null);
-      Object.assign(device, summarise(readings.get(device.id) ?? [], priceSatang));
+      Object.assign(device, summarise(readings.get(device.id) ?? []));
     }
 
     const total_cost_satang = sumSatang(devices.map((d) => d.total_cost_satang));
 
     cache.operationalData(res);
-    res.json({ devices, total_cost_satang, total_cost: fromSatang(total_cost_satang) });
+    res.json({
+      devices,
+      total_cost_satang,
+      total_cost: fromSatang(total_cost_satang),
+      unpriced_readings: devices.reduce((sum, d) => sum + d.unpriced_readings, 0),
+    });
   })
 );
 
@@ -226,8 +264,6 @@ router.get(
       // แถวของสัญญาที่ไม่มีเครื่อง (จาก LEFT JOIN) — มีสัญญาแล้วแต่ไม่มีเครื่องให้เพิ่ม
       if (!row.device_id) continue;
 
-      const priceSatang = effectivePriceSatang(row.price_override, row.price_per_page);
-
       contracts.get(row.contract_id).devices.push({
         id: row.device_id,
         serial_number: row.serial_number,
@@ -235,11 +271,10 @@ router.get(
         status: row.status,
         brand_name: row.brand_name,
         price_override: row.price_override,
-        // ราคาที่ใช้จริงหลังพิจารณาราคาเฉพาะเครื่องแล้ว — ส่งออกไปด้วยเพื่อให้หน้าเว็บ
-        // อธิบายได้ว่าเครื่องนี้คิดที่ราคาเท่าไหร่ โดยไม่ต้องคำนวณกฎ COALESCE ซ้ำเอง
-        effective_price: fromSatang(priceSatang),
         price_source: row.price_override != null ? "device_override" : "contract",
-        ...summarise(readings.get(row.device_id) ?? [], priceSatang),
+        // effective_price / effective_prices มาจาก summarise ซึ่งอ่านราคาที่มีผลจริง
+        // ของแต่ละเดือน — เครื่องที่ย้ายสัญญากลางปีจะมีมากกว่าหนึ่งราคา
+        ...summarise(readings.get(row.device_id) ?? []),
       });
     }
 
@@ -252,6 +287,9 @@ router.get(
         total_pages: contract.devices.reduce((sum, d) => sum + d.total_pages, 0),
         total_cost_satang,
         total_cost: fromSatang(total_cost_satang),
+        // ยอดของสัญญาฉบับนี้ครบหรือยัง — ต้องเดินทางมาพร้อมยอดเสมอ ไม่ใช่ให้ผู้เรียก
+        // ไปไล่บวกจาก devices[] เอง ซึ่งแต่ละที่จะบวกครอบคลุมไม่เท่ากัน (Q27)
+        unpriced_readings: contract.devices.reduce((sum, d) => sum + d.unpriced_readings, 0),
       };
     });
 
@@ -270,7 +308,8 @@ router.get(
     // เดียวกับกลุ่ม "เครื่องที่ยังไม่ผูกสัญญา" ข้างบน — ยอดที่หลุดจากงบต้องเห็น
     // ไม่ใช่ซ่อนไว้
     //
-    // การผูกราคากับช่วงเวลาที่มีผลจริงเป็นขอบเขตของ ADR-0019 ซึ่งยังรอ schema
+    // ตอนนี้ราคาผูกกับช่วงที่มีผลจริงแล้ว (ADR-0019) การย้ายเครื่องกลุ่มนี้ไปสัญญา
+    // ของปีงบปัจจุบันจึงทำได้โดยไม่กระทบยอดเดือนเก่า ถ้าระบุวันที่มีผลตอนย้าย
     const [outsideRows] = await db.query(
       `
       SELECT
@@ -303,18 +342,14 @@ router.get(
       monthsFilter
     );
 
-    const outsideDevices = outsideRows.map((row) => {
-      const priceSatang = effectivePriceSatang(row.price_override, row.price_per_page);
-      return {
-        id: row.device_id,
-        serial_number: row.serial_number,
-        model: row.model,
-        contract_no: row.contract_no,
-        contract_fiscal_year: row.contract_fiscal_year,
-        effective_price: fromSatang(priceSatang),
-        ...summarise(outsideReadings.get(row.device_id) ?? [], priceSatang),
-      };
-    });
+    const outsideDevices = outsideRows.map((row) => ({
+      id: row.device_id,
+      serial_number: row.serial_number,
+      model: row.model,
+      contract_no: row.contract_no,
+      contract_fiscal_year: row.contract_fiscal_year,
+      ...summarise(outsideReadings.get(row.device_id) ?? []),
+    }));
 
     const outside_total_satang = sumSatang(outsideDevices.map((d) => d.total_cost_satang));
 
@@ -329,10 +364,16 @@ router.get(
       // ตัวเลขบาทแบบทศนิยม ซึ่งคลาดเคลื่อนได้เมื่อรวมกันหลายร้อยรายการ
       total_cost_satang: grand_total_satang,
       total_cost: fromSatang(grand_total_satang),
+      // จำนวนรายการที่ยังยืนยันราคาไม่ได้ทั้งหน้า — รวมทั้งกลุ่มนอกปีงบด้านล่าง
+      // ซึ่งฝั่งเว็บเคยไล่บวกเองจาก contracts[].devices[] แล้วตกกลุ่มนี้ไปทั้งก้อน
+      unpriced_readings:
+        contractList.reduce((sum, c) => sum + c.unpriced_readings, 0)
+        + outsideDevices.reduce((sum, d) => sum + d.unpriced_readings, 0),
       // เครื่องที่พิมพ์ในปีงบนี้แต่สัญญาอยู่คนละปีงบ — ไม่ถูกนับใน total ด้านบน
       outside_year_devices: outsideDevices,
       outside_year_total_satang: outside_total_satang,
       outside_year_total: fromSatang(outside_total_satang),
+      outside_year_unpriced_readings: outsideDevices.reduce((sum, d) => sum + d.unpriced_readings, 0),
     });
   })
 );

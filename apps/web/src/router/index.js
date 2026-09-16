@@ -106,6 +106,22 @@ const routes = [
   { path: "/admin/add-asset", name: "AddAsset", component: () => import("../views/admin/AddAsset.vue") },
   { path: "/admin/users", name: "Users", component: () => import("../views/admin/Users.vue") },
 
+  // ตรวจยืนยันสถานะการติดตั้งของเครื่องเดิม (ADR-0018) — ไม่มีรายการในเมนูถาวร
+  // เพราะเป็นงานที่ทำครั้งเดียวแล้วจบ เข้าจากคำเตือนบนแดชบอร์ดหรือ Ctrl+K
+  {
+    path: "/admin/installation-review",
+    name: "InstallationReview",
+    component: () => import("../views/admin/InstallationReview.vue"),
+  },
+
+  // ยืนยันช่วงที่สัญญาและราคามีผล (ADR-0019) — งานคู่กับหน้าตรวจยืนยันการติดตั้ง
+  // ด้านบน ทั้งคู่เป็นงานที่ทำครั้งเดียวแล้วจบ จึงไม่มีรายการในเมนูถาวร
+  {
+    path: "/admin/contract-prices",
+    name: "ContractPriceReview",
+    component: () => import("../views/admin/ContractPriceReview.vue"),
+  },
+
   // การนำเข้าไฟล์กลายเป็นแท็บในหน้าเพิ่มทรัพย์สินแล้ว — เก็บ path เดิมไว้ redirect
   {
     path: "/admin/import-devices",

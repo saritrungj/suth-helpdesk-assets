@@ -27,6 +27,20 @@
 
 ## 1. Layout และการจัดลำดับสายตา
 
+### Dashboard — ปรับใหม่ 15 กันยายน 2026
+
+เจ้าของระบบไม่รับงาน Dashboard รุ่นการ์ด KPI สี่ใบ จึงเปิดดูต้นฉบับจริงใหม่ก่อนปรับโครงหน้า สี และข้อความ รอบนี้ยังรอเจ้าของระบบตรวจรับหน้าตา ผลทดสอบทางเทคนิคไม่ถือเป็นการรับรองงานออกแบบ
+
+| ต้นฉบับที่ตรวจ | สิ่งที่นำมาใช้ | จุดใช้จริง |
+|---|---|---|
+| [Plausible live dashboard](https://plausible.io/plausible.io) | ตัวเลขและกราฟเป็นพื้นที่ต่อเนื่องกัน; รายการอันดับใช้แถบสีอ่อนรองหลังข้อมูล | `Dashboard.vue`, `UiMetric.vue`, `UiRankList.vue` |
+| [Linear Insights](https://linear.app/insights) — ภาพ Dashboard บนหน้า product | แผงข้อมูลมีขอบบาง ขนาดตามเนื้อหา และใช้ชื่อ metric ตรงๆ | `Dashboard.vue`, `design/report.css`; แยกแผนก เครื่อง และสัญญาออกจากแท็บ |
+| [Stripe Dashboard documentation](https://docs.stripe.com/dashboard/basics) | ใช้ภาพรวมเป็นจุดเริ่มต้นก่อนเปิดรายงานและข้อมูลรายการ | รักษาแผงรายละเอียดรายเครื่อง/สัญญาและการส่งออกใน `Dashboard.vue`; แหล่งนี้ใช้อ้างพฤติกรรม ไม่ได้ใช้เป็นหลักฐานภาพหน้าจอ |
+
+สีของ Dashboard รอบนี้เป็น neutral/indigo ที่กำหนดผ่าน semantic tokens ใน `tokens.css` ใช้เฉพาะ `.report-workspace` บนเส้นทาง Dashboard; กฎสีแบรนด์ของหน้าธุรกิจอื่นยังอยู่ตามเดิม ภาพอ้างอิงภายนอกเก็บใน `output/playwright/reference-*.png` เพื่อเทียบงานบนเครื่อง ไม่ได้บรรจุเป็น asset ของผลิตภัณฑ์
+
+หัวข้อด้านล่างเป็นที่มาขององค์ประกอบเดิมและหน้าธุรกิจอื่น ไม่ใช่คำอธิบาย layout ล่าสุดของ Dashboard
+
 | แหล่ง | ที่มา | เอามาใช้ที่ |
 |---|---|---|
 | [Linear — Design Refresh](https://linear.app/now/behind-the-latest-design-refresh) | บทความจากทีมออกแบบผลิตภัณฑ์จริง | `app/AppSidebar.vue` — แถบเมนูเป็นพื้นหลังของงาน, แบ่งหมวดตามจังหวะใช้งาน, active มีทั้งแผ่นพื้น/ขีด/`aria-current` และย่อเป็น rail ได้ |
@@ -166,3 +180,13 @@ mockup ที่ผู้ใช้เห็นชอบแล้วใน #51 �
 | [Primer — DataTable](https://primer.style/product/components/data-table/guidelines/), [PageHeader](https://primer.style/product/components/page-header/guidelines/) | ชื่อหน้าเป็นชื่อตาราง; ตัวเลขชิดขวา tabular; ตัดข้อความเป็นทางเลือกสุดท้าย | หัวหน้าแถวเดียวพร้อม slot `badge` ใน `ui/UiPageHeader.vue` ใช้ใน `views/AssetList.vue`, `views/PrintTransactions.vue`, `views/UsageReport.vue`; ตัดข้อความที่ 2 บรรทัด (ไม่ใช่บรรทัดเดียว) เฉพาะฝ่าย/แผนก/ตำแหน่งใน `views/AssetList.vue` |
 | [NN/g — Applying filters](https://www.nngroup.com/articles/applying-filters/) | ตัวกรองที่ใช้อยู่ต้องเห็นชัด ไม่เลื่อนหน้ากลับบนสุดระหว่างกรอง | ป้ายตัวกรองโทน brand ใน `ui/UiFilterBar.vue`; ค้นหา ตัวกรอง และเครื่องมือตารางอยู่แถวเดียวกันด้วย `tools-target` ของ `ui/UiDataTable.vue` |
 | [GOV.UK — Table](https://design-system.service.gov.uk/components/table/) | caption และ `scope` ทุกตาราง | prop `caption` (เป็น `<caption>` และหัวเรื่องตอนขยาย) กับ `scope="col"` ใน `ui/UiDataTable.vue`; ทุกจุดที่เรียกใช้ส่ง caption แล้ว |
+
+
+### Dashboard — Executive premium (16 กันยายน 2026)
+
+รอบล่าสุดปรับเป็นแถบสรุปพื้นเดียวกับการ์ดอื่นในธีม กราฟกว้าง การกดเจาะรายละเอียด และการส่งออกภาพสรุปตามที่ผู้ใช้เลือก ดูเหตุผล ขอบเขตข้อมูล และแหล่งอ้างอิงที่ [Dashboard สำหรับผู้บริหาร](executive-dashboard.md) การยอมรับหน้าตาจากผู้ใช้ยังเปิดอยู่
+
+
+### Dashboard — ใช้รูปแบบเดียวกับหน้าอื่น (16 กันยายน 2026)
+
+ตามคำแก้ไขล่าสุดของผู้ใช้ ใช้หน้าทะเบียนและหน้าค่าใช้จ่ายในระบบเป็นต้นแบบของโครงหน้า: ใช้ `UiPageHeader`, `UiCard`, `UiStat` และ semantic token กลาง เลิกติด `report-workspace` ที่ MainLayout เพื่อให้ขอบ มุมโค้ง เงา สี Sidebar และพื้นที่เนื้อหาเหมือนหน้าอื่น ความสามารถกดเจาะข้อมูลและส่งออกคงเดิม

@@ -37,6 +37,23 @@ const DEVICE_STATUS_LABELS = {
   retired: { label: "ปลดระวาง", tone: "neutral" },
 };
 
+/**
+ * สถานะการติดตั้ง — ตรงกับ ENUM ในคอลัมน์ devices.installation_status (ADR-0018)
+ *
+ * ⚠️ ไม่มีค่าที่แปลว่า "ยังไม่ตรวจยืนยัน" อยู่ในรายการนี้โดยตั้งใจ ค่านั้นคือ NULL
+ * ในฐานข้อมูล เพราะมันไม่ใช่คำตอบอีกข้อหนึ่ง แต่คือ "ยังไม่มีคำตอบ" การเติมมันเข้า
+ * ไปเป็นตัวเลือกที่สามจะทำให้มีคนเลือกมันตอนบันทึกเครื่องใหม่ ซึ่ง Q18 ห้ามไว้ —
+ * ผู้กรอกต้องตอบว่าติดตั้งแล้วหรือยัง ไม่ใช่เลี่ยงไปตอบว่าไม่รู้
+ */
+const INSTALLATION_STATUSES = ["installed", "not_installed"];
+
+/** ชื่อภาษาไทยของสถานะการติดตั้ง รวมกรณี NULL ที่แปลว่ายังไม่มีใครตรวจ */
+const INSTALLATION_STATUS_LABELS = {
+  installed: { label: "ติดตั้งแล้ว", tone: "ok" },
+  not_installed: { label: "ยังไม่ได้ติดตั้ง", tone: "neutral" },
+  unreviewed: { label: "ยังไม่ตรวจยืนยัน", tone: "warn" },
+};
+
 /** ความยาวรหัสผ่านขั้นต่ำ — bcrypt รับได้สูงสุด 72 ไบต์ จึงตั้งเพดานไว้ที่นั่น */
 const PASSWORD_MIN_LENGTH = 6;
 const PASSWORD_MAX_LENGTH = 72;
@@ -75,6 +92,8 @@ module.exports = {
   USER_ROLE_LABELS,
   DEVICE_STATUSES,
   DEVICE_STATUS_LABELS,
+  INSTALLATION_STATUSES,
+  INSTALLATION_STATUS_LABELS,
   PASSWORD_MIN_LENGTH,
   PASSWORD_MAX_LENGTH,
   MAX_LENGTH,

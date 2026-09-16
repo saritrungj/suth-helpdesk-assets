@@ -27,7 +27,13 @@ const requireStaff = require("../auth/require-staff");
 const { validate, monthString, blankToNull } = require("../shared/validate");
 const { notFound } = require("../shared/http-error");
 const cache = require("../shared/cache");
-const { MAX_PAGES_PER_MONTH, fiscalYearMonths } = require("@suth/domain");
+const { readCoverageScope } = require("../shared/coverage-scope");
+const {
+  MAX_PAGES_PER_MONTH,
+  fiscalYearMonths,
+  computeCoverage,
+  currentMonth,
+} = require("@suth/domain");
 
 router.use(requireAuth);
 
@@ -81,6 +87,18 @@ const pagesField = z
 
 const fiscalYearIdQuery = z.object({
   fiscal_year_id: z.coerce.number({ error: "กรุณาระบุปีงบประมาณ" }).int().positive("กรุณาระบุปีงบประมาณ"),
+});
+
+/**
+ * ความครบถ้วนรับตัวกรองชุดเดียวกับแดชบอร์ด
+ *
+ * เดิมเส้นนี้นับทั้งระบบเสมอ ไม่รับตัวกรองเลย ส่วนแดชบอร์ดนับตามตัวกรองที่เลือก
+ * ผู้ใช้ที่เลือกอาคารแล้วเปิดสองหน้าจึงเห็น "ความครบถ้วน" คนละตัวเลขบนข้อมูล
+ * ชุดเดียวกัน โดยไม่มีอะไรบอกว่าทำไม
+ */
+const coverageQuery = fiscalYearIdQuery.extend({
+  building_name: z.string().trim().max(255).optional(),
+  contract_id: z.coerce.number().int().positive().optional(),
 });
 
 /**
@@ -182,66 +200,85 @@ router.get(
 // ============================================================
 router.get(
   "/coverage",
-  validate({ query: fiscalYearIdQuery }),
+  validate({ query: coverageQuery }),
   asyncHandler(async (req, res) => {
     const range = await fiscalYearRange(req.query.fiscal_year_id);
     const months = fiscalYearMonths({ startMonth: range.start_month, endMonth: range.end_month });
 
-    const [[{ total_devices }]] = await db.query(
-      "SELECT COUNT(*) AS total_devices FROM devices WHERE status = 'active'"
-    );
+    // ตัวเลขชุดเดียวกับที่แดชบอร์ดใช้ ผ่านฟังก์ชันเดียวกัน — ดู shared/coverage-scope.js
+    const scope = await readCoverageScope({
+      months,
+      startMonth: range.start_month,
+      endMonth: range.end_month,
+      buildingName: req.query.building_name,
+      contractId: req.query.contract_id,
+    });
 
-    const [rows] = await db.query(
-      `SELECT pt.month, COUNT(*) AS filled, SUM(pt.pages) AS total_pages
+    const thisMonth = currentMonth();
+    const { coverage, incompleteMonths } = computeCoverage({
+      fyMonths: months,
+      ...scope,
+      today: thisMonth,
+    });
+
+    // ยอดแผ่นรวมของแต่ละเดือนไม่ใช่ส่วนหนึ่งของความครบถ้วน แต่หน้าบันทึกยอดใช้แสดง
+    // ข้างช่องกรอก จึงดึงแยกมาต่อเข้ากับผลด้านบน
+    const [pageRows] = await db.query(
+      `SELECT pt.month, SUM(pt.pages) AS total_pages
        FROM print_transactions pt
-       JOIN devices d ON pt.device_id = d.id AND d.status = 'active'
        WHERE pt.month BETWEEN ? AND ?
        GROUP BY pt.month`,
       [range.start_month, range.end_month]
     );
-
-    const filledByMonth = new Map(rows.map((row) => [row.month, row]));
+    const pagesByMonth = new Map(pageRows.map((row) => [row.month, Number(row.total_pages)]));
 
     // คืนทุกเดือนของปีงบเสมอ รวมเดือนที่ยังไม่มีข้อมูลเลย — ฝั่งเว็บจะได้วาดตาราง
     // 12 ช่องได้โดยไม่ต้องเติมเดือนที่ขาดเอง (ซึ่งเคยทำให้เดือนที่ยังไม่กรอกหายไป
     // จากหน้าจอทั้งเดือน แทนที่จะขึ้นเป็นช่องว่างที่รอการกรอก)
-    const thisMonth = currentMonth();
-
-    const coverage = months.map((month) => {
-      const row = filledByMonth.get(month);
-      const filled = row ? Number(row.filled) : 0;
-
-      return {
-        month,
-        filled,
-        total: total_devices,
-        total_pages: row ? Number(row.total_pages) : 0,
-        complete: total_devices > 0 && filled >= total_devices,
-        // เดือนนี้และเดือนถัดไปยังอ่านมิเตอร์ปิดยอดไม่ได้ จึงไม่ใช่ "งานค้าง"
-        // แยกธงไว้ให้ทุกฝั่งที่ใช้ข้อมูลนี้ตัดสินใจเหมือนกัน — เดิมหน้าเว็บกับ
-        // แดชบอร์ดนับไม่ตรงกันเพราะต่างคนต่างตีความ
-        in_progress: month >= thisMonth,
-      };
-    });
+    const monthRows = coverage.months.map((entry) => ({
+      month: entry.month,
+      filled: entry.filled_devices,
+      total: entry.required_devices,
+      total_pages: pagesByMonth.get(entry.month) || 0,
+      complete: entry.status === "complete",
+      status: entry.status,
+      // เดือนนี้และเดือนถัดไปยังอ่านมิเตอร์ปิดยอดไม่ได้ จึงไม่ใช่ "งานค้าง"
+      // แยกธงไว้ให้ทุกฝั่งที่ใช้ข้อมูลนี้ตัดสินใจเหมือนกัน — เดิมหน้าเว็บกับ
+      // แดชบอร์ดนับไม่ตรงกันเพราะต่างคนต่างตีความ
+      in_progress: entry.month >= thisMonth,
+    }));
 
     cache.operationalData(res);
     res.json({
       fiscal_year_id: req.query.fiscal_year_id,
-      total_devices,
-      months: coverage,
+      // จำนวนเครื่องที่ต้องกรอกเปลี่ยนไปได้ในแต่ละเดือน ค่านี้คือของเดือนปัจจุบัน
+      // ไว้ให้หน้าที่ต้องการตัวเลขเดียว — ตัวเลขรายเดือนที่ถูกต้องอยู่ใน months[]
+      total_devices: coverage.months.find((m) => m.month === thisMonth)?.required_devices ?? 0,
+      months: monthRows,
+      coverage,
       // เดือนที่ควรไปทำต่อ — เดือนแรกที่ยังไม่ครบและจบไปแล้ว
-      // ใช้ `<` ไม่ใช่ `<=` เพราะเดือนปัจจุบันยังอ่านมิเตอร์ปิดยอดไม่ได้
-      next_incomplete_month:
-        coverage.find((entry) => !entry.complete && entry.month < currentMonth())?.month ?? null,
+      // ว่างเมื่อยังยืนยันไม่ได้ เพราะงานถัดไปตอนนั้นคือไปตรวจยืนยันเครื่อง ไม่ใช่กรอกยอด
+      next_incomplete_month: incompleteMonths[0] ?? null,
+
+      // เดือนที่หน้ากรอกยอดควรเปิดให้เป็นค่าเริ่มต้น
+      //
+      // ต่างจาก next_incomplete_month ตรงที่ตอบได้เสมอ ไม่ว่าจะมีงานค้างหรือไม่
+      // และไม่ว่าความครบถ้วนจะยืนยันได้หรือยัง — หน้าจอต้องเปิดเดือนใดเดือนหนึ่ง
+      // เสมอ ไม่มีสถานะ "ไม่เปิดเดือนไหนเลย"
+      //
+      // เคยคำนวณอยู่ฝั่งเว็บ ทั้งที่ในโค้ดตรงนั้นเขียนคอมเมนต์เตือนตัวเองไว้ว่า
+      // "ห้ามคำนวณซ้ำ ไม่งั้นสองที่จะตอบไม่ตรงกันสักวัน" — แล้ววันนั้นก็มาถึง
+      // ตอนที่เทสกับหน้าเว็บใช้กฎ fallback คนละแบบแล้วไปแก้ยอดคนละเดือนกัน
+      default_entry_month:
+        incompleteMonths[0] ??
+        // ไม่มีงานค้าง (หรือยังยืนยันไม่ได้) — เปิดเดือนล่าสุดที่จบแล้วไว้ให้แก้
+        // ย้อนหลัง เดือนปัจจุบันยังอ่านมิเตอร์ปิดยอดไม่ได้จึงไม่ใช่ค่าเริ่มต้นที่ดี
+        monthRows.filter((row) => !row.in_progress).at(-1)?.month ??
+        months.at(-1) ??
+        null,
     });
   })
 );
-
-/** เดือนปัจจุบันในรูปแบบ "YYYY-MM" (ค.ศ.) — ใช้ตัดเดือนอนาคตออกจาก "งานค้าง" */
-function currentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 
 // ============================================================
 // GET /api/print-transactions/summary?fiscal_year_id=ID

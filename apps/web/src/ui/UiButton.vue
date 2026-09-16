@@ -104,7 +104,7 @@ const isInert = computed(() => props.disabled || props.loading);
   <component
     :is="tag"
     :to="to || undefined"
-    :href="href || undefined"
+    v-bind="!to && href ? { href } : {}"
     :type="tag === 'button' ? type : undefined"
     :disabled="tag === 'button' ? isInert : undefined"
     :aria-disabled="tag !== 'button' && isInert ? 'true' : undefined"

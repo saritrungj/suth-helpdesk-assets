@@ -16,8 +16,9 @@ for (const language of ["th", "en"]) {
       if (response.url().includes("/api/") && response.status() >= 500) errors.push(`API ${response.status()}: ${response.url()}`);
     });
     await page.goto("/dashboard");
-    await expect(page.locator("h1")).toContainText(language === "en" ? "Printer and expense overview" : "ภาพรวมเครื่องพิมพ์");
-    await expect(page.getByText(language === "en" ? "Full-year entry completion" : "กรอกยอดพิมพ์ครบทั้งปีงบ")).toBeVisible();
+    await expect(page.locator("h1")).toContainText(language === "en" ? "Print overview" : "ภาพรวมการพิมพ์");
+    // ความครบถ้วนของปีงบยังมีให้ดูใต้กราฟหลัก และแปลตามภาษาที่เลือก
+    await expect(page.getByText(language === "en" ? "Complete months" : "เดือนที่บันทึกครบ")).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${language}.png`), fullPage: true });
     await page.goto("/compare");
     await expect(page.locator("h1")).toBeVisible();
@@ -53,9 +54,30 @@ test("overview exposes annual and overdue coverage separately", async () => {
   expect(overview.coverage.total_months).toBe(12);
   expect(overview.coverage.months).toHaveLength(12);
   expect(overview.coverage.annual_complete_months).toBeLessThanOrEqual(12);
-  if (overview.coverage.applicable) {
-    expect(overview.coverage.annual_complete_months + overview.coverage.incomplete_months + overview.coverage.not_due_months).toBe(12);
-  }
+
+  // ทั้งห้าสถานะต้องแบ่ง 12 เดือนออกจากกันพอดี ไม่ซ้อนและไม่เหลือ
+  //
+  // เดิมยืนยันแค่สามตัวแรกบวกกันได้ 12 ซึ่งจริงตอนที่ยังไม่มีสถานะ "ยืนยันไม่ได้"
+  // ถ้าปล่อยไว้แบบเดิม เดือนที่ยืนยันไม่ได้จะหายไปจากสมการเงียบๆ แล้วเทสจะแดงด้วย
+  // เหตุผลที่ไม่เกี่ยวกับสิ่งที่มันตั้งใจตรวจ — ดู ADR-0018
+  const { coverage } = overview;
+  expect(
+    coverage.annual_complete_months +
+      coverage.incomplete_months +
+      coverage.not_due_months +
+      coverage.indeterminate_months +
+      coverage.not_applicable_months
+  ).toBe(12);
+
+  // เดือนที่ยังมีเครื่องซึ่งไม่รู้ว่าต้องกรอกหรือไม่ ห้ามถูกประกาศว่า "ครบ" หรือ "ค้าง"
+  //
+  // เขียนเป็นกฎรายเดือน ไม่ใช่กฎรวมทั้งปี เพราะการยืนยันเป็นรายเครื่องและรายช่วง
+  // ผู้ดูแลที่ยืนยันย้อนหลังได้ถึงเดือนมกราคม ทำให้เดือนหลังจากนั้นสรุปได้ตามปกติ
+  // ขณะที่เดือนก่อนหน้ายังยืนยันไม่ได้ — ทั้งสองอย่างอยู่ในปีเดียวกันได้
+  const wronglyConcluded = coverage.months.filter(
+    (month) => month.unverified_devices > 0 && ["complete", "overdue"].includes(month.status)
+  );
+  expect(wronglyConcluded).toEqual([]);
 });
 
 test("report table uses the remaining viewport when expanded", async ({ page }) => {
@@ -116,20 +138,32 @@ test("fullscreen is limited to long data tables", async ({ page }) => {
   await expect(page.getByRole("button", { name: "ขยายตาราง", exact: true })).toBeHidden();
 });
 
-test("graph selection retains annual context and overdue links retain their scope", async ({ page }) => {
+test("graph selection retains the filter and follow-up links retain their scope", async ({ page }) => {
   await page.goto("/dashboard");
-  const trend = page.locator("section").filter({ has: page.getByRole("heading", { name: "ยอดพิมพ์รายเดือน", exact: true }) });
+  // หัวข้อการ์ดเปลี่ยนตามสถานะราคาโดยตั้งใจ — เป็น "ค่าใช้จ่ายที่ยืนยันแล้วรายเดือน"
+  // เมื่อยังมีรายการที่ยืนยันราคาไม่ได้ (ADR-0019 Q27) จับด้วยรูปแบบ ไม่ใช่ข้อความตรงตัว
+  // ไม่งั้นเทสจะแดงเพราะข้อมูลในฐานเปลี่ยนสถานะ ไม่ใช่เพราะพฤติกรรมที่มันตรวจพัง
+  const trend = page.locator("section").filter({ has: page.getByRole("heading", { name: /รายเดือน$/ }) });
   await trend.getByRole("radio", { name: "ตาราง", exact: true }).click();
   const months = trend.locator("tbody button");
-  await expect(months).toHaveCount(12);
-  await months.first().click();
-  await expect(page).toHaveURL(/months=\d{4}-10/);
-  await expect(months).toHaveCount(12);
-  await expect(months.first()).toHaveAttribute("aria-pressed", "true");
-  const selectedUrl = page.url();
-  await page.reload();
-  await expect(page.locator("h1")).toBeVisible();
-  await expect(page).toHaveURL(selectedUrl);
+  await expect(trend.locator("canvas")).toHaveCount(1);
+  const count = await months.count();
+  const filterUrl = page.url();
+  if (count) {
+    await months.first().click();
+
+    // คลิกเดือนบนกราฟ = เปิดแผงรายละเอียดของเดือนนั้น ไม่ใช่เปลี่ยนตัวกรองของทั้งหน้า
+    // ความต่างนี้สำคัญ: ตัวกรองที่เปลี่ยนเองตอนกดดูรายละเอียด ทำให้ตัวเลขทุกใบบน
+    // หน้าขยับตามโดยที่ผู้ใช้ไม่ได้สั่ง แล้วภาพรวมที่กำลังอ่านอยู่ก็หายไป
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page).toHaveURL(filterUrl);
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(months).toHaveCount(count);
+  }
+  await page.getByRole("button", { name: "งานที่ต้องติดตาม", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
   const overdue = page.getByRole("link", { name: "ไปกรอกยอดพิมพ์", exact: true });
   if (await overdue.count()) {
     await overdue.click();
@@ -165,7 +199,7 @@ test("language preference survives a reload", async ({ page }) => {
   await page.getByRole("radio", { name: "English", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "เปลี่ยนภาษา", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.locator("h1")).toContainText("Printer and expense overview");
+  await expect(page.locator("h1")).toContainText("Print overview");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });

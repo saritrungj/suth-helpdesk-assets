@@ -39,8 +39,10 @@ playwright-report/
 apps/web/e2e/.artifacts/
 apps/web/e2e/screens/
 
-# build แยกของ scripts/verify-db.cjs ที่ฝังที่อยู่ API ชั่วคราวไว้ — ห้ามเอาไป deploy
-apps/web/dist-verify-db/
+# build แยกที่ฝังที่อยู่ API ชั่วคราวไว้สำหรับรันชุด E2E ที่ต้องใช้ฐานข้อมูลจริง
+# (scripts/verify-db.cjs ใช้ dist-verify-db ส่วนการรันมือกับฐานชั่วคราวใช้ชื่ออื่น)
+# ห้ามเอาไป deploy เด็ดขาด — ที่อยู่ API ข้างในชี้ไปที่เครื่องที่รันเทส
+apps/web/dist-verify-*/
 
 # ภาพที่ .claude/skills/run-web/driver.mjs ถ่ายไว้ตอน agent สั่งรันแอป
 apps/web/e2e/.driver-shots/
@@ -54,3 +56,6 @@ docs/reference/review-*.md
 
 # การตั้งค่าส่วนตัวของ Claude Code ต่อเครื่อง — ไม่ใช่ของทีม
 .claude/settings.local.json
+
+# เครื่องมือ CLI ของ agent ที่ใช้ขับเบราว์เซอร์ระหว่างตรวจงาน ไม่ใช่ส่วนของระบบ
+.playwright-cli/

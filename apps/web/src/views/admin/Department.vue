@@ -37,7 +37,6 @@ const fields = [
 <template>
   <MasterDataPage
     :title="t(&quot;แผนก&quot;)"
-    :eyebrow="t(&quot;ข้อมูลอ้างอิง · หน่วยงาน&quot;)"
     :description="t(&quot;แผนกที่เครื่องพิมพ์แต่ละเครื่องสังกัด และเป็นหน่วยที่รายงานค่าใช้จ่ายลงไปถึง&quot;)"
     endpoint="/departments"
     :item-noun="t(&quot;แผนก&quot;)"

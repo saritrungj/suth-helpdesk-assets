@@ -31,6 +31,7 @@ const db = require("./src/shared/db");
 const { logger, requestLogger } = require("./src/shared/logger");
 const { ApiError, PROBLEM_JSON, notFound, fromDatabaseError } = require("./src/shared/http-error");
 const { noStore } = require("./src/shared/cache");
+const { findSchemaGaps, describeGaps } = require("./src/shared/schema-check");
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -213,6 +214,25 @@ async function start() {
     await db.verifyConnection();
   } catch (err) {
     logger.error("เชื่อมต่อฐานข้อมูลไม่ได้ ไม่เปิดเซิร์ฟเวอร์", { error: err.message });
+    process.exit(1);
+  }
+
+  // ต่อติดไม่ได้แปลว่าใช้ได้ — ฐานที่ยังไม่ได้รัน migration ต่อติดเหมือนกันทุกประการ
+  // แล้วไปพังเป็น 500 ตอนผู้ใช้กดใช้งานจริง ดู src/shared/schema-check.js
+  try {
+    const gaps = await findSchemaGaps();
+    if (gaps.length > 0) {
+      logger.error("โครงสร้างฐานข้อมูลไม่ตรงกับโค้ด ไม่เปิดเซิร์ฟเวอร์", {
+        database: process.env.DB_NAME,
+        missing: gaps.map((gap) => gap.what),
+      });
+      // เขียนซ้ำแบบอ่านง่ายลง stderr ตรงๆ เพราะล็อกโหมด JSON บีบทุกอย่างเป็น
+      // บรรทัดเดียว ซึ่งอ่านคำสั่งที่ต้องพิมพ์ตามไม่ได้
+      process.stderr.write(`\n${describeGaps(gaps)}\n\n`);
+      process.exit(1);
+    }
+  } catch (err) {
+    logger.error("ตรวจโครงสร้างฐานข้อมูลไม่สำเร็จ ไม่เปิดเซิร์ฟเวอร์", { error: err.message });
     process.exit(1);
   }
 

@@ -75,7 +75,14 @@ async function openMonthEntry(page) {
 async function activeMonth() {
   const fy = await activeFiscalYear();
   const coverage = await apiFetch(`/print-transactions/coverage?fiscal_year_id=${fy.id}`);
-  return coverage.next_incomplete_month || coverage.months.at(-1).month;
+
+  // อ่านค่าเดียวกับที่หน้าเว็บอ่าน ห้ามคำนวณ fallback เองที่นี่
+  //
+  // เดิมเทสใช้ `next_incomplete_month || months.at(-1)` ส่วนหน้าเว็บใช้ "เดือน
+  // ล่าสุดที่จบแล้ว" ตอนที่ยังมีงานค้างเสมอ ความต่างนี้ไม่เคยโผล่ พอถึงวันที่ไม่มี
+  // งานค้าง เทสจะ snapshot เดือนกันยาแต่หน้าเว็บไปแก้เดือนสิงหา = คืนค่าผิดเดือน
+  // และทิ้งข้อมูลทดสอบไว้ในฐานจริง
+  return coverage.default_entry_month;
 }
 
 /** ยืนยันว่าเดือนที่เทสคิดไว้ ตรงกับเดือนที่ตารางกำลังให้กรอกอยู่จริง */

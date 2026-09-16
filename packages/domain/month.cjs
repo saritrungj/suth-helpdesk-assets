@@ -129,9 +129,38 @@ function parseMonths(raw) {
   return [...new Set(months)];
 }
 
+/**
+ * เดือนปัจจุบัน "YYYY-MM" (ค.ศ.) ตามเวลาประเทศไทย
+ *
+ * ## ทำไมต้องตรึง timezone ไม่ใช่ใช้เวลาของเครื่อง
+ *
+ * ค่านี้เป็นเส้นแบ่งระหว่าง "เดือนที่จบแล้วจึงค้างได้" กับ "เดือนที่ยังอ่านมิเตอร์
+ * ปิดยอดไม่ได้" ถ้าอ่านจากเวลาเครื่อง (`new Date().getMonth()`) เซิร์ฟเวอร์ที่ตั้ง
+ * เป็น UTC จะเห็นเดือนก่อนหน้าอยู่เจ็ดชั่วโมงแรกของทุกวันที่ 1 — ช่วงนั้นแดชบอร์ด
+ * กับหน้าบันทึกยอดจะไม่ตรงกัน และเดือนที่เพิ่งจบจะยังไม่ถูกนับเป็นงานค้าง
+ *
+ * เคยเขียนไว้สองที่ด้วยวิธีคนละแบบจริงๆ (แดชบอร์ดใช้ Asia/Bangkok ส่วนหน้าบันทึก
+ * ยอดใช้เวลาเครื่อง) — ย้ายมาที่นี่ที่เดียวเพื่อไม่ให้ต่างกันได้อีก
+ *
+ * @param {Date} [now] เวลาอ้างอิง (ใส่ได้เพื่อทดสอบ)
+ * @returns {string} "YYYY-MM"
+ */
+function currentMonth(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+
+  const year = parts.find((part) => part.type === "year").value;
+  const month = parts.find((part) => part.type === "month").value;
+  return `${year}-${month}`;
+}
+
 module.exports = {
   BE_OFFSET,
   BE_YEAR_THRESHOLD,
+  currentMonth,
   CE_YEAR_MIN,
   CE_YEAR_MAX,
   isBuddhistYear,

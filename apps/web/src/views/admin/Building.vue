@@ -30,7 +30,6 @@ const fields = [
 <template>
   <MasterDataPage
     :title="t(&quot;อาคาร&quot;)"
-    :eyebrow="t(&quot;ข้อมูลอ้างอิง · สถานที่&quot;)"
     :description="t(&quot;อาคารที่ใช้จัดกลุ่มเครื่องพิมพ์และแยกยอดในรายงาน&quot;)"
     endpoint="/buildings"
     :item-noun="t(&quot;อาคาร&quot;)"

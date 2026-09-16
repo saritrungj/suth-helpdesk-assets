@@ -19,6 +19,15 @@ const props = defineProps({
   label: { type: String, default: "" },
   /** ซ่อนตัวเลขเปอร์เซ็นต์ ใช้เมื่อมีตัวเลขจริงแสดงอยู่ข้างๆ แล้ว */
   hideValue: { type: Boolean, default: false },
+  /**
+   * label มีไว้ให้โปรแกรมอ่านหน้าจอเท่านั้น ไม่ต้องพิมพ์ออกมาให้เห็น
+   *
+   * ใช้เมื่อชื่อของสิ่งที่แถบนี้วัดอยู่ถูกเขียนไว้ติดกันอยู่แล้ว เช่นแถบใต้ชื่อแผนก
+   * บนแดชบอร์ด — พิมพ์ "สัดส่วนของ การเงิน" ซ้ำใต้คำว่า "การเงิน" ไม่ได้บอกอะไรเพิ่ม
+   * แต่ aria-label ยังต้องมีชื่อแผนกอยู่ ไม่งั้นคนที่ฟังจะได้ยินแค่ "สัดส่วนที่ใช้ไป"
+   * ซ้ำกันห้าครั้งโดยไม่รู้ว่าอันไหนของใคร
+   */
+  srLabel: { type: Boolean, default: false },
   size: { type: String, default: "md" },
   /**
    * "threshold" (ค่าเริ่มต้น) — สีเปลี่ยนตามระดับ เขียว/เหลือง/แดง ใช้เมื่อ max
@@ -46,8 +55,8 @@ const height = computed(() => (props.size === "sm" ? "h-1.5" : props.size === "l
 
 <template>
   <div class="min-w-0">
-    <div v-if="label || !hideValue" class="flex items-baseline justify-between gap-3 mb-1.5">
-      <span v-if="label" class="text-xs text-ink-mute truncate">{{ label }}</span>
+    <div v-if="(label && !srLabel) || !hideValue" class="flex items-baseline justify-between gap-3 mb-1.5">
+      <span v-if="label && !srLabel" class="text-xs text-ink-mute truncate">{{ label }}</span>
       <span v-if="!hideValue" class="text-xs font-semibold text-ink numeral shrink-0">
         {{ pct.toFixed(0) }}%
       </span>

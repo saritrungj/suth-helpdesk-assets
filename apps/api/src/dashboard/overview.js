@@ -37,16 +37,17 @@ const { validate } = require("../shared/validate");
 const cache = require("../shared/cache");
 const { notFound } = require("../shared/http-error");
 const { effectiveLocationJoin } = require("../shared/effective-location-sql");
+const { readCoverageScope } = require("../shared/coverage-scope");
 const { reportQuery } = require("./filters");
-const { fiscalYearMonths, formatMonthTH, fromSatang, toSatang, sumSatang, computeCoverage } = require("@suth/domain");
-
-/** เดือนปัจจุบัน "YYYY-MM" (ค.ศ.) — ใช้ตัดเดือนอนาคตออกจากงานที่ "ค้าง" */
-function currentMonth() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit",
-  }).formatToParts(new Date());
-  return `${parts.find((p) => p.type === "year").value}-${parts.find((p) => p.type === "month").value}`;
-}
+const {
+  fiscalYearMonths,
+  formatMonthTH,
+  fromSatang,
+  toSatang,
+  sumSatang,
+  computeCoverage,
+  currentMonth,
+} = require("@suth/domain");
 
 /** จำนวนรายการเตือนสูงสุดที่ส่งกลับไป */
 const MAX_ATTENTION_ITEMS = 6;
@@ -88,13 +89,17 @@ router.get(
     const monthClause = months.length ? " AND v.month IN (?) " : "";
     const monthParam = months.length ? [months] : [];
 
-    const [totals, series, statusRows, byDepartment, gaps, unbilled, idle] = await Promise.all([
+    const [totals, series, statusRows, byDepartment, coverageScope, unbilled, idle] = await Promise.all([
       // ---------- 1) ยอดรวมของช่วงที่เลือก ----------
       db
         .query(
           `SELECT
              COALESCE(SUM(v.net_pages), 0) AS total_pages,
+             -- SUM() ข้ามแถวที่ราคายังยืนยันไม่ได้ ยอดนี้จึงเป็น "ยอดที่ยืนยันแล้ว"
+             -- ไม่ใช่ค่าใช้จ่ายทั้งหมด — ต้องส่ง unpriced_readings ไปคู่กันเสมอ
+             -- ไม่งั้นหน้าจอจะนำเสนอยอดบางส่วนเป็นข้อสรุป (ADR-0019 Q27)
              COALESCE(SUM(v.total_cost), 0) AS total_cost,
+             SUM(CASE WHEN v.total_cost IS NULL THEN 1 ELSE 0 END) AS unpriced_readings,
              COUNT(DISTINCT v.device_id) AS reporting_devices,
              -- นับเฉพาะเครื่องที่ยังใช้งานอยู่ไว้ต่างหาก เพราะการ์ด "ความครบถ้วน"
              -- เทียบตัวเลขนี้กับจำนวนเครื่องที่ใช้งานอยู่ ถ้าใช้ reporting_devices
@@ -124,6 +129,7 @@ router.get(
                  v.month,
                  SUM(v.net_pages) AS net_pages,
                  SUM(v.total_cost) AS total_cost,
+                 SUM(CASE WHEN v.total_cost IS NULL THEN 1 ELSE 0 END) AS unpriced_readings,
                  COUNT(DISTINCT v.device_id) AS device_count
                FROM v_monthly_kpi v
                JOIN devices d ON v.device_id = d.id
@@ -174,57 +180,46 @@ router.get(
         )
         .then(([rows]) => rows),
 
-      // ---------- 5) เดือนที่ยังกรอกไม่ครบ ----------
-      // นับเฉพาะเครื่องที่ยังใช้งานอยู่ — เครื่องที่ปลดระวางหรือส่งซ่อมไม่มีมิเตอร์
-      // ให้ไปอ่าน การนับรวมจะทำให้ความคืบหน้าไม่มีวันถึงครบ แล้วตัวเลขนั้นจะถูกเมิน
+      // ---------- 5) ความครบถ้วนของยอด ----------
+      // ตัวเศษ ตัวส่วน และจำนวนเครื่องที่ยังไม่ตรวจยืนยัน ออกมาจากฟังก์ชันเดียว
+      // เพื่อให้กรองด้วยขอบเขตชุดเดียวกันโดยไม่มีทางหลุด — เหตุผลเต็มอยู่ใน
+      // shared/coverage-scope.js
       //
-      // ⚠️ ต้องมี ${buildingClause} เหมือนกับคิวรี่ที่นับ active_devices (ข้อ 3)
-      // เป๊ะๆ — ตัวเศษกับตัวส่วนของ "ความครบถ้วน" ต้องมาจากขอบเขตเดียวกันเสมอ
-      //
-      // บั๊กที่เคยเกิด: คิวรี่นี้ไม่มีตัวกรองอาคาร แต่ข้อ 3 มี พอผู้ใช้เลือกอาคาร
-      // ที่มีเครื่อง 3 เครื่อง ตัวส่วนกลายเป็น 3 ส่วนตัวเศษยังเป็นยอดรวมทุกอาคาร
-      // (18) เงื่อนไข 18 < 3 เป็นเท็จ เดือนนั้นจึงถูกนับว่า "ครบแล้ว" ทั้งที่อาคาร
-      // นั้นอาจยังไม่ได้กรอกสักเครื่องเดียว — เป็นการรายงานว่างานเสร็จทั้งที่ยังไม่ทำ
+      // ตัวส่วนคือ "เครื่องที่ต้องกรอกในเดือนนั้น" ตามช่วงความรับผิดชอบจริง
+      // ไม่ใช่จำนวนเครื่องที่ใช้งานอยู่ ณ ตอนนี้ ซึ่งเคยทำให้การเพิ่มเครื่องใหม่
+      // กลางปีทำให้เดือนเก่าที่กรอกครบแล้วกลายเป็นค้างย้อนหลัง (issue #79)
       range
-        ? db
-            .query(
-              `SELECT pt.month, COUNT(*) AS filled
-               FROM print_transactions pt
-               JOIN devices d ON pt.device_id = d.id AND d.status = 'active'
-               LEFT JOIN building b ON d.building_id = b.id
-               WHERE pt.month BETWEEN ? AND ? ${buildingClause} ${contractClause}
-               GROUP BY pt.month`,
-              [range.start_month, range.end_month, ...buildingParam, ...contractParam]
-            )
-            .then(([rows]) => rows)
-        : Promise.resolve([]),
+        ? readCoverageScope({
+            months: fyMonths,
+            startMonth: range.start_month,
+            endMonth: range.end_month,
+            buildingName: building_name,
+            contractId: contract_id,
+          })
+        : Promise.resolve(null),
 
-      // ---------- 6) เครื่องที่พิมพ์อยู่แต่คิดเงินไม่ได้ ----------
+      // ---------- 6) ยอดพิมพ์ที่ยังหาราคาที่มีผลไม่ได้ ----------
       //
-      // ราคาที่ใช้จริงคือ COALESCE(price_override, contract.price_per_page, 0)
-      // เครื่องที่ไม่มีทั้งสองอย่างจะคิดเป็น 0 บาทเสมอ — ยอดพิมพ์ของมันหายไปจากงบ
-      // เงียบๆ โดยไม่มีอะไรเตือน นี่คือบั๊กทางบัญชีที่ระบบไม่เคยบอกใคร
+      // เดิมคำถามคือ "เครื่องไหนไม่มีราคาเลย" ซึ่งตอบได้จากค่าปัจจุบันของเครื่อง
+      // และสัญญา ตอนนี้ราคาผูกกับช่วงเวลาที่มีผลจริง (ADR-0019) คำถามที่ถูกจึงเป็น
+      // "ยอดของเดือนไหนที่หาราคาไม่ได้" ซึ่งครอบคลุมกรณีที่คำถามเดิมมองไม่เห็น เช่น
+      // เครื่องที่มีสัญญาแต่ช่วงของสัญญาไม่ครอบคลุมเดือนนั้น (issue #81) และสัญญา
+      // ที่ยังไม่มีใครยืนยันช่วงที่มีผล
       //
       // ⚠️ ชื่อ alias ของ subquery ต้องไม่ใช่ "usage" — เป็นคำสงวนใน MariaDB
       // (ฐานข้อมูลที่ระบบนี้รันอยู่จริง) แม้ MySQL จะยอมรับก็ตาม
       db
         .query(
           `SELECT
-             COUNT(*) AS device_count,
-             COALESCE(SUM(pages_used.pages), 0) AS unbilled_pages
-           FROM devices d
-           LEFT JOIN contracts c ON d.contract_id = c.id
+             COUNT(DISTINCT v.device_id) AS device_count,
+             COUNT(*) AS unbilled_readings,
+             COALESCE(SUM(v.pages_printed), 0) AS unbilled_pages,
+             COUNT(DISTINCT d.contract_id) AS contract_count
+           FROM v_monthly_kpi v
+           JOIN devices d ON d.id = v.device_id
            LEFT JOIN building b ON d.building_id = b.id
-           LEFT JOIN (
-             SELECT device_id, SUM(pages) AS pages
-             FROM print_transactions
-             ${range ? "WHERE month BETWEEN ? AND ?" : ""}
-             GROUP BY device_id
-           ) pages_used ON pages_used.device_id = d.id
-           WHERE d.status = 'active'
-             AND d.price_override IS NULL
-             AND (c.price_per_page IS NULL OR c.price_per_page = 0)
-             AND COALESCE(pages_used.pages, 0) > 0
+           WHERE v.total_cost IS NULL
+             ${range ? "AND v.month BETWEEN ? AND ?" : ""}
              ${buildingClause} ${contractClause}`,
           [...(range ? [range.start_month, range.end_month] : []), ...buildingParam, ...contractParam]
         )
@@ -263,8 +258,6 @@ router.get(
     // ---------- ประกอบรายการที่ต้องลงมือทำ ----------
     const attention = [];
 
-    // เดือนที่ยังกรอกไม่ครบ (ไม่นับเดือนอนาคต)
-    const filledByMonth = new Map(gaps.map((row) => [row.month, Number(row.filled)]));
     const today = currentMonth();
 
     // เดือนปัจจุบันยังไม่จบ จึงยังไม่ถือว่า "ค้าง" — มิเตอร์ของเดือนนี้อ่านได้ก็ต่อ
@@ -272,14 +265,35 @@ router.get(
     // งานที่ยังไม่ถึงเวลาทำ ซึ่งเป็นวิธีที่เร็วที่สุดในการสอนให้ผู้ใช้เมินคำเตือน
     const { coverage, incompleteMonths } = computeCoverage({
       fyMonths,
-      filledByMonth,
-      activeDevices,
+      filledByMonth: coverageScope?.filledByMonth ?? new Map(),
+      requiredByMonth: coverageScope?.requiredByMonth ?? new Map(),
+      unverifiedByMonth: coverageScope?.unverifiedByMonth ?? new Map(),
+      unreviewedDevices: coverageScope?.unreviewedDevices ?? 0,
       today,
     });
 
-    if (incompleteMonths.length && activeDevices > 0) {
+    // เครื่องที่ยังไม่มีใครตรวจยืนยันสถานะการติดตั้ง
+    //
+    // ต้องมาก่อนงานค้างรายเดือนเสมอ เพราะตราบใดที่ยังตรวจไม่ครบ ตัวเลขงานค้างยัง
+    // ยืนยันไม่ได้ (ดู coverage.cjs) การไล่กรอกยอดก่อนตรวจจึงเป็นการทำงานบนตัวเลข
+    // ที่ยังไม่รู้ว่าถูกหรือไม่ — งานที่ถูกลำดับคือไปตรวจยืนยันให้ครบก่อน
+    if (coverage.unreviewed_devices > 0) {
+      attention.push({
+        code: "unverified_installation",
+        severity: "warning",
+        title: `มี ${coverage.unreviewed_devices} เครื่องที่ยังไม่ได้ตรวจยืนยันสถานะการติดตั้ง`,
+        detail:
+          "ยืนยันความครบถ้วนของยอดพิมพ์ไม่ได้จนกว่าจะตรวจครบ ระบบไม่เดาให้ว่าเครื่องเหล่านี้ติดตั้งแล้วหรือยัง",
+        count: coverage.unreviewed_devices,
+        action: { label: "ไปตรวจยืนยันการติดตั้ง", to: "/admin/installation-review" },
+      });
+    }
+
+    if (incompleteMonths.length) {
       const oldest = incompleteMonths[0];
-      const missing = activeDevices - (filledByMonth.get(oldest) || 0);
+      // อ่านจากผลของ computeCoverage ไม่คำนวณซ้ำเอง — ตัวเลข "ขาดอีกกี่เครื่อง"
+      // ที่ขึ้นบนคำเตือนต้องเป็นตัวเดียวกับที่ขึ้นในตารางความครบถ้วนเสมอ
+      const missing = coverage.months.find((m) => m.month === oldest)?.missing_devices ?? 0;
 
       attention.push({
         code: "missing_readings",
@@ -303,11 +317,14 @@ router.get(
       attention.push({
         code: "unbilled_devices",
         severity: "critical",
-        title: `มี ${unbilled.device_count} เครื่องที่พิมพ์แล้วแต่คิดค่าใช้จ่ายไม่ได้`,
-        detail: `รวม ${Number(unbilled.unbilled_pages).toLocaleString("th-TH")} แผ่นที่ไม่ได้ถูกนับเป็นค่าใช้จ่าย เพราะเครื่องไม่มีสัญญาและไม่มีราคาเฉพาะเครื่อง`,
+        title: `มี ${unbilled.device_count} เครื่องที่ยังยืนยันราคาไม่ได้`,
+        detail: `${Number(unbilled.unbilled_readings).toLocaleString("th-TH")} รายการ รวม ${Number(unbilled.unbilled_pages).toLocaleString("th-TH")} แผ่น ยังไม่ถูกนับในยอดเงิน เพราะยังหาราคาที่มีผลกับเดือนนั้นไม่ได้`,
         count: Number(unbilled.device_count),
-        params: { pages: Number(unbilled.unbilled_pages) },
-        action: { label: "ดูเครื่องที่ยังไม่มีสัญญา", to: "/assets", query: { unassigned: "1" } },
+        params: {
+          pages: Number(unbilled.unbilled_pages),
+          readings: Number(unbilled.unbilled_readings),
+        },
+        action: { label: "ไปยืนยันช่วงที่สัญญามีผล", to: "/admin/contract-prices" },
       });
     }
 
@@ -369,6 +386,9 @@ router.get(
       totals: {
         total_pages: Number(totals.total_pages),
         total_cost: Number(totals.total_cost),
+        // จำนวนยอดพิมพ์ที่ยังหาราคาที่มีผลไม่ได้ — total_cost ด้านบนไม่ได้รวมรายการ
+        // เหล่านี้ หน้าจอต้องบอกทั้งสองอย่างคู่กัน (Q27)
+        unpriced_readings: Number(totals.unpriced_readings) || 0,
         reporting_devices: Number(totals.reporting_devices),
         reporting_active_devices: Number(totals.reporting_active_devices),
         active_devices: activeDevices,
@@ -384,7 +404,11 @@ router.get(
       series: series.map((row) => ({
         month: row.month,
         net_pages: Number(row.net_pages),
-        total_cost: Number(row.total_cost),
+        // เดือนที่ทุกรายการยังยืนยันราคาไม่ได้ ต้องเป็น null ไม่ใช่ 0 — จุดที่ค่า
+        // เป็นศูนย์บนกราฟแปลว่า "เดือนนั้นไม่มีค่าใช้จ่าย" ซึ่งคนละเรื่องกับ
+        // "ยังไม่รู้ว่าเท่าไหร่" (Q27)
+        total_cost: row.total_cost === null ? null : Number(row.total_cost),
+        unpriced_readings: Number(row.unpriced_readings) || 0,
         device_count: Number(row.device_count),
       })),
 

@@ -2,9 +2,9 @@
 import { t } from "../../lib/locale";
 
 /**
- * Contract — สัญญาเช่าเครื่องพิมพ์และราคาต่อแผ่น
+ * Contract — สัญญาเช่าเครื่องพิมพ์และราคาต่อหน้า
  *
- * ราคาต่อแผ่นในสัญญาคือตัวคูณของค่าใช้จ่ายทั้งระบบ กรอกผิดหนึ่งหลักแล้วยอดทั้ง
+ * ราคาต่อหน้าในสัญญาคือตัวคูณของค่าใช้จ่ายทั้งระบบ กรอกผิดหนึ่งหลักแล้วยอดทั้ง
  * ปีงบผิดตาม จึงกำหนด step ละเอียดถึงทศนิยมสี่ตำแหน่งและเขียนกำกับหน่วยไว้ชัด
  */
 import MasterDataPage from "../../components/MasterDataPage.vue";
@@ -15,7 +15,7 @@ const columns = [
   { key: "fiscal_year_id", label: t("ปีงบประมาณ"), optionKey: "fiscal_year_id" },
   {
     key: "price_per_page",
-    label: t("ราคา/แผ่น (บาท)"),
+    label: t("ราคา/หน้า (บาท)"),
     align: "right",
     value: (row) => formatBahtValue(row.price_per_page),
     csv: (row) => Number(row.price_per_page ?? 0),
@@ -43,13 +43,13 @@ const fields = [
   },
   {
     key: "price_per_page",
-    label: t("ราคาต่อแผ่น"),
+    label: t("ราคาต่อหน้า"),
     type: "number",
     required: true,
     step: "0.0001",
     min: "0",
     placeholder: "0.4200",
-    hint: t("หน่วยเป็นบาทต่อแผ่น ใส่ทศนิยมได้ถึงสี่ตำแหน่งตามที่ระบุในสัญญา"),
+    hint: t("หน่วยเป็นบาทต่อหน้า ใส่ทศนิยมได้ถึงสี่ตำแหน่งตามที่ระบุในสัญญา"),
   },
 ];
 </script>
@@ -57,8 +57,7 @@ const fields = [
 <template>
   <MasterDataPage
     :title="t(&quot;สัญญาเช่า&quot;)"
-    :eyebrow="t(&quot;ข้อมูลอ้างอิง · สัญญาและงบประมาณ&quot;)"
-    :description="t(&quot;สัญญาและราคาต่อแผ่นที่ระบบใช้คำนวณค่าใช้จ่ายของทุกเครื่อง&quot;)"
+    :description="t(&quot;สัญญาและราคาต่อหน้าที่ระบบใช้คำนวณค่าใช้จ่ายของทุกเครื่อง&quot;)"
     endpoint="/contracts"
     :item-noun="t(&quot;สัญญา&quot;)"
     export-filename="contracts"

@@ -17,6 +17,8 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 
+DELETE FROM device_contract_history;
+DELETE FROM device_service_period;
 DELETE FROM device_location_history;
 DELETE FROM print_transactions;
 DELETE FROM devices;
@@ -30,6 +32,8 @@ DELETE FROM fiscal_year;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
+ALTER TABLE device_contract_history AUTO_INCREMENT = 1;
+ALTER TABLE device_service_period AUTO_INCREMENT = 1;
 ALTER TABLE device_location_history AUTO_INCREMENT = 1;
 ALTER TABLE print_transactions AUTO_INCREMENT = 1;
 ALTER TABLE devices AUTO_INCREMENT = 1;
@@ -92,24 +96,56 @@ INSERT INTO department (id, division_id, name, status) VALUES
 (1, 1, 'หน่วยบริการผู้ป่วยนอกและประสานงานการรักษาต่อเนื่องกลุ่มงานเวชศาสตร์ฟื้นฟูและกายภาพบำบัดผู้ป่วยเรื้อรัง', 'active'),
 (2, 1, 'ฝ่ายบริหาร', 'active');
 
-INSERT INTO contracts (id, contract_no, fiscal_year_id, price_per_page) VALUES
-(1, CONCAT('SUTH-CI-', @fy_be_year), 1, 0.45);
+-- สัญญาสองฉบับโดยตั้งใจ (ADR-0019)
+--   ฉบับที่ 1 ยืนยันช่วงที่มีผลแล้ว → ยอดของเครื่องในสัญญานี้คิดเงินได้ตามปกติ
+--   ฉบับที่ 2 ยังไม่ยืนยัน → ยอดของเครื่องในสัญญานี้ขึ้นว่า "ยังยืนยันราคาไม่ได้"
+--
+-- ถ้าทุกฉบับยืนยันครบ ชุด db จะไม่เคยเดินผ่านเส้นทางราคาที่ยืนยันไม่ได้เลยสักครั้ง
+-- ซึ่งเป็นเส้นทางที่ผู้ใช้จริงจะเจอทันทีหลังรัน migration
+INSERT INTO contracts
+(id, contract_no, fiscal_year_id, price_per_page, effective_from, effective_to, price_source, price_verified_at)
+VALUES
+(1, CONCAT('SUTH-CI-', @fy_be_year), 1, 0.45,
+ STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'),
+ LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d')),
+ 'สัญญาตัวอย่างสำหรับชุดทดสอบ', CURRENT_TIMESTAMP),
+(2, CONCAT('SUTH-CI-PENDING-', @fy_be_year), 1, 0.50, NULL, NULL, NULL, NULL);
 
 -- ------------------------------------------------------------------------------
 -- Devices — device_id 3 คือเครื่องที่ย้ายแล้ว สังกัดแผนกชื่อยาว เพื่อชนสองเคส
 -- ร้ายพร้อมกัน (ตรงกับที่ฐาน QA48 เจอจริง — ดู docs/reference/accessibility.md)
 -- ------------------------------------------------------------------------------
 
+-- installation_status: เครื่อง 1-4 ตรวจยืนยันแล้ว ส่วนเครื่อง 6 จงใจปล่อยเป็น NULL
+-- = "ยังไม่ตรวจยืนยัน" เพื่อให้ชุด db ตรวจเส้นทาง "ความครบถ้วนยังยืนยันไม่ได้" ได้จริง
+-- ถ้าทุกเครื่องตรวจครบ เส้นทางนั้นจะไม่เคยถูกเรียกใน CI เลยแม้แต่ครั้งเดียว
 INSERT INTO devices
-(id, serial_number, brand_id, model, building_id, floor_id, location, division_id, department_id, contract_id, price_override, status)
+(id, serial_number, brand_id, model, building_id, floor_id, location, division_id, department_id, contract_id, price_override, status, installation_status, service_unverified_before)
 VALUES
-(1, 'CI-SN-001', 1, 'Office 400', 1, 1, 'เคาน์เตอร์พยาบาล', 1, 2, 1, NULL, 'active'),
-(2, 'CI-SN-002', 1, 'Office 400', 1, 1, 'ห้องตรวจ 3', 1, 2, 1, NULL, 'active'),
+(1, 'CI-SN-001', 1, 'Office 400', 1, 1, 'เคาน์เตอร์พยาบาล', 1, 2, 1, NULL, 'active', 'installed', NULL),
+(2, 'CI-SN-002', 1, 'Office 400', 1, 1, 'ห้องตรวจ 3', 1, 2, 1, NULL, 'active', 'installed', NULL),
 -- ย้ายจากอาคารผู้ป่วยนอก (ชั้น 2) ไปอาคารใหม่ (ชั้น 1) แล้ว — building_id/floor_id
 -- ปัจจุบันต้องตรงกับ interval ล่าสุดใน device_location_history ด้านล่าง
-(3, 'CI-SN-003', 2, 'Office 400', 2, 2, 'เคาน์เตอร์ประสานงาน', 1, 1, 1, NULL, 'active'),
-(4, 'CI-SN-004', 2, 'Office 400', 1, 1, 'ห้องเวชระเบียน', 1, 1, 1, NULL, 'repair'),
-(5, 'CI-SN-005', 1, 'Office 400', 1, 1, 'คลังพัสดุ', 1, 2, 1, NULL, 'retired');
+(3, 'CI-SN-003', 2, 'Office 400', 2, 2, 'เคาน์เตอร์ประสานงาน', 1, 1, 1, NULL, 'active', 'installed', NULL),
+(4, 'CI-SN-004', 2, 'Office 400', 1, 1, 'ห้องเวชระเบียน', 1, 1, 1, NULL, 'repair', 'installed', NULL),
+(5, 'CI-SN-005', 1, 'Office 400', 1, 1, 'คลังพัสดุ', 1, 2, 1, NULL, 'retired', 'installed', NULL),
+(6, 'CI-SN-006', 1, 'Office 400', 2, 2, 'ห้องพักเจ้าหน้าที่', 1, 2, 1, NULL, 'active', NULL, NULL);
+
+-- ------------------------------------------------------------------------------
+-- ช่วงความรับผิดชอบ (ADR-0018) — ตัวส่วนของความครบถ้วนรายเดือน
+-- ------------------------------------------------------------------------------
+-- เครื่อง 1-3 รับผิดชอบมาตั้งแต่ต้นปีงบ ส่วนเครื่อง 4 กับ 5 ปิดช่วงไปแล้ว (ส่งซ่อม
+-- และปลดระวาง) ยอดเดือนเก่าของทั้งคู่ยังอยู่ครบและยังคิดเงินตามปกติ
+--
+-- เครื่อง 6 ไม่มีช่วงเลยเพราะยังไม่มีใครตรวจ — ตั้งใจให้เป็นแบบนั้น ไม่ใช่ข้อมูลตกหล่น
+INSERT INTO device_service_period
+(device_id, effective_from, effective_to, verified_by, verified_at)
+VALUES
+(1, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
+(2, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
+(3, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
+(4, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), DATE_SUB(@today, INTERVAL 1 MONTH), NULL, CURRENT_TIMESTAMP),
+(5, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), DATE_SUB(@today, INTERVAL 3 MONTH), NULL, CURRENT_TIMESTAMP);
 
 -- interval เก่า (ปิดแล้ว) + interval ปัจจุบัน (effective_to = NULL) ของ device 3
 -- effective_from ยึดจากวันที่รันจริงเช่นกัน ไม่ตรึงวันที่ตายตัว
@@ -118,6 +154,46 @@ INSERT INTO device_location_history
 VALUES
 (3, 1, 1, 'เคาน์เตอร์พยาบาล', 1, 1, DATE_SUB(@today, INTERVAL 6 MONTH), DATE_SUB(@today, INTERVAL 2 MONTH)),
 (3, 2, 2, 'เคาน์เตอร์ประสานงาน', 1, 1, DATE_SUB(@today, INTERVAL 2 MONTH), NULL);
+
+-- ------------------------------------------------------------------------------
+-- เครื่องเติมจำนวน เพื่อให้ตารางยาวพอที่การแบ่งหน้าจะทำงานจริง
+-- ------------------------------------------------------------------------------
+-- ชุด db มีเทสที่ตรวจว่าตารางเต็มจอใช้พื้นที่ที่เหลือจริง และแถบล่างถูกตรึงไว้
+-- ด้านล่าง ซึ่งพิสูจน์อะไรไม่ได้เลยถ้าตารางมีไม่กี่แถว (เทสรอข้อความ "แสดง 1–20
+-- จาก …" ที่จะขึ้นก็ต่อเมื่อมีเกิน 20 แถว)
+--
+-- เดิม seed นี้มี 5 เครื่อง เทสสองข้อนั้นจึงล้มทุกครั้งที่รันกับ seed ของตัวเอง
+-- ไม่ใช่เพราะโค้ดผิด แต่เพราะข้อมูลไม่ถึงเกณฑ์ที่เทสตั้งไว้
+--
+-- เครื่องกลุ่มนี้อยู่อาคารผู้ป่วยนอกและตรวจยืนยันแล้วทั้งหมด ทำให้ขอบเขต
+-- "อาคารผู้ป่วยนอก" ยืนยันความครบถ้วนได้เต็มที่ ขณะที่ขอบเขตทั้งระบบยังยืนยัน
+-- ไม่ได้เพราะเครื่อง 6 ที่อาคารใหม่ — ชุด db จึงเดินผ่านทั้งสองเส้นทางในการรันเดียว
+INSERT INTO devices
+(id, serial_number, brand_id, model, building_id, floor_id, location, division_id, department_id, contract_id, price_override, status, installation_status, service_unverified_before)
+SELECT
+  seq.n,
+  CONCAT('CI-SN-', LPAD(seq.n, 3, '0')),
+  1 + MOD(seq.n, 2),
+  'Office 400',
+  1, 1,
+  CONCAT('จุดบริการ ', seq.n),
+  1,
+  1 + MOD(seq.n, 2),
+  -- เครื่องสุดท้ายผูกกับสัญญาที่ยังไม่ยืนยันช่วงที่มีผล ยอดของมันจึงขึ้นว่า
+  -- "ยังยืนยันราคาไม่ได้" ซึ่งเป็นสถานะที่ผู้ใช้จริงเจอทันทีหลังรัน migration
+  IF(seq.n = 30, 2, 1),
+  NULL,
+  'active',
+  'installed',
+  NULL
+FROM (
+  WITH RECURSIVE counter AS (SELECT 7 AS n UNION ALL SELECT n + 1 FROM counter WHERE n < 30)
+  SELECT n FROM counter
+) seq;
+
+INSERT INTO device_service_period (device_id, effective_from, effective_to, verified_by, verified_at)
+SELECT d.id, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP
+FROM devices d WHERE d.id >= 7;
 
 -- ------------------------------------------------------------------------------
 -- ยอดพิมพ์ — สองเดือนล่าสุด ให้แดชบอร์ด/รายงาน/เปรียบเทียบมีข้อมูลจริงให้ตรวจ
@@ -130,3 +206,31 @@ INSERT INTO print_transactions (device_id, month, pages) VALUES
 (2, @month_this, 950),
 (3, @month_prev, 300),
 (3, @month_this, 420);
+
+-- เครื่องเติมจำนวนมียอดด้วย ไม่งั้นรายงานตามเครื่องจะมีแถวว่างยาวเหยียดซึ่งไม่
+-- เหมือนข้อมูลจริง และตารางที่กรองเฉพาะเครื่องที่มียอดจะกลับไปสั้นเหมือนเดิม
+INSERT INTO print_transactions (device_id, month, pages)
+SELECT d.id, @month_prev, 200 + (d.id * 13) FROM devices d WHERE d.id >= 7;
+
+INSERT INTO print_transactions (device_id, month, pages)
+SELECT d.id, @month_this, 250 + (d.id * 11) FROM devices d WHERE d.id >= 7;
+
+-- ------------------------------------------------------------------------------
+-- ช่วงการคิดเงินของแต่ละเครื่อง (ADR-0019) — ตัวที่บอกว่าเดือนไหนใช้ราคาของสัญญาไหน
+-- ------------------------------------------------------------------------------
+-- สร้างให้ทุกเครื่องที่ผูกสัญญา ครอบคลุมช่วงของสัญญาฉบับนั้น เหมือนกับที่ระบบสร้าง
+-- ให้ตอนผู้ดูแลกดยืนยันช่วงที่สัญญามีผล
+--
+-- เครื่องที่ 30 อยู่สัญญาฉบับที่ยังไม่ยืนยัน มีช่วงการคิดเงินก็จริง แต่หาราคาไม่ได้
+-- เพราะสัญญายังไม่ถูกรับรอง — ต่างจาก "ไม่มีช่วงเลย" ซึ่งแปลว่าไม่รู้ว่าอยู่สัญญาไหน
+INSERT INTO device_contract_history
+(device_id, contract_id, price_override, effective_from, effective_to, note)
+SELECT
+  d.id,
+  d.contract_id,
+  d.price_override,
+  STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'),
+  LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d')),
+  'ช่วงตั้งต้นของชุดทดสอบ'
+FROM devices d
+WHERE d.contract_id IS NOT NULL;

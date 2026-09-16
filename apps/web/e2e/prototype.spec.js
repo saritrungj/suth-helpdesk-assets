@@ -241,16 +241,16 @@ test("expense failures do not claim zero totals or empty data", async ({ page })
   state.failExpense = true;
   await page.goto("/expense");
   await expect(page.getByText("โหลดข้อมูลค่าใช้จ่ายไม่สำเร็จ", { exact: true })).toBeVisible();
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิรวม", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).not.toBeVisible();
   await expect(page.getByText("ยังไม่มีสัญญาในปีงบนี้", { exact: true })).not.toBeVisible();
   state.failExpense = false;
   await page.getByRole("button", { name: "ลองใหม่", exact: true }).click();
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิรวม", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).toBeVisible();
   await expect(page.getByText("360.00", { exact: true }).first()).toBeVisible();
   state.failExpense = true;
   await page.getByRole("tab", { name: "ตามฝ่าย / แผนก", exact: true }).click();
   await expect(page.getByText("โหลดข้อมูลแยกตามฝ่าย/แผนกไม่สำเร็จ", { exact: true })).toBeVisible();
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิรวม", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).not.toBeVisible();
   await expect(page.getByText("ยังไม่มีข้อมูลฝ่าย/แผนก", { exact: true })).not.toBeVisible();
 });
 
@@ -278,7 +278,7 @@ test("expense side data that fails to load is reported instead of silently disap
   state.failUnassigned = true;
   state.failMonths = true;
   await page.goto("/expense");
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิรวม", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).toBeVisible();
   const unassigned = page.getByRole("status").filter({ hasText: "โหลดรายการเครื่องที่ยังไม่ผูกสัญญาไม่สำเร็จ" });
   const months = page.getByRole("status").filter({ hasText: "โหลดรายการเดือนที่มีข้อมูลไม่สำเร็จ" });
   await expect(unassigned).toBeVisible();
@@ -363,7 +363,9 @@ test("expense price, discount and unit copy is translated while the amounts stay
   await prototypeFixture(page);
   await page.addInitScript(() => localStorage.setItem("suth-language", "en"));
   await page.goto("/expense");
-  await expect(page.getByText("Total net cost", { exact: true })).toBeVisible();
+  // ป้ายยอดรวมใช้คำตามพจนานุกรมโดเมน (CONTEXT.md) แล้ว — "ค่าใช้จ่ายสุทธิ"
+  // และจะเปลี่ยนเป็น "ค่าใช้จ่ายที่ยืนยันแล้ว" เมื่อมีรายการที่ยังยืนยันราคาไม่ได้
+  await expect(page.getByText("Net cost", { exact: true })).toBeVisible();
   // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือแค่ส่วนลด (รอบที่ 3 ของ #51)
   // ยอดรวมของหน้านี้เป็นยอดของสัญญาที่ขึ้นทะเบียนกับปีงบนี้เท่านั้น ป้ายจึงต้องบอก
   // ขอบเขตของตัวเองด้วย ไม่งั้นไปชนกับป้ายชื่อเดียวกันบนแดชบอร์ดที่คิดคนละขอบเขต
@@ -374,7 +376,7 @@ test("expense price, discount and unit copy is translated while the amounts stay
   await page.getByRole("tab", { name: "By division / department", exact: true }).click();
   // แท็บสัญญายังอยู่ใน DOM แบบซ่อน จึงต้องหาเฉพาะในแผงของแท็บที่เลือกอยู่
   const department = page.getByRole("tabpanel", { name: "By division / department" });
-  await expect(department.getByText("Total net cost", { exact: true })).toBeVisible();
+  await expect(department.getByRole("paragraph").filter({ hasText: /^Net cost$/ })).toBeVisible();
   await expect(department.getByText("360.00", { exact: true }).first()).toBeVisible();
 });
 

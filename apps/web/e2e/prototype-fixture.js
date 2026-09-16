@@ -12,7 +12,14 @@ export async function prototypeFixture(page, role = "staff") {
     if (key === "print-transactions/coverage") {
       if (state.failCoverage) return json({}, 503);
       if (state.coverageDelay) await new Promise(resolve => setTimeout(resolve, state.coverageDelay));
-      return json({ next_incomplete_month: "2026-08", months: [{ month: "2026-08", in_progress: false }] });
+      // default_entry_month คือค่าที่หน้าเว็บอ่านจริงตอนเลือกเดือนตั้งต้น
+      // (API เป็นคนตัดสินกฎ ไม่ใช่หน้าเว็บ) ส่วน next_incomplete_month ยังส่งมาด้วย
+      // เพราะหน้าจออื่นใช้บอกว่ามีงานค้างเดือนไหน
+      return json({
+        next_incomplete_month: "2026-08",
+        default_entry_month: "2026-08",
+        months: [{ month: "2026-08", in_progress: false }],
+      });
     }
     if (key === "print-transactions/summary") return json([{ device_id: 1, filled: 1, total_pages: 100, latest_month: "2026-08", latest_pages: 100 }]);
     if (key === "print-transactions/bulk" || key === "print-transactions/bulk-device") {

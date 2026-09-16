@@ -1,5 +1,35 @@
-import { computed } from "vue";
+import { computed, ref, unref } from "vue";
 import { modeState } from "../store/theme";
+
+/**
+ * ผู้ใช้ขอให้ลดการเคลื่อนไหวไว้ที่ระบบปฏิบัติการหรือยัง
+ *
+ * ## ทำไมต้องเช็คที่นี่ ทั้งที่ base.css มีกฎ prefers-reduced-motion อยู่แล้ว
+ *
+ * กฎใน CSS คุมได้แค่ CSS animation และ transition — แต่กราฟทุกอันในระบบวาดลงบน
+ * `<canvas>` แล้วเคลื่อนไหวด้วย JavaScript ของ Chart.js เอง กฎนั้นจึงไม่มีผลกับ
+ * กราฟแม้แต่นิดเดียว ผลคือระบบประกาศว่าเคารพการตั้งค่านี้ แต่ของที่เคลื่อนไหว
+ * เยอะที่สุดบนแดชบอร์ดยังวิ่งเหมือนเดิมทุกครั้งที่เปลี่ยนตัวกรอง
+ *
+ * ## ผลพลอยได้ที่สำคัญพอกัน: กราฟกลายเป็นของที่วัดได้
+ *
+ * ระหว่างไล่ปัญหา "แท่งกราฟเตี้ยผิดปกติ" พบว่าสาเหตุคือการวัดตอนแอนิเมชันยัง
+ * วิ่งอยู่ — สเกล ข้อมูล และการวาดถูกต้องทั้งหมด แต่ภาพ ณ วินาทีที่วัดยังโตไม่สุด
+ * (วัดได้ 6px จากความสูงจริง 212px) เวลาจริงที่ใช้ไปกับการไล่หา "บั๊ก" ที่ไม่มีอยู่
+ * คือต้นทุนของการที่กราฟไม่มีสถานะนิ่งที่แน่นอน
+ */
+const reducedMotion = ref(
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    : false
+);
+
+if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+  // ผู้ใช้เปลี่ยนการตั้งค่าระหว่างที่เปิดหน้าอยู่ได้ และไม่ควรต้องรีเฟรชเพื่อให้มีผล
+  window
+    .matchMedia("(prefers-reduced-motion: reduce)")
+    .addEventListener("change", (event) => (reducedMotion.value = event.matches));
+}
 
 /**
  * useChartTheme.js — สีและค่าตั้งต้นของกราฟ Chart.js ให้เข้ากับธีมของระบบ
@@ -16,33 +46,36 @@ import { modeState } from "../store/theme";
  * ไม่ได้ตั้งใจ (ดู tokens.css)
  */
 
-function cssVar(name, fallback) {
+function cssVar(name, fallback, element) {
   if (typeof window === "undefined") return fallback;
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const value = getComputedStyle(element || document.documentElement).getPropertyValue(name).trim();
   return value || fallback;
 }
 
-export function useChartTheme() {
+export function useChartTheme(element) {
   const colors = computed(() => {
     // อ่านตรงนี้เพื่อบอก Vue ว่าต้องคำนวณใหม่ทุกครั้งที่สลับโหมด
     void modeState.current;
+    // Read the chart's own surface so a scoped workspace palette also applies
+    // to the canvas, grid and tooltip. Callers without a root retain defaults.
+    const color = (name, fallback) => cssVar(name, fallback, unref(element));
 
     return {
-      ink: cssVar("--ink", "#1f2937"),
-      text: cssVar("--ink-mute", "#4b5563"),
-      grid: cssVar("--line-soft", "#e5e7eb"),
-      surface: cssVar("--surface", "#ffffff"),
-      surfaceFloat: cssVar("--surface-float", "#ffffff"),
-      border: cssVar("--line", "#d1d5db"),
+      ink: color("--ink", "#1f2937"),
+      text: color("--ink-mute", "#4b5563"),
+      grid: color("--line-soft", "#e5e7eb"),
+      surface: color("--surface", "#ffffff"),
+      surfaceFloat: color("--surface-float", "#ffffff"),
+      border: color("--line", "#d1d5db"),
       series: [
-        cssVar("--chart-1", "#0f766e"),
-        cssVar("--chart-2", "#c2410c"),
-        cssVar("--chart-3", "#0369a1"),
-        cssVar("--chart-4", "#a16207"),
-        cssVar("--chart-5", "#6d28d9"),
-        cssVar("--chart-6", "#15803d"),
-        cssVar("--chart-7", "#b91c1c"),
-        cssVar("--chart-8", "#6b7280"),
+        color("--chart-1", "#0f766e"),
+        color("--chart-2", "#c2410c"),
+        color("--chart-3", "#0369a1"),
+        color("--chart-4", "#a16207"),
+        color("--chart-5", "#6d28d9"),
+        color("--chart-6", "#15803d"),
+        color("--chart-7", "#b91c1c"),
+        color("--chart-8", "#6b7280"),
       ],
     };
   });
@@ -64,6 +97,9 @@ export function useChartTheme() {
     return {
       responsive: true,
       maintainAspectRatio: false,
+      // ปิดแอนิเมชันทั้งหมดเมื่อผู้ใช้ขอให้ลดการเคลื่อนไหว — Chart.js เคลื่อนไหว
+      // ด้วย JavaScript บน canvas กฎ prefers-reduced-motion ใน CSS จึงคุมไม่ถึง
+      animation: reducedMotion.value ? false : undefined,
       color: c.text,
       font: { family: "Anuphan, sans-serif" },
       interaction: { mode: "index", intersect: false },
