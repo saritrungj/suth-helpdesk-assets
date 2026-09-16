@@ -11,7 +11,6 @@ import { exportSummaryCard } from '../ui/export-summary-card';
 import { UiAlert, UiButton, UiCard, UiChart, UiEmpty, UiSegmented, UiSkeleton, UiPageHeader, UiStat } from '../ui';
 import DashboardFilter from './DashboardFilter.vue';
 import ExecutiveDetails from './ExecutiveDetails.vue';
-import AttentionPanel from './AttentionPanel.vue';
 import { groupReport, reportTotals } from './executive-report';
 
 const root = ref(null);
@@ -63,15 +62,17 @@ const monthLabel = row => `${formatMonth(row.key)}${row.unpriced ? ` · ${t('ร
 const monthlySeries = computed(() => [{ key: metric.value, label: metric.value === 'cost' ? costTitle.value : t('จำนวนหน้าสุทธิ'), data: months.value.map(row => metric.value === 'cost' ? row.cost : row.pages), slot: 1 }]);
 const coverageLabel = computed(() => coverage.value.verifiable === false ? t('รอยืนยันข้อมูล') : `${formatCount(coverage.value.annual_complete_months)} / ${formatCount(coverage.value.total_months)}`);
 
-/**
- * งานที่ต้องลงมือทำ — วางไว้เหนือตัวเลขทั้งหมด
+/*
+ * งานที่ต้องลงมือทำไม่อยู่บนหน้านี้ — อยู่ในลิ้นชักแจ้งเตือนที่กดจากกระดิ่งใน Sidebar
+ * (app/AppNotifications.vue) ที่เดียว
  *
- * คนเปิดแดชบอร์ดมาถามว่า "วันนี้ต้องทำอะไร" ก่อนถามว่า "ตัวเลขเป็นเท่าไหร่" เสมอ
- * และตัวเลขบนหน้านี้จะเชื่อได้ก็ต่อเมื่องานค้างเหล่านี้ถูกเคลียร์แล้ว (เครื่องที่
- * ยังไม่ตรวจยืนยันทำให้ความครบถ้วนสรุปไม่ได้ สัญญาที่ยังไม่ยืนยันทำให้ยอดเงินไม่ครบ)
- * การวางตัวเลขไว้ก่อนจึงเป็นการนำเสนอข้อสรุปก่อนบอกว่ามันยังไม่สมบูรณ์
+ * เดิมรายการชุดเดียวกันขึ้นทั้งสองที่ และเรียกด้วยคนละชื่อ ("สิ่งที่ต้องจัดการ" บนหน้านี้
+ * กับ "งานที่ต้องติดตาม" บนกระดิ่ง) เปิดลิ้นชักทีเห็นสองชื่อซ้อนกัน ของสิ่งเดียวกัน
+ * ควรมีที่อยู่เดียวและชื่อเดียว (#83)
+ *
+ * ตัวเลขบนหน้านี้ไม่ได้กลายเป็นข้อสรุปที่ปิดบังความไม่สมบูรณ์ เพราะคำกำกับ
+ * "ยังยืนยันราคาไม่ได้ N รายการ" ติดอยู่กับยอดเงินที่การ์ด KPI เอง ไม่ได้ฝากไว้กับแผงงานค้าง
  */
-const attention = computed(() => overview.data.value?.attention ?? []);
 function onFilter(next) { filter.value = { ...next }; }
 watch(params, () => { detailOpen.value = false; exportError.value = ''; });
 function openDetails(dimension = 'department', item = null) {
@@ -130,9 +131,6 @@ async function exportCard() {
       <template #actions><UiButton variant="secondary" @click="reload">{{ t('ลองใหม่') }}</UiButton></template>
     </UiAlert>
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
-
-    <!-- งานที่ต้องลงมือทำมาก่อนตัวเลขเสมอ — ดูเหตุผลที่ตัวแปร attention ด้านบน -->
-    <AttentionPanel v-if="!failed" :items="attention" :loading="loading" class="mb-4" />
 
     <section class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading">
       <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring rounded-l-lg" :disabled="!ready || !rows.length" :aria-label="t('ดูที่มาของค่าใช้จ่าย')" @click="openDetails()">
@@ -215,10 +213,8 @@ async function exportCard() {
         <template #footer><p class="text-xs text-ink-mute">{{ t('เลือกแผนกหรือสัญญาเพื่อดูรายการรายเครื่อง ค้นหา และส่งออก Excel ตามขอบเขตที่เลือก') }}</p></template>
       </UiCard>
     </div>
-    <!-- หมายเหตุขอบเขตของตัวเลขบนหน้านี้
-         งานค้างไม่อยู่ตรงนี้แล้ว — ย้ายขึ้นไปเป็นรายการแรกของหน้า (AttentionPanel)
-         การบอกว่า "ยืนยันไม่ได้" ไว้ใต้สุดหลังตัวเลขทั้งหมด คือการให้คนอ่านข้อสรุป
-         จนจบก่อนแล้วค่อยบอกว่ามันยังไม่สมบูรณ์ -->
+    <!-- หมายเหตุขอบเขตของตัวเลขบนหน้านี้ ไม่ใช่ที่เก็บงานค้าง — งานค้างอยู่ในลิ้นชัก
+         แจ้งเตือนที่เดียว ส่วนข้อจำกัดของตัวเลขแต่ละตัวติดอยู่กับตัวเลขนั้นเอง -->
     <footer class="text-xs text-ink-mute leading-relaxed">
       <p>{{ t('ข้อมูลเฉพาะเดือนที่บันทึกแล้ว') }} · {{ t('เดือนที่บันทึกเป็นศูนย์ยังแสดงในรายงาน') }}</p>
     </footer>

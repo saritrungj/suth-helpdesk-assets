@@ -19,6 +19,16 @@ const loading = computed(() => isPending.value || isPlaceholderData.value);
 const items = computed(() => data.value?.attention ?? []);
 const label = computed(() => isError.value ? t("โหลดการแจ้งเตือนไม่สำเร็จ") : t("งานที่ต้องติดตาม"));
 
+/**
+ * ป้ายบนกระดิ่งต้องบอกความด่วน ไม่ใช่บอกแค่จำนวน
+ *
+ * ตั้งแต่ #83 รายการงานที่ต้องติดตามอยู่ในลิ้นชักนี้ที่เดียว ป้ายนี้จึงเป็นสัญญาณเดียว
+ * ที่เหลืออยู่บนหน้าจอ — Carbon เตือนว่า notification panel ปกติใช้คู่กับ toast เพื่อ
+ * บอกว่ามีของใหม่เข้ามา ระบบนี้ไม่มี toast ถ้าป้ายบอกแต่จำนวน เรื่องระดับ "ต้องแก้ทันที"
+ * กับเรื่องระดับ "น่าตรวจสอบ" จะหน้าตาเหมือนกันทุกประการจนกว่าจะมีคนเปิดดู
+ */
+const critical = computed(() => items.value.some((item) => item.severity === "critical"));
+
 function showNotifications() {
   open.value = true;
 }
@@ -40,8 +50,12 @@ watch(() => route.fullPath, () => { open.value = false; });
       <Bell :size="18" class="shrink-0" aria-hidden="true" />
       <span v-if="!uiState.navCollapsed" class="flex-1 text-left">{{ label }}</span>
       <span v-if="isError" class="text-danger-ink" aria-hidden="true">!</span>
-      <span v-else-if="!loading && items.length" class="rounded-full bg-brand text-brand-on px-1.5 text-xs font-semibold" :class="uiState.navCollapsed && 'absolute right-0 top-0'">
-        {{ items.length }}<span class="sr-only"> {{ t("หัวข้อ") }}</span>
+      <span
+        v-else-if="!loading && items.length"
+        class="rounded-full px-1.5 text-xs font-semibold"
+        :class="[critical ? 'bg-danger text-danger-on' : 'bg-brand text-brand-on', uiState.navCollapsed && 'absolute right-0 top-0']"
+      >
+        {{ items.length }}<span class="sr-only"> {{ critical ? t("หัวข้อ รวมเรื่องที่ต้องแก้ทันที") : t("หัวข้อ") }}</span>
       </span>
     </button>
   </UiTooltip>
