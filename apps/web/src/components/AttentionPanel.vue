@@ -44,6 +44,9 @@ const SEVERITY = {
   },
 };
 
+/** เรียงจากด่วนที่สุดลงมา — ลำดับเดียวกับที่ API เรียงมาให้ (SEVERITY_ORDER) */
+const SEVERITY_ORDER = ["critical", "warning", "info"];
+
 const meta = (severity) => SEVERITY[severity] ?? SEVERITY.info;
 
 const localizedItems = computed(() => props.items.map((item) => {
@@ -72,82 +75,106 @@ const localizedItems = computed(() => props.items.map((item) => {
   }[item.code];
   return copy ? { ...item, title: copy.title, detail: copy.detail, action: item.action ? { ...item.action, label: copy.action } : null } : item;
 }));
+
+/**
+ * จัดเป็นกลุ่มตามความเร่งด่วน ไม่ใช่รายการเรียงยาวรายการเดียว
+ *
+ * Carbon (notification pattern) ระบุว่า notification panel จัดกลุ่มได้ตามแหล่งที่มา
+ * หรือความเร่งด่วน และ Linear Inbox แยก "Priority" ออกจาก "Other" ด้วยเหตุผลเดียวกัน
+ * คือคนเปิดกล่องนี้มาเพื่อถามว่า "มีอะไรที่ต้องทำเดี๋ยวนี้ไหม" ไม่ใช่มาอ่านทุกแถว
+ * เรียงกันไปเรื่อยๆ แล้วตัดสินความด่วนเองทีละแถว
+ *
+ * ผลพลอยได้คือคำกำกับความสำคัญขึ้นครั้งเดียวที่หัวกลุ่ม แทนที่จะขึ้นซ้ำทุกแถว
+ * แถวจึงเหลือแค่เรื่องกับปุ่มที่พาไปแก้
+ */
+const groups = computed(() => SEVERITY_ORDER
+  .map((severity) => ({ severity, ...meta(severity), items: localizedItems.value.filter((item) => item.severity === severity) }))
+  .filter((group) => group.items.length));
+
 const hasItems = computed(() => props.items.length > 0);
 </script>
 
 <template>
-  <section aria-labelledby="attention-heading">
+  <div>
     <!--
-      หัวข้อนี้เป็น 14px ไม่ใช่ eyebrow 11px ตัวใหญ่พิมพ์
-      บนแดชบอร์ดรายการนี้คือเนื้อหาหลักของหน้า ไม่ใช่ป้ายกำกับของส่วนย่อย —
-      หัวข้อขนาด eyebrow ทำให้สิ่งที่สำคัญที่สุดบนหน้าเบากว่าชื่อการ์ดทุกใบที่อยู่ใต้มัน
+      ไม่มีหัวข้อของตัวเอง — กล่องที่ครอบอยู่ (UiDrawer) ตั้งชื่อเรื่องนี้ไว้แล้วว่า
+      "งานที่ต้องติดตาม" หัวข้อซ้อนอีกชั้นที่เขียนว่า "สิ่งที่ต้องจัดการ" คือการให้
+      สองชื่อกับของสิ่งเดียวในกล่องเดียวกัน (#83)
     -->
-    <h2 id="attention-heading" class="text-base font-semibold text-ink mb-2">
-      {{ t("สิ่งที่ต้องจัดการ") }}
-    </h2>
-
-    <div v-if="loading" class="grid gap-2">
+    <div v-if="loading" class="grid gap-2" :aria-label="t('กำลังโหลดงานที่ต้องติดตาม')" role="status">
       <UiSkeleton height="4.5rem" />
       <UiSkeleton height="4.5rem" />
     </div>
 
     <!--
       ไม่มีอะไรค้าง — ยืนยันให้เห็นชัดว่า "ตรวจแล้ว" ไม่ใช่ปล่อยว่าง
-      ใช้ทรงเดียวกับรายการที่ค้างเพื่อไม่ให้ความสูงของหน้ากระโดดเวลาสถานะเปลี่ยน
+      กล่องนี้เปิดจากกระดิ่งที่ไม่มีป้ายจำนวน คนกดเข้ามาจึงต้องได้คำตอบ ไม่ใช่หน้าว่าง
     -->
     <p
       v-else-if="!hasItems"
-      class="flex items-center gap-2.5 border-l-[3px] border-ok-ink bg-ok-soft rounded-r-lg py-2.5 pl-3 pr-4"
+      class="flex flex-col gap-1 border-l-[3px] border-ok-ink bg-ok-soft rounded-r-lg py-3 pl-3 pr-4"
     >
-      <CircleCheck class="size-4 shrink-0 text-ok-ink" aria-hidden="true" />
-      <span class="text-base font-medium text-ink"> {{ t("ไม่มีงานค้าง") }} </span>
-      <span class="text-sm text-ink-mute"> {{ t("กรอกยอดพิมพ์ครบทุกเดือนที่ถึงกำหนดแล้ว และไม่พบเครื่องที่คิดค่าใช้จ่ายไม่ได้") }} </span>
+      <span class="flex items-center gap-2 text-base font-medium text-ink">
+        <CircleCheck class="size-4 shrink-0 text-ok-ink" aria-hidden="true" />
+        {{ t("ไม่มีงานค้าง") }}
+      </span>
+      <span class="text-sm text-ink-soft"> {{ t("กรอกยอดพิมพ์ครบทุกเดือนที่ถึงกำหนดแล้ว และไม่พบเครื่องที่คิดค่าใช้จ่ายไม่ได้") }} </span>
     </p>
 
-    <!--
-      แต่ละรายการเป็นแถบขีดข้างเดียว ไม่ใช่การ์ดที่มีกรอบรอบตัว
-
-      รอบที่ 6 วัดหน้านี้เทียบกับ Plausible/Catalyst แล้วพบว่าของที่มีกรอบรอบตัว
-      เหนือบรรทัดพับมีถึง 10 ชิ้น การ์ดสามชั้น (กรอบ + วงกลมไอคอน + พื้นสี) ทำให้
-      แถบเตือนหนึ่งรายการสูง 106px ทั้งที่เนื้อความมีสองบรรทัด ขีดข้างเดียวบอก
-      ระดับความสำคัญได้เท่ากันโดยใช้เส้นเส้นเดียว และเหลือพื้นที่ให้ตัวเลขจริง
-    -->
-    <ul v-else class="grid gap-2">
-      <li
-        v-for="item in localizedItems"
-        :key="item.code"
-        class="flex flex-col gap-1.5 border-l-[3px] rounded-r-lg py-2 pl-3 pr-3 sm:flex-row sm:items-center sm:gap-4"
-        :class="[meta(item.severity).edge, meta(item.severity).tint]"
-      >
-        <div class="min-w-0 flex-1">
-          <p class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <!--
-              คำกำกับระดับความสำคัญเป็นข้อความจริง ไม่ใช่แค่สีของขีด — จำเป็นทั้ง
-              กับคนที่แยกสีไม่ออกและกับโปรแกรมอ่านหน้าจอ
-            -->
-            <span class="inline-flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide" :class="meta(item.severity).ink">
-              <component :is="meta(item.severity).icon" class="size-3.5" aria-hidden="true" />
-              {{ meta(item.severity).label }}
-            </span>
-            <span class="text-base font-semibold text-ink">{{ item.title }}</span>
-          </p>
-          <p class="text-sm text-ink-soft">{{ item.detail }}</p>
-        </div>
+    <div v-else class="grid gap-5">
+      <section v-for="group in groups" :key="group.severity" :aria-labelledby="`attention-${group.severity}`">
+        <!--
+          คำกำกับระดับความสำคัญเป็นข้อความจริง ไม่ใช่แค่สีของขีด — จำเป็นทั้งกับคนที่
+          แยกสีไม่ออกและกับโปรแกรมอ่านหน้าจอ ตัวเลขท้ายหัวกลุ่มบอกว่ากลุ่มนี้มีกี่เรื่อง
+          โดยไม่ต้องนับแถวเอง; เป็น h3 เพราะหัวลิ้นชัก (DialogTitle) เป็น h2 อยู่แล้ว
+        -->
+        <h3
+          :id="`attention-${group.severity}`"
+          class="flex items-center gap-1.5 mb-2 text-2xs font-semibold uppercase tracking-wide"
+          :class="group.ink"
+        >
+          <component :is="group.icon" class="size-3.5" aria-hidden="true" />
+          {{ group.label }}
+          <span class="text-ink-mute font-normal normal-case tracking-normal">· {{ group.items.length }}</span>
+        </h3>
 
         <!--
-          ปุ่มพาไปยังหน้าที่แก้เรื่องนี้ได้จริง พร้อมพารามิเตอร์ที่เจาะจงถึงเดือน
-          หรือตัวกรองที่เกี่ยวข้อง — ไม่ใช่พาไปหน้าเปล่าแล้วให้ผู้ใช้ไล่หาเอง
+          แต่ละรายการเป็นแถบขีดข้างเดียว ไม่ใช่การ์ดที่มีกรอบรอบตัว
+
+          รอบที่ 6 วัดหน้านี้เทียบกับ Plausible/Catalyst แล้วพบว่าการ์ดสามชั้น
+          (กรอบ + วงกลมไอคอน + พื้นสี) ทำให้แถบเตือนหนึ่งรายการสูง 106px ทั้งที่
+          เนื้อความมีสองบรรทัด ขีดข้างเดียวบอกระดับความสำคัญได้เท่ากันโดยใช้เส้นเดียว
         -->
-        <UiButton
-          v-if="item.action"
-          :to="{ path: item.action.to, query: item.action.query }"
-          variant="secondary"
-          size="sm"
-          class="shrink-0 self-start sm:self-auto"
-        >
-          {{ item.action.label }}
-        </UiButton>
-      </li>
-    </ul>
-  </section>
+        <ul class="grid gap-2">
+          <li
+            v-for="item in group.items"
+            :key="item.code"
+            class="border-l-[3px] rounded-r-lg py-2.5 pl-3 pr-3"
+            :class="[group.edge, group.tint]"
+          >
+            <p class="text-base font-semibold text-ink">{{ item.title }}</p>
+            <p class="mt-0.5 text-sm text-ink-soft">{{ item.detail }}</p>
+
+            <!--
+              ปุ่มพาไปยังหน้าที่แก้เรื่องนี้ได้จริง พร้อมพารามิเตอร์ที่เจาะจงถึงเดือน
+              หรือตัวกรองที่เกี่ยวข้อง — ไม่ใช่พาไปหน้าเปล่าแล้วให้ผู้ใช้ไล่หาเอง
+
+              หนึ่งรายการมีปุ่มเดียวตามที่ Carbon กำหนดไว้สำหรับ actionable notification
+              ปุ่มอยู่ใต้เนื้อความ ไม่ใช่ท้ายแถวเดียวกัน เพราะในลิ้นชักกว้าง 560px
+              การวางปุ่มไว้ขวาสุดบีบข้อความให้ตัดบรรทัดเร็วขึ้นโดยไม่ได้อะไรกลับมา
+            -->
+            <UiButton
+              v-if="item.action"
+              :to="{ path: item.action.to, query: item.action.query }"
+              variant="secondary"
+              size="sm"
+              class="mt-2"
+            >
+              {{ item.action.label }}
+            </UiButton>
+          </li>
+        </ul>
+      </section>
+    </div>
+  </div>
 </template>

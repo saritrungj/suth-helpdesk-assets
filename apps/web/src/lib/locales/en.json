@@ -985,5 +985,7 @@
   "เลือกฝ่ายเพื่อดูยอดรวมของฝ่าย หรือเลือกแผนกในฝ่ายนั้นเพื่อดูเฉพาะแผนก แต่ละรายการจะเป็นหนึ่งเส้นบนกราฟ": "Select a division to see its totals, or a department within it to see that department alone. Each selection appears as a separate line on the chart.",
   "เลือกสถานะที่เห็นจริง": "Select the observed status",
   "เว้นว่างไว้ถ้าทราบแค่ว่าตอนนี้เป็นแบบนี้ ระบบจะใช้วันนี้": "Leave blank if only the current status is known. The system will use today's date.",
-  "ไม่มีเครื่องที่รอตรวจ": "No devices awaiting review"
+  "ไม่มีเครื่องที่รอตรวจ": "No devices awaiting review",
+  "กำลังโหลดงานที่ต้องติดตาม": "Loading items that need follow-up",
+  "หัวข้อ รวมเรื่องที่ต้องแก้ทันที": "items, including issues that need immediate action"
 }
