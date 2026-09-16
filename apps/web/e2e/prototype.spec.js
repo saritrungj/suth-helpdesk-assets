@@ -376,7 +376,7 @@ test("expense price, discount and unit copy is translated while the amounts stay
   await page.getByRole("tab", { name: "By division / department", exact: true }).click();
   // แท็บสัญญายังอยู่ใน DOM แบบซ่อน จึงต้องหาเฉพาะในแผงของแท็บที่เลือกอยู่
   const department = page.getByRole("tabpanel", { name: "By division / department" });
-  await expect(department.getByText("Total net cost", { exact: true })).toBeVisible();
+  await expect(department.getByRole("paragraph").filter({ hasText: /^Net cost$/ })).toBeVisible();
   await expect(department.getByText("360.00", { exact: true }).first()).toBeVisible();
 });
 

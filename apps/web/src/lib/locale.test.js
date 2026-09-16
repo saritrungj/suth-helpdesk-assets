@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, expect, test } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
@@ -32,20 +33,38 @@ test("all translations preserve their interpolation placeholders", () => {
  * ยังเป็นภาษาไทยในโหมดอังกฤษโดยไม่มีอะไรฟ้อง — ความผิดพลาดที่ไม่มีทางเห็นจนกว่า
  * จะมีคนสลับภาษาแล้วอ่านเจอเอง
  *
+ * แบบที่สามคือคำพูดคู่ที่ถูก escape เป็น HTML entity ซึ่งเกิดขึ้นเองเมื่อเขียน
+ * attribute ที่ผูกค่าแล้วข้อความข้างในต้องใช้คำพูดคู่ รูปแบบนี้เคยหลุดทั้งหมด
+ * เช่นกัน และหลุดแบบที่ตัวตรวจยัง "ผ่าน" อยู่ ซึ่งอันตรายกว่าไม่มีตัวตรวจเลย —
+ * เทสสีเขียวคือคำสัญญาว่าตรวจครบแล้ว
+ *
  * (เลี่ยงการเขียนตัวอย่างการเรียกจริงไว้ในคอมเมนต์นี้ เพราะตัวตรวจอ่านไฟล์ตัวเอง
  * ด้วย แล้วจะนับตัวอย่างในคอมเมนต์เป็นข้อความที่ต้องแปล)
  */
 const TRANSLATION_CALLS = [
   /\bt\(\s*("(?:[^"\\]|\\.)*")/g,
   /\bt\(\s*('(?:[^'\\]|\\.)*')/g,
+  /\bt\(\s*(&quot;(?:(?!&quot;).)*&quot;)/g,
 ];
 
 /** อ่านค่า string literal ของ JavaScript ทั้งแบบ " และ ' ให้เป็นข้อความจริง */
 function literalValue(text) {
+  if (text.startsWith("&quot;")) {
+    const decoder = document.createElement("textarea");
+    decoder.innerHTML = text;
+    text = decoder.value;
+  }
   return text.startsWith("'")
     ? text.slice(1, -1).replace(/\\(['\\])/g, "$1")
     : JSON.parse(text);
 }
+
+test("translation scanner decodes entity-escaped template literals", () => {
+  const source = 't' + '(&quot;Say \\"hello\\" &amp; goodbye&quot;)';
+  const matches = [...source.matchAll(TRANSLATION_CALLS[2])];
+  expect(matches).toHaveLength(1);
+  expect(literalValue(matches[0][1])).toBe('Say "hello" & goodbye');
+});
 
 test("every literal translation used by the app has an English entry", () => {
   const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
