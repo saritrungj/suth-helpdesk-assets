@@ -84,6 +84,7 @@ const { mount } = await import("@vue/test-utils");
 const { fiscalYearState, setActiveFiscalYear } = await import("../store/fiscalYear");
 const { authState } = await import("../store/auth");
 const PrintTransactions = (await import("./PrintTransactions.vue")).default;
+const api = (await import("../services/api")).default;
 
 /**
  * ตารางกรอกปลอม — ต้องมี discard() จริง เพราะหน้าเรียกผ่าน template ref
@@ -232,5 +233,51 @@ describe("PrintTransactions ต่อสายด่านกัน draft หา
     expect(askConfirm).not.toHaveBeenCalled();
     expect(changed).toBe(true);
     expect(fiscalYearState.activeId).toBe(2);
+  });
+});
+
+/*
+ * #89 — สรุปยอดทั้งปีไม่เคยถูกโหลด เมื่อปีงบมาถึงหลัง mount
+ *
+ * ตัวด่านไม่เกี่ยว แต่เป็นบั๊กของการ "ต่อสาย" แบบเดียวกับที่ไฟล์นี้มีไว้ดัก:
+ * init() เรียก loadSummary() ตั้งแต่ mount ซึ่งตอนนั้นยังไม่รู้ปีงบ จึงคืนค่าว่าง
+ * ส่วน watcher ที่ควรโหลดซ้ำตอนปีงบมาถึง มี `if (!previous) return` กันรอบแรกของ
+ * immediate ไว้ แล้วกันการเปลี่ยนจาก undefined -> id ไปด้วย ผลคือแผงความคืบหน้า
+ * ขึ้นศูนย์ทุกช่องตลอดไป ทั้งที่ตารางบนหน้าจอเดียวกันมีตัวเลขครบ
+ */
+describe("PrintTransactions โหลดสรุปยอดเมื่อปีงบมาถึงหลัง mount (#89)", () => {
+  const summaryCalls = () =>
+    api.get.mock.calls.filter(([url]) => url === "/print-transactions/summary");
+
+  test("ปีงบยังไม่รู้ตอน mount แล้วมาทีหลัง — ต้องโหลดสรุป", async () => {
+    fiscalYearState.activeId = null;
+    api.get.mockClear();
+
+    const wrapper = await mountPage();
+    expect(summaryCalls()).toHaveLength(0);
+
+    fiscalYearState.activeId = 1;
+    await wrapper.vm.$nextTick();
+    await Promise.resolve();
+
+    expect(summaryCalls().length).toBeGreaterThan(0);
+
+    wrapper.unmount();
+  });
+
+  test("ปีงบมาถึงครั้งแรก ไม่ถือเป็นการเปลี่ยนปี จึงไม่ล้างเดือนที่เลือกไว้", async () => {
+    fiscalYearState.activeId = null;
+    api.get.mockClear();
+
+    const wrapper = await mountPage();
+    wrapper.vm.filters = { ...wrapper.vm.filters, month: "2568-10" };
+    await wrapper.vm.$nextTick();
+
+    fiscalYearState.activeId = 1;
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.vm.filters.month).toBe("2568-10");
+
+    wrapper.unmount();
   });
 });

@@ -1,6 +1,7 @@
 <script setup>
 import { reportContext } from "../components/report-context";
 import { formatFiscalYearRange, formatMonth } from "../lib/locale-format";
+import { dueMonthCount, requiredDeviceCount } from "../lib/entry-coverage";
 
 import { t } from "../lib/locale";
 
@@ -140,6 +141,28 @@ const range = computed(() => activeFiscalYearRange.value);
 const displayYearBE = computed(() => formatFiscalYearRange(range.value));
 const fyMonths = computed(() => fiscalYearMonths(range.value));
 const monthsPerYear = computed(() => fyMonths.value.length || 12);
+
+/**
+ * เดือนที่ "ถึงกำหนดบันทึกแล้ว" ในปีงบนี้ — ไม่ใช่จำนวนเดือนทั้งปี
+ *
+ * ความคืบหน้าเคยเทียบกับ 12 เดือนตายตัว ระหว่างปีงบที่ยังไม่จบจึงไม่มีเครื่องไหน
+ * นับเป็น "กรอกครบ" ได้เลยสักเครื่อง หัวหน้าขึ้นว่า "กรอกครบแล้ว 0 จาก 46 เครื่อง"
+ * ทั้งที่ทุกช่องในตารางบนหน้าจอเดียวกันมีตัวเลขอยู่ และ API ก็ตอบว่าเดือนล่าสุด
+ * ครบแล้ว — ตัวเลขที่ขัดกับสิ่งที่ตาเห็นทำให้คนเลิกเชื่อตัวเลขทั้งหน้า (#89)
+ *
+ * เดือนปัจจุบันยังอ่านมิเตอร์ไม่ได้ จึงไม่ใช่งานค้าง API ตัดสินเรื่องนี้ไว้แล้วผ่าน
+ * status ของแต่ละเดือน ("not_due") ที่นี่จึงอ่านคำตอบนั้น ไม่ตัดสินใหม่เอง
+ */
+const dueMonths = computed(() => dueMonthCount(coverage.value?.months, monthsPerYear.value));
+
+/**
+ * จำนวนเครื่องที่ต้องบันทึกยอดตามที่ API นับ — ไม่ใช่จำนวนแถวในตาราง
+ *
+ * ตารางแสดงทุกเครื่องในทะเบียน ส่วน API นับเฉพาะเครื่องที่อยู่ในช่วงต้องบันทึกยอด
+ * จริง (ADR-0018) สองตัวนี้ต่างกันได้ และเมื่อหัวหน้าใช้ตัวหนึ่งแต่ตารางแสดงอีกตัว
+ * ผู้ใช้จะเห็นตัวส่วนสองแบบบนหน้าเดียวกัน
+ */
+const requiredDevices = computed(() => requiredDeviceCount(coverage.value?.months, devices.value.length));
 
 const STATUS_META = {
   active: { label: t("ใช้งานอยู่"), tone: "ok" },
@@ -430,8 +453,22 @@ async function init() {
 // มาแล้วเสมอ
 watch(
   fiscalYearId,
-  (_, previous) => {
-    if (!previous) return;
+  (current, previous) => {
+    /*
+     * ปีงบเพิ่งรู้ค่าเป็นครั้งแรก (สโตร์โหลดเสร็จหลัง mount) — ไม่ใช่การ "เปลี่ยนปี"
+     *
+     * init() เรียก loadSummary() ไปแล้วตอน mount แต่ตอนนั้นยังไม่รู้ว่าปีงบไหน
+     * มันจึงคืนค่าว่างกลับมา ถ้าตรงนี้ return ทิ้งไปด้วย สรุปยอดทั้งปีจะไม่เคยถูก
+     * โหลดเลยจนกว่าผู้ใช้จะกดสลับปีงบเอง ผลคือแผงความคืบหน้าขึ้นศูนย์ทุกช่อง
+     * ("กรอกครบแล้ว 0 จาก 45 เครื่อง") ทั้งที่ตารางบนหน้าจอเดียวกันมีตัวเลขครบ (#89)
+     *
+     * โหลดสรุป แต่ไม่ล้างเดือนที่เลือกไว้ เพราะผู้ใช้ไม่ได้สั่งเปลี่ยนปีอะไรเลย
+     */
+    if (!previous) {
+      if (current) loadSummary();
+      return;
+    }
+
     filters.value.month = "";
     awaitingDefaultMonth.value = true;
     loadSummary();
@@ -587,16 +624,17 @@ function fillInfo(deviceId) {
 
 function fillStatusOf(deviceId) {
   const filled = fillInfo(deviceId).filled;
-  if (filled >= monthsPerYear.value) return "done";
+  if (filled >= dueMonths.value) return "done";
   return filled > 0 ? "partial" : "none";
 }
 
 /** ความคืบหน้าของทั้งปีงบ — ตัวเลขที่บอกว่างานเดือนนี้เหลืออีกเท่าไหร่ */
 const progress = computed(() => {
-  const total = devices.value.length;
+  const total = requiredDevices.value;
   const done = devices.value.filter((d) => fillStatusOf(d.id) === "done").length;
   const started = devices.value.filter((d) => fillStatusOf(d.id) === "partial").length;
-  return { total, done, started, pending: total - done - started };
+  // ตัวตั้งนับจากแถวในตาราง ตัวส่วนมาจาก API — ต่างชุดกันได้ จึงไม่ปล่อยให้ติดลบ
+  return { total, done, started, pending: Math.max(0, total - done - started) };
 });
 
 const filteredDevices = computed(() => {
@@ -641,7 +679,7 @@ const columns = computed(() => [
     align: "center",
     width: "10rem",
     value: (d) => fillInfo(d.id).filled,
-    csv: (d) => `${fillInfo(d.id).filled}/${monthsPerYear.value}`,
+    csv: (d) => `${fillInfo(d.id).filled}/${dueMonths.value}`,
   },
   {
     key: "total_pages",
@@ -1171,14 +1209,14 @@ onUnmounted(unregisterFiscalYearGuard);
               aria-hidden="true"
             />
             <span :class="fillStatusOf(row.id) === 'done' ? 'text-ok-ink font-medium' : 'text-ink-mute'">
-              {{ fillInfo(row.id).filled }}/{{ monthsPerYear }} {{ t("เดือน") }} </span>
+              {{ fillInfo(row.id).filled }}/{{ dueMonths }} {{ t("เดือน") }} </span>
           </span>
 
           <span class="w-full h-1 rounded-full bg-surface-3 overflow-hidden" aria-hidden="true">
             <span
               class="block h-full rounded-full transition-[width] duration-300"
               :class="fillStatusOf(row.id) === 'done' ? 'bg-ok' : 'bg-warn'"
-              :style="{ width: `${percentOf(fillInfo(row.id).filled, monthsPerYear)}%` }"
+              :style="{ width: `${percentOf(fillInfo(row.id).filled, dueMonths)}%` }"
             ></span>
           </span>
         </span>

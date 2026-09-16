@@ -30,7 +30,7 @@ import { t } from "../lib/locale";
  * 4. (รอบที่ 3 ของ #51, NN/g — Applying filters) ป้ายตัวกรองที่ใช้อยู่เป็นสีแบรนด์ทึบ
  *    ให้ต่างจากปุ่มทั่วไปชัด คนเห็นได้ทันทีว่ากำลังกรองอะไรอยู่
  */
-import { computed, ref, useId, watch } from "vue";
+import { computed, ref, useId, watch, useSlots } from "vue";
 import { SlidersHorizontal, X } from "lucide-vue-next";
 import UiButton from "./UiButton.vue";
 
@@ -47,7 +47,16 @@ const props = defineProps({
 
 const emit = defineEmits(["remove", "clear"]);
 
+const slots = useSlots();
 const panelId = useId();
+
+/**
+ * มีตัวกรองขั้นสูงให้แสดงหรือไม่
+ *
+ * หน้าที่ส่งเฉพาะ #primary มา (ตัวกรองน้อยจนไม่มีอะไรเหลือให้ซ่อน) เคยได้กรอบ
+ * เปล่าสูง 40px แถมมาใต้แถบ เพราะแผงถูกเรนเดอร์เสมอเมื่อปิด collapsible
+ */
+const hasPanel = computed(() => Boolean(slots.default));
 const open = ref(props.chips.length > 0);
 
 /**
@@ -118,6 +127,7 @@ watch(
          ใช้ v-show ไม่ใช่ v-if เพื่อไม่ให้ค่าที่พิมพ์ไว้ในช่องหายตอนหุบ และ
          ไม่ต้องสร้าง combobox ทั้งชุดใหม่ทุกครั้งที่กดเปิด ซึ่งสะดุดตาเห็นได้ -->
     <div
+      v-if="hasPanel"
       v-show="!collapsible || open"
       :id="panelId"
       class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3
