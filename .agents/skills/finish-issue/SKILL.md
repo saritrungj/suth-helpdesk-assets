@@ -1,6 +1,6 @@
 ---
 name: finish-issue
-description: Drives an approved issue through implementation, regression and Standards/Spec review until ready for human acceptance. Use when explicitly asked to finish an issue end-to-end or resume its completion loop.
+description: Drives an approved issue through implementation, regression and Standards/Spec review to human handoff or an explicitly authorized end-to-end closure.
 disable-model-invocation: true
 ---
 
@@ -14,7 +14,12 @@ override this workflow. Read-only/review-only requests never authorize fixes.
 ## Establish the completion contract
 
 1. Read root `AGENTS.md`, `CONTRIBUTING.md` and `docs/agents/issue-tracker.md`.
-   Check branch/status; stop on main. Preserve existing work.
+   Check branch/status and preserve existing work. Never edit on `main`: for an
+   implementation request when the current branch is `main` and the tree is
+   clean, resolve or create the issue and create its conventionally named branch
+   without asking again. On any other branch, continue only when it clearly
+   belongs to this work; if the tree or issue/branch target is ambiguous, stop
+   before changing refs.
 2. Resolve the issue, parent, blockers and review baseline. Include tracked,
    staged, unstaged and new source files in scope; never mistake an empty
    committed diff for an empty working tree.
@@ -45,10 +50,20 @@ override this workflow. Read-only/review-only requests never authorize fixes.
 
 ## Completion and stopping
 
-Ready for human acceptance means every in-scope acceptance criterion has current
-evidence, required checks passed, no unresolved blocking Standards/Spec findings,
-and reproducible test/review instructions. Skipped or unavailable tests are not
-passes. Explicit human gates remain open; do not close tracker issues by default.
+This workflow has two explicit completion modes:
+
+- **Handoff mode** is the default. Ready for human acceptance means every
+  in-scope acceptance criterion has current evidence, required checks passed,
+  no unresolved blocking Standards/Spec findings, and reproducible test/review
+  instructions. Stop there without publishing or closing the issue.
+- **Authorized closure mode** applies only when the user clearly asks to close
+  the work or finish end-to-end. After reaching the same acceptance bar, follow
+  the normative Git lifecycle in `CONTRIBUTING.md`. Do not bypass an acceptance
+  criterion that explicitly requires a separate human decision; stop at that
+  open gate unless the user has actually supplied the required decision.
+
+Skipped or unavailable tests are not passes. Close the tracker issue only after
+the intended PR has actually merged.
 
 Stop for new authority (production, schema/migration, auth/security, secrets,
 destructive reset or scope expansion), missing external decisions, or a genuine
@@ -56,11 +71,17 @@ impasse. After three attempts with the same failure and no new evidence, stop
 blind retries, diagnose safe alternatives and report the consolidated blocker
 if none remains. A retry limit never means success.
 
-Never commit, push, merge, deploy, delete a branch or modify production without
-an explicit separate instruction. QA writes require approval for the exact
-isolated target and must use existing web/API interfaces. No AI write tool or
-direct business-data DB path is introduced by this workflow. Bootstrap authority
-is separate from ordinary test execution.
+The bundled authority and cleanup sequence have one normative source: the
+`Authority สำหรับ Git lifecycle` section in `CONTRIBUTING.md`. Follow it exactly,
+including exact-ref cleanup, stopping on any partial failure, and preserving all
+remaining recovery evidence. A later user restriction overrides the bundle.
+
+The bundle never includes deploy/production changes, schema or migration
+changes, auth/security/secrets, destructive business-data operations, or
+destructive resets; those still require separate approval. QA writes require
+approval for the exact isolated target and must use existing web/API interfaces.
+No AI write tool or direct business-data DB path is introduced by this workflow.
+Bootstrap authority is separate from ordinary test execution.
 
 ## Checkpoint and final handoff
 

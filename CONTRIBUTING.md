@@ -5,7 +5,7 @@
 ## ลำดับการทำงาน
 
 1. เริ่มจาก GitHub Issue เสมอ แล้วแตก branch ที่ผูกกับ Issue นั้น
-2. ตรวจ branch และ `git status` ก่อนแก้ไฟล์ — **ห้ามแก้หรือ commit บน `main`**
+2. ตรวจ branch และ `git status` ก่อนแก้ไฟล์ — **ห้ามแก้หรือ commit บน `main`** ถ้าเป็นคำสั่ง implementation, branch ปัจจุบันคือ `main` และ working tree สะอาด ให้สร้าง/ผูก Issue และแตก branch ตามรูปแบบด้านล่างได้ทันทีโดยไม่ถามผู้ใช้ซ้ำ การสร้าง branch เป็นขั้นตอน local ที่ย้อนกลับได้; ถ้าอยู่บน branch อื่น ให้ตรวจว่า branch นั้นผูกกับงานนี้อยู่แล้วหรือไม่ ถ้ามีงานค้างหรือ Issue/branch เป้าหมายไม่ชัด ให้หยุดเพื่อรักษางานเดิม
 3. อ่าน source ที่เกี่ยวข้อง วิเคราะห์ แล้วเสนอแผนก่อนลงมือ
 4. ทำเฉพาะสิ่งที่อยู่ใน scope ของ Issue และรักษาการเปลี่ยนแปลงที่ผู้อื่นค้างไว้
 5. ตรวจ `git diff` และรัน check ที่สัมพันธ์กับความเสี่ยงของการเปลี่ยนแปลง
@@ -53,12 +53,30 @@ docs: simplify project documentation (#7)
 
 รายงานสิ่งที่ **ไม่ได้** ทดสอบทุกครั้ง
 
+## Authority สำหรับ Git lifecycle
+
+ปกติ commit, push, merge และลบ branch ต้องมีคำสั่งชัดเจน แต่คำสั่งให้ **“ปิดงาน”**, **“finish end-to-end”** หรือความหมายเทียบเท่า ถือเป็น authorization ชุดเดียวให้ทำ Git lifecycle จนครบหลัง acceptance criteria, checks และ review ผ่าน โดยไม่หยุดถามซ้ำทุกขั้น:
+
+1. commit เฉพาะ diff ใน scope แล้ว push feature branch
+2. เปิด PR ที่อ้าง Issue พร้อมผลตรวจและสิ่งที่ไม่ได้ทดสอบ
+3. merge PR และยืนยันว่า Issue ปิดตามที่ตั้งใจ
+4. กลับ `main` และอัปเดตแบบ fast-forward แต่ยังเก็บ local branch และ checkpoint ไว้
+5. ตรวจ resolved path ให้อยู่ใต้ workspace แล้วล้างเฉพาะ generated artifacts ของงาน **ยกเว้น checkpoint** ห้ามลบ source, credential หรือข้อมูลผู้ใช้
+6. ทำ pre-cleanup verification ว่า PR merge แล้ว, Issue อยู่ในสถานะที่ตั้งใจ, merge commit อยู่บน `main`/`origin/main`, working tree สะอาด และ generated artifacts เป้าหมายหาย แล้วบันทึกหลักฐานนี้ไว้ใน PR/Issue และ checkpoint
+7. ลบ exact remote branch, ตรวจด้วย `git ls-remote --heads <remote> <exact-branch>` และถ้า remote-tracking ref เดิมยังค้างให้ลบเฉพาะ ref นั้น ห้ามใช้ global `fetch --prune` เป็น cleanup ของงานเดียว ถ้าขั้นนี้ล้ม local branch และ checkpoint ต้องยังอยู่
+8. ลบ exact local branch หลัง remote cleanup ผ่าน แล้วตรวจว่า ref หายจริง
+9. ลบ checkpoint เป็นรายการสุดท้าย จากนั้นทำ read-only audit ว่า working tree สะอาด, branch เป้าหมายหายทั้ง local/remote และ `main` ตรงกับ `origin/main`; ถ้า audit ล้มให้หยุดโดยไม่ทำ destructive action เพิ่ม และใช้หลักฐานถาวรใน PR/Issue/main กู้สถานะ
+
+ถ้าขั้นตอนใดใน lifecycle, issue closure, main update, branch cleanup, artifact cleanup หรือ final verification ล้ม ให้หยุดขั้นตอนถัดไปทันทีและรักษา branch/หลักฐานที่ยังเหลือไว้สำหรับกู้หรือแก้ปัญหา ห้ามถือว่า partial cleanup คือความสำเร็จ ข้อจำกัดล่าสุดของผู้ใช้ เช่น “ห้าม push” หรือ “ไม่ต้อง merge” ชนะ authorization แบบชุดเสมอ
+
 ## เรื่องที่ต้องขออนุมัติก่อนทำ
 
 - เปลี่ยน schema หรือเพิ่ม migration
 - แตะ auth, สิทธิ์ หรือ secret
-- operation ที่ลบหรือเขียนทับข้อมูล
-- commit, push, merge, ลบ branch, deploy หรือเปลี่ยนอะไรบน production
+- operation ที่ลบหรือเขียนทับข้อมูลธุรกิจ, source, credential หรือไฟล์ผู้ใช้ (ไม่รวม generated artifacts/checkpoint ที่ workflow ระบุให้ล้างหลัง merge)
+- deploy หรือเปลี่ยนอะไรบน production
+
+คำสั่งปิดงานแบบ end-to-end **ไม่ครอบคลุม** รายการข้างบน และไม่อนุญาต destructive business-data operation โดยปริยาย
 
 ## การตัดสินใจที่ย้อนกลับยาก
 
