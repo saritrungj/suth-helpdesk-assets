@@ -953,5 +953,12 @@
   "มี {0} เครื่องที่ยังยืนยันราคาไม่ได้": "{0} devices have no confirmed rate",
   "มี {0} เครื่องที่ยังไม่ได้ตรวจยืนยันสถานะการติดตั้ง": "{0} devices still need their installation status reviewed",
   "ยังยืนยันราคาไม่ได้ {0} รายการ · ยอดนี้ยังไม่ครบ": "{0} readings have no confirmed rate - this amount is incomplete",
-  "ยืนยันความครบถ้วนของยอดพิมพ์ไม่ได้จนกว่าจะตรวจครบ": "Reading coverage cannot be confirmed until the review is complete"
+  "ยืนยันความครบถ้วนของยอดพิมพ์ไม่ได้จนกว่าจะตรวจครบ": "Reading coverage cannot be confirmed until the review is complete",
+  "{0}: {1} → {2} — ยังสรุปไม่ได้เพราะมีรายการที่ยืนยันราคาไม่ได้อยู่": "{0}: {1} → {2} — no conclusion yet, some readings have no confirmed rate",
+  "ยังคำนวณค่าเฉลี่ยครบไม่ได้": "Average not yet computable",
+  "ยังยืนยันราคาไม่ได้ {0} รายการในช่วงที่เลือก เส้นค่าใช้จ่ายด้านล่างจึงเป็นยอดเฉพาะส่วนที่ยืนยันแล้ว": "{0} readings in this range have no confirmed rate, so the cost lines below cover only confirmed amounts",
+  "ยังยืนยันราคาไม่ได้ {0} รายการในสองเดือนนี้ — ตัวเลขค่าใช้จ่ายเป็นยอดเฉพาะส่วนที่ยืนยันแล้ว": "{0} readings across these two months have no confirmed rate — the cost figures cover only confirmed amounts",
+  "สองเดือนนี้มีเครื่องที่บันทึกยอดไม่เท่ากัน ({0} เทียบกับ {1} เครื่อง) ยอดรวมจึงต่างกันได้เองโดยที่การใช้งานไม่เปลี่ยน": "These two months have different numbers of devices reporting ({0} vs {1}), so the totals can differ on their own even if usage did not change",
+  "ยังยืนยันราคาไม่ได้ {0} รายการ — ยอดเงินในไฟล์นี้เป็นเฉพาะส่วนที่ยืนยันราคาแล้ว": "{0} readings have no confirmed rate — the amounts in this file cover only confirmed rates",
+  "ยืนยันราคาครบทุกรายการ": "All rates confirmed"
 }

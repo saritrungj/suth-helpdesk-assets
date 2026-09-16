@@ -127,14 +127,12 @@ const totalDevices = computed(() =>
  *
  * ยอดรวมด้านบนไม่รวมรายการเหล่านี้ ถ้าไม่บอกจำนวนไว้ข้างกัน ผู้อ่านจะเข้าใจว่า
  * ตัวเลขที่เห็นคือค่าใช้จ่ายทั้งหมด ทั้งที่เป็นเพียงส่วนที่ยืนยันราคาได้แล้ว
+ *
+ * มาจาก API ไม่ได้ไล่บวกเองจาก contracts[].devices[] อีกแล้ว — วิธีเดิมตกกลุ่ม
+ * "เครื่องที่สัญญาอยู่คนละปีงบ" ไปทั้งก้อน ทั้งที่กลุ่มนั้นก็แสดงยอดเงินอยู่บน
+ * หน้าเดียวกัน ยอดที่ไม่ครบจึงถูกนำเสนอว่าครบในส่วนนั้น
  */
-const unpricedReadings = computed(() =>
-  contracts.value.reduce(
-    (sum, contract) =>
-      sum + (contract.devices ?? []).reduce((n, device) => n + Number(device.unpriced_readings || 0), 0),
-    0
-  )
-);
+const unpricedReadings = ref(0);
 
 function devicePages(device) {
   return (device.monthly ?? []).reduce((sum, m) => sum + Number(m.pages || 0), 0);
@@ -229,6 +227,7 @@ async function loadExpense() {
     contracts.value = res.data.contracts ?? [];
     outsideYearDevices.value = res.data.outside_year_devices ?? [];
     outsideYearTotal.value = Number(res.data.outside_year_total ?? 0);
+    unpricedReadings.value = Number(res.data.unpriced_readings ?? 0);
     loadedContext = context;
   } catch (err) {
     if (request !== requestId) return;
@@ -237,6 +236,7 @@ async function loadExpense() {
     contracts.value = [];
     outsideYearDevices.value = [];
     outsideYearTotal.value = 0;
+    unpricedReadings.value = 0;
   } finally {
     if (request === requestId) { loading.value = false; loaded = true; }
   }
@@ -257,6 +257,9 @@ async function exportExcel() {
     t("รุ่น"),
     t("จำนวนหน้าดิบ"),
     t("ค่าใช้จ่ายสุทธิ (หัก 2%)"),
+    // คอลัมน์แยก ไม่ใช่การแทนยอดด้วยข้อความ — ยอดต้องยังเป็นตัวเลขให้ Excel บวกได้
+    // ส่วนคำเตือนต้องเดินทางไปกับแถวนั้น ไม่ใช่อยู่แค่ในแผ่นบริบท (ADR-0019 Q27)
+    t("รายการที่ยังยืนยันราคาไม่ได้"),
   ];
 
   const rows = filteredContracts.value.flatMap((contract) =>
@@ -270,6 +273,7 @@ async function exportExcel() {
       device.model || "",
       devicePages(device),
       Number(device.total_cost || 0),
+      Number(device.unpriced_readings || 0),
     ])
   );
 
@@ -280,8 +284,13 @@ async function exportExcel() {
     rows,
     sheetName: t("ค่าใช้จ่ายตามสัญญา"),
     filename: `expense-by-contract${suffix}`,
-    columnWidths: [22, 18, 20, 22, 16, 14, 20],
-    context: reportContext({ months: monthSelection.value, filters: { search: search.value }, labels: { search: t("ค้นหา") } }),
+    columnWidths: [22, 18, 20, 22, 16, 14, 20, 16, 20, 26],
+    context: reportContext({
+      months: monthSelection.value,
+      filters: { search: search.value },
+      labels: { search: t("ค้นหา") },
+      unpricedReadings: unpricedReadings.value,
+    }),
   });
 }
 

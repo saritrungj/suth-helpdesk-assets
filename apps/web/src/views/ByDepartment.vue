@@ -85,6 +85,14 @@ let loadedContext = "";
 
 const divisions = ref([]);
 const unassignedDevices = ref([]);
+
+/**
+ * ยอดพิมพ์ที่ยังหาราคาที่มีผลไม่ได้ในขอบเขตนี้ (ADR-0019 Q27)
+ *
+ * มาจาก API เพราะฝั่งนี้มีแต่ยอดที่รวมแล้ว — ค่าใช้จ่ายที่เป็น NULL ถูกแปลงเป็น
+ * 0 ไปตั้งแต่ตอนรวมยอดแล้ว จำนวนที่ยังไม่รู้ราคาจึงมองไม่เห็นจากตัวเลขที่ได้มา
+ */
+const unpricedReadings = ref(0);
 const monthsWithData = ref([]);
 
 const search = ref("");
@@ -133,6 +141,7 @@ async function loadByDepartment() {
     if (request !== requestId) return;
     divisions.value = res.data.divisions ?? [];
     unassignedDevices.value = res.data.unassignedDevices ?? [];
+    unpricedReadings.value = Number(res.data.unpriced_readings ?? 0);
     loadedContext = context;
   } catch (err) {
     if (request !== requestId) return;
@@ -140,6 +149,7 @@ async function loadByDepartment() {
     loadError.value = t("โหลดข้อมูลแยกตามฝ่าย/แผนกไม่สำเร็จ");
     divisions.value = [];
     unassignedDevices.value = [];
+    unpricedReadings.value = 0;
   } finally {
     if (request === requestId) { loading.value = false; loaded = true; }
   }
@@ -628,7 +638,18 @@ const usageColumns = [
    ส่งออก Excel
    -------------------------------------------------------------------------- */
 async function exportTreeExcel() {
-  const header = [t("ฝ่าย"), t("แผนก"), "Serial", t("รุ่น"), t("ยี่ห้อ"), t("จำนวนหน้าดิบทั้งปีงบ"), t("ค่าใช้จ่ายสุทธิทั้งปีงบ")];
+  const header = [
+    t("ฝ่าย"),
+    t("แผนก"),
+    "Serial",
+    t("รุ่น"),
+    t("ยี่ห้อ"),
+    t("จำนวนหน้าดิบทั้งปีงบ"),
+    t("ค่าใช้จ่ายสุทธิทั้งปีงบ"),
+    // ยอดของแถวนี้ครบหรือยัง — ต้องไปกับแถว ไม่ใช่อยู่แค่ในแผ่นบริบท เพราะคนที่
+    // เรียงหรือกรองตารางใน Excel จะเห็นแค่แถว (ADR-0019 Q27)
+    t("รายการที่ยังยืนยันราคาไม่ได้"),
+  ];
 
   const rows = filteredDivisions.value.flatMap((division) =>
     (division.departments ?? []).flatMap((department) =>
@@ -640,6 +661,7 @@ async function exportTreeExcel() {
         device.brand_name || "",
         Number(device.total_pages || 0),
         Number(device.total_cost || 0),
+        Number(device.unpriced_readings || 0),
       ])
     )
   );
@@ -649,7 +671,11 @@ async function exportTreeExcel() {
     rows,
     sheetName: t("แยกตามฝ่าย-แผนก"),
     filename: "expense-by-department",
-    context: reportContext({ filters: { search: search.value }, labels: { search: t("ค้นหา") } }),
+    context: reportContext({
+      filters: { search: search.value },
+      labels: { search: t("ค้นหา") },
+      unpricedReadings: unpricedReadings.value,
+    }),
   });
 }
 
@@ -697,10 +723,16 @@ onMounted(async () => {
 
     <!-- ยอดรวมทั้งปีงบ — แถบเดียวแบ่งสามช่อง ไม่ใช่การ์ดสามใบ -->
     <div v-if="!comparisonOnly && !loadError" class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft">
+      <!--
+        ชื่อและคำอธิบายเปลี่ยนตามสถานะราคา ชุดเดียวกับแดชบอร์ดและหน้าค่าใช้จ่าย —
+        ยอดที่รวมเฉพาะรายการที่ยืนยันราคาแล้ว ต้องไม่ใช้ชื่อเดียวกับยอดที่ครบ (Q27)
+      -->
       <UiStat plain
-        :label="t(&quot;ค่าใช้จ่ายสุทธิรวม&quot;)"
+        :label="unpricedReadings ? t(&quot;ค่าใช้จ่ายที่ยืนยันแล้ว&quot;) : t(&quot;ค่าใช้จ่ายสุทธิ&quot;)"
         :unit="t(&quot;บาท&quot;)"
-        :hint="t(&quot;หัก 2% แล้ว · ไม่ขึ้นกับช่วงที่เลือกเทียบ&quot;)"
+        :hint="unpricedReadings
+          ? t('ยังยืนยันราคาไม่ได้ {0} รายการ · ยอดนี้ยังไม่ครบ', [formatCount(unpricedReadings)])
+          : t('หัก 2% แล้ว · ไม่ขึ้นกับช่วงที่เลือกเทียบ')"
         :loading="loading"
       >
         {{ formatBahtValue(grandTotalCost) }}

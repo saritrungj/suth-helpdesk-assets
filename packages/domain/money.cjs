@@ -159,6 +159,42 @@ function sumSatang(values) {
 }
 
 /**
+ * รวมค่าใช้จ่ายของยอดพิมพ์หลายรายการ โดยแยกนับรายการที่ยัง**ไม่รู้ราคา**ออกมาด้วย
+ *
+ * ## ทำไมต้องมีฟังก์ชันนี้แทนที่จะเรียก sumSatang ตรงๆ
+ *
+ * ตั้งแต่ ADR-0019 ค่าใช้จ่ายของยอดพิมพ์ที่หาราคาที่มีผลไม่ได้จะเป็น `NULL` ไม่ใช่ 0
+ * — "ยังไม่รู้" กับ "รู้แล้วว่าไม่มีค่าใช้จ่าย" เป็นคนละเรื่องกันโดยสิ้นเชิง
+ *
+ * ปัญหาคือทางเดินปกติของ JavaScript กลืนความต่างนี้ทิ้งหมด: `Number(null)` เป็น 0
+ * `toSatang(null)` เป็น 0 และ `sumSatang([null, null])` เป็น 0 ผลคือหน้าที่รวมเงิน
+ * ด้วยวิธีตรงไปตรงมาที่สุดจะแสดง "ค่าใช้จ่าย ฿0.00" อย่างมั่นใจ ทั้งที่ความจริงคือ
+ * ยังไม่รู้ว่าเท่าไร ซึ่ง Q27 ห้ามไว้ตรงๆ ว่าห้ามแทนค่าที่ไม่ทราบด้วยศูนย์
+ *
+ * เคยหลุดมาแล้วสองหน้า (เปรียบเทียบ และฝ่าย/แผนก) เพราะทั้งคู่เขียน
+ * `sumSatang(rows.map((r) => toSatang(r.total_cost)))` ซึ่งอ่านแล้วดูถูกต้องทุกอย่าง
+ * ฟังก์ชันนี้ทำให้จำนวนรายการที่ไม่รู้ราคา**เดินทางมาพร้อมยอดเสมอ** ผู้เรียกจะเลือก
+ * ไม่แสดงมันก็ได้ แต่ต้องเป็นการตัดสินใจที่มองเห็นได้ในโค้ด ไม่ใช่ผลข้างเคียงเงียบๆ
+ *
+ * @param {Array<number|string|null|undefined>} values ค่าใช้จ่ายเป็นบาท (`null` = ยังไม่รู้ราคา)
+ * @returns {{ satang: number, unpriced: number }}
+ */
+function sumCostSatang(values) {
+  let satang = 0;
+  let unpriced = 0;
+
+  for (const value of values || []) {
+    if (value === null || value === undefined || value === "") {
+      unpriced += 1;
+      continue;
+    }
+    satang += toSatang(value);
+  }
+
+  return { satang, unpriced };
+}
+
+/**
  * จัดรูปแบบเงินสำหรับแสดงผล เช่น "1,209.60"
  * @param {number} satang
  * @returns {string}
@@ -181,5 +217,6 @@ module.exports = {
   costSatangAt,
   effectivePriceSatang,
   sumSatang,
+  sumCostSatang,
   formatBaht,
 };

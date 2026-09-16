@@ -21,8 +21,8 @@ import { t } from "../lib/locale";
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { Minus, TrendingDown, TrendingUp } from "lucide-vue-next";
-import { fiscalYearMonths, fromSatang, sumSatang, toSatang } from "@suth/domain";
+import { CircleAlert, Info, Minus, TrendingDown, TrendingUp } from "lucide-vue-next";
+import { fiscalYearMonths, fromSatang, sumCostSatang } from "@suth/domain";
 import { activeFiscalYear, activeFiscalYearRange } from "../store/fiscalYear";
 import api from "../services/api";
 import { useMonthlyKpi } from "../api/queries";
@@ -45,8 +45,18 @@ import {
 const route = useRoute();
 const router = useRouter();
 
+/**
+ * รวมค่าใช้จ่ายของแถว v_monthly_kpi พร้อมจำนวนรายการที่ยังยืนยันราคาไม่ได้
+ *
+ * เดิมบรรทัดนี้เป็น `sumSatang(rows.map((r) => toSatang(r.total_cost)))` ซึ่งอ่าน
+ * แล้วดูถูกต้องทุกอย่าง แต่ `toSatang(null)` เป็น 0 — รายการที่ยังไม่รู้ราคาจึง
+ * ถูกบวกเข้าไปเป็นศูนย์บาท แล้วหน้านี้ประกาศยอดที่ไม่ครบเป็นข้อสรุป ผิด Q27
+ */
 function sumCost(rows) {
-  return fromSatang(sumSatang((rows ?? []).map((r) => r.total_cost_satang ?? toSatang(r.total_cost))));
+  const { satang, unpriced } = sumCostSatang(
+    (rows ?? []).map((r) => (r.total_cost_satang != null ? fromSatang(r.total_cost_satang) : r.total_cost))
+  );
+  return { cost: fromSatang(satang), unpriced };
 }
 
 /* --------------------------------------------------------------------------
@@ -198,14 +208,18 @@ function aggregate(month) {
 
   const totalPages = rows.reduce((s, r) => s + Number(r.pages_printed || 0), 0);
   const netPages = rows.reduce((s, r) => s + Number(r.net_pages || 0), 0);
-  const totalCost = sumCost(rows);
+  const { cost: totalCost, unpriced } = sumCost(rows);
 
   return {
     totalPages,
     netPages,
     totalCost,
+    unpriced,
     activeDevices: new Set(rows.map((r) => r.device_id)).size,
-    costPerPage: totalPages > 0 ? totalCost / totalPages : 0,
+
+    // ค่าเฉลี่ยต่อหน้าคำนวณไม่ได้เมื่อตัวเศษยังไม่ครบ — ยอดเงินบางส่วนหารด้วย
+    // จำนวนหน้าทั้งหมด ให้ตัวเลขที่ต่ำกว่าความจริงโดยไม่มีอะไรบอก (Q29)
+    costPerPage: unpriced > 0 ? null : totalPages > 0 ? totalCost / totalPages : 0,
   };
 }
 
@@ -244,6 +258,8 @@ const METRICS = [
     unit: t("บาท"),
     hint: t("หลังหัก 2% แล้ว"),
     format: formatBahtValue,
+    // ตัวชี้วัดที่ค่าขึ้นกับราคา — เทียบข้ามเดือนไม่ได้จนกว่าราคาจะครบทั้งสองเดือน
+    needsPrice: true,
   },
   {
     key: "activeDevices",
@@ -260,13 +276,31 @@ const METRICS = [
     label: t("ค่าใช้จ่ายต่อหน้าที่พิมพ์จริง"),
     unit: t("บาท/หน้า"),
     hint: t("ค่าใช้จ่ายสุทธิ หารด้วยจำนวนหน้าดิบ"),
-    format: (v) => Number(v).toFixed(3),
+    format: (v) => (v === null ? t("ยังคำนวณค่าเฉลี่ยครบไม่ได้") : Number(v).toFixed(3)),
+    needsPrice: true,
   },
 ];
+
+const METRIC_BY_KEY = Object.fromEntries(METRICS.map((metric) => [metric.key, metric]));
 
 function diffPercent(before, after) {
   if (!before) return after > 0 ? 100 : 0;
   return ((after - before) / before) * 100;
+}
+
+/**
+ * เทียบสองเดือนนี้ได้จริงหรือยัง สำหรับตัวชี้วัดตัวนี้
+ *
+ * ตัวชี้วัดที่ขึ้นกับราคา เทียบกันไม่ได้เมื่อเดือนใดเดือนหนึ่งยังมีรายการที่ยืนยัน
+ * ราคาไม่ได้ — ยอดที่เอามาเทียบเป็นยอด "เท่าที่รู้" ของคนละสัดส่วนกัน เปอร์เซ็นต์
+ * ที่ได้จึงไม่ได้วัดการเปลี่ยนแปลงของค่าใช้จ่าย แต่วัดว่าเดือนไหนยืนยันราคาไปได้
+ * มากกว่ากัน ซึ่งเป็นคนละคำถามโดยสิ้นเชิง (Q30)
+ */
+function comparable(metric, before, after) {
+  if (!before || !after) return false;
+  if (before[metric.key] === null || after[metric.key] === null) return false;
+  if (metric.needsPrice && (before.unpriced > 0 || after.unpriced > 0)) return false;
+  return true;
 }
 
 /** ผลต่างเทียบกับเดือนก่อนหน้า "ในรายการที่เลือก" ไม่ใช่เดือนก่อนหน้าตามปฏิทิน */
@@ -274,9 +308,14 @@ function deltaVsPrevious(metricKey, index) {
   if (index === 0) return null;
   const previous = monthStats.value[index - 1].stats;
   const current = monthStats.value[index].stats;
-  if (!previous || !current) return null;
+  if (!comparable(METRIC_BY_KEY[metricKey], previous, current)) return null;
   return diffPercent(previous[metricKey], current[metricKey]);
 }
+
+/** รายการที่ยืนยันราคาไม่ได้ในทุกเดือนที่กำลังดูอยู่ ไม่ใช่แค่สองเดือนที่เอามาเทียบ */
+const unpricedInSelection = computed(() =>
+  monthStats.value.reduce((sum, entry) => sum + (entry.stats?.unpriced || 0), 0)
+);
 
 const summaryFirst = computed(() => monthStats.value[0] ?? null);
 const summaryLast = computed(() =>
@@ -286,9 +325,28 @@ const summaryLast = computed(() =>
 const summaryLines = computed(() => {
   if (!summaryFirst.value?.stats || !summaryLast.value?.stats) return [];
 
+  const first = summaryFirst.value.stats;
+  const last = summaryLast.value.stats;
+
   return METRICS.map((metric) => {
-    const before = summaryFirst.value.stats[metric.key];
-    const after = summaryLast.value.stats[metric.key];
+    const before = first[metric.key];
+    const after = last[metric.key];
+
+    // เทียบไม่ได้ = บอกยอดของแต่ละเดือนไปตามตรงพร้อมเหตุผล ไม่ใช่เงียบหายไปทั้ง
+    // บรรทัด (ซึ่งทำให้ดูเหมือนตัวชี้วัดนี้ไม่มีอยู่) และไม่ใช่สรุปเปอร์เซ็นต์จาก
+    // ยอดที่ยังไม่ครบ (ซึ่งเป็นการสรุปที่ข้อมูลยังไม่พอจะพูด — Q30)
+    if (!comparable(metric, first, last)) {
+      return {
+        trend: null,
+        incomplete: true,
+        text: t("{0}: {1} → {2} — ยังสรุปไม่ได้เพราะมีรายการที่ยืนยันราคาไม่ได้อยู่", [
+          metric.label,
+          metric.format(before),
+          metric.format(after),
+        ]),
+      };
+    }
+
     const percent = diffPercent(before, after);
 
     if (Math.abs(percent) < 0.05) {
@@ -305,6 +363,43 @@ const summaryLines = computed(() => {
         t("(จาก {0} เป็น {1} {2})", [metric.format(before), metric.format(after), metric.unit]),
     };
   });
+});
+
+/**
+ * ข้อเท็จจริงที่ต้องอ่านคู่กับบทสรุปเสมอ ไม่ใช่เชิงอรรถที่จะละไว้ก็ได้
+ *
+ * ## ทำไมจำนวนเครื่องที่ต่างกันถึงสำคัญกว่าที่เห็น
+ *
+ * บทสรุปของหน้านี้เทียบ "เดือนแรกกับเดือนสุดท้าย" ของยอดรวม โดยไม่เคยบอกว่าสอง
+ * เดือนนั้นมาจากเครื่องคนละจำนวนกัน เดือนที่บันทึกยอดไป 12 เครื่องกับเดือนที่
+ * บันทึกไป 20 เครื่อง ย่อมมียอดรวมต่างกันแน่นอนแม้ทุกเครื่องพิมพ์เท่าเดิมทุกแผ่น
+ * — "ค่าใช้จ่ายเพิ่มขึ้น 67%" ในกรณีนั้นวัดความคืบหน้าของการกรอกข้อมูล ไม่ได้วัด
+ * ค่าใช้จ่าย แต่คนอ่านไม่มีทางรู้ (Q30)
+ */
+const summaryCaveats = computed(() => {
+  const first = summaryFirst.value?.stats;
+  const last = summaryLast.value?.stats;
+  if (!first || !last) return [];
+
+  const notes = [];
+
+  if (first.activeDevices !== last.activeDevices) {
+    notes.push(
+      t("สองเดือนนี้มีเครื่องที่บันทึกยอดไม่เท่ากัน ({0} เทียบกับ {1} เครื่อง) ยอดรวมจึงต่างกันได้เองโดยที่การใช้งานไม่เปลี่ยน", [
+        formatCount(first.activeDevices),
+        formatCount(last.activeDevices),
+      ])
+    );
+  }
+
+  const unpriced = (first.unpriced || 0) + (last.unpriced || 0);
+  if (unpriced > 0) {
+    notes.push(
+      t("ยังยืนยันราคาไม่ได้ {0} รายการในสองเดือนนี้ — ตัวเลขค่าใช้จ่ายเป็นยอดเฉพาะส่วนที่ยืนยันแล้ว", [formatCount(unpriced)])
+    );
+  }
+
+  return notes;
 });
 
 onMounted(async () => {
@@ -400,15 +495,28 @@ onMounted(async () => {
         <ul class="flex flex-col gap-2 list-none">
           <li v-for="(line, index) in summaryLines" :key="index" class="flex items-start gap-2 text-sm">
             <component
-              :is="line.trend === 'up' ? TrendingUp : line.trend === 'down' ? TrendingDown : Minus"
+              :is="line.incomplete ? CircleAlert : line.trend === 'up' ? TrendingUp : line.trend === 'down' ? TrendingDown : Minus"
               :size="15"
               class="shrink-0 mt-0.5"
               :class="
-                line.trend === 'up' ? 'text-danger-ink' : line.trend === 'down' ? 'text-ok-ink' : 'text-ink-mute'
+                line.incomplete ? 'text-warn-ink'
+                : line.trend === 'up' ? 'text-danger-ink'
+                : line.trend === 'down' ? 'text-ok-ink' : 'text-ink-mute'
               "
               aria-hidden="true"
             />
             <span class="text-ink-soft">{{ line.text }}</span>
+          </li>
+        </ul>
+
+        <!--
+          ข้อจำกัดของการเทียบครั้งนี้ อยู่ในการ์ดเดียวกับบทสรุปโดยตั้งใจ — เป็น
+          เงื่อนไขของตัวเลขข้างบน ไม่ใช่ข้อมูลเสริมที่จะย้ายไปไว้ที่อื่นก็ได้
+        -->
+        <ul v-if="summaryCaveats.length" class="mt-3 pt-3 border-t border-line-soft flex flex-col gap-1.5 list-none">
+          <li v-for="(note, index) in summaryCaveats" :key="`caveat-${index}`" class="flex items-start gap-2 text-sm text-ink-mute">
+            <Info :size="15" class="shrink-0 mt-0.5" aria-hidden="true" />
+            <span>{{ note }}</span>
           </li>
         </ul>
       </UiCard>
@@ -469,6 +577,15 @@ onMounted(async () => {
           </table>
         </div>
       </UiCard>
+      <!--
+        กราฟของตัวชี้วัดที่ขึ้นกับราคา วาดจากยอดเฉพาะส่วนที่ยืนยันราคาแล้ว —
+        รูปทรงของเส้นจึงสะท้อนความคืบหน้าของการยืนยันราคาปนอยู่ด้วย ไม่ใช่การใช้งาน
+        อย่างเดียว บอกไว้ครั้งเดียวเหนือกราฟทั้งชุด ดีกว่าเขียนซ้ำบนทุกใบ
+      -->
+      <UiAlert v-if="unpricedInSelection > 0" tone="warn" class="mb-4">
+        {{ t("ยังยืนยันราคาไม่ได้ {0} รายการในช่วงที่เลือก เส้นค่าใช้จ่ายด้านล่างจึงเป็นยอดเฉพาะส่วนที่ยืนยันแล้ว", [formatCount(unpricedInSelection)]) }}
+      </UiAlert>
+
       <!-- กราฟรายตัวชี้วัด -->
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <!-- กราฟย่อยชุดเดียวกันหลายใบ (small multiples) — ทุกใบมีชุดข้อมูลเดียว

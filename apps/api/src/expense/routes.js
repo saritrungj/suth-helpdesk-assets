@@ -287,6 +287,9 @@ router.get(
         total_pages: contract.devices.reduce((sum, d) => sum + d.total_pages, 0),
         total_cost_satang,
         total_cost: fromSatang(total_cost_satang),
+        // ยอดของสัญญาฉบับนี้ครบหรือยัง — ต้องเดินทางมาพร้อมยอดเสมอ ไม่ใช่ให้ผู้เรียก
+        // ไปไล่บวกจาก devices[] เอง ซึ่งแต่ละที่จะบวกครอบคลุมไม่เท่ากัน (Q27)
+        unpriced_readings: contract.devices.reduce((sum, d) => sum + d.unpriced_readings, 0),
       };
     });
 
@@ -361,10 +364,16 @@ router.get(
       // ตัวเลขบาทแบบทศนิยม ซึ่งคลาดเคลื่อนได้เมื่อรวมกันหลายร้อยรายการ
       total_cost_satang: grand_total_satang,
       total_cost: fromSatang(grand_total_satang),
+      // จำนวนรายการที่ยังยืนยันราคาไม่ได้ทั้งหน้า — รวมทั้งกลุ่มนอกปีงบด้านล่าง
+      // ซึ่งฝั่งเว็บเคยไล่บวกเองจาก contracts[].devices[] แล้วตกกลุ่มนี้ไปทั้งก้อน
+      unpriced_readings:
+        contractList.reduce((sum, c) => sum + c.unpriced_readings, 0)
+        + outsideDevices.reduce((sum, d) => sum + d.unpriced_readings, 0),
       // เครื่องที่พิมพ์ในปีงบนี้แต่สัญญาอยู่คนละปีงบ — ไม่ถูกนับใน total ด้านบน
       outside_year_devices: outsideDevices,
       outside_year_total_satang: outside_total_satang,
       outside_year_total: fromSatang(outside_total_satang),
+      outside_year_unpriced_readings: outsideDevices.reduce((sum, d) => sum + d.unpriced_readings, 0),
     });
   })
 );

@@ -37,6 +37,7 @@ export const {
   costSatangAt,
   effectivePriceSatang,
   sumSatang,
+  sumCostSatang,
   formatBaht,
   USER_ROLES,
   USER_ROLE_LABELS,

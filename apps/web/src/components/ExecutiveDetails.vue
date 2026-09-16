@@ -34,7 +34,7 @@ async function exportRows() {
       filename: 'dashboard-cost-details', sheetName: t('รายละเอียด'),
       header: [t('เดือน'), 'Serial', t('แผนก'), t('สัญญา'), t('หน้าสุทธิ'), t('ค่าใช้จ่ายสุทธิ (บาท)'), t('สถานะราคา')],
       rows: visibleRows.value.map(row => [row.month, row.serial_number, row.department_name, row.contract_no, Number(row.net_pages || 0), row.total_cost == null ? null : Number(row.total_cost), row.total_cost == null ? t('ยังยืนยันราคาไม่ได้') : t('ยืนยันแล้ว')]),
-      context: [[t('ช่วงรายงาน'), props.context], [t('ขอบเขต'), props.scope?.label || t('ทั้งหมด')], [t('ค้นหา'), search.value], [t('รายการที่ยังยืนยันราคาไม่ได้'), totals.value.unpriced]],
+      context: [[t('ช่วงรายงาน'), props.context], [t('ขอบเขต'), props.scope?.label || t('ทั้งหมด')], [t('ค้นหา'), search.value], [t('สถานะราคา'), totals.value.unpriced ? t('ยังยืนยันราคาไม่ได้ {0} รายการ — ยอดเงินในไฟล์นี้เป็นเฉพาะส่วนที่ยืนยันราคาแล้ว', [totals.value.unpriced]) : t('ยืนยันราคาครบทุกรายการ')]],
     });
   } catch (error) { exportError.value = errorMessage(error, t('ส่งออกไม่สำเร็จ')); }
   finally { exporting.value = false; }
