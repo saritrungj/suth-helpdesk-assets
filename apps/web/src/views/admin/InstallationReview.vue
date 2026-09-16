@@ -144,7 +144,7 @@ onMounted(load);
 <template>
   <div>
     <UiPageHeader
-      :eyebrow="t(&quot;ผู้ดูแลระบบ · ทะเบียนเครื่องพิมพ์&quot;)"
+      :eyebrow="t(&quot;ตั้งค่าระบบ&quot;)"
       :title="t(&quot;ตรวจยืนยันสถานะการติดตั้ง&quot;)"
       :description="t(&quot;ระบบไม่เดาให้ว่าเครื่องเดิมติดตั้งแล้วหรือยัง ความครบถ้วนของยอดพิมพ์จะยืนยันได้เมื่อตรวจครบทุกเครื่อง&quot;)"
     >

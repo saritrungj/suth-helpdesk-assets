@@ -410,9 +410,8 @@ onMounted(async () => {
 <template>
   <div>
     <UiPageHeader
-      :eyebrow="t(&quot;รายงาน&quot;)"
       :title="t(&quot;เปรียบเทียบ&quot;)"
-      :description="t(&quot;เลือกเดือนที่ต้องการวางเทียบกัน ระบบจะสรุปให้ว่าตัวเลขไหนขยับไปทางไหนและกี่เปอร์เซ็นต์&quot;)"
+      :description="t(&quot;ยอดรวมของสองเดือนต่างกันได้เองเมื่อจำนวนเครื่องที่บันทึกยอดไม่เท่ากัน หรือเมื่อยังยืนยันราคาไม่ครบ&quot;)"
     />
 
     <UiSegmented v-model="comparisonType" :options="COMPARISON_TYPES" :label="t(&quot;รูปแบบการเปรียบเทียบ&quot;)" class="mb-4" />

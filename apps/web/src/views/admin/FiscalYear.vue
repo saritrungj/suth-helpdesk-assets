@@ -49,7 +49,6 @@ const fields = [
 <template>
   <MasterDataPage
     :title="t(&quot;ปีงบประมาณ&quot;)"
-    :eyebrow="t(&quot;ข้อมูลอ้างอิง · สัญญาและงบประมาณ&quot;)"
     :description="t(&quot;ปีงบที่เลือกได้จากแถบด้านบน และเป็นตัวกำหนดช่วงเดือนของทุกรายงาน&quot;)"
     endpoint="/fiscal-years"
     :item-noun="t(&quot;ปีงบประมาณ&quot;)"

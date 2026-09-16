@@ -37,7 +37,6 @@ const fields = [
 <template>
   <MasterDataPage
     :title="t(&quot;ชั้นในอาคาร&quot;)"
-    :eyebrow="t(&quot;ข้อมูลอ้างอิง · สถานที่&quot;)"
     :description="t(&quot;ชั้นที่ใช้ระบุตำแหน่งของเครื่องพิมพ์แต่ละเครื่อง&quot;)"
     endpoint="/floors"
     :item-noun="t(&quot;ชั้น&quot;)"

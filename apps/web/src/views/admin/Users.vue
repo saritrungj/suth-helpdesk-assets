@@ -189,9 +189,8 @@ onMounted(load);
 <template>
   <div>
     <UiPageHeader
-      :eyebrow="t(&quot;ผู้ดูแลระบบ · บัญชีผู้ใช้&quot;)"
       :title="t(&quot;จัดการผู้ใช้งานระบบ&quot;)"
-      :description="t(&quot;เพิ่ม แก้ไข และกำหนดสิทธิ์ของผู้ที่เข้าใช้งานระบบ&quot;)"
+      :description="t(&quot;บัญชีที่เข้าระบบได้ และสิทธิ์ที่กำหนดว่าใครแก้ข้อมูลอะไรได้บ้าง&quot;)"
     >
       <template #actions>
         <UiButton variant="primary" @click="openCreate">

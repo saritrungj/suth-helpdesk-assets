@@ -57,7 +57,6 @@ const fields = [
 <template>
   <MasterDataPage
     :title="t(&quot;สัญญาเช่า&quot;)"
-    :eyebrow="t(&quot;ข้อมูลอ้างอิง · สัญญาและงบประมาณ&quot;)"
     :description="t(&quot;สัญญาและราคาต่อหน้าที่ระบบใช้คำนวณค่าใช้จ่ายของทุกเครื่อง&quot;)"
     endpoint="/contracts"
     :item-noun="t(&quot;สัญญา&quot;)"

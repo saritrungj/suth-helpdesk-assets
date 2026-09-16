@@ -42,7 +42,6 @@ import {
 
 const props = defineProps({
   title: { type: String, required: true },
-  eyebrow: { type: String, default: t("ข้อมูลอ้างอิง") },
   description: { type: String, default: "" },
   /** เส้น API ของชุดข้อมูลนี้ เช่น "/brands" — ใช้ทั้ง GET/POST/PUT/DELETE */
   endpoint: { type: String, required: true },
@@ -264,7 +263,7 @@ onMounted(async () => {
 
 <template>
   <div>
-    <UiPageHeader :eyebrow="eyebrow" :title="title" :description="description">
+    <UiPageHeader :title="title" :description="description">
       <template #actions>
         <UiButton variant="primary" @click="openCreate">
           <template #icon><Plus :size="16" /></template> {{ t("เพิ่ม") }} {{ itemNoun }}

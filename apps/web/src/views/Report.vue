@@ -430,7 +430,6 @@ onMounted(async () => {
 <template>
   <div>
     <UiPageHeader
-      :eyebrow="t(&quot;รายงาน&quot;)"
       :title="t(&quot;ยอดพิมพ์รายเดือนตามเครื่อง&quot;)"
       :description="t(&quot;ยอดมิเตอร์ดิบของแต่ละเครื่องในปีงบ {0} — เครื่องที่ย้ายที่ตั้งกลางปีจะถูกแยกเป็นคนละแถวตามช่วงที่ตั้ง&quot;, [displayYearBE])"
     />

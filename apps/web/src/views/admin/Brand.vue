@@ -31,7 +31,6 @@ const fields = [
 <template>
   <MasterDataPage
     :title="t(&quot;ยี่ห้ออุปกรณ์&quot;)"
-    :eyebrow="t(&quot;ข้อมูลอ้างอิง · อุปกรณ์&quot;)"
     :description="t(&quot;ยี่ห้อที่เลือกได้ตอนเพิ่มเครื่องเข้าทะเบียน&quot;)"
     endpoint="/brands"
     :item-noun="t(&quot;ยี่ห้อ&quot;)"
