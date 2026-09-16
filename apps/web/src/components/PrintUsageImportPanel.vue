@@ -4,6 +4,7 @@ import { Download, Upload } from "lucide-vue-next";
 import api from "../services/api";
 import { errorMessage } from "../lib/api-error";
 import { formatCount } from "../lib/format";
+import { toCsv } from "../lib/export-csv";
 import { UiAlert, UiButton } from "../ui";
 import FileDropzone from "./FileDropzone.vue";
 import { t } from "../lib/locale";
@@ -41,9 +42,8 @@ function downloadErrors() {
   for (const error of preview.value?.errors ?? []) {
     rows.push([error.row, error.serial_number, error.month || "", error.reason]);
   }
-  const csv = rows
-    .map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(","))
-    .join("\r\n");
+  // ค่าในไฟล์นี้มาจากไฟล์ที่ผู้ใช้อัปโหลด ต้องผ่าน toCsv ที่บังคับให้เป็นข้อความ (#87)
+  const csv = toCsv(rows);
   const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" }));
   const link = document.createElement("a");
   link.href = url;
