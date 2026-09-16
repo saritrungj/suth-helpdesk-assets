@@ -6,6 +6,7 @@ const asyncHandler = require("../shared/async-handler");
 const { badRequest, conflict } = require("../shared/http-error");
 const { recordLocationHistory } = require("../devices/controller");
 const { MAX_PAGES_PER_MONTH, normalizeMonth } = require("@suth/domain");
+const { rowFieldProblems } = require("./row-rules");
 
 // ============================================================
 // ตัวช่วยที่ทั้งสอง handler ใช้ร่วมกัน
@@ -28,6 +29,36 @@ function removeUploadedFile(file) {
   } catch (err) {
     console.error("IMPORT TEMP FILE CLEANUP ERROR:", err);
   }
+}
+
+/**
+ * อ่านไฟล์ที่อัปโหลดมาเป็นแผ่นงานแรก — ไฟล์ที่ SheetJS แกะไม่ออกต้องเป็น 400 ไม่ใช่ 500
+ *
+ * ด่านนามสกุล/MIME ที่ routes.js กันไว้เชื่อได้แค่ชื่อไฟล์กับหัวที่ client ส่งมา ซึ่ง
+ * ทั้งสองอย่างผู้ส่งตั้งเองได้ ไฟล์ HTML ที่ถูกเปลี่ยนนามสกุลเป็น .xlsx (ซึ่งเกิดจริง
+ * เวลาคน "Save as" จากระบบอื่น) จึงผ่านด่านนั้นมาแล้วไประเบิดตอน XLSX.readFile
+ * ผู้ใช้เห็น "เกิดข้อผิดพลาดในระบบ" ซึ่งบอกไม่ได้ว่าต้องไปแก้อะไร
+ */
+function readFirstSheet(filePath) {
+  let workbook;
+  try {
+    workbook = XLSX.readFile(filePath);
+  } catch (err) {
+    throw badRequest("ไฟล์นี้เปิดเป็นตารางไม่ได้", {
+      code: "unreadable_file",
+      detail: "ไฟล์อาจเสียหาย หรือเป็นไฟล์ชนิดอื่นที่ถูกเปลี่ยนนามสกุลมาเป็น .xlsx/.csv — ลองเปิดด้วย Excel แล้วบันทึกใหม่",
+    });
+  }
+
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!sheet) {
+    throw badRequest("ไม่พบแผ่นงานในไฟล์", {
+      code: "no_sheet",
+      detail: "ไฟล์นี้ไม่มีแผ่นงานที่อ่านข้อมูลได้",
+    });
+  }
+
+  return sheet;
 }
 
 /**
@@ -84,9 +115,7 @@ exports.importDevices = asyncHandler(async (req, res) => {
 
 
         // อ่าน Excel
-        const workbook = XLSX.readFile(req.file.path);
-
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const sheet = readFirstSheet(req.file.path);
 
         const rows = XLSX.utils.sheet_to_json(sheet, {
             defval: ""
@@ -122,6 +151,10 @@ exports.importDevices = asyncHandler(async (req, res) => {
 
         const insertData = [];
         const skipped = []; // แถวที่ import ไม่ได้ พร้อมเหตุผล ให้ frontend แสดงให้ผู้ใช้แก้ไขได้
+
+        // ซีเรียลที่เจอไปแล้วในไฟล์เดียวกัน — ต้องรายงานเป็นเหตุผลรายแถว ไม่ใช่ปล่อยให้
+        // ไปชน UNIQUE KEY ตอน INSERT แล้วทั้งไฟล์ล้มด้วยข้อความที่ชี้ไปผิดแถว
+        const seenSerials = new Set();
 
 
         for (const row of rows) {
@@ -198,6 +231,10 @@ exports.importDevices = asyncHandler(async (req, res) => {
 
 
             const reasons = [];
+
+            // กฎที่ตรวจได้จากตัวแถวเอง อยู่ใน row-rules.js เพื่อให้เขียนเทสได้โดยไม่ต้องมีฐานข้อมูล (#85)
+            reasons.push(...rowFieldProblems({ serial_number, model, location }, seenSerials));
+
             if (!brand_id) reasons.push(`ไม่พบยี่ห้อ "${brand || "(ว่าง)"}" ในระบบ`);
             if (!building_id) reasons.push(`ไม่พบอาคาร "${building || "(ว่าง)"}" ในระบบ`);
 
@@ -258,6 +295,10 @@ exports.importDevices = asyncHandler(async (req, res) => {
             }
 
 
+
+            // นับซีเรียลนี้เข้าไปเฉพาะเมื่อแถวผ่านจริง — แถวที่ถูกข้ามด้วยเหตุผลอื่น
+            // ไม่ควรไปกันแถวถัดไปที่มีซีเรียลเดียวกันและอาจจะถูกต้อง
+            seenSerials.add(serial_number);
 
             insertData.push({
                 serial_number,
@@ -376,8 +417,7 @@ exports.importPrintTransactions = asyncHandler(async (req, res) => {
         // นี้เข้า route ใหม่โดยลืม handleUpload
         if (!req.file) throw badRequest("กรุณาเลือกไฟล์ที่ต้องการนำเข้า", { code: "no_file" });
 
-        const workbook = XLSX.readFile(req.file.path);
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const sheet = readFirstSheet(req.file.path);
 
         const raw = XLSX.utils.sheet_to_json(sheet, {
             header: 1,
