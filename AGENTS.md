@@ -87,7 +87,7 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 
 ลำดับการทำงานเต็ม ชื่อ branch รูปแบบ commit และข้อกำหนดของ PR อยู่ใน `CONTRIBUTING.md` — ส่วนที่ต้องยึดทุกครั้ง:
 
-1. ตรวจ branch และ `git status` ก่อนแก้ไฟล์ ถ้าอยู่บน `main` ให้หยุดและแจ้งผู้ใช้
+1. ตรวจ branch และ `git status` ก่อนแก้ไฟล์ — ห้ามแก้บน `main`; ถ้าผู้ใช้สั่ง implementation, อยู่บน `main` และ working tree สะอาด ให้สร้าง/ผูก Issue แล้วสร้าง branch ตาม `CONTRIBUTING.md` ได้ทันทีโดยไม่ถามซ้ำ ถ้าอยู่บน branch อื่นให้ใช้ต่อเฉพาะเมื่อผูกกับงานนี้ชัดเจน ถ้ามีงานค้างหรือ branch เป้าหมายไม่ชัดให้หยุดเพื่อรักษางานเดิม
 2. อ่าน source ที่เกี่ยวข้อง วิเคราะห์ และเสนอแผนก่อนแก้
 3. ทำเฉพาะ Issue scope และรักษาการเปลี่ยนแปลงเดิมของผู้ใช้
 4. ตรวจ `git diff` และรัน checks ที่สัมพันธ์กับความเสี่ยงก่อนส่งมอบ
@@ -95,7 +95,7 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 
 **commit ที่ย้ายไฟล์ ห้ามเปลี่ยนพฤติกรรมไปด้วย** แยกเป็นคนละ commit เสมอ ไม่งั้น review และ bisect ไม่ได้จริง
 
-ต้องได้รับคำสั่งชัดเจนก่อน commit, push, merge, delete branch, deploy หรือเปลี่ยน production และต้องขออนุมัติก่อนเปลี่ยน schema/migration, auth/security, secrets หรือทำ destructive operation
+การสร้าง branch สำหรับงาน implementation เป็นขั้นตอนปกติที่ย้อนกลับได้ ไม่ต้องขออนุมัติแยก ส่วน commit, push, merge และลบ branch ต้องมีคำสั่งชัดเจน เว้นแต่ผู้ใช้สั่งให้ **ปิดงาน / finish end-to-end** หรือความหมายเทียบเท่า ซึ่งเป็น authorization ชุดเดียวหลัง checks และ review ผ่าน รายละเอียดลำดับ, exact-branch cleanup, failure handling และข้อยกเว้นทั้งหมดมี source of truth ที่หัวข้อ [Authority สำหรับ Git lifecycle](CONTRIBUTING.md#authority-สำหรับ-git-lifecycle) ข้อจำกัดล่าสุดของผู้ใช้ชนะเสมอ
 
 การตัดสินใจที่ย้อนกลับยากต้องเขียน ADR ไว้ใน `docs/decisions/` ตอนที่ตัดสิน ไม่ใช่ตอนสรุปทีหลัง
 
