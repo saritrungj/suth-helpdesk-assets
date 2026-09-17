@@ -67,7 +67,7 @@ test("accordion, rail tooltip และ command search ใช้คีย์บ�
   await page.mouse.move(800, 700);
   await expect(entry).not.toHaveAttribute("aria-describedby", /.+/);
 
-  await page.getByRole("link", { name: "แดชบอร์ด" }).focus();
+  await page.getByRole("link", { name: "ภาพรวมการพิมพ์" }).focus();
   await page.keyboard.press("Tab");
   await expect(entry).toBeFocused();
   await expectTooltip(page, entry, "บันทึกยอดพิมพ์");
