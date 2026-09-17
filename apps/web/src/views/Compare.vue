@@ -80,7 +80,9 @@ const COMPARISON_TYPES = [
   { value: "building", label: t("อาคาร") },
   { value: "department", label: t("ฝ่าย / แผนก") },
 ];
-const comparisonType = ref(COMPARISON_TYPES.some((type) => type.value === route.query.type) ? route.query.type : "month");
+const comparisonTypeFromQuery = () =>
+  COMPARISON_TYPES.some((type) => type.value === route.query.type) ? route.query.type : "month";
+const comparisonType = ref(comparisonTypeFromQuery());
 /** สัญญาหรืออาคารที่เลือกมาเทียบ — ว่าง = รายการที่มียอดมากที่สุดไม่เกินจำนวนสีที่มี */
 const selectedGroups = ref([]);
 /** ชุดสีของกราฟมี 8 สี — เกินกว่านี้สีจะวนซ้ำจนแยกเส้นไม่ออก */
@@ -140,9 +142,19 @@ function clearAll() {
   selectedGroups.value = [];
 }
 
+let syncingTypeFromRoute = false;
 watch(comparisonType, (value) => {
   clearAll();
+  if (syncingTypeFromRoute) return;
   router.replace({ query: { ...route.query, type: value } });
+}, { flush: "sync" });
+
+watch(() => route.query.type, () => {
+  const next = comparisonTypeFromQuery();
+  if (next === comparisonType.value) return;
+  syncingTypeFromRoute = true;
+  comparisonType.value = next;
+  syncingTypeFromRoute = false;
 });
 
 /** มิติของแต่ละแถวมาจากประวัติที่มีผลในเดือนนั้นแล้ว */
@@ -321,14 +333,28 @@ const METRIC_BY_KEY = Object.fromEntries(METRICS.map((metric) => [metric.key, me
  * ตัวชี้วัดเริ่มต้นคือค่าใช้จ่าย แต่ถ้าทุกเดือนยังยืนยันราคาไม่ครบ กราฟค่าใช้จ่ายจะว่าง
  * ทั้งใบ — เปิดหน้ามาเจอกรอบเปล่าไม่ได้บอกอะไร จึงเริ่มที่จำนวนหน้าแทนจนกว่าผู้ใช้จะเลือกเอง
  */
-const chosenMetricKey = ref(METRIC_BY_KEY[route.query.metric] ? route.query.metric : null);
+const metricFromQuery = () =>
+  METRICS.some((metric) => metric.key === route.query.metric) ? route.query.metric : null;
+const chosenMetricKey = ref(metricFromQuery());
 const chartMetricKey = computed({
   get: () => chosenMetricKey.value ?? (costChartable.value ? "totalCost" : "totalPages"),
   set: (value) => { chosenMetricKey.value = value; },
 });
 const chartMetric = computed(() => METRIC_BY_KEY[chartMetricKey.value]);
 const METRIC_OPTIONS = METRICS.map((metric) => ({ value: metric.key, label: metric.shortLabel }));
-watch(chosenMetricKey, (value) => router.replace({ query: { ...route.query, metric: value ?? undefined } }));
+let syncingMetricFromRoute = false;
+watch(chosenMetricKey, (value) => {
+  if (syncingMetricFromRoute) return;
+  router.replace({ query: { ...route.query, metric: value ?? undefined } });
+}, { flush: "sync" });
+
+watch(() => route.query.metric, () => {
+  const next = metricFromQuery();
+  if (next === chosenMetricKey.value) return;
+  syncingMetricFromRoute = true;
+  chosenMetricKey.value = next;
+  syncingMetricFromRoute = false;
+});
 
 /* --------------------------------------------------------------------------
    แยกกลุ่มตามสัญญา / อาคาร
@@ -675,7 +701,7 @@ onMounted(async () => {
         <!-- บทสรุปอัตโนมัติ — เฉพาะโหมดเดือน โหมดแยกกลุ่มไม่มี "ยอดเดียว" ให้สรุป -->
         <template v-if="!grouping">
           <UiCard
-            v-if="summaryFirst && summaryLast"
+            v-if="summaryFirst?.stats && summaryLast?.stats"
             class="mb-4"
             :eyebrow="t(&quot;สรุปอัตโนมัติ&quot;)"
             :title="t(&quot;{0} เทียบกับ {1}&quot;, [summaryFirst.label, summaryLast.label])"
@@ -709,6 +735,10 @@ onMounted(async () => {
               </li>
             </ul>
           </UiCard>
+
+          <UiAlert v-else-if="summaryLast" tone="warn" class="mb-4">
+            {{ t("ยังสรุปช่วงนี้ไม่ได้ เพราะเดือนแรกหรือเดือนสุดท้ายที่เลือกยังไม่มีข้อมูล") }}
+          </UiAlert>
 
           <UiAlert v-else tone="warn" class="mb-4"> {{ t("ตอนนี้เลือกไว้เดือนเดียว (") }} {{ summaryFirst?.label }} {{ t(") — เลือกอีกเดือนเพื่อให้ระบบเทียบให้") }} </UiAlert>
         </template>

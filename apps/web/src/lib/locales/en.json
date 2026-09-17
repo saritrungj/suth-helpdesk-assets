@@ -557,6 +557,7 @@
   "สรุปอัตโนมัติ": "Automatic summary",
   "{0} เทียบกับ {1}": "{0} compared with {1}",
   "จากทั้งหมด {0} เดือนที่เลือก": "Across {0} selected months",
+  "ยังสรุปช่วงนี้ไม่ได้ เพราะเดือนแรกหรือเดือนสุดท้ายที่เลือกยังไม่มีข้อมูล": "This period cannot be summarized because the first or last selected month has no data.",
   "ตอนนี้เลือกไว้เดือนเดียว (": "Only one month selected (",
   ") — เลือกอีกเดือนเพื่อให้ระบบเทียบให้": ") — Select another month to compare.",
   "ตารางเปรียบเทียบ": "Comparison table",

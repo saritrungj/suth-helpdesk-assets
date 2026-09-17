@@ -131,3 +131,7 @@ Issue ของ repo นี้อยู่ใน GitHub Issues (`saritrungj/suth
 ### Domain docs
 
 Single-context — ADR อยู่ที่ `docs/decisions/` (ไม่ใช่ `docs/adr/`) ยังไม่มี `CONTEXT.md` ดู `docs/agents/domain.md`
+
+### Bug fixing and diff review
+
+เมื่อแก้บั๊ก รีวิว diff หรือเตรียมส่งมอบ implementation ให้ใช้ [workflow ตรวจบั๊กและรีวิว](docs/agents/review-workflow.md): ทำ reproduction ให้แดงก่อน ตรวจทุกไฟล์สามมิติ และปิดทุก finding ด้วยหลักฐานก่อนรันด่านส่งมอบ
