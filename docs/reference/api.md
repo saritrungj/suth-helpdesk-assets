@@ -71,6 +71,8 @@ Master Data ใช้ prefix แยกกันแต่อยู่ในโฟ
 
 รายงานที่คืนยอดรายเดือน (`monthly-kpi`, `compare`, `summary-by-building`, `expense`, `highlights` และ `overview`) ใช้อาคาร ชั้น ตำแหน่ง ฝ่าย และแผนกจาก `device_location_history` ที่มีผลในเดือนนั้น หากช่วงประวัติซ้อนกันจะเลือกช่วงตาม [ADR-0014](../decisions/0014-resolve-overlapping-location-history.md) เพื่อไม่ให้ยอดหนึ่งรายการถูกบวกซ้ำ
 
+`monthly-kpi` คืน `billing_contract_id` / `billing_contract_no` จากช่วงการคิดเงินที่มีผลในเดือนนั้นสำหรับการเปรียบเทียบย้อนหลัง ตาม [ADR-0019](../decisions/0019-effective-pricing-history.md) หากไม่มีช่วงหรือช่วงนั้นไม่ผูกสัญญาจะเป็น `null` ส่วน `contract_id` / `contract_no` และ query `contract_id` เดิมยังหมายถึงสัญญาปัจจุบันของเครื่อง
+
 ### ตัวส่วนของความครบถ้วนคิดจากช่วงความรับผิดชอบรายเดือน
 
 ตัวส่วนของแต่ละเดือนคือ **เครื่องที่ต้องบันทึกยอดในเดือนนั้น** ซึ่งอ่านจากตาราง

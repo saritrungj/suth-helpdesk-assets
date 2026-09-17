@@ -25,7 +25,7 @@ import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, Printer, Receip
 import { fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
 import { fiscalYearState } from "../store/fiscalYear";
-import { formatBahtValue, formatCount } from "../lib/format";
+import { formatBahtValue, formatCount, formatUnitPrice } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
 import {
   UiAlert,
@@ -266,7 +266,8 @@ async function exportExcel() {
     (contract.devices ?? []).map((device) => [
       contract.contract_no,
       Number(contract.price_per_page || 0),
-      Number(device.effective_price || 0),
+      // ว่าง ไม่ใช่ 0 — null แปลว่าเครื่องนี้ใช้หลายราคาในช่วงนี้หรือยังไม่มีราคา ไม่ใช่ฟรี
+      device.effective_price == null ? "" : Number(device.effective_price),
       device.price_source === "device_override" ? t("ราคาพิเศษเฉพาะเครื่อง") : t("ราคาตามสัญญา"),
       device.serial_number || "",
       device.brand_name || "",
@@ -351,7 +352,7 @@ onMounted(() => {
         {{ formatBahtValue(grandTotal) }}
       </UiStat>
 
-      <UiStat plain :label="t(&quot;จำนวนหน้าดิบ&quot;)" :unit="t(&quot;หน้า&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;จำนวนหน้าดิบ&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ยอดตามที่กรอก ยังไม่หัก 2%&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 
@@ -452,7 +453,7 @@ onMounted(() => {
               >
                 {{ formatCount(group.count) }} {{ t("เครื่อง ·") }}
                 {{ group.source === "device_override" ? t("ราคาพิเศษ") : t("ราคาสัญญา") }}
-                {{ group.price === null || group.price === undefined ? "—" : formatBahtValue(group.price) }}
+                {{ group.price === null || group.price === undefined ? "—" : formatUnitPrice(group.price) }}
                 {{ t("บาท/หน้า") }}
               </span>
             </span>
@@ -503,7 +504,7 @@ onMounted(() => {
                 <span class="block text-xs text-ink-mute font-sans">{{ deviceLocationLabel(device.monthly) }}</span>
                 </span>
                 <span class="block text-xs text-ink-mute numeral">
-                  {{ t("ราคาที่ใช้จริง") }} {{ formatBahtValue(device.effective_price) }} {{ t("บาท/หน้า") }} ·
+                  {{ t("ราคาที่ใช้จริง") }} {{ formatUnitPrice(device.effective_price) }} {{ t("บาท/หน้า") }} ·
                   {{ device.price_source === "device_override" ? t("ราคาพิเศษเฉพาะเครื่อง") : t("ราคาตามสัญญา") }}
                 </span>
               </span>
@@ -536,7 +537,9 @@ onMounted(() => {
                   <tr v-for="row in device.monthly" :key="row.month" class="border-t border-line-soft">
                     <td class="py-1.5 text-ink-soft">{{ formatMonth(row.month, { long: true }) }}</td>
                     <td class="py-1.5 text-right numeral text-ink-soft">{{ formatCount(row.pages) }}</td>
-                    <td class="py-1.5 text-right numeral text-ink">{{ formatBahtValue(row.cost) }}</td>
+                    <!-- null = ยังยืนยันราคาไม่ได้ ไม่ใช่ศูนย์บาท (API ส่ง null มาตั้งใจ, Q27) -->
+                    <td v-if="row.cost == null" class="py-1.5 text-right text-xs text-warn-ink">{{ t("ยังไม่มีราคา") }}</td>
+                    <td v-else class="py-1.5 text-right numeral text-ink">{{ formatBahtValue(row.cost) }}</td>
                   </tr>
                 </tbody>
               </table>

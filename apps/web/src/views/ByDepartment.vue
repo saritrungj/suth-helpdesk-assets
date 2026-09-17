@@ -45,6 +45,7 @@ import api from "../services/api";
 import { fiscalYearState } from "../store/fiscalYear";
 import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
+import DeviceSerialLink from "../components/DeviceSerialLink.vue";
 import {
   UiAlert,
   UiBadge,
@@ -64,7 +65,7 @@ import {
   UiTooltip,
 } from "../ui";
 
-defineProps({
+const props = defineProps({
   showComparison: { type: Boolean, default: true },
   comparisonOnly: { type: Boolean, default: false },
 });
@@ -399,6 +400,7 @@ function clampRange() {
 }
 
 const visibleChartMonths = computed(() => {
+  if (props.comparisonOnly) return allChartMonths.value;
   clampRange();
   return allChartMonths.value.slice(rangeStartIdx.value, rangeEndIdx.value + 1);
 });
@@ -488,7 +490,6 @@ const usageFilters = ref({
   status: "",
 });
 
-const usageSort = ref("desc");
 const usageBuildings = ref([]);
 const usageFloors = ref([]);
 const usageBrands = ref([]);
@@ -612,21 +613,26 @@ const deviceUsageRows = computed(() => {
       buildingName: deviceDimensions.value.get(device.id)?.building_name ?? "",
     }));
 
-  rows.sort((a, b) =>
-    usageSort.value === "desc"
-      ? Number(b.total_pages || 0) - Number(a.total_pages || 0)
-      : Number(a.total_pages || 0) - Number(b.total_pages || 0)
-  );
+  rows.sort((a, b) => Number(b.total_pages || 0) - Number(a.total_pages || 0));
 
   // ใส่อันดับหลังเรียงแล้ว เพื่อให้เลขอันดับสื่อ "อันดับตามยอดพิมพ์" เสมอ
   // แม้ผู้ใช้จะไปคลิกเรียงคอลัมน์อื่นในตารางภายหลัง
   return rows.map((device, index) => ({ ...device, rank: index + 1 }));
 });
 
+// อันดับมาก่อน แล้วตามด้วย Serial ที่คนอ่านออก (NN/g: คอลัมน์แรกคือตัวระบุที่คนอ่านได้)
+// รุ่นอยู่ในเซลล์เดียวกับ Serial แล้ว คอลัมน์ "รุ่น" แยกจึงเป็นข้อมูลซ้ำ
 const usageColumns = [
-  { key: "model", label: t("รุ่น") },
   { key: "rank", label: t("อันดับ"), align: "right", width: "5rem", sortable: false },
-  { key: "serial_number", label: "Serial" },
+  // ค่าในเซลล์รวมยี่ห้อกับรุ่นไว้ให้ค้นหาเจอ (ตารางค้นจากค่าที่แสดง) แต่ไฟล์ Excel
+  // ต้องแยกคอลัมน์ ไม่งั้นช่อง Serial กลายเป็น "SN HP M404" ก้อนเดียวและยี่ห้อหายไป
+  {
+    key: "serial_number",
+    label: "Serial",
+    value: (d) => [d.serial_number, d.brand_name, d.model].filter(Boolean).join(" "),
+    csv: (d) => d.serial_number ?? "",
+  },
+  { key: "brand_model", label: t("ยี่ห้อ / รุ่น"), hidden: true, alwaysExport: true, value: (d) => [d.brand_name, d.model].filter(Boolean).join(" ") },
   { key: "locations", label: t("ตำแหน่งที่ตั้งตามเดือน"), value: (d) => deviceLocationLabel(d.locations) },
   { key: "divisionName", label: t("ฝ่าย") },
   { key: "departmentName", label: t("แผนก") },
@@ -644,7 +650,8 @@ async function exportTreeExcel() {
     "Serial",
     t("รุ่น"),
     t("ยี่ห้อ"),
-    t("จำนวนหน้าดิบทั้งปีงบ"),
+    // total_pages ของ API นี้รวมจาก net_pages (หลังหัก 2%) ไม่ใช่ยอดดิบ
+    t("จำนวนหน้าสุทธิทั้งปีงบ"),
     t("ค่าใช้จ่ายสุทธิทั้งปีงบ"),
     // ยอดของแถวนี้ครบหรือยัง — ต้องไปกับแถว ไม่ใช่อยู่แค่ในแผ่นบริบท เพราะคนที่
     // เรียงหรือกรองตารางใน Excel จะเห็นแค่แถว (ADR-0019 Q27)
@@ -738,7 +745,7 @@ onMounted(async () => {
         {{ formatBahtValue(grandTotalCost) }}
       </UiStat>
 
-      <UiStat plain :label="t(&quot;จำนวนหน้าสุทธิรวม&quot;)" :unit="t(&quot;หน้า&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;จำนวนหน้าสุทธิ&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;หลังหัก 2% แล้ว&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 
@@ -819,7 +826,7 @@ onMounted(async () => {
       <template v-else>
         <UiAlert v-if="tooManySeries" tone="warn" class="mb-3"> {{ t("เลือกไว้") }} {{ chartEntities.length }} {{ t("รายการ — ชุดสีมี 8 สีและไม่วนซ้ำ เพราะสีที่ซ้ำกันทำให้แยกเส้นไม่ออก ลองเอาบางรายการออก หรือสลับไปดูเป็นตาราง") }} </UiAlert>
 
-        <div class="flex flex-wrap items-center gap-2 mb-3 text-xs text-ink-mute">
+        <div v-if="!comparisonOnly" class="flex flex-wrap items-center gap-2 mb-3 text-xs text-ink-mute">
           <span> {{ t("ช่วงที่แสดง") }} </span>
           <UiSelect
             :model-value="rangeStartIdx"
@@ -1050,17 +1057,7 @@ onMounted(async () => {
       :title="t(&quot;เครื่องที่ใช้งานหนักที่สุด&quot;)"
       :description="t(&quot;ยอดพิมพ์และค่าใช้จ่ายสุทธิของแต่ละเครื่อง รวมทั้งปีงบที่เลือกไว้ด้านบน&quot;)"
     >
-      <template #actions>
-        <UiSegmented
-          v-model="usageSort"
-          :options="[
-            { value: 'desc', label: t(&quot;มากไปน้อย&quot;) },
-            { value: 'asc', label: t(&quot;น้อยไปมาก&quot;) },
-          ]"
-          size="sm"
-          :label="t(&quot;ลำดับการเรียง&quot;)"
-        />
-      </template>
+
 
       <!-- ตัวกรองหกช่องของตารางนี้อยู่ในแผงพับ (รอบที่ 3 ของ #51) — เดิมกางค้างเหนือตาราง ป้ายตัวกรอง
            จึงเป็นทางที่เห็นว่ากำลังกรองอะไรอยู่ แบบเดียวกับหน้าทะเบียน -->
@@ -1108,7 +1105,8 @@ onMounted(async () => {
         </template>
 
         <template #cell-serial_number="{ row }">
-          <span class="font-mono text-sm text-ink">{{ row.serial_number || "—" }}</span>
+          <!-- Serial ทุกตารางลิงก์ไปหน้ารายละเอียดเครื่อง หน้าตาเดียวกัน -->
+          <DeviceSerialLink :device-id="row.id" :serial-number="row.serial_number" />
           <span class="block text-xs text-ink-soft">{{ row.brand_name }} {{ row.model }}</span>
         </template>
 
@@ -1118,6 +1116,9 @@ onMounted(async () => {
 
         <template #cell-total_cost="{ row }">
           {{ formatBahtValue(row.total_cost) }}
+          <span v-if="row.unpriced_readings > 0" class="block text-2xs text-warn-ink">
+            {{ t("ยังยืนยันราคาไม่ได้ {0} รายการ", [formatCount(row.unpriced_readings)]) }}
+          </span>
         </template>
       </UiDataTable>
     </UiCard>

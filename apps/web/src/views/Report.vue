@@ -346,7 +346,7 @@ function singleDeviceRow(device, monthly) {
 function devicePeriodRow(device, period, monthly, months, periodIndex, periodCount) {
   const monthSet = new Set(months);
   const periodMonthly = {};
-  for (const m of months) periodMonthly[m] = monthly[m] || 0;
+  for (const m of months) periodMonthly[m] = monthly[m] ?? null;
 
   return {
     ...device,
@@ -433,14 +433,18 @@ const columns = computed(() => [
     key: `m_${m}`,
     label: formatMonth(m, { shortYear: true }),
     align: "right",
-    value: (r) => r._monthly[m] || 0,
+    // เดือนที่ไม่มียอด (ยังไม่กรอก หรือเครื่องไม่ได้อยู่ที่นี่ในเดือนนั้น) แสดง "—"
+    // ไม่ใช่ "0" ซึ่งอ่านได้ว่าพิมพ์ศูนย์หน้าจริง และมีตัวคั่นหลักเหมือนตารางอื่นทุกหน้า
+    value: (r) => (r._monthly[m] == null ? "—" : formatCount(r._monthly[m])),
     csv: (r) => r._monthly[m] || 0,
+    sortValue: (r) => r._monthly[m] ?? -1,
   })),
   {
     key: "total_pages",
     label: reportMonths.value.length ? t("รวมเดือนที่เลือก") : t("รวมทั้งปีงบ"),
     align: "right",
-    value: (r) => r._total,
+    value: (r) => formatCount(r._total),
+    sortValue: (r) => r._total,
     csv: (r) => r._total,
   },
 ]);
@@ -463,7 +467,7 @@ onMounted(async () => {
 <template>
   <div>
     <UiPageHeader
-      :title="t(&quot;ยอดพิมพ์รายเดือนตามเครื่อง&quot;)"
+      :title="t(&quot;รายงานสรุปยอดพิมพ์&quot;)"
       :description="t(&quot;ยอดมิเตอร์ดิบของแต่ละเครื่องในปีงบ {0} — เครื่องที่ย้ายที่ตั้งกลางปีจะถูกแยกเป็นคนละแถวตามช่วงที่ตั้ง&quot;, [displayYearBE])"
     />
 
@@ -480,7 +484,7 @@ onMounted(async () => {
     -->
     <UiFilterBar :chips="filterChips" data-print="hide" @remove="clearFilter" @clear="resetFilters">
       <template #primary>
-        <div class="flex-1 min-w-[14rem] max-w-md">
+        <UiField :label="t('ค้นหา')" class="flex-1 min-w-[14rem] max-w-md">
           <UiInput
             v-model="search"
             clearable
@@ -489,22 +493,23 @@ onMounted(async () => {
           >
             <template #icon><Search :size="15" /></template>
           </UiInput>
-        </div>
+        </UiField>
 
         <!-- จำกัดความกว้าง ไม่งั้นตัวเลือกช่วงเวลายืดเต็มแถวแล้วดันตัวอื่นตกบรรทัด -->
-        <div class="w-full sm:w-64">
-          <PeriodPicker v-model="reportMonths" :options="fyMonths" :aria-label="t('เดือนที่แสดงในตาราง')" />
-        </div>
+        <UiField :label="t('เดือนที่แสดงในตาราง')" class="w-full sm:w-64">
+          <PeriodPicker v-model="reportMonths" :options="fyMonths" />
+        </UiField>
 
-        <UiSelect
-          v-model="filters.fillStatus"
-          class="w-full sm:w-52"
-          :options="FILL_STATUS_OPTIONS"
-          value-key="value"
-          label-key="label"
-          :aria-label="t('กรองตามสถานะการกรอก')"
-        />
+        <UiField :label="t('สถานะการกรอก')" class="w-full sm:w-52">
+          <UiSelect
+            v-model="filters.fillStatus"
+            :options="FILL_STATUS_OPTIONS"
+            value-key="value"
+            label-key="label"
+            :aria-label="t('กรองตามสถานะการกรอก')"
+          />
 
+        </UiField>
         <div id="report-table-tools" class="ml-auto"></div>
       </template>
 
@@ -565,7 +570,6 @@ onMounted(async () => {
         :search-placeholder="t(&quot;ค้นหาในตาราง…&quot;)"
         :caption="t(&quot;ยอดพิมพ์รายเดือนตามเครื่อง&quot;)"
         :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับตัวกรอง&quot;)"
-        max-height="68vh"
         sticky-first
         :row-class="rowClass"
       >
@@ -616,7 +620,7 @@ onMounted(async () => {
         </template>
 
         <template #cell-total_pages="{ value }">
-          <span class="font-semibold text-ink">{{ formatCount(value) }}</span>
+          <span class="font-semibold text-ink">{{ value }}</span>
         </template>
       </UiDataTable>
 

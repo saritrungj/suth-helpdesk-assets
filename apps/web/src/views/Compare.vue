@@ -4,9 +4,19 @@ import { formatMonth } from "../lib/locale-format";
 import { t } from "../lib/locale";
 
 /**
- * Compare — เปรียบเทียบตัวชี้วัดระหว่างเดือน
+ * Compare — เปรียบเทียบตัวชี้วัด
  *
- * ใช้ตอบคำถามเดียว: "เดือนนี้ต่างจากเดือนก่อนยังไง และเพราะอะไร"
+ * "เทียบระหว่าง" มีสี่แบบ และทุกแบบเป็นการแยกกลุ่มจริง (breakout) ไม่ใช่ตัวกรอง
+ *
+ *   เดือน          ยอดรวมทีละเดือน — "เดือนนี้ต่างจากเดือนก่อนยังไง และเพราะอะไร"
+ *   สัญญา / อาคาร  หนึ่งเส้นต่อหนึ่งสัญญา/อาคารบนกราฟเดียว (แบบ Comparisons ของ GA4)
+ *   ฝ่าย / แผนก    ใช้ชุดเลือกฝ่าย/แผนกของ ByDepartment
+ *
+ * เดิม "ตามสัญญา" กับ "ตามอาคาร" คำนวณชุดเดียวกันทุกประการ ต่างกันแค่ช่องตัวกรองที่
+ * โผล่มา ถ้าไม่ได้เลือกอะไร สองโหมดให้ตัวเลขตรงกันทุกช่อง — ปุ่มที่ชื่อว่า "เทียบ"
+ * แต่ไม่ได้เทียบอะไร ตัวกรอง (คัดแถวออก) กับการแยกกลุ่ม (หนึ่งแถว/เส้นต่อหนึ่งค่า)
+ * เป็นคนละเครื่องมือ (Metabase: filter vs breakout) จึงแยกให้ชัด
+ *
  * เลือกได้หลายเดือน ไม่จำกัดแค่คู่เดียว เพราะการดูสามสี่เดือนติดกันบอกได้ว่า
  * ตัวเลขที่กระโดดเป็นแนวโน้มจริงหรือเป็นเดือนที่ผิดปกติเดือนเดียว
  *
@@ -64,12 +74,17 @@ function sumCost(rows) {
    ข้อมูลและตัวกรอง
    -------------------------------------------------------------------------- */
 const selectedMonths = ref(monthsFromQuery());
-const comparisonType = ref(["contract", "department", "building"].includes(route.query.type) ? route.query.type : "contract");
 const COMPARISON_TYPES = [
-  { value: "contract", label: t("ตามสัญญา") },
-  { value: "department", label: t("ตามฝ่าย / แผนก") },
-  { value: "building", label: t("ตามอาคาร") },
+  { value: "month", label: t("เดือน") },
+  { value: "contract", label: t("สัญญา") },
+  { value: "building", label: t("อาคาร") },
+  { value: "department", label: t("ฝ่าย / แผนก") },
 ];
+const comparisonType = ref(COMPARISON_TYPES.some((type) => type.value === route.query.type) ? route.query.type : "month");
+/** สัญญาหรืออาคารที่เลือกมาเทียบ — ว่าง = รายการที่มียอดมากที่สุดไม่เกินจำนวนสีที่มี */
+const selectedGroups = ref([]);
+/** ชุดสีของกราฟมี 8 สี — เกินกว่านี้สีจะวนซ้ำจนแยกเส้นไม่ออก */
+const MAX_SERIES = 8;
 
 const filters = ref({
   building: "",
@@ -120,8 +135,13 @@ function resetFilters() {
   filters.value = { building: "", floor: "", division: "", department: "", contract: "" };
 }
 
-watch(comparisonType, (value) => {
+function clearAll() {
   resetFilters();
+  selectedGroups.value = [];
+}
+
+watch(comparisonType, (value) => {
+  clearAll();
   router.replace({ query: { ...route.query, type: value } });
 });
 
@@ -133,7 +153,7 @@ function rowMatches(row) {
     (!f.floor || row.floor_name === f.floor) &&
     (!f.division || row.division_name === f.division) &&
     (!f.department || row.department_name === f.department) &&
-    (!f.contract || String(row.contract_id) === f.contract)
+    (!f.contract || String(row.billing_contract_id) === f.contract)
   );
 }
 
@@ -188,7 +208,8 @@ watch(() => route.query.months, () => {
 });
 
 const monthlyParams = computed(() => ({
-  building_name: filters.value.building || undefined,
+  // โหมดแยกตามอาคารต้องได้ทุกอาคาร ตัวกรองอาคารจึงส่งไปเฉพาะโหมดเดือน
+  building_name: comparisonType.value === "month" ? filters.value.building || undefined : undefined,
   month: activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value).join(",") : undefined,
 }));
 const monthlyQuery = useMonthlyKpi(monthlyParams);
@@ -203,8 +224,8 @@ const monthsWithData = computed(() => [...new Set(rawRows.value.filter(rowMatche
 /* --------------------------------------------------------------------------
    ตัวชี้วัดและการคำนวณ
    -------------------------------------------------------------------------- */
-function aggregate(month) {
-  const rows = rawRows.value.filter((row) => row.month === month && rowMatches(row));
+function aggregate(month, inGroup = () => true) {
+  const rows = rawRows.value.filter((row) => row.month === month && rowMatches(row) && inGroup(row));
   if (!rows.length) return null;
 
   const totalPages = rows.reduce((s, r) => s + Number(r.pages_printed || 0), 0);
@@ -241,6 +262,7 @@ const monthStats = computed(() =>
 const METRICS = [
   {
     key: "totalPages",
+    shortLabel: t("หน้าดิบ"),
     label: t("จำนวนหน้าดิบ"),
     unit: t("หน้า"),
     hint: t("ยอดตามที่กรอก ยังไม่หัก 2%"),
@@ -248,6 +270,7 @@ const METRICS = [
   },
   {
     key: "netPages",
+    shortLabel: t("หน้าสุทธิ"),
     label: t("จำนวนหน้าสุทธิ"),
     unit: t("หน้า"),
     hint: t("หลังหัก 2% แล้ว"),
@@ -255,6 +278,7 @@ const METRICS = [
   },
   {
     key: "totalCost",
+    shortLabel: t("ค่าใช้จ่าย"),
     label: t("ค่าใช้จ่ายสุทธิ"),
     unit: t("บาท"),
     hint: t("หลังหัก 2% แล้ว"),
@@ -264,6 +288,7 @@ const METRICS = [
   },
   {
     key: "activeDevices",
+    shortLabel: t("เครื่องที่ใช้งาน"),
     label: t("เครื่องที่มีการใช้งาน"),
     unit: t("เครื่อง"),
     hint: t("นับเฉพาะเครื่องที่มียอดในเดือนนั้น"),
@@ -271,6 +296,7 @@ const METRICS = [
   },
   {
     key: "costPerPage",
+    shortLabel: t("บาทต่อหน้า"),
     // ไม่ใช้คำว่า "ต้นทุนเฉลี่ย" เดี่ยวๆ เพราะ CONTEXT.md สงวนคำนั้นไว้ให้
     // "ต้นทุนเฉลี่ยต่อเครื่องที่บันทึกยอด" และระบุ "ต้นทุนเฉลี่ยต่อหน้า" ไว้ในช่อง
     // Avoid ตรงๆ — สองอย่างนี้เป็นคนละตัวเลขและเคยถูกอ่านสลับกันมาแล้ว
@@ -283,6 +309,144 @@ const METRICS = [
 ];
 
 const METRIC_BY_KEY = Object.fromEntries(METRICS.map((metric) => [metric.key, metric]));
+
+/* --------------------------------------------------------------------------
+   กราฟใบเดียว + ตัวสลับตัวชี้วัด
+
+   เดิมมีกราฟห้าใบที่แสดงตัวเลขชุดเดียวกับตารางเปรียบเทียบ (และแต่ละใบยังมีปุ่ม
+   "ตาราง" ของตัวเองอีก) ตัวเลขชุดเดียวจึงอยู่บนจอสามรอบ ตอนนี้ตารางเป็นตัวเลขหลัก
+   ส่วนกราฟมีใบเดียวแบบเดียวกับแดชบอร์ด แล้วสลับว่าจะดูตัวชี้วัดไหน
+   -------------------------------------------------------------------------- */
+/**
+ * ตัวชี้วัดเริ่มต้นคือค่าใช้จ่าย แต่ถ้าทุกเดือนยังยืนยันราคาไม่ครบ กราฟค่าใช้จ่ายจะว่าง
+ * ทั้งใบ — เปิดหน้ามาเจอกรอบเปล่าไม่ได้บอกอะไร จึงเริ่มที่จำนวนหน้าแทนจนกว่าผู้ใช้จะเลือกเอง
+ */
+const chosenMetricKey = ref(METRIC_BY_KEY[route.query.metric] ? route.query.metric : null);
+const chartMetricKey = computed({
+  get: () => chosenMetricKey.value ?? (costChartable.value ? "totalCost" : "totalPages"),
+  set: (value) => { chosenMetricKey.value = value; },
+});
+const chartMetric = computed(() => METRIC_BY_KEY[chartMetricKey.value]);
+const METRIC_OPTIONS = METRICS.map((metric) => ({ value: metric.key, label: metric.shortLabel }));
+watch(chosenMetricKey, (value) => router.replace({ query: { ...route.query, metric: value ?? undefined } }));
+
+/* --------------------------------------------------------------------------
+   แยกกลุ่มตามสัญญา / อาคาร
+   -------------------------------------------------------------------------- */
+const GROUPING = {
+  contract: {
+    id: (row) => (row.billing_contract_id == null ? "" : String(row.billing_contract_id)),
+    label: (row) => row.billing_contract_no || t("ไม่ผูกสัญญา"),
+    noun: t("สัญญา"),
+  },
+  building: {
+    id: (row) => row.building_name || "",
+    label: (row) => row.building_name || t("ไม่ระบุอาคาร"),
+    noun: t("อาคาร"),
+  },
+};
+const grouping = computed(() => GROUPING[comparisonType.value] ?? null);
+
+/** ทุกกลุ่มที่มียอดในปีงบนี้ เรียงจากยอดพิมพ์มากไปน้อย — กลุ่มใหญ่ที่สุดได้สีแรก */
+const availableGroups = computed(() => {
+  const by = grouping.value;
+  if (!by) return [];
+  const groups = new Map();
+  for (const row of rawRows.value) {
+    const id = by.id(row);
+    const entry = groups.get(id) ?? { value: id, label: by.label(row), pages: 0 };
+    entry.pages += Number(row.pages_printed || 0);
+    groups.set(id, entry);
+  }
+  return [...groups.values()].sort((a, b) => b.pages - a.pages);
+});
+
+const activeGroups = computed(() => {
+  if (!selectedGroups.value.length) return availableGroups.value.slice(0, MAX_SERIES);
+  const chosen = new Set(selectedGroups.value);
+  return availableGroups.value.filter((group) => chosen.has(group.value)).slice(0, MAX_SERIES);
+});
+const groupsTruncated = computed(() =>
+  (selectedGroups.value.length || availableGroups.value.length) > MAX_SERIES
+);
+
+// สีผูกกับตัวตนของกลุ่ม ไม่ผูกกับอันดับ — เอากลุ่มหนึ่งออกแล้วกลุ่มที่เหลือต้องคงสีเดิม
+// (design-system.md — กฎของชุดสีกราฟ) สลอตที่ว่างจึงถูกนำกลับมาใช้ใหม่เท่านั้น
+const groupSlots = ref(new Map());
+watch(
+  () => activeGroups.value.map((group) => `${comparisonType.value}:${group.value}`),
+  (keys) => {
+    const next = new Map(keys.filter((key) => groupSlots.value.has(key))
+      .map((key) => [key, groupSlots.value.get(key)]));
+    const taken = new Set(next.values());
+    for (const key of keys) {
+      if (next.has(key)) continue;
+      let slot = 1;
+      while (taken.has(slot)) slot += 1;
+      next.set(key, slot);
+      taken.add(slot);
+    }
+    groupSlots.value = next;
+  },
+  { immediate: true }
+);
+
+/** ตัวเลขของแต่ละกลุ่มในทุกเดือนที่แสดง — ใช้ทั้งกราฟและตาราง */
+const groupStats = computed(() => {
+  const by = grouping.value;
+  if (!by) return [];
+  return activeGroups.value.map((group) => ({
+    ...group,
+    months: monthStats.value.map((entry) => aggregate(entry.month, (row) => by.id(row) === group.value)),
+  }));
+});
+
+/** ค่าของตัวชี้วัดในหนึ่งช่อง — ตัวชี้วัดที่ขึ้นกับราคาแต่ราคายังไม่ครบ ไม่มีค่า (Q30) */
+function metricValue(stats, metric) {
+  if (!stats) return null;
+  if (metric.needsPrice && stats.unpriced > 0) return null;
+  return stats[metric.key];
+}
+
+/**
+ * ยอดรวมทั้งช่วงของหนึ่งกลุ่ม — ค่าต่อหน้าคิดจากผลรวม ไม่ใช่เฉลี่ยของค่าเฉลี่ย
+ * จำนวนเครื่องรวมข้ามเดือนไม่ได้ (เครื่องเดียวกันถูกนับทุกเดือน) จึงไม่มียอดรวม
+ */
+function groupTotal(months, metric) {
+  const present = months.filter(Boolean);
+  if (!present.length || metric.key === "activeDevices") return null;
+  if (metric.needsPrice && present.some((m) => m.unpriced > 0)) return null;
+  const sum = (field) => present.reduce((total, m) => total + Number(m[field] || 0), 0);
+  if (metric.key === "costPerPage") {
+    const pages = sum("totalPages");
+    return pages > 0 ? sum("totalCost") / pages : 0;
+  }
+  return sum(metric.key);
+}
+
+function cellText(stats, metric) {
+  if (!stats) return "—";
+  const value = metricValue(stats, metric);
+  return value === null ? t("ราคายังไม่ครบ") : metric.format(value);
+}
+
+const chartSeries = computed(() => {
+  const metric = chartMetric.value;
+  if (grouping.value) {
+    return groupStats.value.map((group) => ({
+      key: `${comparisonType.value}:${group.value}`,
+      label: group.label,
+      slot: groupSlots.value.get(`${comparisonType.value}:${group.value}`),
+      data: group.months.map((stats) => metricValue(stats, metric)),
+    }));
+  }
+  return [{ key: metric.key, label: metric.label, slot: 1, data: monthStats.value.map((entry) => metricValue(entry.stats, metric)) }];
+});
+
+const costChartable = computed(() => monthStats.value.some((entry) => metricValue(entry.stats, METRIC_BY_KEY.totalCost) !== null));
+
+/** กราฟที่ไม่มีจุดให้วาดเลยไม่ต้องแสดงกรอบเปล่า — บอกเหตุผลแทน */
+const chartHasData = computed(() => chartSeries.value.some((series) => series.data.some((value) => value !== null)));
 
 function diffPercent(before, after) {
   if (!before) return after > 0 ? 100 : 0;
@@ -412,222 +576,276 @@ onMounted(async () => {
   <div>
     <UiPageHeader
       :title="t(&quot;เปรียบเทียบ&quot;)"
-      :description="t(&quot;ยอดรวมของสองเดือนต่างกันได้เองเมื่อจำนวนเครื่องที่บันทึกยอดไม่เท่ากัน หรือเมื่อยังยืนยันราคาไม่ครบ&quot;)"
+      :description="t(&quot;เทียบยอดพิมพ์และค่าใช้จ่ายระหว่างเดือน ระหว่างสัญญา ระหว่างอาคาร หรือระหว่างหน่วยงาน&quot;)"
     />
 
     <!--
-      ตัวกรองเป็นแถวเดียว ไม่ใช่การ์ด (#90)
-
-      เดิมหน้านี้ใช้การ์ด "เลือกช่วงที่จะเปรียบเทียบ" สูงราว 290px ใส่ตัวกรองแค่
-      สองตัว โดยมีที่ว่างเปล่าเกินครึ่งการ์ด ผลคือสรุปและตารางเปรียบเทียบซึ่งเป็น
-      เนื้อหาจริงของหน้า ตกไปอยู่ใต้เส้นพับทั้งหมด
-
-      ใช้ UiFilterBar ตัวเดียวกับหน้าอื่น แต่ปิด collapsible เพราะตัวกรองของหน้านี้
-      มีน้อยและขึ้นกับรูปแบบที่เลือก ไม่มีอะไรเหลือให้ซ่อนในแผงพับ
+      ตัวกรองเป็นแถวเดียว ไม่ใช่การ์ด (#90) — "เทียบระหว่าง" อยู่หน้าสุดเพราะมันเปลี่ยน
+      ทั้งหน้า ช่องที่เหลือเปลี่ยนตามแบบที่เลือก และทุกช่องมีป้ายชื่อแบบเดียวกัน
     -->
     <UiFilterBar :collapsible="false" class="mb-4">
       <template #primary>
-        <UiSegmented v-model="comparisonType" :options="COMPARISON_TYPES" size="sm" :label="t(&quot;รูปแบบการเปรียบเทียบ&quot;)" />
+        <UiField :label="t(&quot;เทียบระหว่าง&quot;)">
+          <UiSegmented v-model="comparisonType" :options="COMPARISON_TYPES" />
+        </UiField>
 
-        <div v-if="comparisonType !== 'department'" class="w-full sm:w-72">
+        <UiField v-if="comparisonType !== 'department'" :label="t(&quot;เดือน&quot;)" class="w-full sm:w-72">
           <PeriodPicker
             v-model="selectedMonths"
             :options="monthsWithData"
             mode="multi"
             :all-label="t(&quot;ทุกเดือนที่มีข้อมูล&quot;)"
             :all-emits-empty="false"
-            :aria-label="t('เดือนที่จะเปรียบเทียบ')"
           />
-        </div>
+        </UiField>
 
-        <UiCombobox
-          v-if="comparisonType === 'building'"
-          v-model="filters.building"
-          class="w-full sm:w-52"
-          :options="buildingOptions"
-          :placeholder="t(&quot;ทุกอาคาร&quot;)"
-          :any-label="t(&quot;ทุกอาคาร&quot;)"
-          :aria-label="t(&quot;กรองตามอาคาร&quot;)"
-        />
+        <UiField v-if="grouping" :label="t(&quot;{0}ที่จะนำมาเทียบ&quot;, [grouping.noun])" class="w-full sm:w-80">
+          <UiCombobox
+            v-model="selectedGroups"
+            :options="availableGroups"
+            multiple
+            :placeholder="t(&quot;ยอดพิมพ์สูงสุด {0} รายการ&quot;, [MAX_SERIES])"
+            :search-placeholder="t(&quot;พิมพ์เพื่อค้นหา…&quot;)"
+          />
+        </UiField>
 
-        <UiCombobox
-          v-if="comparisonType === 'building'"
-          v-model="filters.floor"
-          class="w-full sm:w-44"
-          :options="floorOptions"
-          :placeholder="t(&quot;ทุกชั้น&quot;)"
-          :any-label="t(&quot;ทุกชั้น&quot;)"
-          :aria-label="t(&quot;กรองตามชั้น&quot;)"
-        />
+        <template v-if="comparisonType === 'month'">
+          <!-- ชื่อช่องบอกให้ตรงว่ากรองด้วยสัญญาที่คิดเงินของเดือนนั้น ไม่ใช่สัญญาปัจจุบัน
+               ของเครื่องแบบตัวกรอง "สัญญา" ในหน้าทะเบียนและหน้ารายงาน (ADR-0019) -->
+          <UiField :label="t(&quot;สัญญาที่คิดเงิน&quot;)" class="w-full sm:w-48">
+            <UiCombobox
+              v-model="filters.contract"
+              :options="contractOptions"
+              :placeholder="t(&quot;ทุกสัญญา&quot;)"
+              :any-label="t(&quot;ทุกสัญญา&quot;)"
+            />
+          </UiField>
+          <UiField :label="t(&quot;อาคาร&quot;)" class="w-full sm:w-48">
+            <UiCombobox
+              v-model="filters.building"
+              :options="buildingOptions"
+              :placeholder="t(&quot;ทุกอาคาร&quot;)"
+              :any-label="t(&quot;ทุกอาคาร&quot;)"
+            />
+          </UiField>
+          <UiField :label="t(&quot;ชั้น&quot;)" class="w-full sm:w-32">
+            <UiCombobox
+              v-model="filters.floor"
+              :options="floorOptions"
+              :placeholder="t(&quot;ทุกชั้น&quot;)"
+              :any-label="t(&quot;ทุกชั้น&quot;)"
+            />
+          </UiField>
+        </template>
 
-        <UiCombobox
-          v-if="comparisonType === 'contract'"
-          v-model="filters.contract"
-          class="w-full sm:w-56"
-          :options="contractOptions"
-          :placeholder="t(&quot;ทุกสัญญา&quot;)"
-          :any-label="t(&quot;ทุกสัญญา&quot;)"
-          :aria-label="t(&quot;กรองตามสัญญา&quot;)"
-        />
+        <UiField :label="t(&quot;ตัวชี้วัด&quot;)">
+          <UiSegmented v-model="chartMetricKey" :options="METRIC_OPTIONS" size="sm" class="flex-wrap" />
+        </UiField>
 
-        <UiButton v-if="hasActiveFilter" size="sm" variant="danger-ghost" class="ml-auto" @click="resetFilters">
+        <UiButton v-if="hasActiveFilter || selectedGroups.length" size="sm" variant="danger-ghost" class="ml-auto self-end" @click="clearAll">
           {{ t("ล้างตัวกรอง") }}
         </UiButton>
       </template>
     </UiFilterBar>
 
-    <!-- มุมมองฝ่าย/แผนกมีหน้าของตัวเอง ใช้ตัวกรองและกราฟชุดของ ByDepartment -->
+    <!-- มุมมองฝ่าย/แผนกใช้ตัวเลือกและกราฟชุดของ ByDepartment -->
     <ByDepartment v-if="comparisonType === 'department'" comparison-only />
 
     <template v-else>
-    <UiAlert v-if="loadError" tone="danger" class="mb-4">
-      {{ loadError }}
-      <template #actions>
-        <UiButton size="sm" variant="secondary" @click="monthlyQuery.refetch()"> {{ t("ลองใหม่") }} </UiButton>
-      </template>
-    </UiAlert>
-
-    <div v-if="loading" class="flex flex-col gap-3">
-      <UiSkeleton height="8rem" />
-      <UiSkeleton height="14rem" />
-    </div>
-
-    <UiCard v-else-if="!monthStats.some((month) => month.stats)">
-      <UiEmpty
-        :title="t(&quot;ยังไม่มีข้อมูลในช่วงที่เลือก&quot;)"
-        :description="t(&quot;ยังไม่มียอดพิมพ์สำหรับปีงบและตัวกรองนี้&quot;)"
-      />
-    </UiCard>
-
-    <template v-else>
-      <!-- บทสรุปอัตโนมัติ -->
-      <UiCard
-        v-if="summaryFirst && summaryLast"
-        class="mb-4"
-        :eyebrow="t(&quot;สรุปอัตโนมัติ&quot;)"
-        :title="t(&quot;{0} เทียบกับ {1}&quot;, [summaryFirst.label, summaryLast.label])"
-        :description="monthStats.length > 2 ? t(&quot;จากทั้งหมด {0} เดือนที่เลือก&quot;, [monthStats.length]) : ''"
-      >
-        <ul class="flex flex-col gap-2 list-none">
-          <li v-for="(line, index) in summaryLines" :key="index" class="flex items-start gap-2 text-sm">
-            <component
-              :is="line.incomplete ? CircleAlert : line.trend === 'up' ? TrendingUp : line.trend === 'down' ? TrendingDown : Minus"
-              :size="15"
-              class="shrink-0 mt-0.5"
-              :class="
-                line.incomplete ? 'text-warn-ink'
-                : line.trend === 'up' ? 'text-danger-ink'
-                : line.trend === 'down' ? 'text-ok-ink' : 'text-ink-mute'
-              "
-              aria-hidden="true"
-            />
-            <span class="text-ink-soft">{{ line.text }}</span>
-          </li>
-        </ul>
-
-        <!--
-          ข้อจำกัดของการเทียบครั้งนี้ อยู่ในการ์ดเดียวกับบทสรุปโดยตั้งใจ — เป็น
-          เงื่อนไขของตัวเลขข้างบน ไม่ใช่ข้อมูลเสริมที่จะย้ายไปไว้ที่อื่นก็ได้
-        -->
-        <ul v-if="summaryCaveats.length" class="mt-3 pt-3 border-t border-line-soft flex flex-col gap-1.5 list-none">
-          <li v-for="(note, index) in summaryCaveats" :key="`caveat-${index}`" class="flex items-start gap-2 text-sm text-ink-mute">
-            <Info :size="15" class="shrink-0 mt-0.5" aria-hidden="true" />
-            <span>{{ note }}</span>
-          </li>
-        </ul>
-      </UiCard>
-
-      <UiAlert v-else tone="warn" class="mb-4"> {{ t("ตอนนี้เลือกไว้เดือนเดียว (") }} {{ summaryFirst?.label }} {{ t(") — เลือกอีกเดือนเพื่อให้ระบบเทียบให้") }} </UiAlert>
-
-      <!-- ตารางเปรียบเทียบ -->
-      <UiCard flush class="mb-4" :title="t(&quot;ตารางเปรียบเทียบ&quot;)">
-        <div class="overflow-x-auto scroll-hint-x">
-          <table class="w-full text-sm min-w-max">
-            <thead>
-              <tr class="bg-surface-2">
-                <th
-                  scope="col"
-                  class="sticky left-0 z-[1] bg-surface-2 text-left text-xs font-semibold text-ink-mute px-4 py-2.5 border-b border-line-soft shadow-[1px_0_0_var(--line-soft)]"
-                > {{ t("ตัวชี้วัด") }} </th>
-                <th
-                  v-for="stat in monthStats"
-                  :key="stat.month"
-                  scope="col"
-                  class="text-right text-xs font-semibold text-ink-mute px-4 py-2.5 whitespace-nowrap border-b border-line-soft"
-                >
-                  {{ stat.label }}
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr v-for="metric in METRICS" :key="metric.key" class="border-b border-line-soft last:border-0">
-                <th
-                  scope="row"
-                  class="sticky left-0 z-[1] bg-surface text-left font-normal px-4 py-2.5 shadow-[1px_0_0_var(--line-soft)]"
-                >
-                  <span class="block text-ink-soft">{{ metric.label }}</span>
-                  <span class="block text-2xs text-ink-mute">{{ metric.hint }}</span>
-                </th>
-
-                <td v-for="(stat, index) in monthStats" :key="stat.month" class="px-4 py-2.5 text-right">
-                  <span class="block font-semibold text-ink numeral">
-                    {{ stat.stats ? metric.format(stat.stats[metric.key]) : "—" }}
-                  </span>
-
-                  <span
-                    v-if="deltaVsPrevious(metric.key, index) !== null"
-                    class="inline-flex items-center gap-0.5 text-2xs font-medium numeral"
-                    :class="deltaVsPrevious(metric.key, index) >= 0 ? 'text-danger-ink' : 'text-ok-ink'"
-                  >
-                    <component
-                      :is="deltaVsPrevious(metric.key, index) >= 0 ? TrendingUp : TrendingDown"
-                      :size="11"
-                      aria-hidden="true"
-                    />
-                    {{ Math.abs(deltaVsPrevious(metric.key, index)).toFixed(1) }}%
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </UiCard>
-      <!--
-        กราฟของตัวชี้วัดที่ขึ้นกับราคา วาดจากยอดเฉพาะส่วนที่ยืนยันราคาแล้ว —
-        รูปทรงของเส้นจึงสะท้อนความคืบหน้าของการยืนยันราคาปนอยู่ด้วย ไม่ใช่การใช้งาน
-        อย่างเดียว บอกไว้ครั้งเดียวเหนือกราฟทั้งชุด ดีกว่าเขียนซ้ำบนทุกใบ
-      -->
-      <UiAlert v-if="unpricedInSelection > 0" tone="warn" class="mb-4">
-        {{ t("ยังยืนยันราคาไม่ได้ {0} รายการในช่วงที่เลือก เส้นค่าใช้จ่ายด้านล่างจึงเป็นยอดเฉพาะส่วนที่ยืนยันแล้ว", [formatCount(unpricedInSelection)]) }}
+      <UiAlert v-if="loadError" tone="danger" class="mb-4">
+        {{ loadError }}
+        <template #actions>
+          <UiButton size="sm" variant="secondary" @click="monthlyQuery.refetch()"> {{ t("ลองใหม่") }} </UiButton>
+        </template>
       </UiAlert>
 
-      <!-- กราฟรายตัวชี้วัด -->
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <!-- กราฟย่อยชุดเดียวกันหลายใบ (small multiples) — ทุกใบมีชุดข้อมูลเดียว
-             จึงใช้สีเดียวกันทั้งหมด หัวการ์ดเป็นตัวบอกว่าใบไหนคือตัวชี้วัดอะไร
-             การให้สีต่างกันทั้งที่ไม่ได้ใช้สีสื่อความหมายคือการเปลืองช่องทางสีไปเปล่าๆ -->
-        <UiCard v-for="metric in METRICS" :key="`chart-${metric.key}`" :title="metric.label" :eyebrow="metric.unit">
+      <div v-if="loading" class="flex flex-col gap-3">
+        <UiSkeleton height="8rem" />
+        <UiSkeleton height="14rem" />
+      </div>
+
+      <UiCard v-else-if="!monthStats.some((month) => month.stats)">
+        <UiEmpty
+          :title="t(&quot;ยังไม่มีข้อมูลในช่วงที่เลือก&quot;)"
+          :description="t(&quot;ยังไม่มียอดพิมพ์สำหรับปีงบและตัวกรองนี้&quot;)"
+        />
+      </UiCard>
+
+      <template v-else>
+        <!-- บทสรุปอัตโนมัติ — เฉพาะโหมดเดือน โหมดแยกกลุ่มไม่มี "ยอดเดียว" ให้สรุป -->
+        <template v-if="!grouping">
+          <UiCard
+            v-if="summaryFirst && summaryLast"
+            class="mb-4"
+            :eyebrow="t(&quot;สรุปอัตโนมัติ&quot;)"
+            :title="t(&quot;{0} เทียบกับ {1}&quot;, [summaryFirst.label, summaryLast.label])"
+            :description="monthStats.length > 2 ? t(&quot;จากทั้งหมด {0} เดือนที่เลือก&quot;, [monthStats.length]) : ''"
+          >
+            <ul class="flex flex-col gap-2 list-none">
+              <li v-for="(line, index) in summaryLines" :key="index" class="flex items-start gap-2 text-sm">
+                <component
+                  :is="line.incomplete ? CircleAlert : line.trend === 'up' ? TrendingUp : line.trend === 'down' ? TrendingDown : Minus"
+                  :size="15"
+                  class="shrink-0 mt-0.5"
+                  :class="
+                    line.incomplete ? 'text-warn-ink'
+                    : line.trend === 'up' ? 'text-danger-ink'
+                    : line.trend === 'down' ? 'text-ok-ink' : 'text-ink-mute'
+                  "
+                  aria-hidden="true"
+                />
+                <span class="text-ink-soft">{{ line.text }}</span>
+              </li>
+            </ul>
+
+            <!--
+              ข้อจำกัดของการเทียบครั้งนี้ อยู่ในการ์ดเดียวกับบทสรุปโดยตั้งใจ — เป็น
+              เงื่อนไขของตัวเลขข้างบน ไม่ใช่ข้อมูลเสริมที่จะย้ายไปไว้ที่อื่นก็ได้
+            -->
+            <ul v-if="summaryCaveats.length" class="mt-3 pt-3 border-t border-line-soft flex flex-col gap-1.5 list-none">
+              <li v-for="(note, index) in summaryCaveats" :key="`caveat-${index}`" class="flex items-start gap-2 text-sm text-ink-mute">
+                <Info :size="15" class="shrink-0 mt-0.5" aria-hidden="true" />
+                <span>{{ note }}</span>
+              </li>
+            </ul>
+          </UiCard>
+
+          <UiAlert v-else tone="warn" class="mb-4"> {{ t("ตอนนี้เลือกไว้เดือนเดียว (") }} {{ summaryFirst?.label }} {{ t(") — เลือกอีกเดือนเพื่อให้ระบบเทียบให้") }} </UiAlert>
+        </template>
+
+        <!--
+          เดือนที่ราคายังไม่ครบไม่มีจุดบนกราฟของตัวชี้วัดที่ขึ้นกับราคา — ยอด "เท่าที่รู้"
+          จะวาดเส้นที่ตกลงเพราะยืนยันราคาไม่ทัน ไม่ใช่เพราะใช้น้อยลง (Q30)
+        -->
+        <UiCard
+          class="mb-4"
+          :title="grouping ? t(&quot;{0} แยกตาม{1}&quot;, [chartMetric.label, grouping.noun]) : t(&quot;{0} รายเดือน&quot;, [chartMetric.label])"
+          :description="chartMetric.hint"
+        >
+          <UiAlert v-if="chartMetric.needsPrice && unpricedInSelection > 0" tone="warn" class="mb-3">
+            {{ t("ยังยืนยันราคาไม่ได้ {0} รายการในช่วงที่เลือก เดือนที่ราคายังไม่ครบจึงไม่มีจุดบนกราฟ", [formatCount(unpricedInSelection)]) }}
+          </UiAlert>
+
+          <UiAlert v-if="grouping && groupsTruncated" tone="info" class="mb-3">
+            {{ t("แสดงได้ครั้งละ {0} รายการ เพราะชุดสีมี {0} สี — เลือกเองได้จากช่องด้านบน", [MAX_SERIES]) }}
+          </UiAlert>
+
           <UiChart
+            v-if="chartHasData"
             kind="line"
             :labels="monthStats.map((s) => s.label)"
-            :series="[
-              {
-                key: metric.key,
-                label: metric.label,
-                slot: 1,
-                data: monthStats.map((s) => s.stats?.[metric.key] ?? null),
-              },
-            ]"
-            height="13rem"
+            :series="chartSeries"
+            height="20rem"
             :loading="loading"
-            :unit="metric.unit"
-            :format-value="metric.format"
+            :unit="chartMetric.unit"
+            :format-value="chartMetric.format"
             :category-label="t(&quot;เดือน&quot;)"
           />
+          <UiEmpty
+            v-else
+            compact
+            :title="t(&quot;ยังวาดกราฟ{0}ไม่ได้&quot;, [chartMetric.label])"
+            :description="chartMetric.needsPrice ? t(&quot;ทุกเดือนที่เลือกยังมีรายการที่ยืนยันราคาไม่ได้ ยืนยันช่วงที่สัญญามีผลก่อน แล้วกราฟจะขึ้นเอง&quot;) : t(&quot;ยังไม่มียอดในช่วงที่เลือก&quot;)"
+          />
         </UiCard>
-      </div>
-    </template>
+
+        <!-- ตารางเปรียบเทียบ — ตัวเลขหลักของหน้า: ทุกตัวชี้วัด (โหมดเดือน) หรือทุกกลุ่ม (โหมดแยกกลุ่ม) -->
+        <UiCard
+          flush
+          class="mb-4"
+          :title="t(&quot;ตารางเปรียบเทียบ&quot;)"
+          :description="grouping ? t(&quot;{0} ของแต่ละ{1}&quot;, [chartMetric.label, grouping.noun]) : ''"
+        >
+          <!-- กล่องที่เลื่อนแนวนอนได้ต้องรับโฟกัสจากคีย์บอร์ด ไม่งั้นคนที่ไม่ใช้เมาส์เลื่อนดูเดือนท้ายๆ ไม่ได้ -->
+          <div class="overflow-x-auto scroll-hint-x" tabindex="0" role="region" :aria-label="t(&quot;ตารางเปรียบเทียบ&quot;)">
+            <table class="w-full text-sm min-w-max">
+              <caption class="sr-only">{{ t("ตารางเปรียบเทียบ") }}</caption>
+              <thead>
+                <tr class="bg-surface-2">
+                  <th
+                    scope="col"
+                    class="sticky left-0 z-[1] bg-surface-2 text-left text-xs font-semibold text-ink-mute px-4 py-2.5 border-b border-line-soft shadow-[1px_0_0_var(--line-soft)]"
+                  > {{ grouping ? grouping.noun : t("ตัวชี้วัด") }} </th>
+                  <th
+                    v-for="stat in monthStats"
+                    :key="stat.month"
+                    scope="col"
+                    class="text-right text-xs font-semibold text-ink-mute px-4 py-2.5 whitespace-nowrap border-b border-line-soft"
+                  >
+                    {{ stat.label }}
+                  </th>
+                  <th
+                    v-if="grouping"
+                    scope="col"
+                    class="text-right text-xs font-semibold text-ink px-4 py-2.5 whitespace-nowrap border-b border-line-soft"
+                  > {{ t("รวมทั้งช่วง") }} </th>
+                </tr>
+              </thead>
+
+              <tbody v-if="grouping">
+                <tr v-for="group in groupStats" :key="group.value" class="border-b border-line-soft last:border-0">
+                  <th
+                    scope="row"
+                    class="sticky left-0 z-[1] bg-surface text-left font-medium text-ink-soft px-4 py-2.5 whitespace-nowrap shadow-[1px_0_0_var(--line-soft)]"
+                  >
+                    {{ group.label }}
+                  </th>
+                  <td
+                    v-for="(stats, index) in group.months"
+                    :key="monthStats[index].month"
+                    class="px-4 py-2.5 text-right numeral whitespace-nowrap"
+                    :class="stats && metricValue(stats, chartMetric) === null ? 'text-ink-mute text-xs' : 'text-ink'"
+                  >
+                    {{ cellText(stats, chartMetric) }}
+                  </td>
+                  <td class="px-4 py-2.5 text-right numeral font-semibold text-ink whitespace-nowrap">
+                    {{ groupTotal(group.months, chartMetric) === null ? "—" : chartMetric.format(groupTotal(group.months, chartMetric)) }}
+                  </td>
+                </tr>
+              </tbody>
+
+              <tbody v-else>
+                <tr v-for="metric in METRICS" :key="metric.key" class="border-b border-line-soft last:border-0">
+                  <th
+                    scope="row"
+                    class="sticky left-0 z-[1] bg-surface text-left font-normal px-4 py-2.5 shadow-[1px_0_0_var(--line-soft)]"
+                  >
+                    <span class="block text-ink-soft">{{ metric.label }}</span>
+                    <span class="block text-2xs text-ink-mute">{{ metric.hint }}</span>
+                  </th>
+
+                  <td v-for="(stat, index) in monthStats" :key="stat.month" class="px-4 py-2.5 text-right">
+                    <span class="block font-semibold text-ink numeral whitespace-nowrap">
+                      {{ stat.stats ? metric.format(stat.stats[metric.key]) : "—" }}<span
+                        v-if="stat.stats && metric.key === 'totalCost' && stat.stats.unpriced > 0"
+                        class="text-warn-ink"
+                        :title="t(&quot;ยอดเฉพาะส่วนที่ยืนยันราคาแล้ว&quot;)"
+                      >*</span>
+                    </span>
+
+                    <span
+                      v-if="deltaVsPrevious(metric.key, index) !== null"
+                      class="inline-flex items-center gap-0.5 text-2xs font-medium numeral"
+                      :class="deltaVsPrevious(metric.key, index) >= 0 ? 'text-danger-ink' : 'text-ok-ink'"
+                    >
+                      <component
+                        :is="deltaVsPrevious(metric.key, index) >= 0 ? TrendingUp : TrendingDown"
+                        :size="11"
+                        aria-hidden="true"
+                      />
+                      {{ Math.abs(deltaVsPrevious(metric.key, index)).toFixed(1) }}%
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <template v-if="!grouping && unpricedInSelection > 0" #footer>
+            <p class="text-xs text-ink-mute">{{ t("* ยอดเฉพาะส่วนที่ยืนยันราคาแล้ว — เดือนนั้นยังมีรายการที่ยืนยันราคาไม่ได้") }}</p>
+          </template>
+        </UiCard>
+      </template>
     </template>
   </div>
 </template>

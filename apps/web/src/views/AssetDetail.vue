@@ -36,7 +36,7 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { keys, useDevice, useDeviceHistory, useDeviceUsage } from "../api/queries";
 import { authState } from "../store/auth";
 import { activeFiscalYear } from "../store/fiscalYear";
-import { formatBahtValue, formatCount } from "../lib/format";
+import { formatBahtValue, formatCount, formatUnitPrice } from "../lib/format";
 import {
   UiAlert,
   UiBadge,
@@ -233,7 +233,7 @@ const usageSeries = computed(() => [
         <div class="min-w-0">
           <p class="eyebrow mb-1.5"> {{ t("ทะเบียนเครื่องพิมพ์") }} </p>
 
-          <h1 class="font-mono text-2xl font-semibold text-ink tracking-tight break-all">
+          <h1 class="font-mono text-2xl sm:text-3xl font-semibold text-ink tracking-tight break-all">
             {{ device.serial_number || "—" }}
           </h1>
 
@@ -340,7 +340,7 @@ const usageSeries = computed(() => [
               <dt class="text-xs text-ink-mute mb-0.5"> {{ t("ราคาต่อหน้าที่ใช้จริง") }} </dt>
               <dd v-if="effectivePrice" class="text-ink-soft">
                 <span class="numeral font-semibold text-ink">
-                  {{ effectivePrice.value.toFixed(2) }}
+                  {{ formatUnitPrice(effectivePrice.value) }}
                 </span> {{ t("บาท") }} <!-- บอกที่มาเสมอ ไม่งั้นคนเห็นเลขไม่ตรงกับสัญญาแล้วคิดว่าระบบคิดผิด -->
                 <span class="block text-xs text-ink-mute mt-0.5"> {{ t("จาก") }} {{ effectivePrice.source }}
                 </span>

@@ -17,6 +17,7 @@ export const {
   CE_YEAR_MAX,
   isBuddhistYear,
   normalizeMonth,
+  currentMonth,
   toBuddhistMonth,
   parseMonths,
   getFiscalYearRange,
