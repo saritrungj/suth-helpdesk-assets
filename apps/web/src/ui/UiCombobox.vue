@@ -48,6 +48,11 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue"]);
 
 const field = useField();
+const accessibleName = computed(() => {
+  const value = selectedLabels.value || props.placeholder;
+  if (!field.label) return value || undefined;
+  return value ? `${field.label} ${value}` : field.label;
+});
 const search = ref("");
 const open = ref(false);
 
@@ -114,8 +119,10 @@ watch(open, (isOpen) => {
     @update:model-value="onUpdate"
   >
     <ComboboxAnchor as-child>
+      <!-- ชื่อของปุ่มคือ "ป้ายที่เห็น + ค่าที่เลือกอยู่" ทับ aria-label "Show popup" ของ Reka UI -->
       <ComboboxTrigger
         :id="field.id"
+        :aria-label="accessibleName"
         class="field flex items-center gap-2 text-left cursor-pointer"
         :aria-invalid="field.invalid ? 'true' : undefined"
         :aria-describedby="field.describedBy"

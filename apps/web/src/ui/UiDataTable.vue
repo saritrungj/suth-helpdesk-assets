@@ -38,10 +38,12 @@ import { t } from "../lib/locale";
  *     ในตารางเอง
  *
  * นิยามคอลัมน์: { key, label, align?, sortable?, hidden?, alwaysExport?, width?,
- *                 value?: (row) => any, csv?: (row) => any }
+ *                 value?: (row) => any, csv?: (row) => any, sortValue?: (row) => any }
+ *   sortValue ใช้เมื่อค่าที่แสดงเรียงไม่ได้ตรงๆ เช่น "—" ปนกับตัวเลข
  */
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useFullscreen } from "./use-fullscreen";
+import { useFillHeight } from "./use-fill-height";
 import { refDebounced } from "@vueuse/core";
 import { exportSheet } from "../lib/export-xlsx";
 import {
@@ -66,6 +68,8 @@ import UiSkeleton from "./UiSkeleton.vue";
 import UiTooltip from "./UiTooltip.vue";
 
 const tableRoot = useTemplateRef("tableRoot");
+const scrollBox = useTemplateRef("scrollBox");
+const tableFooter = useTemplateRef("tableFooter");
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   columns: { type: Array, required: true },
@@ -84,14 +88,24 @@ const props = defineProps({
   showFullscreen: { type: Boolean, default: true },
   /** ให้ผู้ใช้ซ่อน/แสดงคอลัมน์เองได้ — ช่วยมากกับตารางที่มีสิบกว่าคอลัมน์ */
   showColumnPicker: { type: Boolean, default: true },
-  /** ความสูงสูงสุดของกล่องตาราง เช่น "65vh" ทำให้หัวตารางปักหมุดอยู่ในกล่อง */
-  maxHeight: { type: String, default: "" },
+  /**
+   * ความสูงสูงสุดของกล่องตาราง ทำให้หัวตารางปักหมุดอยู่ในกล่อง
+   * "fill" (ค่าเริ่มต้น) = สูงเต็มพื้นที่จอที่เหลือ ทุกหน้าจึงมีขอบล่างที่ระดับเดียวกัน
+   * (ดู use-fill-height.js) ใส่ค่า CSS เช่น "24rem" ได้เมื่อตารางต้องสูงตายตัว
+   * หรือ "none" เมื่อให้ตารางยาวตามจำนวนแถวแล้วเลื่อนทั้งหน้า
+   */
+  maxHeight: { type: String, default: "fill" },
   /** ตรึงคอลัมน์แรกไว้ตอนเลื่อนแนวนอน สำหรับตารางที่กว้างมาก */
   stickyFirst: { type: Boolean, default: false },
   rowClass: { type: Function, default: null },
   /** Optional search owner; existing callers keep their local search. */
   searchValue: { type: String, default: undefined },
   preservePageOnRefresh: { type: Boolean, default: false },
+  /**
+   * ลำดับเริ่มต้นเมื่อเปิดหน้า เช่น { key: "year", dir: "desc" } — ปีงบล่าสุดขึ้นก่อน
+   * กดหัวคอลัมน์วนครบรอบแล้วกลับมาที่ลำดับนี้ ไม่ใช่ลำดับดิบจาก API
+   */
+  defaultSort: { type: Object, default: null },
   /** ชื่อตาราง — เป็น <caption> ให้โปรแกรมอ่านหน้าจอ และเป็นหัวเรื่องตอนขยายเต็มจอ */
   caption: { type: String, default: "" },
   /** selector ของจุดวางกลุ่มเครื่องมือในแถบตัวกรองของหน้า เช่น "#registry-table-tools" */
@@ -102,10 +116,15 @@ const toolsInline = computed(() => !props.toolsTarget || expanded.value);
 // หน้าที่วางช่องค้นหาไว้นอกตารางส่ง v-model เข้ามาอยู่แล้ว เมื่อเต็มจอให้สร้าง
 // ช่องค้นหาอีกตำแหน่งด้วยค่าเดียวกัน เพื่อไม่ให้ผู้ใช้ต้องออกจากเต็มจอเพื่อค้นใหม่
 const searchVisible = computed(() => props.searchable || (expanded.value && props.searchValue !== undefined));
-// maxHeight 60–70vh ใช้เฉพาะโหมดปกติ ตอนขยายให้กล่องเลื่อนเป็น flex-1 จนถึงขอบล่าง
+// maxHeight ใช้เฉพาะโหมดปกติ ตอนขยายให้กล่องเลื่อนเป็น flex-1 จนถึงขอบล่าง
+const bounded = computed(() => Boolean(props.maxHeight) && props.maxHeight !== "none");
+const fill = computed(() => props.maxHeight === "fill" && !expanded.value);
+const { height: fillHeight, stretch: fillStretch } = useFillHeight(scrollBox, tableFooter, fill);
 const scrollStyle = computed(() => {
-  if (expanded.value) return { maxHeight: "none" };
-  return props.maxHeight ? { maxHeight: props.maxHeight } : {};
+  if (expanded.value || !bounded.value) return { maxHeight: "none" };
+  if (props.maxHeight !== "fill") return { maxHeight: props.maxHeight };
+  if (!fillHeight.value) return {};
+  return fillStretch.value ? { height: fillHeight.value } : { maxHeight: fillHeight.value };
 });
 const emit = defineEmits(["update:searchValue"]);
 const localSearch = ref("");
@@ -132,12 +151,11 @@ const fullscreenContext = computed(() => {
  */
 const searchTerm = refDebounced(search, 180);
 
-const sortKey = ref(null);
-const sortDir = ref("asc");
+const sortKey = ref(props.defaultSort?.key ?? null);
+const sortDir = ref(props.defaultSort?.dir ?? "asc");
 const currentPage = ref(1);
 const pageSize = ref(props.defaultPageSize);
 const hiddenKeys = ref(new Set(props.columns.filter((c) => c.hidden).map((c) => c.key)));
-const scrollBox = useTemplateRef("scrollBox");
 
 const visibleColumns = computed(() => props.columns.filter((c) => !hiddenKeys.value.has(c.key)));
 
@@ -175,9 +193,11 @@ function toggleSort(col) {
     sortDir.value = "asc";
   } else if (sortDir.value === "asc") {
     sortDir.value = "desc";
-  } else {
-    sortKey.value = null;
+  } else if (props.defaultSort?.key === col.key) {
     sortDir.value = "asc";
+  } else {
+    sortKey.value = props.defaultSort?.key ?? null;
+    sortDir.value = props.defaultSort?.dir ?? "asc";
   }
   currentPage.value = 1;
 }
@@ -192,11 +212,14 @@ const sortedRows = computed(() => {
   const collator = new Intl.Collator("th", { numeric: true, sensitivity: "base" });
 
   return [...searchedRows.value].sort((a, b) => {
-    const va = cellValue(a, col);
-    const vb = cellValue(b, col);
+    const sortOf = (row) => (typeof col.sortValue === "function" ? col.sortValue(row) : cellValue(row, col));
+    const va = sortOf(a);
+    const vb = sortOf(b);
 
-    const na = Number(va);
-    const nb = Number(vb);
+    // ค่าที่จัดรูปแบบแล้ว ("1,234") ต้องเรียงเป็นตัวเลข ไม่ใช่ตัวอักษร —
+    // ไม่งั้น "1,234" มาก่อน "987" เพราะเทียบกันแค่หลักแรก
+    const na = Number(String(va ?? "").replace(/,/g, ""));
+    const nb = Number(String(vb ?? "").replace(/,/g, ""));
     const bothNumeric =
       va !== "" && vb !== "" && va !== null && vb !== null && !Number.isNaN(na) && !Number.isNaN(nb);
 
@@ -399,7 +422,7 @@ defineExpose({
       ref="scrollBox"
       class="hidden sm:block relative overflow-auto rounded-t-lg border border-line-soft bg-surface"
       :class="[
-        !maxHeight && 'scroll-hint-x',
+        !bounded && 'scroll-hint-x',
         expanded && 'flex-1 min-h-0',
       ]"
       :style="scrollStyle"
@@ -581,6 +604,7 @@ defineExpose({
     <!-- ท้ายตาราง — จำนวนคู่ตัวแบ่งหน้า (Carbon / Primer) แสดงเสมอแม้มีหน้าเดียว
          จำนวนเป็น live region ให้โปรแกรมอ่านหน้าจอประกาศเมื่อค้นหา/เรียง/เปลี่ยนหน้า -->
     <div
+      ref="tableFooter"
       class="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2 bg-surface text-xs text-ink-mute
              mt-2 sm:mt-0 sm:border sm:border-t-0 sm:border-line-soft sm:rounded-b-lg"
     >

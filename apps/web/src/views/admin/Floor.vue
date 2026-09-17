@@ -8,10 +8,12 @@ import { t } from "../../lib/locale";
  */
 import MasterDataPage from "../../components/MasterDataPage.vue";
 
+// อาคารมาก่อนชั้น และเรียงตามอาคารตั้งแต่เปิดหน้า — "ชั้น 1" สี่แถวติดกันที่อยู่
+// คนละอาคารอ่านไม่ออกว่าแถวไหนคือที่ไหน
 const columns = [
-  { key: "name", label: t("ชื่อชั้น") },
   { key: "building_id", label: t("อาคาร"), optionKey: "building_id" },
-  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
+  { key: "name", label: t("ชื่อชั้น") },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem", hidden: true },
 ];
 
 const fields = [
@@ -44,5 +46,6 @@ const fields = [
     :empty-hint="t(&quot;เลือกอาคารแล้วเพิ่มชั้นทีละชั้นตามที่มีเครื่องตั้งอยู่จริง&quot;)"
     :columns="columns"
     :fields="fields"
+    :default-sort="{ key: 'building_id', dir: 'asc' }"
   />
 </template>

@@ -21,7 +21,9 @@ const layout = computed(() => (route.meta.layout === "auth" ? AuthLayout : MainL
 // ชื่อแท็บบอกว่ากำลังเปิดหน้าอะไร — คนที่เปิดหลายแท็บพร้อมกัน (เทียบข้อมูล
 // สองปีงบ หรือดูรายงานคู่กับหน้าบันทึก) จะหาแท็บที่ต้องการเจอโดยไม่ต้องคลิกไล่
 watchEffect(() => {
-  const page = findActiveItem(route)?.label;
+  // หน้าลูก (รายละเอียดเครื่อง, เพิ่มเครื่อง) ใช้ชื่อของตัวเอง ไม่ใช่ชื่อหน้าแม่ —
+  // ไม่งั้นแท็บของทะเบียนกับแท็บของเครื่องแต่ละเครื่องชื่อเหมือนกันหมด (WCAG 2.4.2)
+  const page = route.meta.breadcrumb ?? findActiveItem(route)?.label;
   document.title = documentTitle(page);
 });
 </script>

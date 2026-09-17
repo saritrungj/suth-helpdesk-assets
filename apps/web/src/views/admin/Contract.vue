@@ -8,7 +8,7 @@ import { t } from "../../lib/locale";
  * ปีงบผิดตาม จึงกำหนด step ละเอียดถึงทศนิยมสี่ตำแหน่งและเขียนกำกับหน่วยไว้ชัด
  */
 import MasterDataPage from "../../components/MasterDataPage.vue";
-import { formatBahtValue } from "../../lib/format";
+import { formatUnitPrice } from "../../lib/format";
 
 const columns = [
   { key: "contract_no", label: t("เลขที่สัญญา") },
@@ -17,10 +17,10 @@ const columns = [
     key: "price_per_page",
     label: t("ราคา/หน้า (บาท)"),
     align: "right",
-    value: (row) => formatBahtValue(row.price_per_page),
+    value: (row) => formatUnitPrice(row.price_per_page),
     csv: (row) => Number(row.price_per_page ?? 0),
   },
-  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem", hidden: true },
 ];
 
 const fields = [

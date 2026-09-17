@@ -30,7 +30,7 @@ for (const language of ["th", "en"]) {
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${language}.png`), fullPage: true });
     await page.goto("/compare");
     await expect(page.locator("h1")).toBeVisible();
-    await expect(page.getByText(language === "en" ? "Comparison table" : "ตารางเปรียบเทียบ", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: language === "en" ? "Comparison table" : "ตารางเปรียบเทียบ", exact: true })).toBeVisible();
     await page.goto("/assets");
     const searchName = language === "en" ? "Search serial, model, location…" : "ค้นหา Serial, รุ่น, ตำแหน่ง…";
     const search = page.getByRole("textbox", { name: searchName }).first();
@@ -90,7 +90,7 @@ test("overview exposes annual and overdue coverage separately", async () => {
 
 test("report table uses the remaining viewport when expanded", async ({ page }) => {
   await page.goto("/report");
-  await expect(page.getByRole("heading", { name: "ยอดพิมพ์รายเดือนตามเครื่อง", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "รายงานสรุปยอดพิมพ์", exact: true })).toBeVisible();
 
   const tableScroll = page.locator("div.relative.overflow-auto").first();
   await expect(tableScroll).toBeVisible();
@@ -514,4 +514,54 @@ test("filtered Excel export carries the search context", async ({ page }) => {
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }).slice(1);
   expect(rows.length).toBeGreaterThan(0);
   expect(rows.every((row) => row.some((value) => String(value).toUpperCase().includes(term.toUpperCase())))).toBe(true);
+});
+
+
+test("monthly comparison keeps historical contracts after a device switches", async () => {
+  test.skip(!writesAllowed(), "Creates disposable contracts and a device in the isolated test database");
+  const [fy, devices] = await Promise.all([activeFiscalYear(), apiFetch("/devices")]);
+  const template = devices.find((row) => row.brand_id);
+  test.skip(!template, "No brand available");
+  const months = [fy.start_month, fy.end_month];
+  const label = `E2E-COMPARE-${Date.now()}`;
+  const contracts = [];
+  let deviceId;
+  try {
+    for (const suffix of ["A", "B"]) {
+      const created = await apiFetch("/contracts", {
+        method: "POST",
+        body: JSON.stringify({ contract_no: `${label}-${suffix}`, fiscal_year_id: fy.id, price_per_page: 0.5 }),
+      });
+      contracts.push(created.id);
+    }
+    const device = { serial_number: label, brand_id: template.brand_id, model: null,
+      contract_id: contracts[0], price_override: 0.5, status: "active",
+      installation_status: "installed", installed_on: `${months[0]}-01`, billing_from: `${months[0]}-01` };
+    ({ id: deviceId } = await apiFetch("/devices", { method: "POST", body: JSON.stringify(device) }));
+    await apiFetch(`/devices/${deviceId}`, {
+      method: "PUT",
+      body: JSON.stringify({ ...device, contract_id: contracts[1], billing_from: `${months[1]}-01` }),
+    });
+    for (const month of months) {
+      await apiFetch("/print-transactions", {
+        method: "POST", body: JSON.stringify({ device_id: deviceId, month, pages: 100 }),
+      });
+    }
+    const rows = (await apiFetch("/dashboard/monthly-kpi")).filter((row) => row.device_id === deviceId);
+    expect(rows).toHaveLength(2);
+    const before = rows.find((row) => row.month === months[0]);
+    const after = rows.find((row) => row.month === months[1]);
+    expect(before.billing_contract_id).toBe(contracts[0]);
+    expect(before.billing_contract_no).toBe(`${label}-A`);
+    expect(after.billing_contract_id).toBe(contracts[1]);
+    expect(after.billing_contract_no).toBe(`${label}-B`);
+    expect(Number(before.total_cost)).toBe(49);
+    expect(Number(after.total_cost)).toBe(49);
+  } finally {
+    if (deviceId) {
+      for (const month of months) await restoreMonth(month, [{ device_id: deviceId, pages: null }]);
+      await apiFetch(`/devices/${deviceId}`, { method: "DELETE" });
+    }
+    for (const id of contracts.reverse()) await apiFetch(`/contracts/${id}`, { method: "DELETE" });
+  }
 });

@@ -79,7 +79,7 @@ const columns = [
     label: t("สร้างเมื่อ"),
     value: (u) => (u.created_at ? formatDate(u.created_at) : "—"),
   },
-  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem", hidden: true },
 ];
 
 function isSelf(user) {

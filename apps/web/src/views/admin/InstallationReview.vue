@@ -1,5 +1,6 @@
 <script setup>
 import { t } from "../../lib/locale";
+import DeviceSerialLink from "../../components/DeviceSerialLink.vue";
 import { formatMonth } from "../../lib/locale-format";
 
 /**
@@ -70,12 +71,12 @@ const STATUS_OPTIONS = [
 ];
 
 const columns = [
-  { key: "serial_number", label: t("หมายเลขเครื่อง") },
+  // "Serial" คำเดียวกับทุกตารางในระบบ (WCAG 3.2.4 — สิ่งเดียวกันเรียกชื่อเดียวกัน)
+  { key: "serial_number", label: "Serial", width: "11rem" },
   { key: "model", label: t("รุ่น"), value: (row) => row.model || "—" },
   { key: "building_name", label: t("อาคาร"), value: (row) => row.building_name || "—" },
   { key: "department_name", label: t("แผนก"), value: (row) => row.department_name || "—" },
-  { key: "readings", label: t("ยอดที่บันทึกไว้แล้ว") },
-  { key: "actions", label: "" },
+  { key: "readings", label: t("ยอดที่บันทึกไว้แล้ว"), value: (row) => readingRange(row), sortable: false },
 ];
 
 const pending = computed(() => devices.value.length);
@@ -148,7 +149,7 @@ onMounted(load);
       :title="t(&quot;ตรวจยืนยันสถานะการติดตั้ง&quot;)"
       :description="t(&quot;ระบบไม่เดาให้ว่าเครื่องเดิมติดตั้งแล้วหรือยัง ความครบถ้วนของยอดพิมพ์จะยืนยันได้เมื่อตรวจครบทุกเครื่อง&quot;)"
     >
-      <template #actions>
+      <template #badge>
         <UiBadge v-if="!loading && pending" tone="warn" dot>
           {{ t("เหลืออีก {0} เครื่อง", [pending]) }}
         </UiBadge>
@@ -181,16 +182,10 @@ onMounted(load);
       :empty-text="t(&quot;ไม่มีเครื่องที่รอตรวจ&quot;)"
     >
       <template #cell-serial_number="{ row }">
-        <RouterLink :to="`/assets/${row.id}`" class="font-medium text-brand-ink underline">
-          {{ row.serial_number }}
-        </RouterLink>
+        <DeviceSerialLink :device-id="row.id" :serial-number="row.serial_number" />
       </template>
 
-      <template #cell-readings="{ row }">
-        <span class="text-ink-soft">{{ readingRange(row) }}</span>
-      </template>
-
-      <template #cell-actions="{ row }">
+      <template #actions="{ row }">
         <UiButton size="sm" variant="secondary" @click="openReview(row)">
           <template #icon><ClipboardCheck :size="14" /></template>
           {{ t("ตรวจยืนยัน") }}

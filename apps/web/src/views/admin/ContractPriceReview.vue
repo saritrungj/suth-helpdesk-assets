@@ -1,7 +1,7 @@
 <script setup>
 import { t } from "../../lib/locale";
 import { formatDate } from "../../lib/locale-format";
-import { formatBahtValue, formatCount } from "../../lib/format";
+import { formatCount, formatUnitPrice } from "../../lib/format";
 
 /**
  * ContractPriceReview — ยืนยันช่วงที่สัญญาและราคามีผลจริง (ADR-0019)
@@ -63,11 +63,19 @@ const columns = [
     key: "price_per_page",
     label: t("ราคา/หน้า (บาท)"),
     align: "right",
-    value: (row) => (row.price_per_page == null ? "—" : formatBahtValue(row.price_per_page)),
+    value: (row) => (row.price_per_page == null ? "—" : formatUnitPrice(row.price_per_page)),
+  },
+  // ช่วงที่มีผลคือสิ่งที่หน้านี้ให้ยืนยัน จึงต้องเห็นค่าปัจจุบันก่อนกดเปิดหน้าต่าง
+  {
+    key: "effective_range",
+    label: t("ช่วงที่มีผล"),
+    value: (row) =>
+      row.effective_from
+        ? `${formatDate(row.effective_from)} – ${row.effective_to ? formatDate(row.effective_to) : t("ไม่มีกำหนดสิ้นสุด")}`
+        : t("ยังไม่กำหนด"),
   },
   { key: "device_count", label: t("เครื่อง"), align: "right" },
-  { key: "state", label: t("สถานะ") },
-  { key: "actions", label: "" },
+  { key: "state", label: t("สถานะ"), sortable: false },
 ];
 
 const pending = computed(() => contracts.value.length);
@@ -158,7 +166,7 @@ onMounted(load);
       :title="t(&quot;ยืนยันช่วงที่สัญญามีผล&quot;)"
       :description="t(&quot;ค่าใช้จ่ายของเดือนหนึ่งคิดจากราคาที่มีผลในเดือนนั้น ระบบจึงยังไม่คิดเงินให้จนกว่าจะมีคนยืนยันช่วงที่สัญญาครอบคลุม&quot;)"
     >
-      <template #actions>
+      <template #badge>
         <UiBadge v-if="!loading && pending" tone="warn" dot>
           {{ t("เหลืออีก {0} ฉบับ", [pending]) }}
         </UiBadge>
@@ -191,7 +199,7 @@ onMounted(load);
       :empty-text="t(&quot;ไม่มีสัญญาที่รอยืนยัน&quot;)"
     >
       <template #cell-state="{ row }">
-        <span class="flex flex-wrap items-center gap-2">
+        <span class="flex flex-col items-start gap-1">
           <UiBadge :tone="row.price_confirmed ? 'ok' : 'warn'" dot>
             {{ row.price_confirmed ? t("ยืนยันแล้ว") : t("ยังไม่ยืนยัน") }}
           </UiBadge>
@@ -207,7 +215,8 @@ onMounted(load);
         </span>
       </template>
 
-      <template #cell-actions="{ row }">
+      <!-- ช่องปุ่มใช้ slot actions ของตาราง — หัวคอลัมน์ "จัดการ" และไม่ติดไปกับไฟล์ Excel เหมือนทุกหน้า -->
+      <template #actions="{ row }">
         <UiButton size="sm" variant="secondary" @click="openConfirm(row)">
           <template #icon><BadgeCheck :size="14" /></template>
           {{ row.outside_term_readings
@@ -245,7 +254,7 @@ onMounted(load);
         </UiAlert>
         <UiAlert v-if="target" tone="info">
           {{ t("ราคาที่จะใช้คิดเงินคือ {0} บาทต่อหน้า กับเครื่อง {1} เครื่องที่ผูกกับสัญญานี้", [
-            target.price_per_page == null ? "—" : formatBahtValue(target.price_per_page),
+            target.price_per_page == null ? "—" : formatUnitPrice(target.price_per_page),
             formatCount(target.device_count),
           ]) }}
         </UiAlert>

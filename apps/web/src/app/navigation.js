@@ -58,7 +58,7 @@ export const NAV_GROUPS = [
     items: [
       {
         to: "/dashboard",
-        label: t("แดชบอร์ด"),
+        label: t("ภาพรวมการพิมพ์"),
         icon: Gauge,
         keywords: t("dashboard home หน้าแรก ภาพรวม สรุป งานค้าง"),
       },
@@ -101,7 +101,7 @@ export const NAV_GROUPS = [
       },
       {
         to: "/report",
-        label: t("รายงานสรุป"),
+        label: t("รายงานสรุปยอดพิมพ์"),
         icon: ScrollText,
         keywords: t("report สรุป พิมพ์ออก export"),
       },
@@ -192,10 +192,13 @@ export const ADMIN_GROUPS = [
 export const HIDDEN_NAV_ITEMS = [
   {
     to: "/admin/add-asset",
-    label: t("เพิ่มทรัพย์สิน"),
+    label: t("เพิ่มเครื่อง"),
     icon: CirclePlus,
     keywords: t("add new เพิ่ม สร้าง import นำเข้า เครื่องใหม่"),
     admin: true,
+    // ปุ่มที่พามาที่นี่อยู่ในหน้าทะเบียน — เป็นหน้าลูกของทะเบียน ไม่ใช่ของตั้งค่าระบบ
+    // แถบเมนูจึงไฮไลต์ทะเบียนค้างไว้ และ breadcrumb ลิงก์กลับไปที่ทะเบียน
+    parent: "/assets",
   },
   // งานที่ทำครั้งเดียวแล้วจบ — พอตรวจครบทุกเครื่องหน้านี้จะว่างเปล่าตลอดไป
   // จึงไม่ควรกินที่ถาวรในเมนู คนเข้าถึงได้จากคำเตือนบนแดชบอร์ดและ Ctrl+K
@@ -223,12 +226,12 @@ export const ALL_NAV_ITEMS = [
   ...ALL_NAV_GROUPS.flatMap((group) =>
     group.items.map((item) => ({ ...item, groupKey: group.key, groupLabel: group.label }))
   ),
-  // หน้าที่ไม่มีเมนูถือว่าอยู่ใต้หมวดตั้งค่า — อ้างจากหมวดจริง ไม่พิมพ์ชื่อซ้ำ
-  ...HIDDEN_NAV_ITEMS.map((item) => ({
-    ...item,
-    groupKey: ADMIN_GROUPS[0].key,
-    groupLabel: ADMIN_GROUPS[0].label,
-  })),
+  // หน้าที่ไม่มีเมนูอยู่ในหมวดของหน้าแม่ (parent) ถ้ามี ไม่งั้นถือว่าอยู่ใต้หมวดตั้งค่า
+  // — อ้างจากหมวดจริง ไม่พิมพ์ชื่อซ้ำ
+  ...HIDDEN_NAV_ITEMS.map((item) => {
+    const group = (item.parent && ALL_NAV_GROUPS.find((g) => g.items.some((i) => pathOf(i.to) === item.parent))) || ADMIN_GROUPS[0];
+    return { ...item, groupKey: group.key, groupLabel: group.label };
+  }),
 ];
 
 function pathOf(to) {
@@ -270,6 +273,8 @@ export function findActiveItem(route) {
     ALL_NAV_ITEMS.find((item) => matchesRoute(item, route)) ??
     ALL_NAV_ITEMS.find((item) => pathOf(item.to) === route.path);
 
+  // หน้าลูกที่ไม่มีเมนูของตัวเอง ให้ถือว่า "อยู่ที่" หน้าแม่ — ทั้งไฮไลต์และ breadcrumb
+  if (exact?.parent) return ALL_NAV_ITEMS.find((item) => pathOf(item.to) === exact.parent) ?? exact;
   if (exact) return exact;
 
   return (

@@ -15,6 +15,7 @@ const asyncHandler = require("../shared/async-handler");
 const { validate } = require("../shared/validate");
 const cache = require("../shared/cache");
 const { effectiveLocationJoin } = require("../shared/effective-location-sql");
+const { effectiveContractJoin } = require("../shared/effective-contract-sql");
 const { reportQuery, reportFilters, joinClauses, sortDirection } = require("./filters");
 
 const withFilters = validate({ query: reportQuery });
@@ -45,7 +46,9 @@ router.get(
          brand.name AS brand_name,
          d.model,
          d.contract_id,
-         c.contract_no
+         c.contract_no,
+         dch.contract_id AS billing_contract_id,
+         billing_contract.contract_no AS billing_contract_no
        FROM v_monthly_kpi m
        LEFT JOIN devices d ON m.device_id = d.id
        LEFT JOIN building b ON d.building_id = b.id
@@ -57,6 +60,8 @@ router.get(
        LEFT JOIN division divi ON CASE WHEN h.id IS NOT NULL THEN h.division_id ELSE d.division_id END = divi.id
        LEFT JOIN brand ON d.brand_id = brand.id
        LEFT JOIN contracts c ON d.contract_id = c.id
+       ${effectiveContractJoin({ deviceIdExpression: "m.device_id", monthExpression: "m.month", historyAlias: "dch" })}
+       LEFT JOIN contracts billing_contract ON billing_contract.id = dch.contract_id
        ${joinClauses(clauses)}
        ORDER BY m.month ASC`,
       params

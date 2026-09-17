@@ -1,6 +1,7 @@
 <script setup>
 import { yearLabel } from "../lib/locale-format";
 import { t } from "../lib/locale";
+import { formatUnitPrice } from "../lib/format";
 import { errorMessage, fieldErrors } from "../lib/api-error";
 import { useDraftSnapshot } from "../lib/use-draft-snapshot";
 import { usePlacementFields } from "../lib/use-placement-fields";
@@ -120,15 +121,11 @@ const contractOptions = computed(() =>
 /** ราคาที่จะถูกใช้จริงถ้าบันทึกตามที่กรอกอยู่ตอนนี้ — แสดงให้เห็นก่อนกดบันทึก */
 const effectivePriceHint = computed(() => {
   if (form.value.price_override !== "" && form.value.price_override !== null) {
-    return t("จะใช้ราคาพิเศษเฉพาะเครื่อง {0} บาท/หน้า แทนราคาตามสัญญา", [Number(form.value.price_override).toLocaleString("th-TH", {
-      minimumFractionDigits: 2,
-    })]);
+    return t("จะใช้ราคาพิเศษเฉพาะเครื่อง {0} บาท/หน้า แทนราคาตามสัญญา", [formatUnitPrice(form.value.price_override)]);
   }
   const contract = contracts.value.find((c) => Number(c.id) === Number(form.value.contract_id));
   if (contract?.price_per_page !== undefined && contract?.price_per_page !== null) {
-    return t("เว้นว่างไว้ = ใช้ราคาตามสัญญา {0} บาท/หน้า", [Number(contract.price_per_page).toLocaleString("th-TH", {
-      minimumFractionDigits: 2,
-    })]);
+    return t("เว้นว่างไว้ = ใช้ราคาตามสัญญา {0} บาท/หน้า", [formatUnitPrice(contract.price_per_page)]);
   }
   return t("เว้นว่างไว้ = ใช้ราคาตามสัญญาที่เลือก");
 });

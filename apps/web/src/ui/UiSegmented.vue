@@ -15,17 +15,23 @@ import { t } from "../lib/locale";
  * แผงเนื้อหา (ถ้าเป็นอย่างหลังให้ใช้ UiTabs)
  */
 import { computed } from "vue";
+import { useField } from "./field-context";
 
 const props = defineProps({
   modelValue: { type: [String, Number], default: "" },
   /** [{ value, label, icon?, count? }] */
   options: { type: Array, required: true },
   size: { type: String, default: "md" },
-  label: { type: String, default: t("ตัวเลือก") },
+  /** ชื่อของกลุ่ม — ไม่ต้องส่งเมื่ออยู่ใน UiField ที่มีป้ายอยู่แล้ว */
+  label: { type: String, default: "" },
   block: { type: Boolean, default: false },
 });
 
 defineEmits(["update:modelValue"]);
+
+const field = useField();
+// ป้ายที่คนเห็นคือชื่อเดียวกับที่โปรแกรมอ่านหน้าจออ่าน ไม่ต้องเขียนสองที่ (WCAG 2.5.3)
+const groupLabel = computed(() => props.label || field.label || t("ตัวเลือก"));
 
 const sizing = computed(() =>
   props.size === "sm" ? "text-xs h-7 px-2.5 gap-1.5" : "text-sm h-8 px-3 gap-1.5"
@@ -37,7 +43,7 @@ const sizing = computed(() =>
     class="inline-flex items-center p-0.5 rounded-lg bg-surface-2 border border-line-soft"
     :class="block && 'flex w-full'"
     role="radiogroup"
-    :aria-label="label"
+    :aria-label="groupLabel"
   >
     <button
       v-for="option in options"

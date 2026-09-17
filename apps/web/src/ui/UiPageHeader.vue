@@ -6,8 +6,15 @@
  * และทำอะไรได้จากที่นี่ (slot actions) การรวมไว้ที่เดียวทำให้ระยะขอบและขนาด
  * ตัวอักษรของทุกหน้าตรงกัน คนจึงจำตำแหน่งปุ่มได้โดยไม่ต้องมองหาใหม่ทุกหน้า
  *
- * รอบที่ 3 ของ #51 (Primer PageHeader): ชื่อหน้า 20px อยู่แถวเดียวกับป้ายจำนวน
+ * รอบที่ 3 ของ #51 (Primer PageHeader): ชื่อหน้าอยู่แถวเดียวกับป้ายจำนวน
  * (slot "badge") และปุ่มหลัก ไม่ใช่หัวหน้าสี่บรรทัดที่ดันตารางลงไปใต้เส้นพับ
+ *
+ * ขนาดชื่อหน้า 24px บนมือถือ / 30px (--text-3xl "หัวข้อหน้า") ตั้งแต่ sm ขึ้นไป
+ * เดิม 20px ซึ่งเท่ากับหัวการ์ด (text-xl) ชื่อหน้าจึงไม่เด่นกว่าหัวข้อย่อยในหน้า
+ * ช่วงที่ระบบออกแบบหลักใช้กับหัวเรื่องระดับหน้า: Material 3 headline 24–32px,
+ * Fluent 2 title3–title1 24–32px, Carbon heading-04/05 28–32px,
+ * Primer title large 32px
+ * ตัวหนาเท่าเดิม (semibold) เพราะทุกระบบข้างบนใช้ 600 กับหัวเรื่องขนาดนี้
  *
  * ## กฎของ eyebrow — ใส่เมื่อ sidebar ตอบ "อยู่ตรงไหน" ให้ไม่ได้เท่านั้น
  *
@@ -37,7 +44,7 @@ defineProps({
       <p v-if="eyebrow" class="eyebrow mb-1">{{ eyebrow }}</p>
 
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 class="text-xl font-semibold text-ink tracking-tight">
+        <h1 class="text-2xl sm:text-3xl font-semibold text-ink tracking-tight">
           {{ title }}
         </h1>
         <slot name="badge" />

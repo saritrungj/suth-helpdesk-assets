@@ -28,8 +28,9 @@ import { invalidateAfterWrite } from "../api/invalidate";
 import { authState } from "../store/auth";
 import { askConfirm } from "../store/confirmDialog";
 import { toastError, toastSuccess } from "../store/toast";
-import { formatBahtValue, formatCount } from "../lib/format";
+import { formatBahtValue, formatCount, formatUnitPrice } from "../lib/format";
 import AssetForm from "./AssetForm.vue";
+import DeviceSerialLink from "../components/DeviceSerialLink.vue";
 import MoveDeviceModal from "./MoveDeviceModal.vue";
 import {
   UiAlert,
@@ -436,7 +437,10 @@ onMounted(async () => {
   <div>
     <!-- หัวหน้าแถวเดียว (รอบที่ 3 ของ #51, Primer): จำนวนเป็นป้ายข้างชื่อหน้า
          ไม่ใช่บรรทัดคำอธิบายที่ดันตารางลงไปใต้เส้นพับ -->
-    <UiPageHeader :title="t(&quot;ทะเบียนเครื่องพิมพ์&quot;)">
+    <UiPageHeader
+      :title="t(&quot;ทะเบียนเครื่องพิมพ์&quot;)"
+      :description="t(&quot;เครื่องพิมพ์ทุกเครื่อง พร้อมที่ตั้ง แผนก และสัญญาที่ผูกอยู่&quot;)"
+    >
       <template #badge>
         <UiBadge tone="neutral" class="numeral">
           {{ formatCount(filteredAssets.length) }} {{ t("เครื่อง") }}
@@ -473,28 +477,29 @@ onMounted(async () => {
          เหมือนกันหน้าตาไม่เหมือนกัน และเวลาแก้พฤติกรรมต้องแก้สองที่ -->
     <UiFilterBar :chips="filterChips" @remove="clearFilter" @clear="resetFilters">
       <template #primary>
-        <!-- แถวเดียวไม่มีป้ายเหนือช่อง (รอบที่ 3 ของ #51) — ชื่อที่โปรแกรมอ่านหน้าจออ่าน
-             มาจาก aria-label ของแต่ละช่อง ส่วนเครื่องมือตารางถูกย้ายมาต่อท้ายแถวนี้ -->
-        <div class="flex-1 min-w-[14rem] max-w-md">
+        <UiField :label="t('ค้นหา')" class="flex-1 min-w-[14rem] max-w-md">
           <UiInput ref="searchInput" v-model="search" clearable :aria-label="t('ค้นหา Serial, รุ่น, ตำแหน่ง…')" :placeholder="t('ค้นหา Serial, รุ่น, ตำแหน่ง…')">
             <template #icon><Search :size="15" /></template>
           </UiInput>
-        </div>
-        <UiSegmented v-model="filters.status" :options="STATUS_OPTIONS" size="sm" :label="t(&quot;กรองตามสถานะเครื่อง&quot;)" />
+        </UiField>
+        <UiField :label="t('สถานะเครื่อง')">
+          <UiSegmented v-model="filters.status" :options="STATUS_OPTIONS" size="sm" />
+        </UiField>
 
         <!--
           เครื่องที่ยังไม่ผูกสัญญาคิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาพิเศษเฉพาะเครื่อง —
           ยอดพิมพ์ของมันหายไปจากงบเงียบๆ จึงต้องมีทางกรองดูได้โดยตรง ไม่ใช่ต้อง
           ไล่กวาดสายตาหาช่องสัญญาที่ว่างในตารางเป็นร้อยแถว
         -->
-        <UiCombobox
-          v-model="filters.contract"
-          class="w-full sm:w-56"
-          :options="contractOptions"
-          :placeholder="t(&quot;ทุกสัญญา&quot;)"
-          :any-label="t(&quot;ทุกสัญญา&quot;)"
-          :aria-label="t(&quot;กรองตามสัญญา&quot;)"
-        />
+        <UiField :label="t('สัญญา')" class="w-full sm:w-56">
+          <UiCombobox
+            v-model="filters.contract"
+            :options="contractOptions"
+            :placeholder="t(&quot;ทุกสัญญา&quot;)"
+            :any-label="t(&quot;ทุกสัญญา&quot;)"
+            :aria-label="t(&quot;กรองตามสัญญา&quot;)"
+          />
+        </UiField>
         <div id="registry-table-tools" class="ml-auto"></div>
       </template>
 
@@ -550,7 +555,6 @@ onMounted(async () => {
       :search-placeholder="t(&quot;ค้นหา Serial, รุ่น, ตำแหน่ง…&quot;)"
       :empty-text="t(&quot;ยังไม่มีเครื่องในทะเบียน&quot;)"
       :empty-hint="t(&quot;เพิ่มทีละเครื่อง หรือนำเข้าทั้งหมดจากไฟล์ Excel ในครั้งเดียว&quot;)"
-      max-height="70vh"
       sticky-first
     >
       <!-- Serial เป็นลิงก์ไปหน้ารายละเอียดของเครื่องนั้น
@@ -564,12 +568,7 @@ onMounted(async () => {
            บรรทัดเดียวสูงแค่ 17px และลิงก์นี้ไม่เข้าข้อยกเว้น "อยู่ในประโยค"
            เพราะมันอยู่เดี่ยวๆ ในช่องตาราง ไม่ได้แทรกอยู่ในข้อความ -->
       <template #cell-serial_number="{ row }">
-        <RouterLink
-          :to="`/assets/${row.id}`"
-          class="inline-flex items-center min-h-6 font-mono text-sm text-ink hover:text-brand-ink hover:underline underline-offset-2 rounded-xs"
-        >
-          {{ row.serial_number || "—" }}
-        </RouterLink>
+        <DeviceSerialLink :device-id="row.id" :serial-number="row.serial_number" />
       </template>
 
       <template #cell-brand_name="{ row }">
@@ -596,7 +595,7 @@ onMounted(async () => {
       </template>
 
       <template #cell-effective_price="{ row }">
-        <span>{{ effectivePrice(row) === null ? "—" : formatBahtValue(effectivePrice(row)) }}</span>
+        <span>{{ effectivePrice(row) === null ? "—" : formatUnitPrice(effectivePrice(row)) }}</span>
         <UiTooltip
           v-if="row.price_override !== null && row.price_override !== undefined"
           :content="t(&quot;เครื่องนี้ตั้งราคาต่อหน้าเฉพาะตัว ไม่ได้ใช้ราคาตามสัญญา&quot;)"
