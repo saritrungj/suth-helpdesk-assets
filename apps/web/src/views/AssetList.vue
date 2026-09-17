@@ -234,6 +234,16 @@ const filteredAssets = computed(() =>
    ซึ่งไม่ใช่สิ่งที่คนคาดหวังจากปุ่มนั้น
    -------------------------------------------------------------------------- */
 const route = useRoute();
+const routeBillingFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(route.query.billing_from || ""))
+  ? String(route.query.billing_from)
+  : "";
+/** id จาก query ที่เป็นจำนวนเต็มบวก ไม่งั้น null */
+function queryId(key) {
+  const id = Number(route.query[key]);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+const routeEditId = queryId("edit");
+const billingSuggestionConsumed = ref(false);
 
 const queryClient = useQueryClient();
 
@@ -244,6 +254,9 @@ onMounted(() => {
 
   if (route.query.unassigned) {
     filters.value.contract = "__unassigned__";
+  } else if (queryId("contract_id")) {
+    // หน้าตรวจช่วงสัญญาส่งมา เมื่อช่วงถูกต้องแล้วแต่ต้องย้ายเครื่องไปสัญญาอื่น (#96)
+    filters.value.contract = String(queryId("contract_id"));
   }
 
   /**
@@ -257,11 +270,10 @@ onMounted(() => {
    * เพราะการเปิดฟอร์มให้คนที่กดบันทึกแล้วจะโดนปฏิเสธ คือการเสียเวลาเปล่าของเขา
    */
   if (isAdmin.value) {
-    const editId = Number(route.query.edit);
-    const moveId = Number(route.query.move);
+    const moveId = queryId("move");
 
-    if (Number.isInteger(editId) && editId > 0) openEdit(editId);
-    else if (Number.isInteger(moveId) && moveId > 0) openMove(moveId);
+    if (routeEditId) openEdit(routeEditId);
+    else if (moveId) openMove(moveId);
   }
 });
 
@@ -374,6 +386,16 @@ const formOpen = ref(false);
 const moveOpen = ref(false);
 const moveTrigger = ref(null);
 const activeAssetId = ref(null);
+const initialBillingFrom = computed(() =>
+  !billingSuggestionConsumed.value && Number(activeAssetId.value) === routeEditId
+    ? routeBillingFrom
+    : ""
+);
+watch(formOpen, (open, wasOpen) => {
+  // คำแนะนำนี้เป็นของงานค้างที่ลิงก์มาเพียงครั้งเดียว ไม่ควรติดไปกับการเปิดแก้
+  // เครื่องเดิมหรือเครื่องอื่นภายหลังจากปิด drawer แล้ว
+  if (wasOpen && !open) billingSuggestionConsumed.value = true;
+});
 
 function openEdit(id) {
   activeAssetId.value = id;
@@ -626,7 +648,12 @@ onMounted(async () => {
       </template>
     </UiDataTable>
 
-    <AssetForm v-model="formOpen" :asset-id="activeAssetId" @saved="refreshAfterSave" />
+    <AssetForm
+      v-model="formOpen"
+      :asset-id="activeAssetId"
+      :initial-billing-from="initialBillingFrom"
+      @saved="refreshAfterSave"
+    />
     <MoveDeviceModal v-if="moveOpen" v-model="moveOpen" :asset-id="activeAssetId" :return-focus="moveTrigger" @saved="refreshAfterSave" @focus-fallback="searchInput?.focus()" />
   </div>
 </template>

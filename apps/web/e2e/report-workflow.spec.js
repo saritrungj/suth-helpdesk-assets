@@ -1,6 +1,14 @@
 import { test, expect } from "@playwright/test";
 import { sumSatang, toSatang } from "@suth/domain";
-import { signIn, reasonToSkip, apiFetch } from "./fixtures.js";
+import {
+  signIn,
+  reasonToSkip,
+  apiFetch,
+  restoreMonth,
+  snapshotMonth,
+  writesAllowed,
+  activeFiscalYear,
+} from "./fixtures.js";
 
 test.beforeEach(async ({ context }) => {
   test.skip(await reasonToSkip());
@@ -237,6 +245,233 @@ test("historical report views preserve row counts and financial totals", async (
     sumSatang(buildings.map((row) => toSatang(row.total_building_cost)))
   );
   expect(Number(stats.total_transactions)).toBe(monthly.length);
+});
+
+test("readings outside a contract's fiscal year are not sent to that contract's review", async () => {
+  test.skip(!writesAllowed(), "This regression writes and restores one reading in an isolated test database");
+  const [contracts, fiscalYear] = await Promise.all([apiFetch("/contracts"), activeFiscalYear()]);
+  const contract = contracts.find(
+    (row) => row.price_confirmed && row.fiscal_start_month && Number(row.device_count) > 0
+  );
+  test.skip(!contract, "No confirmed contract with linked devices in the database under test");
+
+  const devices = await apiFetch(`/devices?contract_id=${contract.id}`);
+  const device = devices[0];
+  test.skip(!device, "No device linked to the confirmed contract");
+
+  // สิบปีก่อนปีงบของสัญญา — ไกลพอที่ไม่มีประวัติสัญญาใดครอบคลุม เครื่องจึงถูกโยง
+  // กับสัญญาปัจจุบัน ซึ่งเดิมทำให้ยอดนี้ไปโผล่เป็นยอดค้างของสัญญานั้น
+  const [year, month] = contract.fiscal_start_month.split("-").map(Number);
+  const outsideMonth = new Date(Date.UTC(year - 10, month - 1, 1)).toISOString().slice(0, 7);
+  const reviewSum = (rows) =>
+    rows.reduce((sum, row) => sum + Number(row.unpriced_readings) + Number(row.outside_term_readings), 0);
+  const contractReview = (review) => reviewSum(review.contracts.filter((row) => row.id === contract.id));
+  const readingsOf = (overview, code) =>
+    Number(overview.attention.find((item) => item.code === code)?.params.readings ?? 0);
+  const [before, overallBefore] = await Promise.all([
+    apiFetch("/contracts/price-review"),
+    apiFetch("/dashboard/overview"),
+  ]);
+  const snapshot = await snapshotMonth(outsideMonth, [device.id]);
+  test.skip(snapshot[0].pages !== null, "The device already has a reading in the probe month");
+
+  try {
+    await apiFetch("/print-transactions", {
+      method: "POST",
+      body: JSON.stringify({ device_id: device.id, month: outsideMonth, pages: 123 }),
+    });
+
+    const [review, overall, scoped] = await Promise.all([
+      apiFetch("/contracts/price-review"),
+      apiFetch("/dashboard/overview"),
+      apiFetch(`/dashboard/overview?fiscal_year_id=${fiscalYear.id}`),
+    ]);
+    expect(contractReview(review)).toBe(contractReview(before));
+
+    // ทุกยอดที่ลิงก์ "ไปตรวจช่วงที่สัญญามีผล" นับ ต้องเห็นได้บนหน้านั้น ทั้งแบบไม่กรอง
+    // และแบบเลือกปีงบ (= สัญญาของปีงบนั้น) ยอดนอกปีงบแยกไปอีกงาน (#96)
+    expect(readingsOf(overall, "unbilled_devices")).toBe(reviewSum(review.contracts));
+    expect(readingsOf(overall, "unpriced_outside_contract_year"))
+      .toBe(readingsOf(overallBefore, "unpriced_outside_contract_year") + 1);
+
+    // สัญญาที่ไม่ผูกปีงบถูกนับทุกเดือนบนหน้าตรวจ แต่แดชบอร์ดที่เลือกปีงบนับแค่เดือนใน
+    // ปีงบนั้น จึงเทียบเท่ากันพอดีได้เฉพาะเมื่อไม่มีสัญญาแบบนั้น
+    const inYear = review.contracts.filter((row) => Number(row.fiscal_year_id) === Number(fiscalYear.id));
+    const withoutYear = review.contracts.filter((row) => row.fiscal_year_id == null);
+    const scopedReadings = readingsOf(scoped, "unbilled_devices");
+    if (withoutYear.length) {
+      expect(scopedReadings).toBeGreaterThanOrEqual(reviewSum(inYear));
+      expect(scopedReadings).toBeLessThanOrEqual(reviewSum([...inYear, ...withoutYear]));
+    } else {
+      expect(scopedReadings).toBe(reviewSum(inYear));
+    }
+  } finally {
+    await restoreMonth(outsideMonth, snapshot);
+  }
+});
+
+test("reconfirming a longer term extends the billing periods the shorter one closed", async () => {
+  // ใช้สัญญาและเครื่องที่สร้างเองแล้วลบทิ้ง ไม่แก้ช่วงของสัญญาในฐาน เพราะเวลายืนยัน
+  // ถูกประทับใหม่ทุกครั้งและคืนค่าเดิมผ่าน API ไม่ได้
+  test.skip(!writesAllowed(), "This regression creates and removes a contract and a device in an isolated test database");
+  const [fiscalYear, devices] = await Promise.all([activeFiscalYear(), apiFetch("/devices")]);
+  const template = devices.find((row) => row.brand_id);
+  test.skip(!template, "No device to copy a brand from");
+
+  const [startYear, startMonth] = fiscalYear.start_month.split("-").map(Number);
+  const [endYear, endMonth] = fiscalYear.end_month.split("-").map(Number);
+  const monthAt = (offset) => new Date(Date.UTC(startYear, startMonth - 1 + offset, 1)).toISOString().slice(0, 7);
+  const termFrom = `${monthAt(0)}-01`;
+  const firstMonthEnd = new Date(Date.UTC(startYear, startMonth, 0)).toISOString().slice(0, 10);
+  const fiscalYearEnd = new Date(Date.UTC(endYear, endMonth, 0)).toISOString().slice(0, 10);
+  const readingMonth = monthAt(1);
+  // ช่วงเปิดที่เครื่องได้ตอนสร้าง เริ่มหลังเดือนที่ตรวจ การขยายต้องหยุดที่วันนี้
+  const laterBillingFrom = `${monthAt(3)}-01`;
+  const label = `E2E-TERM-${Date.now()}`;
+  let contractId = null;
+  let deviceId = null;
+
+  const confirm = (effective_to) =>
+    apiFetch(`/contracts/${contractId}/term`, {
+      method: "PUT",
+      body: JSON.stringify({ effective_from: termFrom, effective_to }),
+    });
+  const readingCost = async () => {
+    const rows = await apiFetch(`/dashboard/monthly-kpi?month=${readingMonth}&contract_id=${contractId}`);
+    return rows.find((row) => row.device_id === deviceId)?.total_cost;
+  };
+
+  try {
+    ({ id: contractId } = await apiFetch("/contracts", {
+      method: "POST",
+      body: JSON.stringify({ contract_no: label, fiscal_year_id: fiscalYear.id, price_per_page: 0.5 }),
+    }));
+    ({ id: deviceId } = await apiFetch("/devices", {
+      method: "POST",
+      body: JSON.stringify({
+        serial_number: label,
+        brand_id: template.brand_id,
+        contract_id: contractId,
+        // ราคาเฉพาะเครื่องไม่ขึ้นกับช่วงของสัญญา จึงเห็นได้ว่าการยืนยันช่วงสั้นซ้ำ
+        // ไปตัดช่วงของเครื่องหรือไม่
+        price_override: 0.3,
+        status: "active",
+        installation_status: "installed",
+        installed_on: termFrom,
+        billing_from: laterBillingFrom,
+      }),
+    }));
+
+    // ยังไม่มีช่วงที่ครอบวันเริ่มสัญญา การยืนยันช่วงสั้นจึงเปิดช่วงที่ปิดตรงวันสิ้นสุดนั้น
+    expect((await confirm(firstMonthEnd)).devices_linked).toBe(1);
+    await apiFetch("/print-transactions", {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, month: readingMonth, pages: 100 }),
+    });
+    expect(await readingCost()).toBeNull();
+
+    // ยืนยันช่วงเต็มปี: ช่วงที่ปิดไว้ต้องขยายไปถึงช่วงถัดไปของเครื่อง เดิมถูกข้ามเพราะ
+    // "มีช่วงครอบวันเริ่มแล้ว" เดือนระหว่างนั้นจึงไม่มีราคาทั้งที่ยืนยันครบ (#96)
+    expect((await confirm(fiscalYearEnd)).devices_linked).toBe(1);
+    expect(await readingCost()).not.toBeNull();
+
+    expect((await confirm(fiscalYearEnd)).devices_linked).toBe(0);
+
+    // ยืนยันช่วงสั้นซ้ำต้องไม่ตัดช่วงของเครื่อง — เคยทำให้ยอดที่มีราคาเฉพาะเครื่อง
+    // หายราคาหลังผู้ใช้กดยืนยัน CT-001/2569 ซ้ำด้วยวันเดิม
+    expect((await confirm(firstMonthEnd)).devices_linked).toBe(0);
+    expect(await readingCost()).not.toBeNull();
+  } finally {
+    if (deviceId) {
+      // FK ป้องกันการลบเครื่องที่ยังมียอดอยู่ จึงคืนเดือนเป็น null ก่อนลบเครื่องจำลอง
+      await restoreMonth(readingMonth, [{ device_id: deviceId, pages: null }]);
+      await apiFetch(`/devices/${deviceId}`, { method: "DELETE" });
+    }
+    if (contractId) await apiFetch(`/contracts/${contractId}`, { method: "DELETE" });
+  }
+});
+
+test("reviewing an earlier billing date repairs a current contract history gap", async () => {
+  test.skip(!writesAllowed(), "This regression creates and removes one device in an isolated test database");
+  const [contracts, devices] = await Promise.all([apiFetch("/contracts"), apiFetch("/devices")]);
+  const contract = contracts.find((row) => {
+    if (!row.price_confirmed || !row.effective_from || !row.effective_to) return false;
+    return row.effective_from.slice(0, 7) < row.effective_to.slice(0, 7);
+  });
+  const template = devices.find((row) => row.brand_id);
+  test.skip(!contract || !template, "No confirmed multi-month contract or device template");
+
+  const readingMonth = contract.effective_from.slice(0, 7);
+  const [year, month] = readingMonth.split("-").map(Number);
+  const laterBillingFrom = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+  const reviewedBillingFrom = `${readingMonth}-01`;
+  // ช่วง "ยังไม่ผูกสัญญา" เริ่มหลังวันที่ที่ตรวจแล้ว จึงชนะช่วงที่ขยายกลับตามกติกา
+  // ช่วงที่เริ่มทีหลังชนะ ถ้าการบันทึกไม่แทนที่ช่วงนั้น ยอดเดือนนี้จะยังไม่มีราคา
+  const installedMidMonth = `${readingMonth}-02`;
+  const serial = `E2E-HISTORY-${Date.now()}`;
+  let deviceId = null;
+
+  try {
+    const created = await apiFetch("/devices", {
+      method: "POST",
+      body: JSON.stringify({
+        serial_number: serial,
+        brand_id: template.brand_id,
+        contract_id: null,
+        price_override: null,
+        status: "active",
+        installation_status: "installed",
+        installed_on: installedMidMonth,
+      }),
+    });
+    deviceId = created.id;
+
+    await apiFetch(`/devices/${deviceId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        serial_number: serial,
+        brand_id: template.brand_id,
+        model: null,
+        contract_id: contract.id,
+        price_override: null,
+        status: "active",
+        billing_from: laterBillingFrom,
+      }),
+    });
+    await apiFetch("/print-transactions", {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, month: readingMonth, pages: 100 }),
+    });
+
+    const before = await apiFetch(
+      `/dashboard/monthly-kpi?month=${readingMonth}&contract_id=${contract.id}`
+    );
+    expect(before.find((row) => row.device_id === deviceId)?.total_cost).toBeNull();
+
+    await apiFetch(`/devices/${deviceId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        serial_number: serial,
+        brand_id: template.brand_id,
+        model: null,
+        contract_id: contract.id,
+        price_override: null,
+        status: "active",
+        billing_from: reviewedBillingFrom,
+      }),
+    });
+
+    const after = await apiFetch(
+      `/dashboard/monthly-kpi?month=${readingMonth}&contract_id=${contract.id}`
+    );
+    expect(after.find((row) => row.device_id === deviceId)?.total_cost).not.toBeNull();
+  } finally {
+    if (deviceId) {
+      // FK ป้องกันการลบเครื่องที่ยังมียอดอยู่ จึงคืนเดือนเป็น null ก่อนลบเครื่องจำลอง
+      await restoreMonth(readingMonth, [{ device_id: deviceId, pages: null }]);
+      await apiFetch(`/devices/${deviceId}`, { method: "DELETE" });
+    }
+  }
 });
 
 test("report device rows link to the complete asset detail", async ({ page }) => {

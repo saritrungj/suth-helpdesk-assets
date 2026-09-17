@@ -36,6 +36,8 @@ const props = defineProps({
   grouped: { type: Boolean, default: false },
   /** null = เพิ่มใหม่, ตัวเลข = แก้ไขเครื่องนั้น */
   assetId: { type: [Number, String, null], default: null },
+  /** วันที่แนะนำจากงานค้าง; ผู้ใช้ยังต้องตรวจเอกสารก่อนบันทึก */
+  initialBillingFrom: { type: String, default: "" },
 });
 
 const emit = defineEmits(["saved", "dirty"]);
@@ -77,6 +79,7 @@ const emptyForm = () => ({
   status: "active",
   installation_status: "",
   installed_on: "",
+  billing_from: "",
 });
 
 const form = ref(emptyForm());
@@ -176,6 +179,7 @@ async function loadAsset(id) {
       contract_id: device.contract_id ?? "",
       price_override: device.price_override ?? "",
       status: device.status ?? "active",
+      billing_from: props.initialBillingFrom,
     };
   } catch (err) {
     console.error("Load device error:", err);
@@ -236,6 +240,9 @@ async function submit() {
         ? Number(form.value.price_override)
         : null,
     status: form.value.status || "active",
+    ...(isEdit.value && form.value.billing_from
+      ? { billing_from: form.value.billing_from }
+      : {}),
   };
 
   const placement = {
@@ -398,6 +405,15 @@ defineExpose({ reset, submit, saving, loading, ready });
 
         <UiField :label="t(&quot;ราคาพิเศษเฉพาะเครื่อง&quot;)" :hint="effectivePriceHint" :error="errors.price_override">
           <UiInput v-model="form.price_override" type="number" step="0.0001" min="0" :suffix="t(&quot;บาท&quot;)" />
+        </UiField>
+
+        <UiField
+          v-if="isEdit"
+          :label="t('เริ่มคิดเงินตามสัญญานี้ตั้งแต่วันที่')"
+          :hint="t('ตรวจเอกสารสัญญาหรือหลักฐานก่อนระบุ วันที่นี้จะมีผลกับยอดย้อนหลัง')"
+          class="sm:col-span-2"
+        >
+          <UiInput v-model="form.billing_from" type="date" />
         </UiField>
       </fieldset>
 

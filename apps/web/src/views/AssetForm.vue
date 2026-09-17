@@ -19,6 +19,7 @@ import { UiButton, UiDrawer } from "../ui";
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   assetId: { type: [Number, String, null], default: null },
+  initialBillingFrom: { type: String, default: "" },
 });
 
 const emit = defineEmits(["update:modelValue", "saved"]);
@@ -61,7 +62,16 @@ async function save() {
     :pending="pending"
     @update:open="requestClose"
   >
-    <DeviceFormFields v-if="modelValue" :key="assetId" ref="fields" grouped :asset-id="assetId" @dirty="dirty = $event" @saved="saved" />
+    <DeviceFormFields
+      v-if="modelValue"
+      :key="assetId"
+      ref="fields"
+      grouped
+      :asset-id="assetId"
+      :initial-billing-from="initialBillingFrom"
+      @dirty="dirty = $event"
+      @saved="saved"
+    />
 
     <template #footer>
       <UiButton variant="secondary" :disabled="pending" @click="requestClose"> {{ t("ยกเลิก") }} </UiButton>

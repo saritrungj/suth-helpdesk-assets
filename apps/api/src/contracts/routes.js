@@ -31,6 +31,7 @@ const {
 const { notFound, badRequest } = require("../shared/http-error");
 const cache = require("../shared/cache");
 const { openPeriodsForContract } = require("../devices/contract-history");
+const { effectiveContractJoin, effectiveContractId } = require("../shared/effective-contract-sql");
 const { fiscalYearDateRange } = require("@suth/domain");
 
 router.use(requireAuth);
@@ -114,11 +115,13 @@ router.get(
 );
 
 // ============================================================
-// GET /api/contracts/price-review — สัญญาที่ยังไม่ได้ยืนยันช่วงที่มีผล
+// GET /api/contracts/price-review — สัญญาที่ยังไม่ได้ยืนยันหรือมีช่วงให้ตรวจ
 // ============================================================
 //
 // รายการงานของผู้ดูแลตาม ADR-0019 — ตราบใดที่ยังไม่ยืนยัน ยอดพิมพ์ของเครื่องใน
 // สัญญานั้นจะไม่มีราคา และรายงานจะบอกว่า "ยังยืนยันราคาไม่ได้" แทนการคิดเป็น 0 บาท
+// สัญญาที่ยืนยันแล้วแต่มียอดในปีงบอยู่นอกช่วงก็อยู่ในรายการ โดยแยกจำนวนให้ผู้ใช้
+// ตัดสินจากเอกสารว่าจะขยายช่วงหรือควรผูกเครื่องกับสัญญาฉบับอื่น
 //
 // ⚠️ ต้องประกาศก่อน "/:id" ไม่งั้น Express จะจับคำว่า price-review เป็นค่าของ :id
 router.get(
@@ -126,25 +129,48 @@ router.get(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const [rows] = await db.query(`
+      WITH unpriced AS (
+        SELECT
+          v.month,
+          ${effectiveContractId({ historyAlias: "dch", deviceAlias: "d" })} AS contract_id
+        FROM v_monthly_kpi v
+        JOIN devices d ON d.id = v.device_id
+        ${effectiveContractJoin({ deviceIdExpression: "v.device_id", monthExpression: "v.month", historyAlias: "dch" })}
+        WHERE v.total_cost IS NULL
+      ),
+      -- นับเฉพาะยอดในปีงบของสัญญา ยอดจากปีงบอื่นห้ามตามสัญญาปัจจุบันมา (#96)
+      -- แดชบอร์ดแยกยอดกลุ่มนั้นไปอีกงาน (dashboard/overview.js) จึงต้องใช้กติกาเดียวกัน
+      review_counts AS (
+        SELECT
+          u.contract_id,
+          COUNT(*) AS fiscal_year_readings,
+          -- สัญญาที่ยังไม่ยืนยันยังไม่มีช่วงให้เทียบ ทุกยอดในปีงบจึงนับว่ารอยืนยัน
+          COUNT(CASE
+            WHEN c.price_verified_at IS NOT NULL
+             AND c.effective_from IS NOT NULL
+             AND (u.month < DATE_FORMAT(c.effective_from, '%Y-%m')
+                  OR (c.effective_to IS NOT NULL
+                      AND u.month > DATE_FORMAT(c.effective_to, '%Y-%m')))
+            THEN 1
+          END) AS outside_term_readings
+        FROM unpriced u
+        JOIN contracts c ON c.id = u.contract_id
+        LEFT JOIN fiscal_year fy ON fy.id = c.fiscal_year_id
+        WHERE (fy.start_month IS NULL OR u.month >= fy.start_month)
+          AND (fy.end_month IS NULL OR u.month <= fy.end_month)
+        GROUP BY u.contract_id
+      )
       SELECT ${CONTRACT_COLUMNS},
-        (SELECT COUNT(*)
-           FROM v_monthly_kpi v
-           JOIN devices d2 ON d2.id = v.device_id
-          WHERE d2.contract_id = c.id AND v.total_cost IS NULL) AS unpriced_readings
+        COALESCE(rc.fiscal_year_readings - rc.outside_term_readings, 0) AS unpriced_readings,
+        COALESCE(rc.outside_term_readings, 0) AS outside_term_readings
       FROM contracts c
       LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
+      LEFT JOIN review_counts rc ON rc.contract_id = c.id
       WHERE c.price_verified_at IS NULL
          OR c.effective_from IS NULL
-         -- สัญญาที่ยืนยันแล้วแต่ยังมียอดที่หาราคาไม่ได้ ต้องอยู่ในรายการนี้ด้วย
-         --
-         -- เกิดจริงเมื่อเพิ่มหรือนำเข้าเครื่องเข้าสัญญา **หลัง** ยืนยันไปแล้ว
-         -- เครื่องกลุ่มนั้นยังไม่มีช่วงการคิดเงิน ยอดของมันจึงไม่มีราคา ถ้ารายการนี้
-         -- แสดงเฉพาะสัญญาที่ยังไม่ยืนยัน ผู้ดูแลจะไม่มีทางรู้ว่าต้องกลับมากดอีกครั้ง
-         OR EXISTS (
-           SELECT 1 FROM v_monthly_kpi v
-           JOIN devices d2 ON d2.id = v.device_id
-           WHERE d2.contract_id = c.id AND v.total_cost IS NULL
-         )
+         -- เครื่องที่เพิ่มหลังยืนยัน หรือยอดในปีงบที่อยู่นอกช่วงสัญญา ต้องกลับมา
+         -- ให้ผู้ดูแลตรวจช่วงหรือย้ายเครื่องไปสัญญาที่ครอบคลุมเดือนนั้น
+         OR rc.contract_id IS NOT NULL
       ORDER BY fy.year DESC, c.contract_no
     `);
 
@@ -180,8 +206,12 @@ router.get(
 // ============================================================
 //
 // แยกจาก PUT /:id เพราะเป็นการ "รับรองข้อเท็จจริงจากเอกสาร" ไม่ใช่การแก้ค่าในฟอร์ม
-// และมีผลข้างเคียงที่ต้องตั้งใจ: เปิดช่วงการคิดเงินให้เครื่องทุกเครื่องในสัญญานี้
-// ซึ่งทำให้ยอดเงินย้อนหลังของเครื่องเหล่านั้นกลับมาคำนวณได้
+// และมีผลข้างเคียงที่ต้องตั้งใจ: เปิดช่วงการคิดเงินให้เครื่องในสัญญานี้ที่ยังไม่มี
+// และปรับวันสิ้นสุดของช่วงเดิมที่ปิดแล้วตามช่วงที่เพิ่งยืนยัน ยอดเงินย้อนหลังของ
+// เครื่องเหล่านั้นจึงกลับมาคำนวณได้
+//
+// devices_linked คงชื่อเดิมไว้เพราะหน้าเว็บอ่านอยู่ ค่าคือจำนวนเครื่องที่ช่วง
+// การคิดเงินถูกสร้างหรือปรับในรอบนี้
 router.put(
   "/:id/term",
   requireAdmin,
@@ -193,7 +223,7 @@ router.put(
       throw badRequest("วันสิ้นสุดต้องไม่มาก่อนวันเริ่ม", { code: "invalid_term" });
     }
 
-    const devices = await db.withTransaction(async (conn) => {
+    const devicesUpdated = await db.withTransaction(async (conn) => {
       const [[contract]] = await conn.query(
         "SELECT id, price_per_page FROM contracts WHERE id = ?",
         [req.params.id]
@@ -223,7 +253,7 @@ router.put(
       });
     });
 
-    res.json({ message: "ยืนยันช่วงที่สัญญามีผลแล้ว", devices_linked: devices });
+    res.json({ message: "ยืนยันช่วงที่สัญญามีผลแล้ว", devices_linked: devicesUpdated });
   })
 );
 

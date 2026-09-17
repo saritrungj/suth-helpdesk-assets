@@ -128,6 +128,9 @@ async function main() {
       PORT: String(ports.api),
       CORS_ORIGIN: webUrl,
       JWT_SECRET: crypto.randomBytes(32).toString("hex"),
+      // ชุด db ยิง API หลายร้อยครั้งในไม่กี่นาทีจาก IP เดียว การชน production
+      // rate limit ทำให้เคสท้ายๆ ได้ 429 ทั้งที่ระบบและฐานทดสอบยังปกติ
+      RATE_LIMIT_PER_MINUTE: "100000",
       SUTH_API_URL: apiUrl,
       SUTH_WEB_URL: webUrl,
       SUTH_WEB_DIST: webDist,

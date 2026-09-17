@@ -24,10 +24,10 @@ import { formatBahtValue, formatCount } from "../../lib/format";
  *
  * ## ทำไมสัญญาที่ยืนยันแล้วยังโผล่ในรายการนี้ได้
  *
- * เมื่อเพิ่มหรือนำเข้าเครื่องเข้าสัญญาหลังยืนยันไปแล้ว เครื่องกลุ่มนั้นยังไม่มีช่วง
- * การคิดเงิน ยอดของมันจึงไม่มีราคา รายการนี้จึงแสดงสัญญาที่ "ยังมียอดที่หาราคา
- * ไม่ได้" ด้วย ไม่ใช่เฉพาะที่ยังไม่เคยยืนยัน — ไม่งั้นผู้ดูแลจะไม่มีทางรู้ว่าต้อง
- * กลับมากดอีกครั้ง
+ * เมื่อเพิ่มหรือนำเข้าเครื่องเข้าสัญญาหลังยืนยันไปแล้ว เครื่องกลุ่มนั้นอาจยังไม่มี
+ * ช่วงการคิดเงิน หรืออาจมียอดในปีงบที่อยู่นอกช่วงสัญญา รายการนี้จึงแสดงสัญญาที่
+ * ต้องกลับมาตรวจด้วย ไม่ใช่เฉพาะที่ยังไม่เคยยืนยัน โดยไม่นับยอดจากปีงบเก่าตาม
+ * สัญญาปัจจุบันมาปะปน
  */
 import { computed, onMounted, ref } from "vue";
 import { BadgeCheck } from "lucide-vue-next";
@@ -72,6 +72,24 @@ const columns = [
 
 const pending = computed(() => contracts.value.length);
 
+/**
+ * กดยืนยันวันเดิมซ้ำแล้วไม่มีอะไรเปลี่ยน
+ *
+ * สัญญาที่ค้างเพราะยอดอยู่นอกช่วงเท่านั้น จะหายจากรายการได้ด้วยการแก้วันตามเอกสาร
+ * หรือย้ายเครื่องเท่านั้น ผู้ใช้เคยกดยืนยันวันเดิมแล้วเข้าใจว่าระบบไม่ทำงาน (#96)
+ * ยังยืนยันซ้ำได้เมื่อมียอดในช่วงที่รอยืนยัน เช่นเครื่องที่เพิ่งเพิ่มเข้าสัญญา
+ */
+const repeatsWithoutEffect = computed(() => {
+  const row = target.value;
+  return Boolean(
+    row?.price_confirmed
+    && Number(row.outside_term_readings) > 0
+    && !Number(row.unpriced_readings)
+    && form.value.effective_from === row.effective_from
+    && form.value.effective_to === row.effective_to
+  );
+});
+
 async function load() {
   loading.value = true;
   loadError.value = "";
@@ -115,7 +133,7 @@ async function save() {
     });
 
     toastSuccess(
-      t("ยืนยัน {0} แล้ว · เปิดช่วงการคิดเงินให้ {1} เครื่อง", [
+      t("ยืนยัน {0} แล้ว · อัปเดตช่วงการคิดเงินให้ {1} เครื่อง", [
         target.value.contract_no,
         formatCount(data.devices_linked ?? 0),
       ])
@@ -157,7 +175,7 @@ onMounted(load);
     <UiEmpty
       v-else-if="!loading && !pending"
       :title="t(&quot;ยืนยันครบทุกสัญญาแล้ว&quot;)"
-      :description="t(&quot;ยอดค่าใช้จ่ายในทุกรายงานคิดจากราคาที่มีผลจริงแล้ว&quot;)"
+      :description="t(&quot;ไม่มีสัญญาที่ต้องยืนยันหรือยืนยันซ้ำภายในช่วงที่สัญญามีผล&quot;)"
     />
 
     <UiDataTable
@@ -165,7 +183,7 @@ onMounted(load);
       :rows="contracts"
       :columns="columns"
       :loading="loading"
-      :caption="t(&quot;สัญญาที่รอยืนยันช่วงที่มีผล&quot;)"
+      :caption="t(&quot;สัญญาที่ต้องตรวจช่วงที่มีผล&quot;)"
       :show-fullscreen="false"
       row-key="id"
       export-filename="contract-price-review"
@@ -180,6 +198,9 @@ onMounted(load);
           <span v-if="row.unpriced_readings" class="text-xs text-ink-mute">
             {{ t("ยังยืนยันราคาไม่ได้ {0} รายการ", [formatCount(row.unpriced_readings)]) }}
           </span>
+          <span v-if="row.outside_term_readings" class="text-xs text-ink-mute">
+            {{ t("มี {0} รายการอยู่นอกช่วงสัญญา", [formatCount(row.outside_term_readings)]) }}
+          </span>
           <span v-if="row.price_verified_at" class="text-xs text-ink-mute">
             {{ t("ยืนยันเมื่อ {0}", [formatDate(row.price_verified_at)]) }}
           </span>
@@ -189,7 +210,9 @@ onMounted(load);
       <template #cell-actions="{ row }">
         <UiButton size="sm" variant="secondary" @click="openConfirm(row)">
           <template #icon><BadgeCheck :size="14" /></template>
-          {{ row.price_confirmed ? t("ยืนยันอีกครั้ง") : t("ยืนยันช่วง") }}
+          {{ row.outside_term_readings
+            ? t("ตรวจช่วงสัญญา")
+            : row.price_confirmed ? t("ยืนยันอีกครั้ง") : t("ยืนยันช่วง") }}
         </UiButton>
       </template>
     </UiDataTable>
@@ -200,6 +223,26 @@ onMounted(load);
       :description="target ? t(&quot;สัญญา {0}&quot;, [target.contract_no]) : ''"
     >
       <div class="flex flex-col gap-4">
+        <UiAlert v-if="target?.outside_term_readings" tone="warn">
+          <p>
+            {{ t("มี {0} รายการในปีงบนี้อยู่นอกช่วงวันที่ที่ยืนยันไว้ โปรดตรวจเอกสารก่อนแก้วันเริ่มหรือวันสิ้นสุด", [
+              formatCount(target.outside_term_readings),
+            ]) }}
+          </p>
+          <!--
+            ถ้าช่วงถูกต้องอยู่แล้ว ทางแก้อยู่ที่เครื่อง ไม่ใช่ที่สัญญา — ไม่มีลิงก์นี้
+            สัญญาจะค้างในรายการตลอดไปโดยไม่มีปุ่มไหนแก้ได้ (#96)
+          -->
+          <p class="mt-1">
+            {{ t("ถ้าช่วงนี้ถูกต้องตามเอกสารแล้ว ยอดหลังวันสิ้นสุดแก้ได้โดยย้ายเครื่องไปสัญญาที่ครอบคลุมเดือนนั้น พร้อมระบุวันที่เริ่มคิดเงินในฟอร์มเครื่อง") }}
+            <RouterLink
+              :to="{ path: '/assets', query: { contract_id: String(target.id) } }"
+              class="font-medium underline"
+            >
+              {{ t("ดูเครื่องในสัญญานี้") }}
+            </RouterLink>
+          </p>
+        </UiAlert>
         <UiAlert v-if="target" tone="info">
           {{ t("ราคาที่จะใช้คิดเงินคือ {0} บาทต่อหน้า กับเครื่อง {1} เครื่องที่ผูกกับสัญญานี้", [
             target.price_per_page == null ? "—" : formatBahtValue(target.price_per_page),
@@ -226,12 +269,24 @@ onMounted(load);
           <UiInput v-model="form.price_source" :maxlength="255" />
         </UiField>
 
+        <p v-if="repeatsWithoutEffect" id="term-unchanged" class="text-sm text-ink-soft">
+          {{ t("วันที่ยังเหมือนที่ยืนยันไว้ การยืนยันซ้ำจะไม่ทำให้ยอดนอกช่วงมีราคา แก้วันสิ้นสุดตามเอกสารก่อน") }}
+        </p>
+
         <UiAlert v-if="formError" tone="danger">{{ formError }}</UiAlert>
       </div>
 
       <template #footer>
         <UiButton variant="ghost" @click="dialogOpen = false">{{ t("ยกเลิก") }}</UiButton>
-        <UiButton variant="primary" :loading="saving" @click="save">{{ t("ยืนยันช่วงที่มีผล") }}</UiButton>
+        <UiButton
+          variant="primary"
+          :loading="saving"
+          :disabled="repeatsWithoutEffect"
+          :aria-describedby="repeatsWithoutEffect ? 'term-unchanged' : undefined"
+          @click="save"
+        >
+          {{ t("ยืนยันช่วงที่มีผล") }}
+        </UiButton>
       </template>
     </UiModal>
   </div>
