@@ -56,6 +56,7 @@
 - [เอกสารโดเมนสำหรับ agent](agents/domain.md) — อ่านไฟล์ไหนก่อนเริ่มสำรวจโค้ด
 - [Issue tracker](agents/issue-tracker.md) — ใช้ GitHub Issues ผ่าน `gh` CLI
 - [Triage labels](agents/triage-labels.md) — 5 บทบาทมาตรฐาน map กับ label จริงบน GitHub
+- [Workflow ตรวจบั๊กและรีวิว](agents/review-workflow.md) — ทำ reproduction, รีวิว diff สามมิติ และปิดด่านส่งมอบ
 
 ## นอกโฟลเดอร์นี้
 

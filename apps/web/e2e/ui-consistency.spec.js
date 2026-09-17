@@ -51,6 +51,54 @@ test("department comparison has one month selector", async ({ page }, testInfo) 
   await page.screenshot({ path: testInfo.outputPath("compare-department.png"), fullPage: true });
 });
 
+test("comparison explains when a selected boundary month has no data", async ({ page }) => {
+  await prototypeFixture(page);
+  await page.route("**/api/dashboard/monthly-kpi**", (route) => route.fulfill({ json: [
+    { device_id: 1, month: "2025-10", pages_printed: 100, net_pages: 98, total_cost: 49 },
+  ] }));
+
+  await page.goto("/compare?months=2025-10,2025-11");
+
+  await expect(page.getByText("ยังสรุปช่วงนี้ไม่ได้ เพราะเดือนแรกหรือเดือนสุดท้ายที่เลือกยังไม่มีข้อมูล", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "ตารางเปรียบเทียบ", exact: true }))
+    .toContainText("พฤศจิกายน 2568");
+});
+
+test("comparison controls follow the URL when the current page link clears its query", async ({ page }) => {
+  await prototypeFixture(page);
+  await page.route("**/api/dashboard/monthly-kpi**", (route) => route.fulfill({ json: [
+    { device_id: 1, month: "2025-10", pages_printed: 100, net_pages: 98, total_cost: 49,
+      billing_contract_id: 1, billing_contract_no: "OLD-A" },
+  ] }));
+
+  await page.goto("/compare?type=contract&metric=totalPages");
+  await expect(page.getByRole("radio", { name: "สัญญา", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "หน้าดิบ", exact: true })).toBeChecked();
+
+  await page.getByRole("link", { name: "เปรียบเทียบ", exact: true }).click();
+  await expect(page).toHaveURL(/\/compare$/);
+  await expect(page.getByRole("radio", { name: "เดือน", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "ค่าใช้จ่าย", exact: true })).toBeChecked();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/type=contract/);
+  await expect(page.getByRole("radio", { name: "สัญญา", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "หน้าดิบ", exact: true })).toBeChecked();
+});
+
+test("comparison rejects inherited object properties as metric query values", async ({ page }) => {
+  await prototypeFixture(page);
+  await page.route("**/api/dashboard/monthly-kpi**", (route) => route.fulfill({ json: [
+    { device_id: 1, month: "2025-10", pages_printed: 100, net_pages: 98, total_cost: 49,
+      billing_contract_id: 1, billing_contract_no: "OLD-A" },
+  ] }));
+
+  await page.goto("/compare?type=contract&metric=constructor");
+
+  await expect(page.getByRole("radio", { name: "ค่าใช้จ่าย", exact: true })).toBeChecked();
+  await expect(page.getByRole("heading", { name: "ค่าใช้จ่ายสุทธิ แยกตามสัญญา", exact: true })).toBeVisible();
+});
+
 /**
  * หน้าที่เหลือของงานนี้ (รายละเอียดเครื่อง, ยืนยันช่วงสัญญา, อันดับรายเครื่อง) ต้องอ่านได้
  * ทั้งโหมดมืดและบนจอ 320px — หัวข้อ ป้ายสถานะ และคอลัมน์ที่เพิ่มเข้ามาในงานนี้อยู่บนหน้าเหล่านี้
