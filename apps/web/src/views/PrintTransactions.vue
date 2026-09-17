@@ -44,6 +44,7 @@ import { errorMessage } from "../lib/api-error";
 import { applyPaste, describePaste, parseNumbers } from "../lib/paste-numbers";
 import { useCoverage, useMonthPages } from "../api/queries";
 import MonthEntryGrid from "../components/MonthEntryGrid.vue";
+import DeviceSerialLink from "../components/DeviceSerialLink.vue";
 import PrintUsageImportPanel from "../components/PrintUsageImportPanel.vue";
 import {
   UiAlert,
@@ -926,15 +927,25 @@ onUnmounted(unregisterFiscalYearGuard);
   <div>
     <!-- หัวหน้าแถวเดียว (รอบที่ 3 ของ #51): ความคืบหน้าของทั้งปีงบเป็นบรรทัดสรุปข้างชื่อหน้า
          ส่วนสลับโหมดอยู่ขวาสุด เหนือทุกอย่างที่มันเปลี่ยน เพราะมันเปลี่ยนทั้งหน้า -->
-    <UiPageHeader :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)">
+    <UiPageHeader
+      :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
+      :description="t(&quot;กรอกยอดมิเตอร์ของแต่ละเครื่องทีละเดือน หรือดูภาพรวมการกรอกของทั้งปีงบ&quot;)"
+    >
       <template #badge>
         <!-- ไม่ใส่ "ปีงบ" ซ้ำบนจอปกติ — ปีงบที่กำลังดูอยู่บนแถบบนตลอดเวลาแล้ว
              ยกเว้นตอนขยายตารางเต็มจอ (แถบบนอยู่นอก fullscreen root จึงมองไม่เห็น)
              และตอนสั่งพิมพ์ (แถบบนถูกซ่อน) สองกรณีนั้นป้ายนี้โผล่มาแทน ดู base.css -->
         <p data-topbar-context class="text-sm text-ink-soft numeral">{{ t("ปีงบ {0}", [displayYearBE]) }}</p>
-        <p v-if="!summaryError && !summaryLoading && !loading && !pageError" class="text-sm text-ink-soft">
+        <!-- ป้ายจำนวนข้างชื่อหน้าแบบเดียวกับทะเบียน ("45 เครื่อง") — ข้อความลอยๆ
+             ข้างหัวข้อเคยทำให้หน้านี้เป็นหน้าเดียวที่หัวหน้าหน้าตาไม่เหมือนใคร -->
+        <UiBadge
+          v-if="!summaryError && !summaryLoading && !loading && !pageError"
+          :tone="progress.total && progress.done === progress.total ? 'ok' : 'warn'"
+          dot
+          class="numeral"
+        >
           {{ t("กรอกครบแล้ว {0} จาก {1} เครื่อง", [formatCount(progress.done), formatCount(progress.total)]) }}
-        </p>
+        </UiBadge>
         <UiButton size="sm" variant="ghost" :aria-expanded="yearExpanded" aria-controls="year-progress" @click="yearExpanded = !yearExpanded">
           {{ t("รายละเอียดความคืบหน้าปี") }}
           <ChevronDown :size="14" :class="yearExpanded && 'rotate-180'" aria-hidden="true" />
@@ -1011,23 +1022,21 @@ onUnmounted(unregisterFiscalYearGuard);
          แทบไม่ถูกแตะเลย แต่กินความสูงจนตารางที่คนมากรอกหลุดใต้เส้นพับ -->
     <UiFilterBar :chips="filterChips" @remove="removeFilter" @clear="resetFilters">
       <template #primary>
-        <!-- แถวเดียวกับทะเบียน (รอบที่ 3 ของ #51) — ชื่อของช่องมาจาก aria-label
-             และเครื่องมือของตารางที่แสดงอยู่ (รายเดือนหรือทั้งปี) ต่อท้ายแถวนี้ -->
-        <div class="flex-1 min-w-[16rem] max-w-md">
-          <UiInput v-model="search" clearable :aria-label="t(&quot;ค้นหา&quot;)" :placeholder="t(&quot;Serial, รุ่น, ตำแหน่ง, แผนก…&quot;)">
+        <UiField :label="t('ค้นหา')" class="flex-1 min-w-[16rem] max-w-md">
+          <UiInput v-model="search" clearable :placeholder="t(&quot;Serial, รุ่น, ตำแหน่ง, แผนก…&quot;)">
             <template #icon><Search :size="15" /></template>
           </UiInput>
-        </div>
+        </UiField>
 
-        <UiSelect
-          class="w-full sm:w-56"
-          :model-value="filters.month"
-          :options="monthOptions"
-          value-key="value"
-          label-key="label"
-          :aria-label="t(&quot;ดูยอดของเดือน&quot;)"
-          @update:model-value="changeMonth"
-        />
+        <UiField :label="t('ดูยอดของเดือน')" class="w-full sm:w-56">
+          <UiSelect
+            :model-value="filters.month"
+            :options="monthOptions"
+            value-key="value"
+            label-key="label"
+            @update:model-value="changeMonth"
+          />
+        </UiField>
         <UiTooltip v-if="canImport" :content="t(&quot;นำเข้ายอดพิมพ์จาก Excel หรือ CSV&quot;)">
           <UiButton variant="secondary" icon-only :label="t(&quot;นำเข้ายอดพิมพ์&quot;)" @click="importOpen = true">
             <FileUp :size="16" />
@@ -1131,7 +1140,6 @@ onUnmounted(unregisterFiscalYearGuard);
           :caption="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
           :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
           :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
-          max-height="60vh"
           sticky-first
           :row-class="row => draft.has(row.id) ? 'bg-brand-soft' : ''"
         >
@@ -1144,12 +1152,7 @@ onUnmounted(unregisterFiscalYearGuard);
                ซ้ำที่นี่ตอนขยาย wcag.spec.js ให้รันกับฐาน CI จริงใน #63 — แก้ไปแล้ว
                ที่ทะเบียนทรัพย์สิน AssetList.vue แต่ไม่เคยตรวจหน้านี้ด้วยฐานจริงมาก่อน) -->
           <template #cell-serial_number="{ row }">
-            <RouterLink
-              :to="`/assets/${row.id}`"
-              class="inline-flex items-center min-h-6 font-mono text-sm text-ink hover:text-brand-ink hover:underline underline-offset-2 rounded-xs"
-            >
-              {{ row.serial_number || "—" }}
-            </RouterLink>
+            <DeviceSerialLink :device-id="row.id" :serial-number="row.serial_number" />
           </template>
 
           <template #cell-entry="{ row, index, rows }">
@@ -1191,11 +1194,10 @@ onUnmounted(unregisterFiscalYearGuard);
       :caption="t(&quot;ภาพรวมทั้งปี&quot;)"
       :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
       :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
-      max-height="68vh"
       sticky-first
     >
       <template #cell-serial_number="{ row }">
-        <span class="font-mono text-sm text-ink">{{ row.serial_number || "—" }}</span>
+        <DeviceSerialLink :device-id="row.id" :serial-number="row.serial_number" />
         <span v-if="row.asset_code" class="block text-xs text-ink-soft font-mono">{{ row.asset_code }}</span>
       </template>
 

@@ -103,7 +103,13 @@ const routes = [
   { path: "/admin/departments", name: "Departments", component: () => import("../views/admin/Department.vue") },
   { path: "/admin/fiscal-years", name: "FiscalYears", component: () => import("../views/admin/FiscalYear.vue") },
   { path: "/admin/contracts", name: "Contracts", component: () => import("../views/admin/Contract.vue") },
-  { path: "/admin/add-asset", name: "AddAsset", component: () => import("../views/admin/AddAsset.vue") },
+  {
+    path: "/admin/add-asset",
+    name: "AddAsset",
+    component: () => import("../views/admin/AddAsset.vue"),
+    // หน้าลูกของทะเบียน — breadcrumb "งานประจำ › ทะเบียนเครื่องพิมพ์ › เพิ่มเครื่อง"
+    meta: { breadcrumb: t("เพิ่มเครื่อง") },
+  },
   { path: "/admin/users", name: "Users", component: () => import("../views/admin/Users.vue") },
 
   // ตรวจยืนยันสถานะการติดตั้งของเครื่องเดิม (ADR-0018) — ไม่มีรายการในเมนูถาวร

@@ -107,7 +107,7 @@ async function exportCard() {
 
 <template>
   <div ref="root">
-    <UiPageHeader :title="t('ภาพรวมการพิมพ์')">
+    <UiPageHeader :title="t('ภาพรวมการพิมพ์')" :description="t('ค่าใช้จ่ายและยอดพิมพ์ของปีงบที่เลือก เลือกสัญญาหรือเดือนเพื่อดูเฉพาะส่วน')">
       <template #actions>
         <UiButton variant="secondary" :disabled="!ready || !rows.length" :loading="exportBusy" @click="exportCard">
           <template #icon><FileImage :size="16" /></template>{{ t('ส่งออกการ์ด') }}

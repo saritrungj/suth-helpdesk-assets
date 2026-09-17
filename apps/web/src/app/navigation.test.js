@@ -43,7 +43,7 @@ describe("findActiveItem", () => {
   });
 
   it("?fy= ที่ระบบเติมให้ทุกหน้าต้องไม่ทำให้หาไม่เจอ", () => {
-    expect(findActiveItem(routeAt("/dashboard", { fy: "1" }))?.label).toBe("แดชบอร์ด");
+    expect(findActiveItem(routeAt("/dashboard", { fy: "1" }))?.label).toBe("ภาพรวมการพิมพ์");
   });
 
   it("หน้าลูกตกกลับไปหาหน้าแม่ — /assets/17 คือทะเบียนเครื่องพิมพ์", () => {
@@ -74,7 +74,7 @@ describe("navigation groups", () => {
   it("หน้าลูกและ direct link ชี้หมวดที่ sidebar ต้องกาง", () => {
     expect(findActiveGroup(routeAt("/assets/17"))?.key).toBe("routine");
     expect(findActiveGroup(routeAt("/admin/contracts"))?.key).toBe("settings");
-    expect(findActiveGroup(routeAt("/admin/add-asset"))?.key).toBe("settings");
+    expect(findActiveGroup(routeAt("/admin/add-asset"))?.key).toBe("routine");
   });
 });
 

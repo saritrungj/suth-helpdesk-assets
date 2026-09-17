@@ -20,7 +20,7 @@ import { t } from "../lib/locale";
  *                hint, maxlength, unique, step, min, optionsFrom: "/buildings",
  *                optionValue: "id", optionLabel: "name" }
  */
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, useSlots } from "vue";
 import { Pencil, Plus, Trash2 } from "lucide-vue-next";
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -54,7 +54,12 @@ const props = defineProps({
   emptyHint: { type: String, default: "" },
   /** เรียกหลังเพิ่ม/แก้/ลบสำเร็จ — ใช้ตอนที่ state กลางต้องรีเฟรชตาม (เช่น ปีงบ) */
   onChanged: { type: Function, default: null },
+  /** ลำดับเริ่มต้นของตาราง ส่งต่อให้ UiDataTable */
+  defaultSort: { type: Object, default: null },
 });
+
+const slots = useSlots();
+const cellSlots = computed(() => Object.keys(slots).filter((name) => name.startsWith("cell-")));
 
 const rows = ref([]);
 const loading = ref(true);
@@ -266,7 +271,7 @@ onMounted(async () => {
     <UiPageHeader :title="title" :description="description">
       <template #actions>
         <UiButton variant="primary" @click="openCreate">
-          <template #icon><Plus :size="16" /></template> {{ t("เพิ่ม") }} {{ itemNoun }}
+          <template #icon><Plus :size="16" /></template> {{ t("เพิ่ม{0}", [itemNoun]) }}
         </UiButton>
       </template>
     </UiPageHeader>
@@ -288,8 +293,13 @@ onMounted(async () => {
       :empty-text="t(&quot;ยังไม่มี{0}ในระบบ&quot;, [itemNoun])"
       :empty-hint="emptyHint"
       :search-placeholder="t(&quot;ค้นหา{0}…&quot;, [itemNoun])"
+      :default-sort="defaultSort"
       row-key="id"
     >
+      <!-- ส่ง slot ของเซลล์ต่อให้ตาราง หน้าที่ต้องแสดงป้ายหรือข้อความสองบรรทัดจึงไม่ต้องเขียนตารางเอง -->
+      <template v-for="name in cellSlots" :key="name" #[name]="scope">
+        <slot :name="name" v-bind="scope" />
+      </template>
       <template #actions="{ row }">
         <UiTooltip :content="t(&quot;แก้ไข{0}&quot;, [itemNoun])">
           <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;แก้ไข {0}&quot;, [row[fields[0].key]])" @click="openEdit(row)">
@@ -313,10 +323,10 @@ onMounted(async () => {
       <template #empty>
         <div class="py-12">
           <div class="text-center">
-            <p class="text-md font-semibold text-ink"> {{ t("ยังไม่มี") }} {{ itemNoun }} {{ t("ในระบบ") }} </p>
+            <p class="text-md font-semibold text-ink">{{ t("ยังไม่มี{0}ในระบบ", [itemNoun]) }}</p>
             <p v-if="emptyHint" class="text-sm text-ink-mute mt-1">{{ emptyHint }}</p>
             <UiButton variant="primary" size="sm" class="mt-4" @click="openCreate">
-              <template #icon><Plus :size="15" /></template> {{ t("เพิ่ม") }} {{ itemNoun }} {{ t("แรก") }} </UiButton>
+              <template #icon><Plus :size="15" /></template> {{ t("เพิ่ม{0}แรก", [itemNoun]) }} </UiButton>
           </div>
         </div>
       </template>

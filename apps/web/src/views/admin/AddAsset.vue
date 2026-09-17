@@ -16,7 +16,7 @@ import { t } from "../../lib/locale";
  */
 import { computed, ref, useTemplateRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { FileSpreadsheet, Plus } from "lucide-vue-next";
+import { ArrowLeft, FileSpreadsheet, Plus } from "lucide-vue-next";
 import DeviceFormFields from "../../components/DeviceFormFields.vue";
 import DeviceImportPanel from "../../components/DeviceImportPanel.vue";
 import { UiButton, UiCard, UiPageHeader, UiTabs } from "../../ui";
@@ -53,15 +53,14 @@ async function save(goBack) {
 
 <template>
   <div>
+    <!-- ลิงก์กลับแบบเดียวกับหน้ารายละเอียดเครื่อง — หน้าลูกของทะเบียนทุกหน้าหน้าตาเดียวกัน -->
+    <UiButton to="/assets" variant="ghost" size="sm" class="mb-3 -ml-2">
+      <template #icon><ArrowLeft :size="15" /></template> {{ t("กลับไปทะเบียน") }} </UiButton>
+
     <UiPageHeader
-      :eyebrow="t(&quot;ตั้งค่าระบบ&quot;)"
       :title="t(&quot;เพิ่มเครื่องเข้าทะเบียน&quot;)"
       :description="t(&quot;กรอกทีละเครื่องสำหรับของที่เพิ่งรับเข้ามา หรือนำเข้าทั้งล็อตจากไฟล์ที่มีอยู่แล้ว&quot;)"
-    >
-      <template #actions>
-        <UiButton to="/assets" variant="secondary"> {{ t("กลับไปหน้าทะเบียน") }} </UiButton>
-      </template>
-    </UiPageHeader>
+    />
 
     <UiTabs v-model="tab" :tabs="TABS" :label="t(&quot;วิธีเพิ่มเครื่อง&quot;)">
       <template #single>

@@ -37,6 +37,7 @@ import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka
 import { CalendarRange, Check, ChevronDown, X } from "lucide-vue-next";
 
 import { activeFiscalYearRange, fiscalYearMonths } from "../store/fiscalYear";
+import { useField } from "../ui/field-context";
 
 const props = defineProps({
   /** อาเรย์ของ "YYYY-MM" — ว่าง = ทั้งปีงบ */
@@ -58,11 +59,20 @@ const props = defineProps({
   /**
    * ช่วงเดือนต่อท้ายในบรรทัดเดียว — ใช้ในแถบเครื่องมือที่ช่องอื่นสูงบรรทัดเดียว (รอบที่ 3 ของ #51)
    * แบบสองบรรทัดทำให้ช่องสูงกว่าช่องข้างๆ ป้ายเหนือช่องจึงไม่ตรงแนว และบรรทัดล่างตัวเล็กอ่านยาก
+   * เป็นค่าเริ่มต้นแล้ว — เดิมแต่ละหน้าเลือกเอง ช่องเลือกเดือนจึงสูงไม่เท่ากันในแต่ละหน้า
    */
-  inline: { type: Boolean, default: false },
+  inline: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(["update:modelValue"]);
+const field = useField();
+/** ชื่อของปุ่ม — ป้ายที่เห็นบนจอ ตามด้วยช่วงเวลาที่เลือกอยู่ (ดู UiField.label) */
+const accessibleName = computed(() => {
+  const value = [summary.value.text, summary.value.detail].filter(Boolean).join(" · ");
+  // ไม่มีป้าย = ปุ่มเดี่ยวนอก UiField หน้าที่เรียกส่ง aria-label มาเอง (fallthrough attr)
+  if (!field.label) return undefined;
+  return value ? `${field.label} ${value}` : field.label;
+});
 
 const open = ref(false);
 /** เดือนแรกที่คลิกไว้ระหว่างกำลังลากช่วง (โหมด range) */
@@ -270,12 +280,15 @@ watch(open, (isOpen) => {
 <template>
   <PopoverRoot v-model:open="open">
     <PopoverTrigger
+      :id="field.id"
+      :aria-label="accessibleName"
+      :aria-describedby="field.describedBy"
       :disabled="disabled"
       class="field flex items-center gap-2.5 text-left disabled:cursor-not-allowed"
     >
       <CalendarRange :size="16" class="shrink-0 text-ink-mute" aria-hidden="true" />
 
-      <span v-if="inline" class="min-w-0 flex-1 truncate">
+      <span v-if="inline" class="min-w-0 flex-1 truncate" :title="summary.detail ? `${summary.text} · ${summary.detail}` : summary.text">
         <span :class="summary.isAll ? 'text-ink-soft' : 'text-ink font-medium'">{{ summary.text }}</span>
         <span v-if="summary.detail" class="text-ink-mute"> · {{ summary.detail }}</span>
       </span>

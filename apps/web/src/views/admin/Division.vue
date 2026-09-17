@@ -11,7 +11,7 @@ import MasterDataPage from "../../components/MasterDataPage.vue";
 
 const columns = [
   { key: "name", label: t("ชื่อฝ่าย") },
-  { key: "id", label: t("รหัส"), align: "right", width: "6rem" },
+  { key: "id", label: t("รหัส"), align: "right", width: "6rem", hidden: true },
 ];
 
 const fields = [

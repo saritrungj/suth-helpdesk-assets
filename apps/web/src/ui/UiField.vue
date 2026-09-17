@@ -59,6 +59,18 @@ provideField({
   get id() {
     return id.value;
   },
+  /**
+   * ข้อความบนป้าย — ปุ่มที่เปิดแผง (UiCombobox, PeriodPicker) ไม่ได้ชื่อจาก
+   * `<label for>` เพราะ Reka UI ตั้ง aria-label ของตัวเองไว้ ("Show popup")
+   * ซึ่งทับป้ายที่คนมองเห็น ปุ่มเหล่านั้นจึงประกอบชื่อเป็น "ป้าย + ค่าที่เลือกอยู่"
+   * เพื่อให้สิ่งที่โปรแกรมอ่านหน้าจออ่าน ขึ้นต้นด้วยป้ายบนจอ (WCAG 2.5.3)
+   *
+   * ใช้ aria-label ไม่ใช่ aria-labelledby ที่ชี้กลับมาที่ตัวปุ่มเอง เพราะเบราว์เซอร์
+   * ตัดการอ้างตัวเองทิ้ง ชื่อจึงเหลือแค่ป้ายและค่าที่เลือกอยู่หายไปทั้งหมด
+   */
+  get label() {
+    return props.label;
+  },
   get describedBy() {
     return describedBy.value;
   },

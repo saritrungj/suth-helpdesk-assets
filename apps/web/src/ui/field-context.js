@@ -26,6 +26,7 @@ export function provideField(context) {
 export function useField() {
   return inject(FIELD_KEY, {
     id: undefined,
+    label: undefined,
     describedBy: undefined,
     invalid: false,
     required: false,

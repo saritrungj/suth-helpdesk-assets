@@ -92,7 +92,7 @@ watch(range, (value, previous) => {
 
 <template>
   <div
-    class="flex flex-wrap items-end gap-3"
+    class="flex flex-wrap items-end gap-3 min-w-0 max-w-full"
     :class="!bare && 'card p-3'"
     data-print="hide"
   >
@@ -105,7 +105,7 @@ watch(range, (value, previous) => {
       />
     </UiField>
 
-    <UiField :label="t(&quot;เดือน (ปีงบ {0})&quot;, [formatFiscalYearRange(range)])" class="w-56 max-w-full">
+    <UiField :label="t(&quot;เดือน (ปีงบ {0})&quot;, [formatFiscalYearRange(range)])" class="w-80 max-w-full">
       <PeriodPicker
         v-model="monthSelection"
         :options="monthOptions"
