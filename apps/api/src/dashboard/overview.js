@@ -37,6 +37,7 @@ const { validate } = require("../shared/validate");
 const cache = require("../shared/cache");
 const { notFound } = require("../shared/http-error");
 const { effectiveLocationJoin } = require("../shared/effective-location-sql");
+const { effectiveContractJoin, effectiveContractId } = require("../shared/effective-contract-sql");
 const { readCoverageScope } = require("../shared/coverage-scope");
 const { reportQuery } = require("./filters");
 const {
@@ -53,6 +54,121 @@ const {
 const MAX_ATTENTION_ITEMS = 6;
 
 const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 };
+
+const readingsAndPages = ({ readings, pages }) =>
+  `${readings.toLocaleString("th-TH")} รายการ รวม ${pages.toLocaleString("th-TH")} แผ่น`;
+
+/**
+ * สาเหตุที่ยอดพิมพ์หาราคาไม่ได้ แยกตามหน้าที่แก้ได้จริง (#96)
+ *
+ * `cause` คือค่าที่คิวรี่ใช้จัดกลุ่มและเป็นคำนำหน้าชื่อคอลัมน์ผลรวม ส่วน `code`
+ * คงค่าที่หน้าเว็บใช้แปลภาษาอยู่ ลำดับในรายการนี้คือลำดับบนลิ้นชักแจ้งเตือน
+ */
+const UNPRICED_CAUSES = [
+  {
+    // สัญญาที่ราคามาจริงครอบคลุมปีงบของยอดนั้น — หน้าตรวจสัญญาแสดงยอดกลุ่มนี้ครบทุกรายการ
+    cause: "contract_term",
+    code: "unbilled_devices",
+    severity: "critical",
+    title: (count) => `มี ${count} เครื่องที่ยังยืนยันราคาไม่ได้`,
+    detail: (group) => `${readingsAndPages(group)} ยังไม่ถูกนับในยอดเงิน เพราะยังหาราคาที่มีผลกับเดือนนั้นไม่ได้`,
+    action: { label: "ไปตรวจช่วงที่สัญญามีผล", to: "/admin/contract-prices" },
+  },
+  {
+    cause: "unassigned",
+    code: "unassigned_unbilled_devices",
+    severity: "critical",
+    title: (count) => `มี ${count} เครื่องที่ยังไม่ได้ผูกสัญญา`,
+    detail: (group) => `${readingsAndPages(group)} ยังไม่ถูกนับในยอดเงิน`,
+    action: { label: "ไปผูกสัญญาให้เครื่อง", to: "/assets", query: { unassigned: "true" } },
+    opensFirstDevice: true,
+  },
+  {
+    // ประวัติบอกว่าเดือนนั้นไม่มีสัญญา ทั้งที่ตอนนี้เครื่องผูกสัญญาของปีงบนั้นอยู่
+    cause: "contract_history",
+    code: "unpriced_contract_history",
+    severity: "critical",
+    title: (count) => `มี ${count} เครื่องที่ประวัติสัญญาไม่ครอบคลุมยอดพิมพ์`,
+    detail: (group) => `${readingsAndPages(group)} ต้องตรวจวันที่เริ่มคิดเงินของเครื่อง`,
+    action: { label: "ไปตรวจประวัติสัญญาของเครื่อง", to: "/assets" },
+    opensFirstDevice: true,
+  },
+  {
+    // ยังไม่มีหน้าจอผูกเครื่องกับสัญญาของปีงบที่ผ่านมาแล้ว (#97) จึงพาไปดูว่าปีงบไหน
+    // มีสัญญาบ้าง และเป็นเพียงงานค้าง ไม่ใช่เรื่องที่แก้ได้ทันทีจากลิงก์นี้
+    cause: "outside_contract_year",
+    code: "unpriced_outside_contract_year",
+    severity: "warning",
+    title: (count) => `มี ${count} เครื่องที่มียอดพิมพ์ในปีงบที่ยังไม่มีสัญญาครอบคลุม`,
+    detail: (group) => `${readingsAndPages(group)} อยู่นอกปีงบของสัญญาที่เครื่องผูกไว้ ต้องมีสัญญาของปีงบนั้นก่อนจึงคิดเงินได้`,
+    action: { label: "ไปดูสัญญาของแต่ละปีงบ", to: "/admin/contracts" },
+  },
+];
+
+/**
+ * เปิดฟอร์มของเครื่องแรกที่ต้องแก้ พร้อมวันที่เริ่มคิดเงินที่แนะนำ
+ *
+ * การพาไปแค่หน้าทะเบียนทำให้ผู้ใช้กดแล้วไม่รู้ว่าต้องทำอะไรต่อ งานค้างจึงดูเหมือน
+ * "กดแล้วไม่หาย" (#96) บันทึกเสร็จแล้วแดชบอร์ดจะชี้เครื่องถัดไปเอง ส่วนวันที่เป็น
+ * เพียงค่าแนะนำ ผู้ใช้ยังต้องตรวจกับเอกสารก่อนบันทึก
+ *
+ * @param {string|null} firstTarget "YYYY-MM|<device id เติมศูนย์>" — SQL เลือกคู่นี้จาก
+ *   แถวเดียวกัน ห้ามหา MIN(device_id) กับ MIN(month) แยกกัน เพราะวันที่ของเครื่องอื่น
+ *   อาจถูกเอาไปเสนอให้เครื่องที่เปิดอยู่
+ */
+function withFirstDevice(action, firstTarget) {
+  const [firstMonth, paddedDeviceId] = String(firstTarget || "").split("|");
+  const firstDeviceId = Number(paddedDeviceId) || null;
+  if (!firstDeviceId) return action;
+
+  return {
+    ...action,
+    query: {
+      ...action.query,
+      edit: String(firstDeviceId),
+      ...(firstMonth ? { billing_from: `${firstMonth}-01` } : {}),
+    },
+  };
+}
+
+/** เครื่องและเดือนแรกของสาเหตุหนึ่ง สำหรับ withFirstDevice — ค่าคงที่ในโค้ดเท่านั้น */
+function firstTargetColumn(cause) {
+  return `MIN(CASE
+               WHEN cause = '${cause}'
+               THEN CONCAT(month, '|', LPAD(device_id, 20, '0'))
+             END) AS ${cause}_first_target`;
+}
+
+/** จำนวนเครื่อง รายการ และแผ่นของยอดที่หาราคาไม่ได้ด้วยสาเหตุเดียว — ค่าคงที่ในโค้ดเท่านั้น */
+function unpricedCauseColumns(cause) {
+  return `COUNT(DISTINCT CASE WHEN cause = '${cause}' THEN device_id END) AS ${cause}_device_count,
+             SUM(CASE WHEN cause = '${cause}' THEN 1 ELSE 0 END) AS ${cause}_readings,
+             COALESCE(SUM(CASE WHEN cause = '${cause}' THEN pages_printed ELSE 0 END), 0) AS ${cause}_pages`;
+}
+
+/** แยกงานที่แก้คนละหน้าออกจากกัน เพื่อให้ทุกลิงก์พาไปถึงจุดที่ลงมือแก้ได้จริง (#96) */
+function buildUnbilledAttention(unbilled) {
+  return UNPRICED_CAUSES.flatMap((spec) => {
+    const count = Number(unbilled?.[`${spec.cause}_device_count`]) || 0;
+    if (count === 0) return [];
+
+    const group = {
+      readings: Number(unbilled[`${spec.cause}_readings`]),
+      pages: Number(unbilled[`${spec.cause}_pages`]),
+    };
+    return [{
+      code: spec.code,
+      severity: spec.severity,
+      title: spec.title(count),
+      detail: spec.detail(group),
+      count,
+      params: group,
+      action: spec.opensFirstDevice
+        ? withFirstDevice(spec.action, unbilled[`${spec.cause}_first_target`])
+        : spec.action,
+    }];
+  });
+}
 
 router.get(
   "/overview",
@@ -210,17 +326,51 @@ router.get(
       // (ฐานข้อมูลที่ระบบนี้รันอยู่จริง) แม้ MySQL จะยอมรับก็ตาม
       db
         .query(
-          `SELECT
-             COUNT(DISTINCT v.device_id) AS device_count,
-             COUNT(*) AS unbilled_readings,
-             COALESCE(SUM(v.pages_printed), 0) AS unbilled_pages,
-             COUNT(DISTINCT d.contract_id) AS contract_count
-           FROM v_monthly_kpi v
-           JOIN devices d ON d.id = v.device_id
-           LEFT JOIN building b ON d.building_id = b.id
-           WHERE v.total_cost IS NULL
-             ${range ? "AND v.month BETWEEN ? AND ?" : ""}
-             ${buildingClause} ${contractClause}`,
+          `WITH unpriced_scope AS (
+             SELECT
+               v.device_id,
+               v.month,
+               v.pages_printed,
+               d.contract_id AS current_contract_id,
+               ${effectiveContractId({ historyAlias: "dch", deviceAlias: "d" })} AS effective_contract_id
+             FROM v_monthly_kpi v
+             JOIN devices d ON d.id = v.device_id
+             ${effectiveContractJoin({ deviceIdExpression: "v.device_id", monthExpression: "v.month", historyAlias: "dch" })}
+             LEFT JOIN building b ON d.building_id = b.id
+             WHERE v.total_cost IS NULL
+               ${range ? "AND v.month BETWEEN ? AND ?" : ""}
+               ${buildingClause} ${contractClause}
+           ),
+           -- แยกตามหน้าที่แก้ได้จริง (UNPRICED_CAUSES): หน้าตรวจสัญญานับเฉพาะยอดในปีงบ
+           -- ของสัญญา (contracts/routes.js /price-review) ยอดนอกปีงบจึงห้ามถูกส่งไปที่นั่น
+           unpriced_cause AS (
+             SELECT
+               s.device_id,
+               s.month,
+               s.pages_printed,
+               CASE
+                 WHEN s.effective_contract_id IS NOT NULL THEN
+                   CASE WHEN (efy.start_month IS NULL OR s.month >= efy.start_month)
+                         AND (efy.end_month IS NULL OR s.month <= efy.end_month)
+                        THEN 'contract_term' ELSE 'outside_contract_year' END
+                 WHEN s.current_contract_id IS NULL THEN 'unassigned'
+                 WHEN (cfy.start_month IS NULL OR s.month >= cfy.start_month)
+                  AND (cfy.end_month IS NULL OR s.month <= cfy.end_month)
+                   THEN 'contract_history'
+                 ELSE 'outside_contract_year'
+               END AS cause
+             FROM unpriced_scope s
+             LEFT JOIN contracts ec ON ec.id = s.effective_contract_id
+             LEFT JOIN fiscal_year efy ON efy.id = ec.fiscal_year_id
+             LEFT JOIN contracts cc ON cc.id = s.current_contract_id
+             LEFT JOIN fiscal_year cfy ON cfy.id = cc.fiscal_year_id
+           )
+           SELECT
+             ${UNPRICED_CAUSES.map(({ cause }) => unpricedCauseColumns(cause)).join(",\n             ")},
+             ${UNPRICED_CAUSES.filter((spec) => spec.opensFirstDevice)
+               .map(({ cause }) => firstTargetColumn(cause))
+               .join(",\n             ")}
+           FROM unpriced_cause`,
           [...(range ? [range.start_month, range.end_month] : []), ...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows[0]),
@@ -312,21 +462,8 @@ router.get(
       });
     }
 
-    // เครื่องที่พิมพ์อยู่แต่ไม่มีราคา
-    if (Number(unbilled?.device_count) > 0) {
-      attention.push({
-        code: "unbilled_devices",
-        severity: "critical",
-        title: `มี ${unbilled.device_count} เครื่องที่ยังยืนยันราคาไม่ได้`,
-        detail: `${Number(unbilled.unbilled_readings).toLocaleString("th-TH")} รายการ รวม ${Number(unbilled.unbilled_pages).toLocaleString("th-TH")} แผ่น ยังไม่ถูกนับในยอดเงิน เพราะยังหาราคาที่มีผลกับเดือนนั้นไม่ได้`,
-        count: Number(unbilled.device_count),
-        params: {
-          pages: Number(unbilled.unbilled_pages),
-          readings: Number(unbilled.unbilled_readings),
-        },
-        action: { label: "ไปยืนยันช่วงที่สัญญามีผล", to: "/admin/contract-prices" },
-      });
-    }
+    // เครื่องที่พิมพ์อยู่แต่ไม่มีราคา — แยกตามหน้าที่แก้ได้จริง (#96)
+    attention.push(...buildUnbilledAttention(unbilled));
 
     // เครื่องที่ไม่มีใครใช้เลยทั้งปี
     if (Number(idle?.device_count) > 0 && range) {
@@ -422,3 +559,4 @@ router.get(
 
 module.exports = router;
 module.exports.computeCoverage = computeCoverage;
+module.exports.buildUnbilledAttention = buildUnbilledAttention;
