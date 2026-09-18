@@ -18,6 +18,7 @@ export const {
   isBuddhistYear,
   normalizeMonth,
   currentMonth,
+  recentMonths,
   toBuddhistMonth,
   parseMonths,
   getFiscalYearRange,

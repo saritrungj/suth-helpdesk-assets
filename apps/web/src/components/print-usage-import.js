@@ -1,4 +1,5 @@
 import { toBuddhistYear } from "@suth/domain";
+export { recentMonths } from "@suth/domain";
 import { toCsv } from "../lib/export-csv";
 import { t } from "../lib/locale";
 
@@ -15,15 +16,6 @@ import { t } from "../lib/locale";
 export function meterHeader(month) {
   const [year, value] = String(month).split("-");
   return `meter ${Number(value)}/${String(toBuddhistYear(Number(year))).slice(-2)}`;
-}
-
-/** `count` เดือนล่าสุด นับถอยจาก `current` (รวมตัวมันเอง) เรียงจากเก่าไปใหม่ */
-export function recentMonths(current, count = 3) {
-  const [year, month] = String(current).split("-").map(Number);
-  return Array.from({ length: count }, (_, index) => {
-    const offset = year * 12 + (month - 1) - (count - 1 - index);
-    return `${Math.floor(offset / 12)}-${String((offset % 12) + 1).padStart(2, "0")}`;
-  });
 }
 
 /**
