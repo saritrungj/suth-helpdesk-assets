@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowUpRight, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
+import { ArrowUpRight, GitCompareArrows, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
 import { useContracts, useDepartments, useDivisions, useMonthlyKpi, useOverview } from '../api/queries';
 import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths } from '../store/fiscalYear';
 import { t } from '../lib/locale';
@@ -14,7 +14,7 @@ import ExecutiveDetails from './ExecutiveDetails.vue';
 import ExportExcelButton from './ExportExcelButton.vue';
 import PrintComparison from './PrintComparison.vue';
 import ComparisonTable from './ComparisonTable.vue';
-import { buildComparison, comparisonFromQuery, comparisonToQuery, dimensionLabel, itemOptions, metricLabel, metricUnit, periodLabel, summarize } from './comparison';
+import { buildComparison, comparisonFromQuery, comparisonScope, comparisonToQuery, dimensionLabel, itemOptions, metricLabel, metricUnit, periodChange, periodLabel, rowsInScope, summarize } from './comparison';
 import { comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, saveWorkbook, standardNotes } from './comparison-export';
 
 /**
@@ -82,18 +82,10 @@ const ready = computed(() => !loading.value && !failed.value);
 const rows = computed(() => (loading.value || report.isError.value ? [] : (report.data.value || [])
   .filter((row) => !monthParam.value || monthParam.value.split(',').includes(row.month))));
 
-const totals = computed(() => summarize(rows.value));
 const fleet = computed(() => overview.data.value?.totals || {});
 const coverage = computed(() => overview.data.value?.coverage || {});
-const comparison = computed(() => overview.data.value?.comparison || {});
-const change = computed(() => (totals.value.unpriced ? null : comparison.value.cost_change_percent));
-const previousLabel = computed(() => {
-  const list = comparison.value.previous_months || [];
-  return list.length ? t('เทียบกับ {0}', [periodLabel(list)]) : t('ยังไม่มีข้อมูลช่วงเปรียบเทียบ');
-});
 const coverageLabel = computed(() => (coverage.value.verifiable === false ? t('รอยืนยันข้อมูล') : `${formatCount(coverage.value.annual_complete_months)} / ${formatCount(coverage.value.total_months)}`));
 const money = (value) => (value == null ? '—' : formatBahtValue(value));
-const costTitle = computed(() => (totals.value.unpriced ? t('ค่าใช้จ่ายที่ยืนยันแล้ว') : t('ค่าใช้จ่ายสุทธิ')));
 
 const options = computed(() => itemOptions(state.value.by, {
   divisions: divisions.data.value ?? [],
@@ -111,11 +103,65 @@ const model = computed(() => buildComparison({
   options: options.value,
 }));
 
+/*
+ * ตัวเลขสำคัญ แผงรายละเอียด และช่วงก่อนหน้า ใช้ขอบเขตเดียวกับกราฟ ตาราง และไฟล์ (R06)
+ * เลือกฝ่าย A/B แล้วการ์ดต้องเป็นยอดของ A/B — ไม่ใช่ยอดทั้งองค์กรวางข้างกราฟของ A/B
+ */
+const scope = computed(() => comparisonScope(model.value));
+const scopedRows = computed(() => rowsInScope(rows.value, scope.value));
+const totals = computed(() => summarize(scopedRows.value));
+const costTitle = computed(() => (totals.value.unpriced ? t('ค่าใช้จ่ายที่ยืนยันแล้ว') : t('ค่าใช้จ่ายสุทธิ')));
+
+/*
+ * ช่วงก่อนหน้า: เดือนมาจาก API (ยาวเท่ากันและอยู่ในปีงบเดียวกัน) แต่ยอดคิดที่นี่จาก
+ * แถวรายเครื่องรายเดือนของรายการชุดเดียวกัน ด้วยกฎเดียวกับช่วงที่ดู — เดิมใช้เปอร์เซ็นต์
+ * ทั้งองค์กรจาก API ซึ่งนับรายการที่ยังไม่รู้ราคาเป็นศูนย์ด้วย
+ */
+const previousMonths = computed(() => overview.data.value?.comparison?.previous_months ?? []);
+const previousReport = useMonthlyKpi(
+  computed(() => ({ month: previousMonths.value.join(',') || undefined })),
+  { enabled: computed(() => previousMonths.value.length > 0) },
+);
+const previousTotals = computed(() => {
+  if (!previousMonths.value.length || loading.value) return null;
+  if (previousReport.isPending.value || previousReport.isPlaceholderData.value || previousReport.isError.value) return null;
+  const months = new Set(previousMonths.value);
+  return summarize(rowsInScope((previousReport.data.value ?? []).filter((row) => months.has(row.month)), scope.value));
+});
+const change = computed(() => (previousTotals.value ? periodChange(previousTotals.value, totals.value, 'cost') : null));
+const costHint = computed(() => {
+  if (totals.value.unpriced) return t('ยังยืนยันราคาไม่ได้ {0} รายการ', [formatCount(totals.value.unpriced)]);
+  if (!previousMonths.value.length) return t('ยังไม่มีข้อมูลช่วงเปรียบเทียบ');
+  const previous = periodLabel(previousMonths.value);
+  switch (change.value?.reason) {
+    case 'unpriced': return t('{0} ยังยืนยันราคาไม่ครบ จึงยังไม่เทียบ', [previous]);
+    case 'no-base-data': return t('{0} ไม่มียอดของขอบเขตนี้ จึงยังไม่เทียบ', [previous]);
+    default: return t('เทียบกับ {0}', [previous]);
+  }
+});
+
+/** ทางไปหน้าเปรียบเทียบพร้อมขอบเขตเดิม — เปิดด้วย push กดย้อนกลับจึงกลับมาที่มุมมองนี้ */
+const compareLink = computed(() => {
+  const m = model.value;
+  if (!scope.value.selected || m.entries.length < 2 || !['division', 'department'].includes(m.dimension)) return null;
+  return {
+    path: '/compare',
+    query: {
+      type: 'department',
+      level: m.dimension === 'division' ? undefined : m.dimension,
+      items: scope.value.keys.join(','),
+      measure: m.metric === 'rawPages' ? 'pages' : undefined,
+      months: filter.value.selected.length ? filter.value.selected.join(',') : undefined,
+    },
+  };
+});
+
 const periodText = computed(() => (filter.value.selected.length
   ? periodLabel(filter.value.selected)
   : t('ทั้งปีงบ ({0})', [periodLabel(fyMonths.value)])));
 const noun = computed(() => dimensionLabel(state.value.by));
 const metricText = computed(() => `${metricLabel(model.value.metric, { incomplete: model.value.metric === 'cost' && model.value.scope.unpriced > 0 })} (${metricUnit(model.value.metric)})`);
+const scopeCaption = computed(() => (scope.value.selected ? `${noun.value}: ${scope.value.label}` : t('ทุกหน่วยงาน')));
 const itemsText = computed(() => {
   if (model.value.view === 'overall') return t('ทุกหน่วยงาน');
   if (model.value.view === 'rank') return t('{0} {1} อันดับจากทุก{2}', [model.value.direction === 'low' ? t('น้อยสุด') : t('มากสุด'), model.value.limit, noun.value]);
@@ -233,11 +279,12 @@ async function runExport(kind) {
     </UiAlert>
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
-    <!-- ตัวเลขสำคัญของทั้งช่วงเวลา (ทุกหน่วยงาน) — ไม่ขึ้นกับรายการที่เลือกเปรียบเทียบด้านล่าง -->
+    <!-- ตัวเลขสำคัญของขอบเขตเดียวกับกราฟ ตาราง และไฟล์ด้านล่าง — เลือกฝ่าย A/B แล้วเป็นยอดของ A/B -->
+    <p class="text-xs text-ink-mute mb-1.5">{{ t('ตัวเลขของ {0} · {1}', [scopeCaption, periodText]) }}</p>
     <section class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading">
       <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring rounded-l-lg" :disabled="!ready || !rows.length" :aria-label="t('ดูที่มาของค่าใช้จ่าย')" @click="openDetails('department')">
-        <UiStat plain :label="costTitle" :value="failed ? '—' : money(totals.cost)" :unit="t('บาท')" :loading="loading" :delta="ready ? change ?? null : null" delta-inverse
-          :hint="totals.unpriced ? t('ยังยืนยันราคาไม่ได้ {0} รายการ', [formatCount(totals.unpriced)]) : previousLabel">
+        <UiStat plain :label="costTitle" :value="failed ? '—' : money(totals.cost)" :unit="t('บาท')" :loading="loading" :delta="ready ? change?.percent ?? null : null" delta-inverse
+          :hint="costHint">
           <template #icon><ArrowUpRight :size="16" class="text-brand-ink" /></template>
         </UiStat>
       </button>
@@ -247,13 +294,19 @@ async function runExport(kind) {
           <template #icon><ArrowUpRight :size="16" class="text-brand-ink" /></template>
         </UiStat>
       </button>
-      <UiStat plain tone="ink" :label="t('เครื่องพิมพ์ทั้งหมด')" :value="ready ? formatCount(fleet.total_devices) : '—'" :unit="t('เครื่อง')" :loading="loading"
-        :hint="ready ? `${t('มียอดในช่วงนี้ {0} เครื่อง', [formatCount(totals.devices)])} · ${t('ใช้งานอยู่ {0} เครื่อง', [formatCount(fleet.active_devices)])} · ${t('เดือนที่บันทึกครบ')} ${coverageLabel}` : ''" />
+      <!-- จำนวนเครื่องในทะเบียนวันนี้ไม่ใช่จำนวนเครื่องที่มียอดย้อนหลัง จึงเป็นข้อมูลอ้างอิงแยก
+           ส่วนความครบถ้วนนับทั้งองค์กรทั้งปีงบ ยังไม่มีตัวเลขของขอบเขตที่เลือก จึงบอกไว้ตรงๆ -->
+      <UiStat plain tone="ink" :label="t('เครื่องที่มียอดในช่วงนี้')" :value="ready ? formatCount(totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading"
+        :hint="ready ? `${t('ทะเบียนวันนี้ {0} เครื่อง', [formatCount(fleet.total_devices)])} · ${t('ใช้งานอยู่ {0} เครื่อง', [formatCount(fleet.active_devices)])} · ${t('เดือนที่บันทึกครบทั้งองค์กร')} ${coverageLabel}` : ''" />
     </section>
 
     <PrintComparison v-model:state="state" :model="model" :options="options" :loading="loading" :failed="failed" :scope-text="scopeText"
       @details="(entry) => openDetails('device', entry)">
       <template #actions>
+        <!-- จอแคบเหลือแค่ไอคอน (ชื่อยังอยู่ให้โปรแกรมอ่านหน้าจอ) ไม่งั้นแถวปุ่มดันหน้าล้นแนวนอนที่ 320px -->
+        <UiButton v-if="compareLink" variant="secondary" :to="compareLink" :label="t('วิเคราะห์ส่วนต่าง')">
+          <template #icon><GitCompareArrows :size="16" /></template><span class="sr-only sm:not-sr-only">{{ t('วิเคราะห์ส่วนต่าง') }}</span>
+        </UiButton>
         <ExportExcelButton :disabled="Boolean(blockedReason)" :raw-disabled="!ready || !model.scopeRows.length" :busy="exportBusy" :reason="blockedReason"
           @report="runExport('report')" @raw="runExport('raw')" />
       </template>

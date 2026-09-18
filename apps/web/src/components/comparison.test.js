@@ -4,15 +4,18 @@ import {
   buildDifference,
   comparisonChart,
   comparisonFromQuery,
+  comparisonScope,
   comparisonToQuery,
   deviceSpread,
   difference,
   differenceChart,
   differenceFromQuery,
   itemOptions,
+  periodChange,
   periodLabel,
   rankEntries,
   referenceMonths,
+  rowsInScope,
   stableSlots,
   summarize,
 } from "./comparison";
@@ -161,6 +164,57 @@ describe("แบบจำลองของพื้นที่เปรีย�
     expect(options.map((option) => [option.value, option.label, option.hint])).toEqual([
       ["10", "แผนก A1", "ฝ่าย A"], ["11", "แผนกว่าง", "ฝ่าย A"], ["unassigned", "ไม่ระบุแผนก", "ฝ่าย A"],
     ]);
+  });
+});
+
+describe("ตัวเลขสำคัญ รายละเอียด และช่วงก่อนหน้าใช้ขอบเขตเดียวกับกราฟ (R06)", () => {
+  const rows = [
+    row({ device_id: 1, month: "2025-11", pages_printed: 1000, net_pages: 980, total_cost: "490.00" }),
+    row({ device_id: 2, month: "2025-11", division_id: 2, division_name: "ฝ่าย B", pages_printed: 300, net_pages: 294, total_cost: "147.00" }),
+    row({ device_id: 3, month: "2025-11", division_id: 3, division_name: "ฝ่าย C", pages_printed: 50, net_pages: 49, total_cost: "24.50" }),
+  ];
+  const previous = [
+    row({ device_id: 1, month: "2025-10", pages_printed: 800, net_pages: 784, total_cost: "392.00" }),
+    row({ device_id: 2, month: "2025-10", division_id: 2, division_name: "ฝ่าย B", pages_printed: 100, net_pages: 98, total_cost: "49.00" }),
+    row({ device_id: 3, month: "2025-10", division_id: 3, division_name: "ฝ่าย C", pages_printed: 9000, net_pages: 8820, total_cost: "4410.00" }),
+  ];
+
+  test("เลือกฝ่าย A/B แล้ว ตัวเลขสำคัญเป็นของ A/B เท่ากับขอบเขตของกราฟและไฟล์", () => {
+    const model = buildComparison({ rows, dimension: "division", view: "select", items: ["1", "2"], metric: "cost" });
+    const scope = comparisonScope(model);
+    expect(scope).toMatchObject({ selected: true, keys: ["1", "2"] });
+    expect(rowsInScope(rows, scope)).toEqual(model.scopeRows);
+    expect(summarize(rowsInScope(rows, scope)).rawPages).toBe(1300);
+  });
+
+  test("ช่วงก่อนหน้าคัดด้วยรายการชุดเดียวกัน ไม่ใช่ยอดทั้งองค์กร", () => {
+    const model = buildComparison({ rows, dimension: "division", view: "select", items: ["1", "2"], metric: "cost" });
+    const scope = comparisonScope(model);
+    const before = summarize(rowsInScope(previous, scope));
+    expect(before.rawPages).toBe(900);
+    // (637 − 441) ÷ 441 — ถ้าใช้ยอดทั้งองค์กรของเดือนก่อน ฝ่าย C จะทำให้ดูเหมือนลดลงเกือบ 90%
+    expect(periodChange(before, summarize(rowsInScope(rows, scope)), "cost").percent).toBeCloseTo(44.44, 2);
+  });
+
+  test("อันดับ ภาพรวม และยังไม่ได้เลือกรายการ ใช้ทุกแถว — เปลี่ยน 5/10 ไม่เปลี่ยนฐานยอดรวม", () => {
+    for (const input of [
+      { dimension: "division", view: "rank", limit: 5 },
+      { dimension: "division", view: "rank", limit: 10 },
+      { dimension: "overall" },
+      { dimension: "division", view: "select", items: [] },
+    ]) {
+      const scope = comparisonScope(buildComparison({ rows, metric: "cost", ...input }));
+      expect(scope.selected).toBe(false);
+      expect(rowsInScope(rows, scope)).toEqual(rows);
+    }
+  });
+
+  test("ราคาช่วงใดช่วงหนึ่งไม่ครบ ไม่คิดเปอร์เซ็นต์ค่าใช้จ่าย และฐานศูนย์ไม่มีเปอร์เซ็นต์", () => {
+    const priced = summarize(rows);
+    const unpricedBefore = summarize([...previous, row({ device_id: 9, month: "2025-10", total_cost: null })]);
+    expect(periodChange(unpricedBefore, priced, "cost")).toEqual({ percent: null, reason: "unpriced" });
+    expect(periodChange(summarize([row({ pages_printed: 0, net_pages: 0, total_cost: "0.00" })]), priced, "rawPages")).toEqual({ percent: null, reason: "zero-base" });
+    expect(periodChange(summarize([]), priced, "cost")).toEqual({ percent: null, reason: "no-base-data" });
   });
 });
 

@@ -27,6 +27,7 @@ import { t } from "../lib/locale";
  */
 import { computed, onActivated, onMounted, ref, watch } from "vue";
 import { exportSheet } from "../lib/export-xlsx";
+import { useExportTask } from "../composables/useExportTask";
 import {
   Building2,
   ChevronRight,
@@ -444,6 +445,8 @@ const usageColumns = [
 /* --------------------------------------------------------------------------
    ส่งออก Excel
    -------------------------------------------------------------------------- */
+const { busy: exporting, error: exportError, run: runExport } = useExportTask();
+
 async function exportTreeExcel() {
   const header = [
     t("ฝ่าย"),
@@ -474,7 +477,7 @@ async function exportTreeExcel() {
     )
   );
 
-  await exportSheet({
+  await runExport(() => exportSheet({
     header,
     rows,
     sheetName: t("แยกตามฝ่าย-แผนก"),
@@ -484,7 +487,7 @@ async function exportTreeExcel() {
       labels: { search: t("ค้นหา") },
       unpricedReadings: unpricedReadings.value,
     }),
-  });
+  }));
 }
 
 onMounted(async () => {
@@ -516,7 +519,7 @@ onMounted(async () => {
         <UiTooltip :content="t(&quot;พับทั้งหมด&quot;)">
           <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;พับทั้งหมด&quot;)" @click="collapseAll"><ChevronsDownUp :size="15" /></UiButton>
         </UiTooltip>
-        <UiButton size="sm" variant="secondary" :disabled="!divisions.length || loading || !!loadError" @click="exportTreeExcel">
+        <UiButton size="sm" variant="secondary" :disabled="!divisions.length || loading || !!loadError" :loading="exporting" @click="exportTreeExcel">
           <template #icon><Download :size="15" /></template>
           Excel
         </UiButton>
@@ -555,6 +558,13 @@ onMounted(async () => {
     </div>
 
     <UiAlert v-if="month && noDataCount > 0" tone="warn"> {{ t("มี") }} {{ formatCount(noDataCount) }} {{ t("จาก") }} {{ formatCount(totalDepartmentCount) }} {{ t("แผนก ที่ยังไม่มีการบันทึกยอดพิมพ์ทั้งในช่วงนี้และช่วงก่อนหน้า จึงเทียบแนวโน้มให้ไม่ได้") }} </UiAlert>
+
+    <UiAlert v-if="exportError" tone="danger">
+      {{ exportError }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" :loading="exporting" @click="exportTreeExcel"> {{ t("ลองใหม่") }} </UiButton>
+      </template>
+    </UiAlert>
 
     <UiAlert v-if="loadError" tone="danger">
       {{ loadError }}

@@ -39,6 +39,8 @@ const GROUPING = {
   department: { id: "department_id", name: "department_name", hint: "division_name" },
   // สัญญาที่คิดเงินของเดือนนั้น ไม่ใช่สัญญาปัจจุบันของเครื่อง (ADR-0019)
   contract: { id: "billing_contract_id", name: "billing_contract_no" },
+  // อาคารของเดือนนั้นจากประวัติการย้าย — API ส่งเฉพาะชื่อ จึงใช้ชื่อเป็น key (หน้าเปรียบเทียบ)
+  building: { id: "building_name", name: "building_name" },
 };
 
 export function dimensionLabel(dimension) {
@@ -47,6 +49,7 @@ export function dimensionLabel(dimension) {
     division: t("ฝ่าย"),
     department: t("แผนก"),
     contract: t("สัญญา"),
+    building: t("อาคาร"),
   }[dimension] ?? "";
 }
 
@@ -55,6 +58,7 @@ function emptyLabel(dimension) {
     division: t("ไม่ระบุฝ่าย"),
     department: t("ไม่ระบุแผนก"),
     contract: t("ไม่ผูกสัญญา"),
+    building: t("ไม่ระบุอาคาร"),
   }[dimension] ?? t("ไม่ระบุ");
 }
 
@@ -275,9 +279,11 @@ export function rankEntries(entries, { metric, direction = "high", limit = 5 }) 
  * @param {string[]} input.items key ของรายการที่ผู้ใช้เลือก (มุมมองเลือกรายการ)
  * @param {"cost"|"rawPages"} input.metric
  * @param {object[]} input.options ตัวเลือกจาก itemOptions() ใช้หาชื่อของรายการที่ไม่มีข้อมูล
+ * @param {string[]} [input.months] เดือนที่ผู้ใช้เลือกแสดง — ใส่มาเมื่อเดือนที่ไม่มีข้อมูลต้อง
+ *   ยังเป็นช่องว่างบนแกนและในไฟล์ (หน้าเปรียบเทียบ) ไม่ใส่ = เฉพาะเดือนที่มีแถว
  */
-export function buildComparison({ rows = [], dimension = "overall", view = "select", items = [], metric = "cost", direction = "high", limit = 5, options = [] }) {
-  const months = [...new Set(rows.map((row) => row.month))].sort();
+export function buildComparison({ rows = [], dimension = "overall", view = "select", items = [], metric = "cost", direction = "high", limit = 5, options = [], months: shownMonths = null }) {
+  const months = shownMonths?.length ? [...shownMonths].sort() : [...new Set(rows.map((row) => row.month))].sort();
   const total = summarize(rows);
   const base = { dimension, metric, months, total, direction, limit };
 
@@ -318,6 +324,40 @@ export function buildComparison({ rows = [], dimension = "overall", view = "sele
     scope: summarize(scopeRows),
     blocked: !chosen.length ? "no-items" : !scopeRows.length ? "no-data" : null,
   };
+}
+
+/**
+ * ขอบเขตของตัวเลขสำคัญ แผงรายละเอียด และช่วงก่อนหน้าบนหน้าภาพรวม
+ *
+ * ต้องเป็นชุดเดียวกับกราฟ ตาราง และไฟล์ Excel — เดิมการ์ดตัวเลขรวมทั้งองค์กรขณะที่
+ * กราฟแสดงเฉพาะฝ่ายที่เลือก กดการ์ดแล้วแผงรายละเอียดกลับเห็นแค่บางฝ่าย และ
+ * เปอร์เซ็นต์เทียบช่วงก่อนเอายอดที่เลือกไปเทียบกับยอดทั้งองค์กรของช่วงก่อน
+ *
+ * มุมมองเลือกรายการ (ที่เลือกแล้ว) = เฉพาะรายการที่เลือก ส่วนภาพรวม อันดับ และยัง
+ * ไม่ได้เลือก = ทุกแถว — อันดับเป็นผลสรุปของขอบเขต ไม่ใช่ขอบเขต เปลี่ยน 5/10 จึง
+ * ไม่เปลี่ยนยอดรวม
+ */
+export function comparisonScope(model) {
+  if (model?.view !== "select" || !model.entries?.length) return { selected: false, dimension: model?.dimension, keys: null, label: "" };
+  return {
+    selected: true,
+    dimension: model.dimension,
+    keys: model.entries.map((entry) => entry.key),
+    label: model.entries.map((entry) => entry.displayLabel).join(", "),
+  };
+}
+
+/** แถวที่อยู่ในขอบเขต — ใช้กับแถวของช่วงก่อนหน้าได้ด้วย เพราะคัดด้วย key ชุดเดียวกัน */
+export function rowsInScope(rows, scope) {
+  if (!scope?.keys) return rows ?? [];
+  const keys = new Set(scope.keys);
+  return (rows ?? []).filter((row) => keys.has(groupKey(row, scope.dimension)));
+}
+
+/** เปลี่ยนแปลงจากช่วงก่อนหน้าเป็นเปอร์เซ็นต์ — กฎเดียวกับ difference() (ราคาไม่ครบ ฐานศูนย์ ไม่มีข้อมูล) */
+export function periodChange(previous, current, metric) {
+  const result = difference(previous, current, metric);
+  return { percent: result.ratio === null ? null : result.ratio * 100, reason: result.reason };
 }
 
 /** ป้ายของรายการบนกราฟ — ติดสถานะไว้กับชื่อเมื่อยอดเงินของรายการนั้นยังไม่ครบ */

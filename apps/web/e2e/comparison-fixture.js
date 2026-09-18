@@ -81,7 +81,8 @@ export const MASTERS = {
  */
 export async function comparisonFixture(page, { rows = COMPARISON_ROWS } = {}) {
   const base = await prototypeFixture(page, "viewer");
-  const state = { ...base, delay: 0, fail: false, requests: [], masterRequests: [] };
+  // overviewComparison = เดือนของช่วงก่อนหน้าที่ API จริงคำนวณให้ (ยาวเท่ากัน อยู่ในปีงบเดียวกัน)
+  const state = { ...base, delay: 0, fail: false, requests: [], masterRequests: [], overviewComparison: null };
   const json = (route, data, status = 200) => route.fulfill({ status, json: data });
 
   // route ที่ลงทะเบียนทีหลังถูกเรียกก่อน — ทับของ prototype/asset fixture เฉพาะที่ต้องใช้
@@ -102,7 +103,7 @@ export async function comparisonFixture(page, { rows = COMPARISON_ROWS } = {}) {
       return json(route, {
         totals: { total_devices: 7, active_devices: 6 },
         coverage: { total_months: 12, annual_complete_months: 3, months: [], verifiable: true },
-        comparison: null,
+        comparison: state.overviewComparison,
         attention: [],
       });
     }

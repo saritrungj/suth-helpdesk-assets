@@ -184,7 +184,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await page.goto("/dashboard?by=division&view=select&items=1,2&measure=pages");
     await detailTable(page).getByRole("button", { name: "ดูรายละเอียดของ ฝ่ายการพยาบาล" }).click();
     const drawer = page.getByRole("dialog");
-    await expect(drawer).toContainText("เจาะค่าใช้จ่าย · ฝ่ายการพยาบาล");
+    await expect(drawer).toContainText("รายละเอียดข้อมูล · ฝ่ายการพยาบาล");
     await drawer.getByRole("link", { name: "0100-SN" }).click();
     await expect(page).toHaveURL(/\/assets\/1$/);
     await page.goBack();
@@ -193,6 +193,61 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(card.getByRole("radio", { name: "ฝ่าย", exact: true })).toBeChecked();
     await expect(card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true })).toBeChecked();
     await expect(detailTable(page).getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550/ })).toBeVisible();
+  });
+
+  test("เลือกฝ่ายแล้ว ตัวเลขสำคัญ รายละเอียด และ Excel เป็นของฝ่ายที่เลือกชุดเดียวกัน (R06)", async ({ page }) => {
+    await comparisonFixture(page);
+    await page.goto("/dashboard?by=division&view=select&items=2");
+    const kpi = page.getByRole("region", { name: "สรุปตัวเลขสำคัญ" });
+    // ทั้งองค์กรคือ 5,970 หน้า 2,588.67 บาท — การ์ดต้องเป็นยอดของฝ่ายบริหารทั่วไปเท่านั้น
+    await expect(kpi).toContainText("1,420");
+    await expect(kpi).toContainText("626.22");
+    await expect(kpi).toContainText("เครื่องที่มียอดในช่วงนี้");
+    await expect(page.getByText("ตัวเลขของ ฝ่าย: ฝ่ายบริหารทั่วไป")).toBeVisible();
+
+    await kpi.getByRole("button", { name: "ดูที่มาของค่าใช้จ่าย" }).click();
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toContainText("รายละเอียดข้อมูล · ฝ่ายบริหารทั่วไป");
+    await expect(drawer).toContainText("626.22");
+    await expect(drawer).toContainText("1,420");
+    await page.keyboard.press("Escape");
+
+    const file = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
+    const detail = file.rows("ข้อมูลรายละเอียด").slice(1);
+    expect(detail.reduce((sum, line) => sum + line[9], 0)).toBe(1420);
+    expect(new Set(detail.map((line) => line[5]))).toEqual(new Set(["ฝ่ายบริหารทั่วไป"]));
+  });
+
+  test("ช่วงก่อนหน้าเทียบรายการชุดเดียวกัน ไม่ใช่ยอดทั้งองค์กร และอันดับ 5/10 ไม่เปลี่ยนยอดรวม (R06)", async ({ page }) => {
+    const state = await comparisonFixture(page);
+    state.overviewComparison = { previous_months: ["2025-10"] };
+    await page.goto("/dashboard?months=2025-11&by=division&view=select&items=2");
+    const kpi = page.getByRole("region", { name: "สรุปตัวเลขสำคัญ" });
+    // ฝ่ายบริหารทั่วไป พ.ย. 242.55 บาท เทียบ ต.ค. 132.30 บาท = +83.3%
+    // (ถ้าเอายอดทั้งองค์กรมาเทียบจะได้ +19.4% ซึ่งไม่ใช่ของฝ่ายนี้)
+    await expect(kpi).toContainText("242.55");
+    await expect(kpi).toContainText("+83.3%");
+    await expect(kpi).toContainText("เทียบกับ ต.ค. 2568");
+    const previous = state.requests.filter((request) => request.path.endsWith("/monthly-kpi")).map((request) => request.months.join(","));
+    expect(previous).toContain("2025-10");
+
+    await page.goto("/dashboard?by=division&view=rank&measure=pages");
+    await expect(kpi).toContainText("5,970");
+    await comparisonCard(page).getByRole("radio", { name: "10", exact: true }).click();
+    await expect(kpi).toContainText("5,970");
+  });
+
+  test("วิเคราะห์ส่วนต่างพาไปหน้าเปรียบเทียบพร้อมรายการเดิม แล้วย้อนกลับได้", async ({ page }) => {
+    await comparisonFixture(page);
+    await page.goto("/dashboard?months=2025-11&by=division&view=select&items=1,2&measure=pages");
+    await page.getByRole("link", { name: "วิเคราะห์ส่วนต่าง" }).click();
+    await expect(page).toHaveURL(/\/compare\?/);
+    await expect(page).toHaveURL(/type=department/);
+    await expect(page).toHaveURL(/items=1(?:%2C|,)2/);
+    await expect(page).toHaveURL(/months=2025-11/);
+    await expect(page).toHaveURL(/measure=pages/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/dashboard\?.*items=1(?:%2C|,)2/);
   });
 
   test("ลิงก์ตรงที่เลือกรายการเกินจำนวนสีถูกปรับให้ตรงกับแบบจำลอง", async ({ page }) => {
@@ -373,5 +428,65 @@ test.describe("หน้าเปรียบเทียบ → ฝ่าย/�
     const fiscalYears = new Set(file.rows("ข้อมูลรายละเอียด").slice(1).map((line) => line[1]));
     expect(fiscalYears).toEqual(new Set([2568, 2569]));
     expect(conditionsOf(file)["ช่วงฐาน"]).toBe("ก.ค. 2568 – ก.ย. 2568 (ช่วงก่อนหน้าที่ยาวเท่ากัน)");
+  });
+});
+
+test.describe("หน้าเปรียบเทียบ → เดือน สัญญา อาคาร (R07)", () => {
+  test("โหมดสัญญาส่งออกไฟล์เดียวสามแผ่นแบบเดียวกับหน้าภาพรวม ตามสัญญาที่เลือกใน URL", async ({ page }) => {
+    await comparisonFixture(page);
+    await page.goto("/compare?type=contract&months=2025-10,2025-11,2025-12&groups=7,8&metric=totalPages");
+    await expect(page.getByRole("heading", { name: "ตารางเปรียบเทียบ", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/groups=7(?:%2C|,)8/);
+
+    const file = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
+    expect(file.name).toBe("print-comparison-fy2569-2025-10_2025-12-contract-pages.xlsx");
+    expect(file.workbook.SheetNames).toEqual(["เปรียบเทียบ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
+    const [header, first, second] = file.rows("เปรียบเทียบ");
+    expect(header[0]).toBe("สัญญา");
+    expect([first[0], first[1], ...first.slice(-3)]).toEqual(["CT-001/2569", 4450, 1500, 1600, 1350]);
+    expect([second[0], second[1], ...second.slice(-3)]).toEqual(["CT-002/2569", 1420, 300, 550, 570]);
+    expect(file.chart()).toContain("<c:lineChart>");
+    expect(file.chart().match(/<c:ser>/g)).toHaveLength(2);
+    expect(file.rows("ข้อมูลรายละเอียด")).toHaveLength(15);
+    const conditions = conditionsOf(file);
+    expect(conditions["เทียบระหว่าง"]).toBe("สัญญา");
+    expect(conditions["รายการที่เปรียบเทียบ"]).toBe("CT-001/2569, CT-002/2569");
+  });
+
+  test("โหมดเดือน: ตัวกรองสัญญาอยู่ใน URL ไฟล์มีเฉพาะแถวที่กรอง และเดือนที่ไม่มีข้อมูลเป็นช่องว่าง", async ({ page }) => {
+    await comparisonFixture(page);
+    await page.goto("/compare?type=month&months=2025-12,2026-01&contract=8&metric=totalPages");
+    await expect(page.getByRole("heading", { name: "ตารางเปรียบเทียบ", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/contract=8/);
+
+    const file = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
+    const [, december, january] = file.rows("เปรียบเทียบ");
+    expect([december[0], december[1]]).toEqual(["ธ.ค. 2568", 570]);
+    expect(january[0]).toBe("ม.ค. 2569");
+    expect(january[1]).toBeNull();
+    expect(january.at(-1)).toBe("ไม่มีข้อมูล");
+    const detail = file.rows("ข้อมูลรายละเอียด").slice(1);
+    expect(new Set(detail.map((line) => line[7]))).toEqual(new Set(["CT-002/2569"]));
+    expect(conditionsOf(file)["สัญญาที่คิดเงิน"]).toBe("CT-002/2569");
+  });
+
+  test("สัญญาที่เลือกยังอยู่หลังโหลดหน้าใหม่ และเปลี่ยนแบบการเทียบแล้วล้างออกจาก URL", async ({ page }) => {
+    await comparisonFixture(page);
+    await page.goto("/compare?type=contract");
+    await chooseItems(page, /^สัญญาที่จะนำมาเทียบ/, ["CT-002/2569"]);
+    await expect(page).toHaveURL(/groups=8/);
+    await page.reload();
+    await expect(page).toHaveURL(/groups=8/);
+    await expect(page.getByLabel(/^สัญญาที่จะนำมาเทียบ/)).toContainText("CT-002/2569");
+    await page.getByRole("radio", { name: "อาคาร", exact: true }).click();
+    await expect(page).toHaveURL(/type=building/);
+    await expect(page).not.toHaveURL(/groups=/);
+  });
+
+  test("โหลดข้อมูลไม่สำเร็จแล้วปุ่มส่งออกกดไม่ได้ ไม่สร้างไฟล์ว่าง", async ({ page }) => {
+    const state = await comparisonFixture(page);
+    state.fail = true;
+    await page.goto("/compare?type=contract");
+    await expect(page.getByRole("button", { name: "ส่งออก Excel", exact: true })).toBeDisabled();
   });
 });

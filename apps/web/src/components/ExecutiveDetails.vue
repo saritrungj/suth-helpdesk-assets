@@ -25,13 +25,14 @@ const groups = computed(() => groupReport(scoped.value, group.value).filter(row 
 const visibleRows = computed(() => groups.value.flatMap(row => row.rows));
 const totals = computed(() => reportTotals(visibleRows.value));
 const money = value => value === null ? '—' : formatBahtValue(value);
-const title = computed(() => props.scope ? t('เจาะค่าใช้จ่าย · {0}', [props.scope.label]) : t('รายละเอียดค่าใช้จ่าย'));
+// แผงนี้แสดงทั้งยอดพิมพ์และค่าใช้จ่าย — ชื่อ "เจาะค่าใช้จ่าย" ผิดเมื่อผู้ใช้กดมาจากยอดพิมพ์
+const title = computed(() => props.scope ? t('รายละเอียดข้อมูล · {0}', [props.scope.label]) : t('รายละเอียดข้อมูล'));
 
 /** ข้อมูลดิบของแผงนี้ — คอลัมน์ชุดเดียวกับแผ่น "ข้อมูลรายละเอียด" ของไฟล์เปรียบเทียบ */
 async function exportRows() {
   exporting.value = true;
   exportError.value = '';
-  const filename = exportFilename(['dashboard-cost-details', props.scope?.dimension, group.value]);
+  const filename = exportFilename(['dashboard-details', props.scope?.dimension, group.value]);
   try {
     await saveWorkbook(filename, [
       detailSheet(visibleRows.value),
