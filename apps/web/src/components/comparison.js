@@ -1,4 +1,4 @@
-import { fiscalYearMonths, fromSatang, getFiscalYearRange, sumCostSatang } from "@suth/domain";
+import { fiscalYearMonths, fromSatang, getFiscalYearRange, monthIndex, sumCostSatang } from "@suth/domain";
 import { t } from "../lib/locale";
 import { formatMonth, yearLabel } from "../lib/locale-format";
 
@@ -564,11 +564,6 @@ export function referenceMonths(months, mode, fiscalYear) {
     return timeline.slice(Math.max(0, first - selected.length), first);
   }
   return selected.map((month) => previous[current.indexOf(month)]);
-}
-
-function monthIndex(month) {
-  const [year, value] = String(month).split("-").map(Number);
-  return year * 12 + value;
 }
 
 /** ช่วงเวลาเป็นภาษาคน — "ต.ค. 2568 – ธ.ค. 2568" หรือรายการเดือนเมื่อไม่ต่อเนื่อง */
