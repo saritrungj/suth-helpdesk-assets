@@ -17,7 +17,8 @@ import { t } from "../lib/locale";
  * เรื่องที่ยากที่สุดของหน้านี้คือเครื่องที่ย้ายที่ตั้งกลางปีงบ: ถ้าเหมายอดทั้งปีให้
  * ที่ตั้งปัจจุบัน แผนกใหม่จะถูกคิดยอดของแผนกเก่าไปด้วย จึงแตกเป็นหลายแถว
  * แถวละหนึ่งช่วงที่ตั้ง แต่ละแถวเห็นเฉพาะเดือนที่เครื่องอยู่ที่นั่นจริง และมีป้าย
- * บอกชัดว่าแถวไหนเป็นช่วงที่เท่าไหร่ของเครื่องเดียวกัน
+ * บอกชัดว่าแถวไหนเป็นช่วงที่เท่าไหร่ของเครื่องเดียวกัน — กฎการแบ่งแถวอยู่ที่
+ * components/report-rows.js
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { ChevronDown, ChevronUp, CornerDownRight, Repeat2, Search } from "lucide-vue-next";
@@ -32,6 +33,7 @@ import {
 } from "../store/fiscalYear";
 import { formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
+import { deviceReportRows, periodsByDevice, readingsByDevice } from "../components/report-rows";
 import {
   UiAlert,
   UiBadge,
@@ -51,8 +53,8 @@ const loading = ref(false);
 const loadError = ref("");
 
 const devices = ref([]);
-/** device_id -> { "YYYY-MM": pages } */
-const monthlyMap = ref({});
+/** device_id -> { "YYYY-MM": { pages, locationHistoryId } } */
+const readings = ref({});
 const locationHistory = ref([]);
 
 const buildings = ref([]);
@@ -76,11 +78,19 @@ const filters = ref({
   fillStatus: "",
 });
 
+/**
+ * ตัวกรองนี้บอกแค่ว่ามียอดบันทึกไว้ในเดือนที่แสดงของแถวนั้นหรือไม่ (#104)
+ *
+ * ไม่ใช่ความครบถ้วนตามหน้าที่ — หน้านี้ไม่รู้ว่าเครื่องต้องรับผิดชอบเดือนไหน
+ * (ADR-0018) เดิมป้าย "กรอกครบทุกเดือน" ทำให้เครื่องที่รับผิดชอบหกเดือนและกรอก
+ * ครบหกเดือนดูเหมือนงานค้าง งานค้างจริงอยู่ที่การแจ้งเตือน
+ */
+const FILL_STATUS_LABEL = t("ยอดในเดือนที่แสดง");
 const FILL_STATUS_OPTIONS = [
   { value: "", label: t("ทั้งหมด") },
-  { value: "done", label: t("กรอกครบทุกเดือน") },
-  { value: "partial", label: t("กรอกบางเดือน") },
-  { value: "none", label: t("ยังไม่ได้กรอกเลย") },
+  { value: "done", label: t("มียอดครบทุกเดือน") },
+  { value: "partial", label: t("ขาดยอดบางเดือน") },
+  { value: "none", label: t("ยังไม่มียอด") },
 ];
 
 const DEVICE_STATUS_OPTIONS = [
@@ -161,6 +171,22 @@ const filterChips = computed(() =>
     .map(([key, value]) => ({ key, label: `${CHIP_LABELS[key]}: ${chipValue(key, value)}` }))
 );
 
+/** ตัวกรองในไฟล์ Excel ใช้ป้ายและค่าเดียวกับบนจอ ไม่ใช่รหัสภายในอย่าง "done" หรือ id สัญญา */
+const EXPORT_FILTER_LABELS = { ...CHIP_LABELS, fillStatus: FILL_STATUS_LABEL };
+
+const exportFilters = computed(() =>
+  Object.fromEntries(
+    Object.entries(filters.value)
+      .filter(([, value]) => value)
+      .map(([key, value]) => [
+        key,
+        key === "fillStatus"
+          ? FILL_STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value
+          : chipValue(key, value),
+      ])
+  )
+);
+
 function clearFilter(key) {
   filters.value[key] = "";
 }
@@ -204,10 +230,19 @@ async function loadMasterData() {
   }
 }
 
+/**
+ * เลขของคำขอล่าสุด — สลับปีงบเร็วๆ แล้วคำตอบของปีก่อนมาถึงทีหลัง ต้องไม่ทับข้อมูล
+ * ของปีที่เลือกอยู่ (#104) คำตอบที่ไม่ใช่ของคำขอล่าสุดถูกทิ้งทั้งหมด รวมถึง error
+ */
+let latestLoad = 0;
+
 async function loadReport() {
+  const request = ++latestLoad;
+
   if (!fiscalYearState.activeId || !fyMonths.value.length) {
     devices.value = [];
-    monthlyMap.value = {};
+    readings.value = {};
+    loading.value = false;
     return;
   }
 
@@ -222,62 +257,36 @@ async function loadReport() {
       api.get("/devices/location-history"),
       loadMasterData(),
     ]);
+    if (request !== latestLoad) return;
 
     devices.value = deviceRes.data ?? [];
-
-    // ใช้ pages_printed (ยอดมิเตอร์ดิบ) ไม่ใช่ net_pages เพราะคำถามของหน้านี้คือ
-    // "พิมพ์ไปเท่าไหร่" ไม่ใช่ยอดที่เอาไปคิดเงิน
-    const map = {};
-    for (const row of monthlyRes.data ?? []) {
-      if (!map[row.device_id]) map[row.device_id] = {};
-      map[row.device_id][row.month] = Number(row.pages_printed || 0);
-    }
-
-    monthlyMap.value = map;
+    readings.value = readingsByDevice(monthlyRes.data);
     locationHistory.value = historyRes.data ?? [];
   } catch (err) {
+    if (request !== latestLoad) return;
     console.error("Load report error:", err);
     loadError.value = t("โหลดข้อมูลรายงานไม่สำเร็จ");
     devices.value = [];
-    monthlyMap.value = {};
+    readings.value = {};
     locationHistory.value = [];
   } finally {
-    loading.value = false;
+    if (request === latestLoad) loading.value = false;
   }
 }
 
 /* --------------------------------------------------------------------------
    ช่วงที่ตั้งของแต่ละเครื่อง
    -------------------------------------------------------------------------- */
+/** ประวัติของแต่ละเครื่องเรียงตามเวลา — ใช้ทั้งแบ่งแถวและแสดงในแผงประวัติการย้าย */
 const devicePeriods = computed(() => {
-  const map = {};
-
-  for (const row of locationHistory.value) {
-    if (!map[row.device_id]) map[row.device_id] = [];
-    map[row.device_id].push(row);
-  }
-
+  const map = periodsByDevice(locationHistory.value);
   for (const id in map) {
     map[id].sort(
       (a, b) => String(a.effective_from).localeCompare(String(b.effective_from)) || a.id - b.id
     );
   }
-
   return map;
 });
-
-/** ตัด ISO string ที่ mysql2 ส่งมาให้เหลือแค่ "YYYY-MM" */
-function ymOf(value) {
-  if (!value) return null;
-  return String(value).split("T")[0].slice(0, 7);
-}
-
-/** เดือนไหนตกอยู่ในช่วงนี้ — เทียบระดับเดือนล้วน ตรรกะเดียวกับฝั่ง API */
-function monthsInPeriod(months, period) {
-  const from = ymOf(period.effective_from);
-  const to = ymOf(period.effective_to);
-  return months.filter((m) => m >= from && (!to || m < to));
-}
 
 function formatDateShort(value) {
   return value ? formatDate(String(value).split("T")[0]) : "—";
@@ -288,107 +297,57 @@ function periodRange(period) {
   return `${formatDateShort(period.effective_from)} – ${formatDateShort(period.effective_to)}`;
 }
 
+/**
+ * ป้ายของแถวเป็นช่วง "เดือน" ที่ยอดเป็นของที่ตั้งนั้น ไม่ใช่วันที่ย้าย
+ *
+ * เครื่องที่ย้ายวันที่ 20 ม.ค. — ยอด ม.ค. ทั้งเดือนเป็นของที่ใหม่ ป้ายแบบวันที่
+ * "1 ต.ค. – 20 ม.ค." ทำให้อ่านว่า ม.ค. ครึ่งหนึ่งอยู่ที่เก่า วันที่ย้ายจริงยังดูได้
+ * จากปุ่ม "ดูประวัติ"
+ */
+function runLabel(months) {
+  const first = formatMonth(months[0], { shortYear: true });
+  const last = formatMonth(months[months.length - 1], { shortYear: true });
+  return months.length === 1 ? first : `${first} – ${last}`;
+}
+
 /* --------------------------------------------------------------------------
-   สถานะการกรอกและการกรอง
+   สร้างแถวแล้วกรอง — ตัวกรองที่ตั้งและหน่วยงานใช้ที่ตั้งของแถว (ของเดือนนั้น)
+   ส่วนยี่ห้อ สัญญา และสถานะเครื่องเป็นคุณสมบัติของเครื่องวันนี้ ซึ่งแถวไม่ได้แทนที่
    -------------------------------------------------------------------------- */
-function filledCount(deviceId) {
-  return Object.keys(monthlyMap.value[deviceId] ?? {}).length;
-}
+const allRows = computed(() =>
+  devices.value.flatMap((device) =>
+    deviceReportRows({
+      device,
+      periods: devicePeriods.value[device.id],
+      readings: readings.value[device.id],
+      fyMonths: fyMonths.value,
+      displayMonths: displayMonths.value,
+      runLabel,
+    })
+  )
+);
 
-function fillStatusOf(deviceId) {
-  const count = filledCount(deviceId);
-  if (fyMonths.value.length && count >= fyMonths.value.length) return "done";
-  return count > 0 ? "partial" : "none";
-}
-
-const filteredDevices = computed(() => {
+const reportRows = computed(() => {
   const keyword = search.value.trim().toLowerCase();
   const f = filters.value;
 
-  return devices.value.filter((d) => {
-    const matchKeyword =
-      !keyword ||
-      d.serial_number?.toLowerCase().includes(keyword) ||
-      d.model?.toLowerCase().includes(keyword) ||
-      d.department_name?.toLowerCase().includes(keyword) ||
-      d.contract_no?.toLowerCase().includes(keyword);
-
-    return (
-      matchKeyword &&
-      (!f.building || d.building_name === f.building) &&
-      (!f.floor || d.floor_name === f.floor) &&
-      (!f.division || d.division_name === f.division) &&
-      (!f.department || d.department_name === f.department) &&
-      (!f.brand || d.brand_name === f.brand) &&
-      (!f.contract || String(d.contract_id) === f.contract) &&
-      (!f.deviceStatus || d.status === f.deviceStatus) &&
-      (!f.fillStatus || fillStatusOf(d.id) === f.fillStatus)
-    );
-  });
-});
-
-/* --------------------------------------------------------------------------
-   สร้างแถวของตาราง — เครื่องที่ย้ายกลางปีถูกแตกเป็นหลายแถว
-   -------------------------------------------------------------------------- */
-function singleDeviceRow(device, monthly) {
-  return {
-    ...device,
-    _row_key: String(device.id),
-    _monthly: monthly,
-    _total: displayMonths.value.reduce((sum, m) => sum + (monthly[m] || 0), 0),
-    _period_label: "",
-    _is_moved_group: false,
-    _period_index: 0,
-    _period_count: 1,
-  };
-}
-
-function devicePeriodRow(device, period, monthly, months, periodIndex, periodCount) {
-  const monthSet = new Set(months);
-  const periodMonthly = {};
-  for (const m of months) periodMonthly[m] = monthly[m] ?? null;
-
-  return {
-    ...device,
-    _row_key: `${device.id}-h${period.id}`,
-    // ที่ตั้งของ "ช่วงนี้" ไม่ใช่ที่ตั้งปัจจุบัน แถวของช่วงเก่าจึงแสดงที่เก่าจริงๆ
-    building_name: period.building_name,
-    floor_name: period.floor_name,
-    location: period.location,
-    division_name: period.division_name,
-    department_name: period.department_name,
-    _monthly: periodMonthly,
-    _total: displayMonths.value.reduce(
-      (sum, m) => sum + (monthSet.has(m) ? monthly[m] || 0 : 0),
-      0
-    ),
-    _period_label: periodRange(period),
-    _is_moved_group: true,
-    _period_index: periodIndex,
-    _period_count: periodCount,
-  };
-}
-
-function buildDeviceRows(device) {
-  const monthly = monthlyMap.value[device.id] ?? {};
-  const periods = devicePeriods.value[device.id] ?? [];
-
-  if (periods.length <= 1) return [singleDeviceRow(device, monthly)];
-
-  const split = periods
-    .map((period) => ({ period, months: monthsInPeriod(fyMonths.value, period) }))
-    // ช่วงที่ไม่มีเดือนไหนตกอยู่ในปีงบนี้เลย ไม่ต้องแสดงเป็นแถวเปล่า
-    .filter(({ months }) => months.length);
-
-  const rows = split.map(({ period, months }, index) =>
-    devicePeriodRow(device, period, monthly, months, index + 1, split.length)
+  return allRows.value.filter(
+    (r) =>
+      (!keyword ||
+        r.serial_number?.toLowerCase().includes(keyword) ||
+        r.model?.toLowerCase().includes(keyword) ||
+        r.department_name?.toLowerCase().includes(keyword) ||
+        r.contract_no?.toLowerCase().includes(keyword)) &&
+      (!f.building || r.building_name === f.building) &&
+      (!f.floor || r.floor_name === f.floor) &&
+      (!f.division || r.division_name === f.division) &&
+      (!f.department || r.department_name === f.department) &&
+      (!f.brand || r.brand_name === f.brand) &&
+      (!f.contract || String(r.contract_id) === f.contract) &&
+      (!f.deviceStatus || r.status === f.deviceStatus) &&
+      (!f.fillStatus || r._record_status === f.fillStatus)
   );
-
-  // กันเครื่องหายจากรายงาน เผื่อทุกช่วงอยู่นอกปีงบนี้ทั้งหมด
-  return rows.length ? rows : [singleDeviceRow(device, monthly)];
-}
-
-const reportRows = computed(() => filteredDevices.value.flatMap(buildDeviceRows));
+});
 
 const expandedDeviceIds = ref(new Set());
 
@@ -435,16 +394,17 @@ const columns = computed(() => [
     align: "right",
     // เดือนที่ไม่มียอด (ยังไม่กรอก หรือเครื่องไม่ได้อยู่ที่นี่ในเดือนนั้น) แสดง "—"
     // ไม่ใช่ "0" ซึ่งอ่านได้ว่าพิมพ์ศูนย์หน้าจริง และมีตัวคั่นหลักเหมือนตารางอื่นทุกหน้า
+    // ไฟล์ Excel เป็นช่องว่างเหมือนกัน — 0 ในไฟล์ต้องเป็นศูนย์ที่บันทึกจริงเท่านั้น
     value: (r) => (r._monthly[m] == null ? "—" : formatCount(r._monthly[m])),
-    csv: (r) => r._monthly[m] || 0,
+    csv: (r) => r._monthly[m] ?? null,
     sortValue: (r) => r._monthly[m] ?? -1,
   })),
   {
     key: "total_pages",
     label: reportMonths.value.length ? t("รวมเดือนที่เลือก") : t("รวมทั้งปีงบ"),
     align: "right",
-    value: (r) => formatCount(r._total),
-    sortValue: (r) => r._total,
+    value: (r) => (r._total == null ? "—" : formatCount(r._total)),
+    sortValue: (r) => r._total ?? -1,
     csv: (r) => r._total,
   },
 ]);
@@ -500,13 +460,13 @@ onMounted(async () => {
           <PeriodPicker v-model="reportMonths" :options="fyMonths" />
         </UiField>
 
-        <UiField :label="t('สถานะการกรอก')" class="w-full sm:w-52">
+        <UiField :label="FILL_STATUS_LABEL" class="w-full sm:w-52">
           <UiSelect
             v-model="filters.fillStatus"
             :options="FILL_STATUS_OPTIONS"
             value-key="value"
             label-key="label"
-            :aria-label="t('กรองตามสถานะการกรอก')"
+            :aria-label="t('กรองตามยอดในเดือนที่แสดง')"
           />
 
         </UiField>
@@ -566,7 +526,7 @@ onMounted(async () => {
         :loading="loading"
         row-key="_row_key"
         export-filename="report-print-by-device"
-        :export-context="reportContext({ months: displayMonths, filters })"
+        :export-context="reportContext({ months: displayMonths, filters: exportFilters, labels: EXPORT_FILTER_LABELS })"
         :search-placeholder="t(&quot;ค้นหาในตาราง…&quot;)"
         :caption="t(&quot;ยอดพิมพ์รายเดือนตามเครื่อง&quot;)"
         :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับตัวกรอง&quot;)"

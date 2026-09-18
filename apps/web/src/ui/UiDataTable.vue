@@ -319,7 +319,9 @@ async function exportExcel() {
   const body = sortedRows.value.map((row) =>
     cols.map((col) => {
       const raw = typeof col.csv === "function" ? col.csv(row) : cellValue(row, col);
-      return raw === null || raw === undefined ? "" : raw;
+      // null = เซลล์ว่างจริงในไฟล์ ไม่ใช่ข้อความว่าง — COUNT/COUNTBLANK ของ Excel จึง
+      // แยกค่าที่ไม่มีออกจากศูนย์ได้ถูก ศูนย์ส่งมาเป็นตัวเลข 0 ตามเดิม
+      return raw ?? null;
     })
   );
 
