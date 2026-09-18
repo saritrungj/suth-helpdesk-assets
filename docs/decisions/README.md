@@ -39,5 +39,5 @@
 | [0015](0015-brand-assets-in-repository.md) | เก็บ brand asset ของเจ้าของระบบไว้ใน repository | Accepted |
 | [0016](0016-isolated-qa-database-and-bootstrap-harness.md) | ฐาน QA แยก และ harness ที่ต่อ MySQL ตรงเฉพาะ bootstrap | Accepted |
 | [0017](0017-two-percent-page-deduction.md) | หักจำนวนหน้าพิมพ์ 2% และใช้กับยอดย้อนหลังทุกปีงบ | Accepted — QA migrated; production pending |
-| [0018](0018-separate-installation-status.md) | แยกสถานะการติดตั้งจากสถานะการใช้งานของเครื่อง | Proposed — ผู้ใช้ยืนยันแล้ว รอ implementation |
-| [0019](0019-effective-pricing-history.md) | ใช้ราคาตามช่วงที่มีผลจริงในการคำนวณย้อนหลัง | Proposed — ผู้ใช้ยืนยันหลักการแล้ว รายละเอียดยังเปิดอยู่ |
+| [0018](0018-separate-installation-status.md) | แยกสถานะการติดตั้งจากสถานะการใช้งานของเครื่อง | Accepted — implemented; ยังไม่ได้รันกับฐานข้อมูลจริง |
+| [0019](0019-effective-pricing-history.md) | ใช้ราคาตามช่วงที่มีผลจริงในการคำนวณย้อนหลัง | Accepted — implemented; ยังไม่ได้รันกับฐานข้อมูลจริง |
