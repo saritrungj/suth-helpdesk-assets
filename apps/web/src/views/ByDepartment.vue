@@ -11,11 +11,13 @@ import { t } from "../lib/locale";
  * ใช้ตอนทำเรื่องเบิกภายใน: เงินก้อนเดียวกับหน้า "ตามสัญญา" แต่มองจากมุมของ
  * หน่วยงานที่ใช้ กางจากฝ่าย -> แผนก -> เครื่อง -> ยอดรายเดือน
  *
- * หน้านี้มีสามส่วนที่ตอบคนละคำถาม จึงแยกกันชัดเจนด้วยการ์ด
+ * หน้านี้มีสองส่วนที่ตอบคนละคำถาม จึงแยกกันชัดเจนด้วยการ์ด
  *
- *   1. กราฟเปรียบเทียบ  เลือกฝ่าย/แผนกมาวางเทียบกันตามช่วงเวลา
- *   2. ต้นไม้รายละเอียด ไล่ดูตัวเลขจนถึงระดับเครื่องและเดือน
- *   3. อันดับรายเครื่อง เครื่องไหนใช้หนักที่สุด/เบาที่สุด พร้อมตัวกรองของตัวเอง
+ *   1. ต้นไม้รายละเอียด ไล่ดูตัวเลขจนถึงระดับเครื่องและเดือน
+ *   2. อันดับรายเครื่อง เครื่องไหนใช้หนักที่สุด/เบาที่สุด พร้อมตัวกรองของตัวเอง
+ *
+ * การเปรียบเทียบฝ่าย/แผนก (กราฟ อันดับมาก–น้อย และส่วนต่าง) อยู่ที่หน้าภาพรวมและ
+ * หน้าเปรียบเทียบ ซึ่งใช้ตรรกะชุดเดียวกันใน components/comparison.js (#103)
  *
  * ยอดรวมด้านบนอ้างอิง "ทั้งปีงบ" เสมอ ไม่ขึ้นกับช่วงที่เลือกเปรียบเทียบ —
  * ตั้งใจให้เป็นเลขนิ่งที่เอาไปอ้างอิงได้ตลอด และเขียนกำกับไว้ในการ์ด
@@ -52,23 +54,16 @@ import {
   UiButton,
   UiFilterBar,
   UiCard,
-  UiChart,
   UiCombobox,
   UiDataTable,
   UiEmpty,
   UiField,
   UiInput,
-  UiSegmented,
   UiSelect,
   UiSkeleton,
   UiStat,
   UiTooltip,
 } from "../ui";
-
-const props = defineProps({
-  showComparison: { type: Boolean, default: true },
-  comparisonOnly: { type: Boolean, default: false },
-});
 
 /** บวกเงินในหน่วยสตางค์ที่เป็นจำนวนเต็มเสมอ ไม่บวกทศนิยมของบาท */
 function sumCost(rows) {
@@ -281,200 +276,6 @@ function trendDetail(department) {
     costDiff: currentCost - previousCost,
   };
 }
-
-/* --------------------------------------------------------------------------
-   กราฟเปรียบเทียบฝ่าย/แผนก
-   -------------------------------------------------------------------------- */
-const selectedDivisionIds = ref([]);
-const selectedDepartmentIds = ref([]);
-const chartMetric = ref("cost");
-const rangeStartIdx = ref(0);
-const rangeEndIdx = ref(0);
-
-const METRIC_OPTIONS = [
-  { value: "cost", label: t("ค่าใช้จ่าย") },
-  { value: "pages", label: t("จำนวนหน้า") },
-];
-
-const divisionOptions = computed(() =>
-  divisions.value.map((division) => ({ value: division.id, label: division.name }))
-);
-
-const departmentOptions = computed(() =>
-  (selectedDivisionIds.value.length
-    ? divisions.value.filter((division) => selectedDivisionIds.value.includes(division.id))
-    : divisions.value).flatMap((division) =>
-    (division.departments ?? []).map((department) => ({
-      value: department.id,
-      label: department.name,
-      hint: division.name,
-      keywords: division.name,
-    }))
-  )
-);
-
-// กราฟใช้ขอบเขตเดียวต่อครั้งเพื่อไม่ให้เส้นฝ่ายกับเส้นแผนกปนกันจนอ่านผิด
-// ฝ่ายที่เลือกไว้ยังใช้จำกัดรายการแผนกได้ แต่เมื่อเลือกแผนกแล้วกราฟจะเหลือเฉพาะแผนก
-watch(selectedDivisionIds, (next) => {
-  if (!selectedDepartmentIds.value.length) return;
-
-  // ฝ่ายทำหน้าที่จำกัดรายการแผนกที่เลือกได้ ไม่ใช่รายการที่จะวาดพร้อมกัน
-  // เก็บแผนกเดิมไว้ถ้ายังอยู่ในฝ่ายที่เลือก เพื่อให้เลือกหลายแผนกในฝ่ายเดียวกัน
-  // ต่อได้โดยไม่ต้องค้นหาใหม่ทุกครั้ง
-  const allowed = new Set(
-    (next.length ? divisions.value.filter((division) => next.includes(division.id)) : divisions.value)
-      .flatMap((division) => (division.departments ?? []).map((department) => department.id))
-  );
-  selectedDepartmentIds.value = selectedDepartmentIds.value.filter((id) => allowed.has(id));
-}, { deep: true });
-
-function findDivision(id) {
-  return divisions.value.find((d) => d.id === id) ?? null;
-}
-
-function findDepartment(id) {
-  for (const division of divisions.value) {
-    const department = (division.departments ?? []).find((d) => d.id === id);
-    if (department) return { department, division };
-  }
-  return null;
-}
-
-/** หนึ่งรายการ = หนึ่งเส้นในกราฟ (ฝ่ายรวมทุกแผนก หรือแผนกเดี่ยว) */
-const chartEntities = computed(() => {
-  const list = [];
-
-  if (selectedDepartmentIds.value.length) {
-    for (const id of selectedDepartmentIds.value) {
-      const found = findDepartment(id);
-      if (!found) continue;
-      list.push({
-        key: `dep-${id}`,
-        label: `${found.department.name} (${found.division.name})`,
-        devices: found.department.devices ?? [],
-      });
-    }
-  } else {
-    for (const id of selectedDivisionIds.value) {
-      const division = findDivision(id);
-      if (!division) continue;
-      list.push({
-        key: `div-${id}`,
-        label: division.name,
-        devices: (division.departments ?? []).flatMap((dep) => dep.devices ?? []),
-      });
-    }
-  }
-
-  return list;
-});
-
-/** รวมยอดรายเดือนของกลุ่มเครื่อง — สะสมเป็นสตางค์ก่อนแล้วค่อยแปลงเป็นบาทตอนท้าย */
-function buildMonthlySeries(devices) {
-  const byMonth = {};
-
-  for (const device of devices) {
-    for (const row of device.monthly ?? []) {
-      if (!byMonth[row.month]) byMonth[row.month] = { costSatang: 0, pages: 0 };
-      byMonth[row.month].costSatang += row.total_cost_satang ?? toSatang(row.total_cost);
-      byMonth[row.month].pages += Number(row.net_pages || 0);
-    }
-  }
-
-  for (const entry of Object.values(byMonth)) entry.cost = fromSatang(entry.costSatang);
-  return byMonth;
-}
-
-const allChartMonths = computed(() => {
-  const set = new Set();
-  for (const entity of chartEntities.value) {
-    for (const m of Object.keys(buildMonthlySeries(entity.devices))) set.add(m);
-  }
-  return [...set].sort();
-});
-
-function clampRange() {
-  const max = Math.max(0, allChartMonths.value.length - 1);
-  if (rangeEndIdx.value === 0 || rangeEndIdx.value > max) rangeEndIdx.value = max;
-  if (rangeStartIdx.value > rangeEndIdx.value) rangeStartIdx.value = rangeEndIdx.value;
-}
-
-const visibleChartMonths = computed(() => {
-  if (props.comparisonOnly) return allChartMonths.value;
-  clampRange();
-  return allChartMonths.value.slice(rangeStartIdx.value, rangeEndIdx.value + 1);
-});
-
-const monthRangeOptions = computed(() =>
-  allChartMonths.value.map((m, index) => ({ value: index, label: formatMonth(m) }))
-);
-
-/**
- * สลอตสีของแต่ละฝ่าย/แผนก — จองไว้จนกว่าจะเอาออกจากกราฟ
- *
- * ต้องได้สองอย่างพร้อมกัน ซึ่งวิธีง่ายๆ ให้ได้แค่อย่างเดียว
- *
- *   ก. **เอารายการหนึ่งออกแล้วรายการที่เหลือต้องไม่เปลี่ยนสี** คนที่เพิ่งจำได้ว่า
- *      "ฝ่ายการพยาบาลคือเส้นสีส้ม" จะอ่านผิดทันทีถ้าสีสลับกันหลังกรอง
- *      -> ให้สีตามลำดับที่เลือกไม่ได้
- *   ข. **สองรายการที่แสดงอยู่พร้อมกันต้องไม่ได้สีเดียวกันเด็ดขาด** ชุดสีมี 8 สลอต
- *      แต่ฝ่ายกับแผนกรวมกันมีได้เป็นสิบ
- *      -> ให้สีตายตัวตามตำแหน่งในรายการทั้งหมดก็ไม่ได้ เพราะพอเกิน 8 จะวนมาชนกัน
- *
- * วิธีที่ได้ทั้งสองข้อ: จองสลอตตอนถูกเลือกครั้งแรก (หยิบเลขที่ว่างต่ำสุด) แล้ว
- * **ถือไว้จนกว่าจะถูกเอาออก** — รายการที่ยังอยู่จึงไม่มีวันเปลี่ยนสี และรายการที่
- * แสดงพร้อมกันก็ไม่มีวันชนกัน เพราะสลอตที่ถูกจองอยู่จะไม่ถูกแจกซ้ำ
- */
-const slotAssignments = ref(new Map());
-
-watch(
-  () => chartEntities.value.map((entity) => entity.key),
-  (keys) => {
-    const next = new Map();
-    const taken = new Set();
-
-    // รอบแรก: รายการที่เคยได้สลอตไปแล้วรักษาสลอตเดิมไว้
-    for (const key of keys) {
-      const existing = slotAssignments.value.get(key);
-      if (existing && !taken.has(existing)) {
-        next.set(key, existing);
-        taken.add(existing);
-      }
-    }
-
-    // รอบสอง: รายการใหม่หยิบเลขที่ว่างต่ำสุด
-    for (const key of keys) {
-      if (next.has(key)) continue;
-      let slot = 1;
-      while (taken.has(slot) && slot <= 8) slot += 1;
-      next.set(key, slot);
-      taken.add(slot);
-    }
-
-    slotAssignments.value = next;
-  },
-  { immediate: true }
-);
-
-const chartLabels = computed(() => visibleChartMonths.value.map((m) => formatMonth(m)));
-
-const chartSeries = computed(() => {
-  const metricKey = chartMetric.value === "cost" ? "cost" : "pages";
-
-  return chartEntities.value.map((entity) => {
-    const byMonth = buildMonthlySeries(entity.devices);
-    return {
-      key: entity.key,
-      label: entity.label,
-      slot: slotAssignments.value.get(entity.key) ?? 1,
-      // null = เดือนที่ยังไม่มีข้อมูล ต่างจาก 0 ที่แปลว่าเดือนนั้นไม่ได้พิมพ์เลย
-      data: visibleChartMonths.value.map((m) => byMonth[m]?.[metricKey] ?? null),
-    };
-  });
-});
-
-/** ชุดสีมี 8 สลอตและห้ามวนซ้ำ เกินกว่านั้นสีจะเริ่มซ้ำจนแยกไม่ออก */
-const tooManySeries = computed(() => chartEntities.value.length > 8);
 
 /* --------------------------------------------------------------------------
    อันดับการใช้งานรายเครื่อง
@@ -694,13 +495,7 @@ onMounted(async () => {
 
 <template>
   <div class="flex flex-col gap-4">
-    <div v-if="comparisonOnly" class="flex flex-wrap items-end gap-2" data-print="hide">
-      <UiField :label="t(&quot;เดือนที่จะเปรียบเทียบ&quot;)" class="w-80">
-        <PeriodPicker v-model="trendMonthSelection" :options="monthsWithData" mode="multi" :all-label="t(&quot;ทุกเดือนที่มีข้อมูล&quot;)" inline />
-      </UiField>
-    </div>
-
-    <div v-else class="flex flex-wrap items-end gap-2" data-print="hide">
+    <div class="flex flex-wrap items-end gap-2" data-print="hide">
       <UiField
         :label="t(&quot;ช่วงที่เทียบแนวโน้ม&quot;)"
         class="w-80"
@@ -729,7 +524,7 @@ onMounted(async () => {
     </div>
 
     <!-- ยอดรวมทั้งปีงบ — แถบเดียวแบ่งสามช่อง ไม่ใช่การ์ดสามใบ -->
-    <div v-if="!comparisonOnly && !loadError" class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft">
+    <div v-if="!loadError" class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft">
       <!--
         ชื่อและคำอธิบายเปลี่ยนตามสถานะราคา ชุดเดียวกับแดชบอร์ดและหน้าค่าใช้จ่าย —
         ยอดที่รวมเฉพาะรายการที่ยืนยันราคาแล้ว ต้องไม่ใช้ชื่อเดียวกับยอดที่ครบ (Q27)
@@ -759,7 +554,7 @@ onMounted(async () => {
       </UiStat>
     </div>
 
-    <UiAlert v-if="!comparisonOnly && month && noDataCount > 0" tone="warn"> {{ t("มี") }} {{ formatCount(noDataCount) }} {{ t("จาก") }} {{ formatCount(totalDepartmentCount) }} {{ t("แผนก ที่ยังไม่มีการบันทึกยอดพิมพ์ทั้งในช่วงนี้และช่วงก่อนหน้า จึงเทียบแนวโน้มให้ไม่ได้") }} </UiAlert>
+    <UiAlert v-if="month && noDataCount > 0" tone="warn"> {{ t("มี") }} {{ formatCount(noDataCount) }} {{ t("จาก") }} {{ formatCount(totalDepartmentCount) }} {{ t("แผนก ที่ยังไม่มีการบันทึกยอดพิมพ์ทั้งในช่วงนี้และช่วงก่อนหน้า จึงเทียบแนวโน้มให้ไม่ได้") }} </UiAlert>
 
     <UiAlert v-if="loadError" tone="danger">
       {{ loadError }}
@@ -775,96 +570,6 @@ onMounted(async () => {
       </template>
     </UiAlert>
 
-    <!-- กราฟเปรียบเทียบ -->
-    <UiCard v-if="showComparison && !loadError" :title="chartMetric === 'cost' ? t(&quot;ค่าใช้จ่ายของฝ่าย / แผนกที่เลือก&quot;) : t(&quot;ยอดพิมพ์ของฝ่าย / แผนกที่เลือก&quot;)">
-      <template #actions>
-        <UiSegmented
-          v-model="chartMetric"
-          :options="METRIC_OPTIONS"
-          size="sm"
-          :label="t(&quot;สิ่งที่แสดงบนกราฟ&quot;)"
-        />
-      </template>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-        <UiField :label="t(&quot;ฝ่ายที่จะนำมาเทียบ&quot;)">
-          <UiCombobox
-            v-model="selectedDivisionIds"
-            :options="divisionOptions"
-            multiple
-            :placeholder="t(&quot;เลือกฝ่าย&quot;)"
-            :search-placeholder="t(&quot;พิมพ์ชื่อฝ่าย…&quot;)"
-          />
-        </UiField>
-
-        <UiField :label="t(&quot;แผนกที่จะนำมาเทียบ&quot;)">
-          <UiCombobox
-            v-model="selectedDepartmentIds"
-            :options="departmentOptions"
-            multiple
-            :placeholder="t(&quot;เลือกแผนก&quot;)"
-            :search-placeholder="t(&quot;พิมพ์ชื่อแผนก…&quot;)"
-          />
-        </UiField>
-      </div>
-
-      <UiEmpty
-        v-if="!chartEntities.length"
-        :title="t(&quot;ยังไม่ได้เลือกอะไรมาเทียบ&quot;)"
-          :description="t(&quot;เลือกฝ่ายเพื่อดูยอดรวมของฝ่าย หรือเลือกแผนกในฝ่ายนั้นเพื่อดูเฉพาะแผนก แต่ละรายการจะเป็นหนึ่งเส้นบนกราฟ&quot;)"
-        compact
-      />
-
-      <UiEmpty
-        v-else-if="!allChartMonths.length"
-        :title="t(&quot;รายการที่เลือกยังไม่มียอดรายเดือน&quot;)"
-        :description="t(&quot;ลองเลือกฝ่าย/แผนกอื่น หรือตรวจว่าบันทึกยอดพิมพ์ของเดือนนั้นแล้วหรือยัง&quot;)"
-        variant="search"
-        compact
-      />
-
-      <template v-else>
-        <UiAlert v-if="tooManySeries" tone="warn" class="mb-3"> {{ t("เลือกไว้") }} {{ chartEntities.length }} {{ t("รายการ — ชุดสีมี 8 สีและไม่วนซ้ำ เพราะสีที่ซ้ำกันทำให้แยกเส้นไม่ออก ลองเอาบางรายการออก หรือสลับไปดูเป็นตาราง") }} </UiAlert>
-
-        <div v-if="!comparisonOnly" class="flex flex-wrap items-center gap-2 mb-3 text-xs text-ink-mute">
-          <span> {{ t("ช่วงที่แสดง") }} </span>
-          <UiSelect
-            :model-value="rangeStartIdx"
-            :options="monthRangeOptions"
-            value-key="value"
-            label-key="label"
-            size="sm"
-            class="w-auto"
-            :aria-label="t(&quot;เดือนเริ่มต้นของช่วงที่แสดง&quot;)"
-            @update:model-value="rangeStartIdx = Number($event)"
-          />
-          <span> {{ t("ถึง") }} </span>
-          <UiSelect
-            :model-value="rangeEndIdx"
-            :options="monthRangeOptions"
-            value-key="value"
-            label-key="label"
-            size="sm"
-            class="w-auto"
-            :aria-label="t(&quot;เดือนสิ้นสุดของช่วงที่แสดง&quot;)"
-            @update:model-value="rangeEndIdx = Number($event)"
-          />
-        </div>
-
-        <UiChart
-          kind="line"
-          :labels="chartLabels"
-          :series="chartSeries"
-          height="20rem"
-          :loading="loading"
-          :unit="chartMetric === 'cost' ? t(&quot;บาท&quot;) : t(&quot;หน้า&quot;)"
-          :format-value="chartMetric === 'cost' ? formatBahtValue : formatCount"
-          :category-label="t(&quot;เดือน&quot;)"
-        />
-      </template>
-    </UiCard>
-
-    <template v-if="!comparisonOnly">
     <!-- ต้นไม้รายละเอียด -->
     <div v-if="loading && !divisions.length" class="flex flex-col gap-2">
       <UiSkeleton v-for="n in 4" :key="n" height="3.5rem" />
@@ -1122,6 +827,5 @@ onMounted(async () => {
         </template>
       </UiDataTable>
     </UiCard>
-    </template>
   </div>
 </template>

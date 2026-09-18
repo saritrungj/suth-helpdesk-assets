@@ -22,6 +22,7 @@ export const {
   parseMonths,
   getFiscalYearRange,
   fiscalYearMonths,
+  fiscalYearOfMonth,
   MONTHS_TH,
   MONTHS_TH_FULL,
   toBuddhistYear,

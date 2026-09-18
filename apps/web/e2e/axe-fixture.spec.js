@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { assetFixture } from "./asset-fixture.js";
+import { comparisonFixture } from "./comparison-fixture.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE_PATH = path.join(HERE, "axe-baseline.json");
@@ -59,6 +60,33 @@ const STATES = [
       await page.getByRole("button", { name: "การกระทำเพิ่มเติม SUTH-001", exact: true }).click();
       await page.getByRole("menuitem", { name: "ย้ายเครื่อง", exact: true }).click();
       await expect(page.getByRole("dialog").getByRole("textbox")).toBeVisible();
+    },
+  },
+  // พื้นที่เปรียบเทียบของหน้าภาพรวมและหน้าเปรียบเทียบฝ่าย/แผนก (#103) — ใช้ fixture ที่มีทั้ง
+  // ยอดศูนย์ ข้อมูลขาด และราคาไม่ครบ ป้ายสถานะและคำเตือนทุกแบบจึงอยู่บนจอตอนตรวจ
+  {
+    name: "ภาพรวม: เลือกฝ่ายมาเทียบ",
+    async setup(page) {
+      await comparisonFixture(page);
+      await page.goto("/dashboard?by=division&view=select&items=1,2,4");
+      await expect(page.getByRole("heading", { name: "ตารางรายละเอียด" })).toBeVisible();
+      await expect(page.getByRole("row", { name: /ฝ่ายการพยาบาล/ })).toBeVisible();
+    },
+  },
+  {
+    name: "ภาพรวม: อันดับค่าใช้จ่ายที่ยังจัดไม่ได้",
+    async setup(page) {
+      await comparisonFixture(page);
+      await page.goto("/dashboard?by=department");
+      await expect(page.getByRole("button", { name: "จัดอันดับตามยอดพิมพ์จริง" })).toBeVisible();
+    },
+  },
+  {
+    name: "เปรียบเทียบฝ่าย/แผนก: ช่วง A กับ B",
+    async setup(page) {
+      await comparisonFixture(page);
+      await page.goto("/compare?type=department&basis=periods&items=1,2&measure=pages");
+      await expect(page.getByRole("table", { name: "ตารางความแตกต่าง" })).toBeVisible();
     },
   },
 ];

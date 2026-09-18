@@ -10,7 +10,7 @@ import { t } from "../lib/locale";
  *
  *   เดือน          ยอดรวมทีละเดือน — "เดือนนี้ต่างจากเดือนก่อนยังไง และเพราะอะไร"
  *   สัญญา / อาคาร  หนึ่งเส้นต่อหนึ่งสัญญา/อาคารบนกราฟเดียว (แบบ Comparisons ของ GA4)
- *   ฝ่าย / แผนก    ใช้ชุดเลือกฝ่าย/แผนกของ ByDepartment
+ *   ฝ่าย / แผนก    ตรวจความแตกต่างของหน่วยงาน — ดู components/UnitDifference.vue
  *
  * เดิม "ตามสัญญา" กับ "ตามอาคาร" คำนวณชุดเดียวกันทุกประการ ต่างกันแค่ช่องตัวกรองที่
  * โผล่มา ถ้าไม่ได้เลือกอะไร สองโหมดให้ตัวเลขตรงกันทุกช่อง — ปุ่มที่ชื่อว่า "เทียบ"
@@ -35,10 +35,10 @@ import { CircleAlert, Info, Minus, TrendingDown, TrendingUp } from "lucide-vue-n
 import { fiscalYearMonths, fromSatang, sumCostSatang } from "@suth/domain";
 import { activeFiscalYear, activeFiscalYearRange } from "../store/fiscalYear";
 import api from "../services/api";
-import { useMonthlyKpi } from "../api/queries";
+import { useDepartments, useDivisions, useMonthlyKpi } from "../api/queries";
 import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
-import ByDepartment from "./ByDepartment.vue";
+import UnitDifference from "../components/UnitDifference.vue";
 import {
   UiAlert,
   UiButton,
@@ -98,9 +98,11 @@ const filters = ref({
 
 const buildings = ref([]);
 const floors = ref([]);
-const divisions = ref([]);
-const departments = ref([]);
 const contracts = ref([]);
+const divisionQuery = useDivisions();
+const departmentQuery = useDepartments();
+const divisions = computed(() => divisionQuery.data.value ?? []);
+const departments = computed(() => departmentQuery.data.value ?? []);
 
 const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.name }));
 
@@ -145,6 +147,7 @@ function clearAll() {
 let syncingTypeFromRoute = false;
 watch(comparisonType, (value) => {
   clearAll();
+  if (value !== "department") void loadMasterData();
   if (syncingTypeFromRoute) return;
   router.replace({ query: { ...route.query, type: value } });
 }, { flush: "sync" });
@@ -169,24 +172,30 @@ function rowMatches(row) {
   );
 }
 
+let masterDataLoaded = false;
+let masterDataPromise = null;
 async function loadMasterData() {
-  try {
-    const [building, floor, division, department, contract] = await Promise.all([
-      api.get("/buildings"),
-      api.get("/floors"),
-      api.get("/divisions"),
-      api.get("/departments"),
-      api.get("/contracts"),
-    ]);
+  if (masterDataLoaded) return;
+  if (masterDataPromise) return masterDataPromise;
+  masterDataPromise = (async () => {
+    try {
+      const [building, floor, contract] = await Promise.all([
+        api.get("/buildings"),
+        api.get("/floors"),
+        api.get("/contracts"),
+      ]);
 
-    buildings.value = building.data ?? [];
-    floors.value = floor.data ?? [];
-    divisions.value = division.data ?? [];
-    departments.value = department.data ?? [];
-    contracts.value = contract.data ?? [];
-  } catch (err) {
-    console.error("Load master data error:", err);
-  }
+      buildings.value = building.data ?? [];
+      floors.value = floor.data ?? [];
+      contracts.value = contract.data ?? [];
+      masterDataLoaded = true;
+    } catch (err) {
+      console.error("Load master data error:", err);
+    } finally {
+      masterDataPromise = null;
+    }
+  })();
+  return masterDataPromise;
 }
 
 /* --------------------------------------------------------------------------
@@ -474,8 +483,12 @@ const costChartable = computed(() => monthStats.value.some((entry) => metricValu
 /** กราฟที่ไม่มีจุดให้วาดเลยไม่ต้องแสดงกรอบเปล่า — บอกเหตุผลแทน */
 const chartHasData = computed(() => chartSeries.value.some((series) => series.data.some((value) => value !== null)));
 
+/**
+ * เปอร์เซ็นต์เปลี่ยนแปลง — ฐานเป็นศูนย์คืน null เพราะ "เพิ่มขึ้น 100%" จากศูนย์เป็นตัวเลข
+ * ที่ทำให้เข้าใจผิด ส่วนต่างจริงยังอ่านได้จากยอดสองเดือนที่แสดงคู่กัน (#103)
+ */
 function diffPercent(before, after) {
-  if (!before) return after > 0 ? 100 : 0;
+  if (!before) return null;
   return ((after - before) / before) * 100;
 }
 
@@ -540,6 +553,13 @@ const summaryLines = computed(() => {
 
     const percent = diffPercent(before, after);
 
+    if (percent === null) {
+      return {
+        trend: after > 0 ? "up" : null,
+        text: t("{0}: {1} → {2} {3} — เดือนแรกเป็นศูนย์ จึงไม่คิดเปอร์เซ็นต์", [metric.label, metric.format(before), metric.format(after), metric.unit]),
+      };
+    }
+
     if (Math.abs(percent) < 0.05) {
       return {
         trend: null,
@@ -594,7 +614,7 @@ const summaryCaveats = computed(() => {
 });
 
 onMounted(async () => {
-  await loadMasterData();
+  if (comparisonType.value !== "department") await loadMasterData();
 });
 </script>
 
@@ -605,6 +625,10 @@ onMounted(async () => {
       :description="t(&quot;เทียบยอดพิมพ์และค่าใช้จ่ายระหว่างเดือน ระหว่างสัญญา ระหว่างอาคาร หรือระหว่างหน่วยงาน&quot;)"
     />
 
+    <!-- ฝ่าย/แผนกมีตัวเลือกและผลของตัวเอง (ตรวจความแตกต่าง) รวมช่อง "เทียบระหว่าง" ไว้ในแถบเดียวกัน -->
+    <UnitDifference v-if="comparisonType === 'department'" v-model:type="comparisonType" :types="COMPARISON_TYPES" />
+
+    <template v-else>
     <!--
       ตัวกรองเป็นแถวเดียว ไม่ใช่การ์ด (#90) — "เทียบระหว่าง" อยู่หน้าสุดเพราะมันเปลี่ยน
       ทั้งหน้า ช่องที่เหลือเปลี่ยนตามแบบที่เลือก และทุกช่องมีป้ายชื่อแบบเดียวกัน
@@ -615,7 +639,7 @@ onMounted(async () => {
           <UiSegmented v-model="comparisonType" :options="COMPARISON_TYPES" />
         </UiField>
 
-        <UiField v-if="comparisonType !== 'department'" :label="t(&quot;เดือน&quot;)" class="w-full sm:w-72">
+        <UiField :label="t(&quot;เดือน&quot;)" class="w-full sm:w-72">
           <PeriodPicker
             v-model="selectedMonths"
             :options="monthsWithData"
@@ -674,10 +698,6 @@ onMounted(async () => {
       </template>
     </UiFilterBar>
 
-    <!-- มุมมองฝ่าย/แผนกใช้ตัวเลือกและกราฟชุดของ ByDepartment -->
-    <ByDepartment v-if="comparisonType === 'department'" comparison-only />
-
-    <template v-else>
       <UiAlert v-if="loadError" tone="danger" class="mb-4">
         {{ loadError }}
         <template #actions>

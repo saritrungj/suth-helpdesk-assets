@@ -315,30 +315,6 @@ test("expense Excel export carries the search context and the on-screen amounts"
   expect([rows[0][0], rows[0][1], rows[0][4], rows[0][7], rows[0][8]]).toEqual(["SUTH-2569", 0.45, "SUTH-001", 1000, 360]);
 });
 
-test("department chart table adds up to the same totals as the division tree", async ({ page }) => {
-  const state = await prototypeFixture(page);
-  // สองเครื่อง สองเดือน สองแผนก — ให้กราฟต้องรวมข้ามเครื่องจริง ไม่ใช่คัดลอกยอดเครื่องเดียว
-  const device = (id, serial, monthly) => ({ id, serial_number: serial, brand_name: "SUTH Printer", model: "Office 400", monthly,
-    total_cost: monthly.reduce((sum, row) => sum + row.total_cost, 0), total_pages: monthly.reduce((sum, row) => sum + row.net_pages, 0) });
-  const first = device(1, "SUTH-001", [{ month: "2026-08", net_pages: 500, total_cost: 225.25 }, { month: "2026-09", net_pages: 300, total_cost: 135.1 }]);
-  const second = device(2, "SUTH-002", [{ month: "2026-09", net_pages: 200, total_cost: 90.05 }]);
-  state.byDepartment = { unassignedDevices: [], divisions: [{ id: 1, name: "ฝ่ายการพยาบาล", total_cost: 450.4, total_cost_satang: 45040, total_pages: 1000, departments: [
-    { id: 1, name: "หน่วยบริการผู้ป่วยนอก", total_cost: 360.35, total_pages: 800, devices: [first] },
-    { id: 2, name: "หน่วยไตเทียม", total_cost: 90.05, total_pages: 200, devices: [second] },
-  ] }] };
-  await page.goto("/compare?type=department");
-  // trigger ของ UiCombobox ยังไม่มีชื่อที่ผูกกับ label (ปัญหา a11y ของ shared UI อยู่ใน #58)
-  // จึงกดจากข้อความ placeholder แทน getByLabel
-  await page.getByText("เลือกฝ่าย", { exact: true }).click();
-  await page.getByRole("option", { name: "ฝ่ายการพยาบาล" }).click();
-  await page.keyboard.press("Escape");
-  await page.getByRole("radio", { name: "ตาราง", exact: true }).first().click();
-  const table = page.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" });
-  // 225.25 + (135.10 + 90.05) = 450.40 ตรงกับยอดฝ่ายในต้นไม้และการ์ดยอดรวม
-  await expect(table.getByRole("row", { name: /ส\.ค\..*225\.25/ })).toBeVisible();
-  await expect(table.getByRole("row", { name: /ก\.ย\..*225\.15/ })).toBeVisible();
-});
-
 test("department tab keeps its search and expanded device after returning from detail", async ({ page }) => {
   await prototypeFixture(page);
   await page.goto("/expense?tab=department");

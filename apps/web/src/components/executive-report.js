@@ -6,19 +6,24 @@ export function reportTotals(rows) {
   return {
     cost: rows.length && !priced.length ? null : fromSatang(priced.reduce((sum, row) => sum + toSatang(row.total_cost), 0)),
     unpriced: rows.length - priced.length,
-    pages: rows.reduce((sum, row) => sum + Number(row.net_pages || 0), 0),
+    // หน้าสุทธิรวมเป็นหน่วยร้อยของหน้า ไม่ทิ้งเศษทศนิยมลอยไว้บนจอ
+    pages: rows.reduce((sum, row) => sum + Math.round(Number(row.net_pages || 0) * 100), 0) / 100,
+    rawPages: rows.reduce((sum, row) => sum + Number(row.pages_printed || 0), 0),
     devices: new Set(rows.map(row => row.device_id)).size,
   };
 }
 
+// หน่วยงานและสัญญาเป็นของเดือนนั้น (ประวัติการย้ายและสัญญาที่คิดเงิน) ไม่ใช่ค่าปัจจุบันของเครื่อง
+const FIELDS = {
+  month: ['month', 'month'],
+  division: ['division_id', 'division_name'],
+  department: ['department_id', 'department_name'],
+  contract: ['billing_contract_id', 'billing_contract_no'],
+  device: ['device_id', 'serial_number'],
+};
+
 export function groupReport(rows, dimension) {
-  const fields = {
-    month: ['month', 'month'],
-    department: ['department_id', 'department_name'],
-    contract: ['contract_id', 'contract_no'],
-    device: ['device_id', 'serial_number'],
-  };
-  const [id, name] = fields[dimension];
+  const [id, name] = FIELDS[dimension];
   const groups = new Map();
   for (const row of rows) {
     const key = String(row[id] ?? 'unassigned');
@@ -31,7 +36,10 @@ export function groupReport(rows, dimension) {
       : complete ? (a, b) => b.cost - a.cost : (a, b) => a.label.localeCompare(b.label));
 }
 
+/** ขอบเขตของแผงรายละเอียด — `key` เดียว หรือ `keys` หลายรายการ (รายการที่เลือกมาเทียบ) */
 export function scopeReport(rows, scope) {
-  const fields = { month: 'month', department: 'department_id', contract: 'contract_id', device: 'device_id' };
-  return scope ? rows.filter(row => String(row[fields[scope.dimension]] ?? 'unassigned') === scope.key) : rows;
+  if (!scope) return rows;
+  const [id] = FIELDS[scope.dimension];
+  const keys = new Set((scope.keys ?? [scope.key]).map(String));
+  return rows.filter(row => keys.has(String(row[id] ?? 'unassigned')));
 }
