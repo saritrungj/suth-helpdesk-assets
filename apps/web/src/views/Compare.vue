@@ -45,8 +45,9 @@ import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
 import UnitDifference from "../components/UnitDifference.vue";
 import ExportExcelButton from "../components/ExportExcelButton.vue";
-import { MAX_ITEMS, buildComparison, metricLabel, metricUnit, periodLabel, summarize } from "../components/comparison";
-import { comparisonSheet, conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, saveWorkbook, standardNotes } from "../components/comparison-export";
+import { MAX_ITEMS, buildComparison, periodLabel, summarize } from "../components/comparison";
+import { conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, saveWorkbook, standardNotes } from "../components/comparison-export";
+import { compareSheet } from "../components/compare-export";
 import { useExportTask } from "../composables/useExportTask";
 import {
   UiAlert,
@@ -678,7 +679,7 @@ const exportRows = computed(() => {
   const months = new Set(exportMonths.value);
   return rawRows.value.filter((row) => months.has(row.month) && rowMatches(row));
 });
-/** ตัวชี้วัดของไฟล์มีสองแบบเหมือนหน้าภาพรวม — กลุ่มเงินใช้ค่าใช้จ่าย ที่เหลือใช้ยอดพิมพ์จริง */
+/** แบบจำลองสรุปร่วมใช้สองตัวชี้วัด; compareSheet ใช้ chartSeries เพื่อส่งออกตัวชี้วัดจริงทั้งห้าแบบ */
 const exportMetric = computed(() => (chartMetric.value.needsPrice ? "cost" : "rawPages"));
 /** key ของกลุ่มในแบบจำลอง — กลุ่มที่ไม่มีค่า (ไม่ผูกสัญญา/ไม่ระบุอาคาร) ใช้ "unassigned" */
 const modelKey = (value) => (value === "" ? "unassigned" : value);
@@ -713,7 +714,7 @@ function exportConditions(model, kind) {
     ...(f.contract ? [[t("สัญญาที่คิดเงิน"), contractOptions.value.find((option) => option.value === f.contract)?.label ?? f.contract]] : []),
     ...(f.building ? [[t("อาคาร"), f.building]] : []),
     ...(f.floor ? [[t("ชั้น"), f.floor]] : []),
-    ...(kind === "raw" ? [] : [[t("ตัวชี้วัด"), `${metricLabel(model.metric, { incomplete: model.metric === "cost" && summary.unpriced > 0 })} (${metricUnit(model.metric)})`]]),
+    ...(kind === "raw" ? [] : [[t("ตัวชี้วัด"), `${chartMetric.value.label} (${chartMetric.value.unit})`]]),
     [t("ตัวชี้วัดบนหน้าจอ"), chartMetric.value.label],
     [t("จำนวนรายการยอดพิมพ์"), formatCount(model.scopeRows.length)],
     [t("จำนวนเครื่องที่มีข้อมูล"), formatCount(summary.devices)],
@@ -731,11 +732,11 @@ async function runCompareExport(kind) {
     `fy${activeFiscalYear.value?.year ?? "all"}`,
     monthsSlug(selectedMonths.value, activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value) : []),
     comparisonType.value,
-    kind === "raw" ? null : model.metric === "rawPages" ? "pages" : "cost",
+    kind === "raw" ? null : ({ totalPages: "pages", netPages: "net-pages", totalCost: "cost", activeDevices: "devices", costPerPage: "cost-per-page" })[chartMetricKey.value],
   ]);
   const conditions = conditionsSheet(filename, exportConditions(model, kind));
   const sheets = kind === "report"
-    ? [comparisonSheet(model), detailSheet(model.scopeRows), conditions]
+    ? [compareSheet(model, chartMetric.value, chartSeries.value), detailSheet(model.scopeRows), conditions]
     : [detailSheet(model.scopeRows), conditions];
   await runExport(() => saveWorkbook(filename, sheets));
 }

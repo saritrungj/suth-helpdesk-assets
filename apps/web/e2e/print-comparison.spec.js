@@ -432,6 +432,33 @@ test.describe("หน้าเปรียบเทียบ → ฝ่าย/�
 });
 
 test.describe("หน้าเปรียบเทียบ → เดือน สัญญา อาคาร (R07)", () => {
+  test("export preserves the selected Compare metric and incomplete-price chart gaps", async ({ page }) => {
+    await comparisonFixture(page);
+    const chartValues = (file) => [...file.chart().matchAll(/<c:val>([\s\S]*?)<\/c:val>/g)]
+      .map((match) => [...match[1].matchAll(/<c:pt idx="(\d+)"><c:v>(.*?)<\/c:v><\/c:pt>/g)]
+        .map((point) => [Number(point[1]), Number(point[2])]));
+    for (const type of ["month", "contract"]) {
+      for (const months of ["2025-10", "2025-10,2025-11"]) {
+        for (const [metric, expected] of [["totalPages", [1500, 1600]], ["netPages", [1470, 1568]], ["activeDevices", [2, 2]], ["totalCost", [661.5, 705.6]], ["costPerPage", [0.441, 0.441]]]) {
+          await page.goto(`/compare?type=${type}&months=${months}&contract=7&groups=7&metric=${metric}`);
+          const file = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
+          expect.soft(chartValues(file)[0], `${type}/${metric}/${months}`).toEqual(expected.slice(0, months.split(",").length).map((value, index) => [index, value]));
+          expect(file.chart()).toContain("<c:lineChart>");
+          expect(conditionsOf(file)["ตัวชี้วัด"]).toBe(conditionsOf(file)["ตัวชี้วัดบนหน้าจอ"] + (metric === "totalCost" ? " (บาท)" : metric === "costPerPage" ? " (บาท/หน้า)" : metric === "activeDevices" ? " (เครื่อง)" : " (หน้า)"));
+        }
+      }
+    }
+    await page.goto("/compare?type=building&months=2025-11,2025-12&metric=totalCost");
+    const file = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
+    expect(chartValues(file)[0]).toEqual([[0, 948.15]]);
+    await page.goto("/compare?type=contract&months=2025-11,2025-10&groups=8,7&metric=netPages");
+    const reversed = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
+    expect(reversed.rows("เปรียบเทียบ").slice(1).map((row) => [row[0], ...row.slice(-2)])).toEqual([
+      ["CT-001/2569", 1470, 1568], ["CT-002/2569", 294, 539],
+    ]);
+    expect(chartValues(reversed)).toEqual([[[0, 1470], [1, 1568]], [[0, 294], [1, 539]]]);
+  });
+
   test("โหมดสัญญาส่งออกไฟล์เดียวสามแผ่นแบบเดียวกับหน้าภาพรวม ตามสัญญาที่เลือกใน URL", async ({ page }) => {
     await comparisonFixture(page);
     await page.goto("/compare?type=contract&months=2025-10,2025-11,2025-12&groups=7,8&metric=totalPages");
