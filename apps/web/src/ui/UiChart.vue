@@ -159,7 +159,16 @@ const chartOptions = computed(() => {
       callback: (v) => axisFormat(v),
     },
   };
-  const categoryScale = { ...base.scales.x, ticks: { ...base.scales.x.ticks, autoSkip: !props.horizontal } };
+  const categoryScale = {
+    ...base.scales.x,
+    ticks: {
+      ...base.scales.x.ticks,
+      autoSkip: !props.horizontal,
+      // แท่งแนวนอนมีชื่อยาว (ชื่อหน่วยงานภาษาไทย + สถานะ) — บนจอแคบ Chart.js ตัดป้ายทิ้ง
+      // จากขอบซ้าย จึงตัดเป็นหลายบรรทัดตามช่องว่างแทน ตารางยังแสดงชื่อเต็มเหมือนเดิม
+      ...(props.horizontal ? { callback(_value, index) { return wrapLabel(props.labels[index], this.chart.width < 480 ? 16 : 32); } } : {}),
+    },
+  };
 
   return {
     ...base,
@@ -187,6 +196,17 @@ const chartOptions = computed(() => {
       : { x: categoryScale, y: valueScale },
   };
 });
+
+/** แบ่งป้ายเป็นบรรทัดไม่เกิน max ตัวอักษร ตามช่องว่าง ส่วนคำที่ยาวกว่านั้นตัดท้ายด้วย … */
+function wrapLabel(label, max) {
+  const lines = [];
+  for (const word of String(label ?? "").split(" ")) {
+    const last = lines.at(-1);
+    if (last !== undefined && `${last} ${word}`.length <= max) lines[lines.length - 1] = `${last} ${word}`;
+    else lines.push(word.length > max ? `${word.slice(0, max - 1)}…` : word);
+  }
+  return lines.length > 1 ? lines : lines[0] ?? "";
+}
 
 /** ตารางคู่กับกราฟ — แถวคือหมวด คอลัมน์คือชุดข้อมูล */
 const tableRows = computed(() =>

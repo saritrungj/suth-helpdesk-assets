@@ -1,0 +1,108 @@
+// @vitest-environment jsdom
+//
+// ข้อมูลอ้างอิงโหลดไม่สำเร็จ ต้องไม่หน้าตาเหมือน "ยังไม่มีข้อมูล" (#105)
+//
+// หน้าชั้น/แผนกเลือกอาคาร/ฝ่ายจากรายการที่โหลดมาอีกเส้นหนึ่ง ถ้าเส้นนั้นล้มแล้วหน้า
+// เงียบ ผู้ใช้จะเห็นช่องเลือกว่างและตารางที่ชื่ออาคารเป็น "—" ทุกแถว ซึ่งอ่านได้ว่า
+// ระบบไม่มีอาคารเลย
+
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+const get = vi.fn();
+const post = vi.fn();
+vi.mock("../services/api", () => ({ default: { get: (...a) => get(...a), post: (...a) => post(...a) } }));
+vi.mock("../store/confirmDialog", () => ({ askConfirm: vi.fn(async () => true) }));
+vi.mock("../store/toast", () => ({ toastError: vi.fn(), toastSuccess: vi.fn() }));
+vi.mock("../api/invalidate", () => ({ invalidateAfterWrite: vi.fn(async () => {}), changeKindForEndpoint: () => null }));
+vi.mock("@tanstack/vue-query", () => ({ useQueryClient: () => ({}) }));
+
+const { mount, flushPromises } = await import("@vue/test-utils");
+const MasterDataPage = (await import("./MasterDataPage.vue")).default;
+
+const FLOORS = [{ id: 1, building_id: 3, name: "ชั้น 2" }];
+const BUILDINGS = [{ id: 3, name: "อาคารผู้ป่วยนอก" }];
+
+let buildingsFail;
+
+beforeEach(() => {
+  buildingsFail = true;
+  get.mockReset();
+  post.mockReset();
+  get.mockImplementation(async (path) => {
+    if (path === "/floors") return { data: FLOORS };
+    if (path === "/buildings") {
+      if (buildingsFail) throw Object.assign(new Error("Network Error"), { request: {} });
+      return { data: BUILDINGS };
+    }
+    return { data: [] };
+  });
+});
+
+const mounted = [];
+afterEach(() => { while (mounted.length) mounted.pop().unmount(); });
+
+async function mountFloors() {
+  const wrapper = mount(MasterDataPage, {
+    props: {
+      title: "ชั้น",
+      endpoint: "/floors",
+      itemNoun: "ชั้น",
+      columns: [
+        { key: "building_id", label: "อาคาร", optionKey: "building_id" },
+        { key: "name", label: "ชื่อชั้น" },
+      ],
+      fields: [
+        { key: "building_id", label: "อาคาร", type: "select", required: true, optionsFrom: "/buildings" },
+        { key: "name", label: "ชื่อชั้น", required: true },
+      ],
+    },
+    global: {
+      stubs: {
+        UiDataTable: true,
+        UiModal: { template: "<div><slot /><slot name=\"footer\" /></div>" },
+      },
+    },
+  });
+  mounted.push(wrapper);
+  await flushPromises();
+  return wrapper;
+}
+
+describe("ข้อมูลอ้างอิงโหลดไม่สำเร็จ", () => {
+  test("บอกว่ารายการไหนโหลดไม่สำเร็จ ไม่ใช่ปล่อยเป็นรายการว่างเงียบๆ", async () => {
+    const wrapper = await mountFloors();
+    expect(wrapper.text()).toContain("โหลดรายการอาคารไม่สำเร็จ");
+  });
+
+  test("ตารางไม่แสดงชื่ออาคารเป็นขีดราวกับไม่มีอาคาร", async () => {
+    const wrapper = await mountFloors();
+    const column = wrapper.vm.tableColumns.find((col) => col.key === "building_id");
+    expect(column.value(FLOORS[0])).not.toBe("—");
+  });
+
+  test("บันทึกไม่ได้ระหว่างที่รายการอาคารยังใช้ไม่ได้ และบอกเหตุผล", async () => {
+    const wrapper = await mountFloors();
+    wrapper.vm.openCreate();
+    wrapper.vm.form.name = "ชั้น 5";
+    wrapper.vm.form.building_id = 3;
+    await wrapper.vm.submit();
+    expect(post).not.toHaveBeenCalled();
+    expect(wrapper.vm.formError).toContain("อาคาร");
+  });
+
+  test("ลองใหม่สำเร็จแล้วข้อความหาย ตัวเลือกมา ค่าที่กรอกไว้ยังอยู่", async () => {
+    const wrapper = await mountFloors();
+    wrapper.vm.openCreate();
+    wrapper.vm.form.name = "ชั้น 5";
+
+    buildingsFail = false;
+    await wrapper.get("[data-testid=retry-options]").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("โหลดรายการอาคารไม่สำเร็จ");
+    expect(wrapper.vm.optionSets.building_id).toEqual([{ value: 3, label: "อาคารผู้ป่วยนอก" }]);
+    expect(wrapper.vm.form.name).toBe("ชั้น 5");
+    const column = wrapper.vm.tableColumns.find((col) => col.key === "building_id");
+    expect(column.value(FLOORS[0])).toBe("อาคารผู้ป่วยนอก");
+  });
+});

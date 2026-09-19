@@ -10,7 +10,7 @@ import { t } from "../lib/locale";
  *
  *   เดือน          ยอดรวมทีละเดือน — "เดือนนี้ต่างจากเดือนก่อนยังไง และเพราะอะไร"
  *   สัญญา / อาคาร  หนึ่งเส้นต่อหนึ่งสัญญา/อาคารบนกราฟเดียว (แบบ Comparisons ของ GA4)
- *   ฝ่าย / แผนก    ใช้ชุดเลือกฝ่าย/แผนกของ ByDepartment
+ *   ฝ่าย / แผนก    ตรวจความแตกต่างของหน่วยงาน — ดู components/UnitDifference.vue
  *
  * เดิม "ตามสัญญา" กับ "ตามอาคาร" คำนวณชุดเดียวกันทุกประการ ต่างกันแค่ช่องตัวกรองที่
  * โผล่มา ถ้าไม่ได้เลือกอะไร สองโหมดให้ตัวเลขตรงกันทุกช่อง — ปุ่มที่ชื่อว่า "เทียบ"
@@ -20,8 +20,12 @@ import { t } from "../lib/locale";
  * เลือกได้หลายเดือน ไม่จำกัดแค่คู่เดียว เพราะการดูสามสี่เดือนติดกันบอกได้ว่า
  * ตัวเลขที่กระโดดเป็นแนวโน้มจริงหรือเป็นเดือนที่ผิดปกติเดือนเดียว
  *
- * เดือนที่เลือกถูก sync กับ ?months= ใน URL เพื่อให้ส่งลิงก์ให้คนอื่นเปิดดูชุด
- * เดียวกันได้ — เป็นหน้าที่ถูกแชร์ในไลน์กลุ่มบ่อยที่สุด
+ * เดือน กลุ่มที่เลือก และตัวกรองถูก sync กับ URL (?months= ?groups= ?contract=
+ * ?building= ?floor=) เพื่อให้ส่งลิงก์ให้คนอื่นเปิดดูชุดเดียวกันได้ และเปิดรายละเอียด
+ * แล้วกดย้อนกลับได้มุมมองเดิม — เป็นหน้าที่ถูกแชร์ในไลน์กลุ่มบ่อยที่สุด
+ *
+ * ทุกโหมดส่งออก Excel ด้วยปุ่มและไฟล์รูปแบบเดียวกับหน้าภาพรวม (เปรียบเทียบ + กราฟ /
+ * ข้อมูลรายละเอียด / เงื่อนไขรายงาน) จากแบบจำลองใน components/comparison.js
  *
  * ทิศทางของสีในหน้านี้กลับด้านกับกราฟการเงินทั่วไป: ตัวเลขที่ "เพิ่มขึ้น" ใช้โทน
  * เตือน เพราะทุกตัวชี้วัดในหน้านี้คือต้นทุน ไม่ใช่รายได้
@@ -34,11 +38,17 @@ import { useRoute, useRouter } from "vue-router";
 import { CircleAlert, Info, Minus, TrendingDown, TrendingUp } from "lucide-vue-next";
 import { fiscalYearMonths, fromSatang, sumCostSatang } from "@suth/domain";
 import { activeFiscalYear, activeFiscalYearRange } from "../store/fiscalYear";
+import { yearLabel } from "../lib/locale-format";
 import api from "../services/api";
-import { useMonthlyKpi } from "../api/queries";
+import { useDepartments, useDivisions, useMonthlyKpi } from "../api/queries";
 import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
-import ByDepartment from "./ByDepartment.vue";
+import UnitDifference from "../components/UnitDifference.vue";
+import ExportExcelButton from "../components/ExportExcelButton.vue";
+import { MAX_ITEMS, buildComparison, periodLabel, summarize } from "../components/comparison";
+import { conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, saveWorkbook, standardNotes } from "../components/comparison-export";
+import { compareSheet } from "../components/compare-export";
+import { useExportTask } from "../composables/useExportTask";
 import {
   UiAlert,
   UiButton,
@@ -83,24 +93,34 @@ const COMPARISON_TYPES = [
 const comparisonTypeFromQuery = () =>
   COMPARISON_TYPES.some((type) => type.value === route.query.type) ? route.query.type : "month";
 const comparisonType = ref(comparisonTypeFromQuery());
-/** สัญญาหรืออาคารที่เลือกมาเทียบ — ว่าง = รายการที่มียอดมากที่สุดไม่เกินจำนวนสีที่มี */
-const selectedGroups = ref([]);
-/** ชุดสีของกราฟมี 8 สี — เกินกว่านี้สีจะวนซ้ำจนแยกเส้นไม่ออก */
-const MAX_SERIES = 8;
+/** ชุดสีของกราฟมี 8 สี — เกินกว่านี้สีจะวนซ้ำจนแยกเส้นไม่ออก (ค่าเดียวกับหน้าภาพรวม) */
+const MAX_SERIES = MAX_ITEMS;
 
-const filters = ref({
-  building: "",
-  floor: "",
+const queryText = (value) => String(Array.isArray(value) ? value[0] ?? "" : value ?? "").trim();
+/** กลุ่มที่เลือกจาก URL — ตัดค่าซ้ำและเกินจำนวนสีตั้งแต่ตอนอ่าน ให้ URL ตรงกับสิ่งที่วาดจริง */
+const groupsFromQuery = () =>
+  [...new Set(queryText(route.query.groups).split(",").map((item) => item.trim()).filter(Boolean))].slice(0, MAX_SERIES);
+/** ตัวกรองมีเฉพาะโหมดเดือน — โหมดแยกกลุ่มต้องได้ทุกสัญญา/อาคาร */
+const filtersFromQuery = () => ({
+  building: queryText(route.query.building),
+  floor: queryText(route.query.floor),
   division: "",
   department: "",
-  contract: "",
+  contract: /^\d+$/.test(queryText(route.query.contract)) ? queryText(route.query.contract) : "",
 });
+
+/** สัญญาหรืออาคารที่เลือกมาเทียบ — ว่าง = รายการที่มียอดมากที่สุดไม่เกินจำนวนสีที่มี */
+const selectedGroups = ref(groupsFromQuery());
+
+const filters = ref(filtersFromQuery());
 
 const buildings = ref([]);
 const floors = ref([]);
-const divisions = ref([]);
-const departments = ref([]);
 const contracts = ref([]);
+const divisionQuery = useDivisions();
+const departmentQuery = useDepartments();
+const divisions = computed(() => divisionQuery.data.value ?? []);
+const departments = computed(() => departmentQuery.data.value ?? []);
 
 const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.name }));
 
@@ -128,8 +148,10 @@ const departmentOptions = computed(() => {
   return toOptions(source);
 });
 
-watch(() => filters.value.building, () => (filters.value.floor = ""));
-watch(() => filters.value.division, () => (filters.value.department = ""));
+// อ่านค่าจาก URL ห้ามถูกล้างตาม — เปิดลิงก์ที่มีทั้งอาคารและชั้นต้องได้ทั้งสองค่า
+let syncingScopeFromRoute = false;
+watch(() => filters.value.building, () => { if (!syncingScopeFromRoute) filters.value.floor = ""; }, { flush: "sync" });
+watch(() => filters.value.division, () => { if (!syncingScopeFromRoute) filters.value.department = ""; }, { flush: "sync" });
 
 const hasActiveFilter = computed(() => Object.values(filters.value).some(Boolean));
 
@@ -144,9 +166,15 @@ function clearAll() {
 
 let syncingTypeFromRoute = false;
 watch(comparisonType, (value) => {
-  clearAll();
+  if (value !== "department") void loadMasterData();
+  // เปลี่ยนจาก URL (ย้อนกลับ/ลิงก์) มีกลุ่มและตัวกรองของมันเองมาด้วย — ห้ามล้างทิ้ง
   if (syncingTypeFromRoute) return;
-  router.replace({ query: { ...route.query, type: value } });
+  // ล้างแล้วเขียน URL ครั้งเดียว — ถ้าให้ watcher ของขอบเขตเขียนเองอีกรอบ สองคำสั่ง replace
+  // จะอ่าน route.query ชุดเดิม แล้วอันหลังพากลุ่มเก่ากลับมา
+  syncingScopeFromRoute = true;
+  clearAll();
+  syncingScopeFromRoute = false;
+  router.replace({ query: { ...route.query, type: value, ...scopeQuery(selectedGroups.value, filters.value) } });
 }, { flush: "sync" });
 
 watch(() => route.query.type, () => {
@@ -169,25 +197,61 @@ function rowMatches(row) {
   );
 }
 
+let masterDataLoaded = false;
+let masterDataPromise = null;
 async function loadMasterData() {
-  try {
-    const [building, floor, division, department, contract] = await Promise.all([
-      api.get("/buildings"),
-      api.get("/floors"),
-      api.get("/divisions"),
-      api.get("/departments"),
-      api.get("/contracts"),
-    ]);
+  if (masterDataLoaded) return;
+  if (masterDataPromise) return masterDataPromise;
+  masterDataPromise = (async () => {
+    try {
+      const [building, floor, contract] = await Promise.all([
+        api.get("/buildings"),
+        api.get("/floors"),
+        api.get("/contracts"),
+      ]);
 
-    buildings.value = building.data ?? [];
-    floors.value = floor.data ?? [];
-    divisions.value = division.data ?? [];
-    departments.value = department.data ?? [];
-    contracts.value = contract.data ?? [];
-  } catch (err) {
-    console.error("Load master data error:", err);
-  }
+      buildings.value = building.data ?? [];
+      floors.value = floor.data ?? [];
+      contracts.value = contract.data ?? [];
+      masterDataLoaded = true;
+    } catch (err) {
+      console.error("Load master data error:", err);
+    } finally {
+      masterDataPromise = null;
+    }
+  })();
+  return masterDataPromise;
 }
+
+/* --------------------------------------------------------------------------
+   sync กลุ่มที่เลือกและตัวกรองกับ URL
+   -------------------------------------------------------------------------- */
+const scopeQuery = (groups, f) => ({
+  groups: groups.length ? groups.join(",") : undefined,
+  contract: f.contract || undefined,
+  building: f.building || undefined,
+  floor: f.floor || undefined,
+});
+const SCOPE_KEYS = ["groups", "contract", "building", "floor"];
+
+watch([selectedGroups, filters], ([groups, f]) => {
+  if (syncingScopeFromRoute) return;
+  router.replace({ query: { ...route.query, ...scopeQuery(groups, f) } });
+}, { deep: true, flush: "sync" });
+
+watch(() => route.query, (query) => {
+  const groups = groupsFromQuery();
+  const next = filtersFromQuery();
+  syncingScopeFromRoute = true;
+  if (groups.join(",") !== selectedGroups.value.join(",")) selectedGroups.value = groups;
+  if (JSON.stringify(next) !== JSON.stringify(filters.value)) filters.value = next;
+  syncingScopeFromRoute = false;
+  // ค่าที่อ่านไม่ได้หรือเกินจำนวนสีถูกเขียนกลับให้ URL ตรงกับสิ่งที่หน้าใช้จริง
+  const normalized = scopeQuery(groups, next);
+  if (SCOPE_KEYS.some((key) => queryText(query[key]) !== queryText(normalized[key]))) {
+    router.replace({ query: { ...query, ...normalized } });
+  }
+});
 
 /* --------------------------------------------------------------------------
    sync เดือนที่เลือกกับ ?months= ใน URL
@@ -474,8 +538,12 @@ const costChartable = computed(() => monthStats.value.some((entry) => metricValu
 /** กราฟที่ไม่มีจุดให้วาดเลยไม่ต้องแสดงกรอบเปล่า — บอกเหตุผลแทน */
 const chartHasData = computed(() => chartSeries.value.some((series) => series.data.some((value) => value !== null)));
 
+/**
+ * เปอร์เซ็นต์เปลี่ยนแปลง — ฐานเป็นศูนย์คืน null เพราะ "เพิ่มขึ้น 100%" จากศูนย์เป็นตัวเลข
+ * ที่ทำให้เข้าใจผิด ส่วนต่างจริงยังอ่านได้จากยอดสองเดือนที่แสดงคู่กัน (#103)
+ */
 function diffPercent(before, after) {
-  if (!before) return after > 0 ? 100 : 0;
+  if (!before) return null;
   return ((after - before) / before) * 100;
 }
 
@@ -540,6 +608,13 @@ const summaryLines = computed(() => {
 
     const percent = diffPercent(before, after);
 
+    if (percent === null) {
+      return {
+        trend: after > 0 ? "up" : null,
+        text: t("{0}: {1} → {2} {3} — เดือนแรกเป็นศูนย์ จึงไม่คิดเปอร์เซ็นต์", [metric.label, metric.format(before), metric.format(after), metric.unit]),
+      };
+    }
+
     if (Math.abs(percent) < 0.05) {
       return {
         trend: null,
@@ -593,8 +668,81 @@ const summaryCaveats = computed(() => {
   return notes;
 });
 
+/* --------------------------------------------------------------------------
+   ส่งออก Excel — ไฟล์เดียวกับหน้าภาพรวม: เปรียบเทียบ + กราฟ / ข้อมูลรายละเอียด / เงื่อนไข
+
+   ตัวเลขมาจาก buildComparison ชุดเดียวกับหน้าภาพรวม โดยใช้แถว เดือน และกลุ่มที่หน้านี้
+   แสดงอยู่ เดือนที่เลือกแต่ไม่มีข้อมูลยังเป็นช่องว่างในไฟล์ ไม่หายไปจากแกน
+   -------------------------------------------------------------------------- */
+const exportMonths = computed(() => monthStats.value.map((entry) => entry.month));
+const exportRows = computed(() => {
+  const months = new Set(exportMonths.value);
+  return rawRows.value.filter((row) => months.has(row.month) && rowMatches(row));
+});
+/** แบบจำลองสรุปร่วมใช้สองตัวชี้วัด; compareSheet ใช้ chartSeries เพื่อส่งออกตัวชี้วัดจริงทั้งห้าแบบ */
+const exportMetric = computed(() => (chartMetric.value.needsPrice ? "cost" : "rawPages"));
+/** key ของกลุ่มในแบบจำลอง — กลุ่มที่ไม่มีค่า (ไม่ผูกสัญญา/ไม่ระบุอาคาร) ใช้ "unassigned" */
+const modelKey = (value) => (value === "" ? "unassigned" : value);
+const exportModel = computed(() => (grouping.value
+  ? buildComparison({
+    rows: exportRows.value,
+    dimension: comparisonType.value,
+    view: "select",
+    items: activeGroups.value.map((group) => modelKey(group.value)),
+    options: activeGroups.value.map((group) => ({ value: modelKey(group.value), label: group.label })),
+    metric: exportMetric.value,
+    months: exportMonths.value,
+  })
+  : buildComparison({ rows: exportRows.value, dimension: "overall", metric: exportMetric.value, months: exportMonths.value })));
+
+const { busy: exporting, error: exportError, run: runExport } = useExportTask();
+const exportBlocked = computed(() => {
+  if (loading.value || loadError.value) return t("รอข้อมูลโหลดเสร็จ");
+  return exportRows.value.length ? "" : t("ยังไม่มียอดพิมพ์ในขอบเขตนี้");
+});
+
+function exportConditions(model, kind) {
+  const f = filters.value;
+  const typeLabel = COMPARISON_TYPES.find((type) => type.value === comparisonType.value)?.label ?? "";
+  const summary = summarize(model.scopeRows);
+  return [
+    [t("ปีงบประมาณ"), yearLabel(activeFiscalYear.value?.year)],
+    [t("ช่วงเวลา"), periodLabel(exportMonths.value)],
+    [t("เทียบระหว่าง"), typeLabel],
+    ...(grouping.value ? [[t("รายการที่เปรียบเทียบ"), model.entries.map((entry) => entry.displayLabel).join(", ")]] : []),
+    ...(grouping.value && !selectedGroups.value.length ? [[t("วิธีเลือกรายการ"), t("ไม่ได้เลือกเอง — {0} รายการที่มียอดพิมพ์สูงสุดในปีงบ", [MAX_SERIES])]] : []),
+    ...(f.contract ? [[t("สัญญาที่คิดเงิน"), contractOptions.value.find((option) => option.value === f.contract)?.label ?? f.contract]] : []),
+    ...(f.building ? [[t("อาคาร"), f.building]] : []),
+    ...(f.floor ? [[t("ชั้น"), f.floor]] : []),
+    ...(kind === "raw" ? [] : [[t("ตัวชี้วัด"), `${chartMetric.value.label} (${chartMetric.value.unit})`]]),
+    [t("ตัวชี้วัดบนหน้าจอ"), chartMetric.value.label],
+    [t("จำนวนรายการยอดพิมพ์"), formatCount(model.scopeRows.length)],
+    [t("จำนวนเครื่องที่มีข้อมูล"), formatCount(summary.devices)],
+    [t("สถานะราคา"), priceStatusLine(summary.unpriced)],
+    ...standardNotes(),
+  ];
+}
+
+async function runCompareExport(kind) {
+  if (exportBlocked.value) return;
+  // จับแบบจำลองและเงื่อนไขไว้ก่อน await — เปลี่ยนตัวเลือกระหว่างสร้างไฟล์ ไฟล์ยังเป็นชุดที่กด
+  const model = exportModel.value;
+  const filename = exportFilename([
+    kind === "raw" ? "print-usage-data" : "print-comparison",
+    `fy${activeFiscalYear.value?.year ?? "all"}`,
+    monthsSlug(selectedMonths.value, activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value) : []),
+    comparisonType.value,
+    kind === "raw" ? null : ({ totalPages: "pages", netPages: "net-pages", totalCost: "cost", activeDevices: "devices", costPerPage: "cost-per-page" })[chartMetricKey.value],
+  ]);
+  const conditions = conditionsSheet(filename, exportConditions(model, kind));
+  const sheets = kind === "report"
+    ? [compareSheet(model, chartMetric.value, chartSeries.value), detailSheet(model.scopeRows), conditions]
+    : [detailSheet(model.scopeRows), conditions];
+  await runExport(() => saveWorkbook(filename, sheets));
+}
+
 onMounted(async () => {
-  await loadMasterData();
+  if (comparisonType.value !== "department") await loadMasterData();
 });
 </script>
 
@@ -605,6 +753,10 @@ onMounted(async () => {
       :description="t(&quot;เทียบยอดพิมพ์และค่าใช้จ่ายระหว่างเดือน ระหว่างสัญญา ระหว่างอาคาร หรือระหว่างหน่วยงาน&quot;)"
     />
 
+    <!-- ฝ่าย/แผนกมีตัวเลือกและผลของตัวเอง (ตรวจความแตกต่าง) รวมช่อง "เทียบระหว่าง" ไว้ในแถบเดียวกัน -->
+    <UnitDifference v-if="comparisonType === 'department'" v-model:type="comparisonType" :types="COMPARISON_TYPES" />
+
+    <template v-else>
     <!--
       ตัวกรองเป็นแถวเดียว ไม่ใช่การ์ด (#90) — "เทียบระหว่าง" อยู่หน้าสุดเพราะมันเปลี่ยน
       ทั้งหน้า ช่องที่เหลือเปลี่ยนตามแบบที่เลือก และทุกช่องมีป้ายชื่อแบบเดียวกัน
@@ -615,7 +767,7 @@ onMounted(async () => {
           <UiSegmented v-model="comparisonType" :options="COMPARISON_TYPES" />
         </UiField>
 
-        <UiField v-if="comparisonType !== 'department'" :label="t(&quot;เดือน&quot;)" class="w-full sm:w-72">
+        <UiField :label="t(&quot;เดือน&quot;)" class="w-full sm:w-72">
           <PeriodPicker
             v-model="selectedMonths"
             :options="monthsWithData"
@@ -672,12 +824,19 @@ onMounted(async () => {
           {{ t("ล้างตัวกรอง") }}
         </UiButton>
       </template>
+      <template #actions>
+        <ExportExcelButton :disabled="Boolean(exportBlocked)" :raw-disabled="Boolean(exportBlocked)" :busy="exporting" :reason="exportBlocked"
+          @report="runCompareExport('report')" @raw="runCompareExport('raw')" />
+      </template>
     </UiFilterBar>
 
-    <!-- มุมมองฝ่าย/แผนกใช้ตัวเลือกและกราฟชุดของ ByDepartment -->
-    <ByDepartment v-if="comparisonType === 'department'" comparison-only />
+      <UiAlert v-if="exportError" tone="danger" class="mb-4">
+        {{ exportError }}
+        <template #actions>
+          <UiButton size="sm" variant="secondary" :loading="exporting" @click="runCompareExport('report')"> {{ t("ลองใหม่") }} </UiButton>
+        </template>
+      </UiAlert>
 
-    <template v-else>
       <UiAlert v-if="loadError" tone="danger" class="mb-4">
         {{ loadError }}
         <template #actions>

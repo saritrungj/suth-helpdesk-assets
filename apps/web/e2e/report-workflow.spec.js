@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { sumSatang, toSatang } from "@suth/domain";
+import { fiscalYearMonths, sumSatang, toSatang } from "@suth/domain";
 import {
   signIn,
   reasonToSkip,
@@ -563,5 +563,98 @@ test("monthly comparison keeps historical contracts after a device switches", as
       await apiFetch(`/devices/${deviceId}`, { method: "DELETE" });
     }
     for (const id of contracts.reverse()) await apiFetch(`/contracts/${id}`, { method: "DELETE" });
+  }
+});
+
+
+/** ส่งออกตารางหน้ารายงานเป็น Excel แล้วคืนหัวตารางกับแถวข้อมูลของแผ่นแรก */
+async function exportReportSheet(page) {
+  const exportButton = page.getByRole("button", { name: /Excel/ });
+  await expect(exportButton).toBeEnabled();
+  const downloadPromise = page.waitForEvent("download");
+  await exportButton.click();
+  const download = await downloadPromise;
+
+  const { readFile } = await import("node:fs/promises");
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(await readFile(await download.path()), { type: "buffer" });
+  const [header, ...body] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+  return { header, body };
+}
+
+/** ยอดรวมของแต่ละค่าในคอลัมน์ `keyOf` — ช่องยอดรวมที่ว่าง (ยังไม่มียอด) ไม่นับ */
+function totalsBy({ header, body }, keyOf) {
+  const totalColumn = header.length - 1;
+  const totals = {};
+  for (const row of body) {
+    if (row[totalColumn] === undefined || row[totalColumn] === "") continue;
+    const key = keyOf(row, header);
+    totals[key] = (totals[key] ?? 0) + Number(row[totalColumn]);
+  }
+  return totals;
+}
+
+async function fiscalYearReadings() {
+  const year = await activeFiscalYear();
+  const months = fiscalYearMonths({ startMonth: year.start_month, endMonth: year.end_month });
+  return apiFetch(`/dashboard/monthly-kpi?month=${months.join(",")}`);
+}
+
+test("report Excel reconciles each building with the API allocation (#104)", async ({ page }) => {
+  /* ยอดหนึ่งเครื่องหนึ่งเดือนต้องอยู่แถวเดียว และอยู่ที่อาคารเดียวกับที่ API จัดให้
+     เทียบผ่านไฟล์ Excel เพราะไฟล์ส่งออกทุกแถวที่กรองไว้ ไม่ตัดตามหน้าของตาราง
+     ยอดรวมที่เกิน = นับซ้ำ ยอดที่ขาด = เดือนตกหล่นจากแถวของช่วงประวัติ */
+  const [devices, readings] = await Promise.all([apiFetch("/devices"), fiscalYearReadings()]);
+  const known = new Set(devices.map((device) => device.id));
+  const expected = {};
+  for (const row of readings) {
+    if (!known.has(row.device_id)) continue;
+    const building = row.building_name || "—";
+    expected[building] = (expected[building] ?? 0) + Number(row.pages_printed || 0);
+  }
+  test.skip(!Object.keys(expected).length, "No readings in the active fiscal year");
+
+  await page.goto("/report");
+  const sheet = await exportReportSheet(page);
+  const buildingColumn = sheet.header.indexOf("อาคาร / ชั้น");
+  expect(buildingColumn).toBeGreaterThanOrEqual(0);
+  expect(totalsBy(sheet, (row) => String(row[buildingColumn]).split(" / ")[0])).toEqual(expected);
+});
+
+test("report division filter follows the division of each month (#104)", async ({ page }) => {
+  /* สองเคสที่ reconciliation รวมทั้งอาคารจับไม่ได้ครบ ต้องกรองจริงผ่านหน้าจอ:
+       CI-SN-031 ย้ายฝ่ายต้นเดือนนี้ — กรองฝ่ายเดิมต้องยังเห็นยอดเดือนก่อน
+       CI-SN-032 ประวัติซ้อน — ยอดอยู่กับช่วงที่เริ่มทีหลังเท่านั้น ไม่ถูกนับสองฝ่าย
+     ค่าที่คาดหวังมาจาก API ไม่ได้ตรึงตัวเลขจาก seed เพื่อให้เทสยืนยันว่าหน้ากับ API
+     ตรงกัน ไม่ใช่ยืนยันว่า seed ยังเหมือนเดิม */
+  const [devices, readings] = await Promise.all([apiFetch("/devices"), fiscalYearReadings()]);
+  const serials = ["CI-SN-031", "CI-SN-032"];
+  const cases = serials.map((serial) => devices.find((device) => device.serial_number === serial));
+  test.skip(cases.some((device) => !device), "Needs devices 31/32 from database/seed_ci.sql");
+
+  const pagesOf = (device, division) =>
+    readings
+      .filter((row) => row.device_id === device.id && row.division_name === division)
+      .reduce((sum, row) => sum + Number(row.pages_printed || 0), 0);
+  const [moved, overlapping] = cases;
+  // ยืนยันว่า seed ยังเป็นรูปที่เทสนี้ต้องการ ก่อนสรุปอะไรจากหน้าจอ
+  expect(pagesOf(moved, "ฝ่ายการพยาบาล")).toBeGreaterThan(0);
+  expect(pagesOf(moved, "ฝ่ายเภสัชกรรม")).toBeGreaterThan(0);
+  expect(pagesOf(overlapping, "ฝ่ายการพยาบาล")).toBe(0);
+  expect(pagesOf(overlapping, "ฝ่ายเภสัชกรรม")).toBeGreaterThan(0);
+
+  await page.goto("/report");
+  const toggle = page.getByRole("button", { name: /^ตัวกรอง/ });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+
+  for (const division of ["ฝ่ายการพยาบาล", "ฝ่ายเภสัชกรรม"]) {
+    await page.getByRole("button", { name: /^ฝ่าย (ทุกฝ่าย|ฝ่าย)/ }).click();
+    await page.getByRole("option", { name: division, exact: true }).click();
+
+    const sheet = await exportReportSheet(page);
+    const serialColumn = sheet.header.indexOf("Serial");
+    const totals = totalsBy(sheet, (row) => row[serialColumn]);
+    expect(totals["CI-SN-031"] ?? 0, `CI-SN-031 ใน${division}`).toBe(pagesOf(moved, division));
+    expect(totals["CI-SN-032"] ?? 0, `CI-SN-032 ใน${division}`).toBe(pagesOf(overlapping, division));
   }
 });

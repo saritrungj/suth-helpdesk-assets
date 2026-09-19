@@ -71,6 +71,25 @@ function fiscalYearMonths(range) {
 }
 
 /**
+ * ปีงบ พ.ศ. ที่เดือน "YYYY-MM" (ค.ศ.) อยู่ — ด้านกลับของ getFiscalYearRange()
+ *
+ * ใช้ตอนที่ข้อมูลหนึ่งชุดคร่อมหลายปีงบ เช่นไฟล์ส่งออกที่เทียบช่วงเดียวกันของสองปี
+ * แต่ละแถวต้องบอกได้เองว่าเป็นของปีงบไหน โดยไม่ให้หน้าเว็บเดาจากเลขปีปฏิทิน
+ *
+ * @param {string} month "YYYY-MM" แบบ ค.ศ.
+ * @returns {number|null} ปีงบ พ.ศ. หรือ null ถ้ารูปแบบเดือนไม่ถูกต้อง
+ */
+function fiscalYearOfMonth(month) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month ?? ""));
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  if (monthNumber < 1 || monthNumber > 12) return null;
+  // ต.ค.–ธ.ค. เป็นของปีงบถัดไป เพราะปีงบเริ่ม 1 ต.ค. ของปี ค.ศ. ก่อนปีที่ปีงบสิ้นสุด
+  return (monthNumber >= 10 ? year + 1 : year) + BE_OFFSET;
+}
+
+/**
  * ช่วง "วันที่" ของปีงบ — วันแรกของเดือนเริ่ม ถึงวันสุดท้ายของเดือนจบ
  *
  * ใช้เสนอช่วงที่สัญญามีผลเป็นค่าตั้งต้นให้ผู้ดูแลกดยืนยัน (ADR-0019) เอกสารสัญญา
@@ -98,4 +117,4 @@ function fiscalYearDateRange(range) {
   };
 }
 
-module.exports = { getFiscalYearRange, fiscalYearMonths, fiscalYearDateRange, BE_OFFSET };
+module.exports = { getFiscalYearRange, fiscalYearMonths, fiscalYearDateRange, fiscalYearOfMonth, BE_OFFSET };

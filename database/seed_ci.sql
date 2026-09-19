@@ -87,14 +87,18 @@ INSERT INTO floor (id, building_id, name, status) VALUES
 (1, 1, 'ชั้น 2', 'active'),
 (2, 2, 'ชั้น 1', 'active');
 
+-- ฝ่ายที่สองมีไว้ให้เครื่อง 31/32 ย้ายเข้า (#104) — ตัวกรองฝ่ายของรายงานต้องแยกยอด
+-- ก่อนและหลังย้ายได้จริง ซึ่งพิสูจน์ไม่ได้ถ้าทั้งระบบมีฝ่ายเดียว
 INSERT INTO division (id, name, status) VALUES
-(1, 'ฝ่ายการพยาบาล', 'active');
+(1, 'ฝ่ายการพยาบาล', 'active'),
+(2, 'ฝ่ายเภสัชกรรม', 'active');
 
 -- แผนกหนึ่งชื่อยาวจงใจ (แผนกจริงที่ทำให้เจอบั๊ก 2.5.8 และ 1.4.12 ใน #48 มีความยาว
 -- ระดับนี้) อีกแผนกชื่อสั้นไว้เทียบ — เพื่อให้เห็นว่าปัญหาเกิดกับชื่อยาวเท่านั้น
 INSERT INTO department (id, division_id, name, status) VALUES
 (1, 1, 'หน่วยบริการผู้ป่วยนอกและประสานงานการรักษาต่อเนื่องกลุ่มงานเวชศาสตร์ฟื้นฟูและกายภาพบำบัดผู้ป่วยเรื้อรัง', 'active'),
-(2, 1, 'ฝ่ายบริหาร', 'active');
+(2, 1, 'ฝ่ายบริหาร', 'active'),
+(3, 2, 'งานคลังยา', 'active');
 
 -- สัญญาสองฉบับโดยตั้งใจ (ADR-0019)
 --   ฉบับที่ 1 ยืนยันช่วงที่มีผลแล้ว → ยอดของเครื่องในสัญญานี้คิดเงินได้ตามปกติ
@@ -214,6 +218,45 @@ SELECT d.id, @month_prev, 200 + (d.id * 13) FROM devices d WHERE d.id >= 7;
 
 INSERT INTO print_transactions (device_id, month, pages)
 SELECT d.id, @month_this, 250 + (d.id * 11) FROM devices d WHERE d.id >= 7;
+
+-- ------------------------------------------------------------------------------
+-- เครื่องที่ยอดต้องอยู่กับหน่วยงานของเดือนนั้น (#104, ADR-0014)
+-- ------------------------------------------------------------------------------
+-- 31: ย้ายจากฝ่ายการพยาบาล (อาคารผู้ป่วยนอก) ไปฝ่ายเภสัชกรรม (อาคารใหม่) วันแรก
+--     ของเดือนนี้ — ยอดเดือนก่อนเป็นของฝ่ายเดิม ยอดเดือนนี้เป็นของฝ่ายใหม่ กรองด้วย
+--     ฝ่ายเดิมต้องยังเห็นยอดเดือนก่อน ทั้งที่ทะเบียนวันนี้บอกว่าอยู่ฝ่ายใหม่แล้ว
+-- 32: ประวัติซ้อนกันแบบข้อมูลเก่า — ช่วงฝ่ายเดิมไม่เคยถูกปิด แล้วมีช่วงใหม่เริ่มเดือน
+--     ก่อน ช่วงที่เริ่มทีหลังต้องชนะ และยอดต้องไม่ถูกนับให้ทั้งสองฝ่าย
+--
+-- ทางเขียนของ API สร้างประวัติซ้อนไม่ได้ (ปิดช่วงเดิมก่อนเปิดใหม่เสมอ) เคสนี้จึงต้อง
+-- มาจาก seed ไม่ใช่จากเทสที่ย้ายเครื่องผ่าน API
+--
+-- อยู่หลังเครื่องเติมจำนวนโดยตั้งใจ — คำสั่งของกลุ่มนั้นเลือก `id >= 7` จากตาราง
+-- devices ถ้าเครื่อง 31/32 มีอยู่ก่อนจะได้ช่วงรับผิดชอบและยอดซ้ำ
+INSERT INTO devices
+(id, serial_number, brand_id, model, building_id, floor_id, location, division_id, department_id, contract_id, price_override, status, installation_status, service_unverified_before)
+VALUES
+(31, 'CI-SN-031', 1, 'Office 400', 2, 2, 'ห้องจ่ายยา', 2, 3, 1, NULL, 'active', 'installed', NULL),
+(32, 'CI-SN-032', 1, 'Office 400', 2, 2, 'ห้องเก็บยา', 2, 3, 1, NULL, 'active', 'installed', NULL);
+
+INSERT INTO device_service_period (device_id, effective_from, effective_to, verified_by, verified_at) VALUES
+(31, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
+(32, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP);
+
+INSERT INTO device_location_history
+(device_id, building_id, floor_id, location, division_id, department_id, effective_from, effective_to)
+VALUES
+(31, 1, 1, 'เคาน์เตอร์ยาผู้ป่วยนอก', 1, 2,
+ STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), STR_TO_DATE(CONCAT(@month_this, '-01'), '%Y-%m-%d')),
+(31, 2, 2, 'ห้องจ่ายยา', 2, 3, STR_TO_DATE(CONCAT(@month_this, '-01'), '%Y-%m-%d'), NULL),
+(32, 1, 1, 'เคาน์เตอร์ยาผู้ป่วยนอก', 1, 2, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL),
+(32, 2, 2, 'ห้องเก็บยา', 2, 3, STR_TO_DATE(CONCAT(@month_prev, '-01'), '%Y-%m-%d'), NULL);
+
+INSERT INTO print_transactions (device_id, month, pages) VALUES
+(31, @month_prev, 610),
+(31, @month_this, 340),
+(32, @month_prev, 500),
+(32, @month_this, 270);
 
 -- ------------------------------------------------------------------------------
 -- ช่วงการคิดเงินของแต่ละเครื่อง (ADR-0019) — ตัวที่บอกว่าเดือนไหนใช้ราคาของสัญญาไหน
