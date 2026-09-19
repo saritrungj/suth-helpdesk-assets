@@ -36,7 +36,7 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { keys, useDevice, useDeviceHistory, useDeviceUsage } from "../api/queries";
 import { authState } from "../store/auth";
 import { activeFiscalYear, fiscalYearState } from "../store/fiscalYear";
-import { fiscalPosition, monthText } from "../components/comparison";
+import { FISCAL_POSITIONS, fiscalPosition, monthText } from "../components/comparison";
 import { formatBahtValue, formatCount, formatUnitPrice } from "../lib/format";
 import {
   UiAlert,
@@ -214,22 +214,19 @@ const usageView = computed({
 const comparingYears = computed(() => usageView.value === "previous-year");
 const previousUsageQuery = useDeviceUsage(deviceId, computed(() => (comparingYears.value ? previousFiscalYear.value?.id ?? null : null)));
 const previousUsage = computed(() => previousUsageQuery.data.value ?? []);
-const yearAxis = computed(() => {
-  return Array.from({ length: 12 }, (_, index) => `P${String(index + 1).padStart(2, "0")}`);
-});
 const pagesAt = (rows, position) => {
   const row = rows.find((item) => fiscalPosition(item.month) === position);
   return row ? Number(row.pages || 0) : null;
 };
 
 const usageLabels = computed(() => (comparingYears.value
-  ? yearAxis.value.map((position) => monthText(position))
+  ? FISCAL_POSITIONS.map((position) => monthText(position))
   : usage.value.map((row) => formatMonth(row.month))));
 
 const usageSeries = computed(() => (comparingYears.value
   ? [
-    { key: "previous", label: t("ปีงบ {0}", [yearLabel(previousFiscalYear.value.year)]), slot: 3, data: yearAxis.value.map((position) => pagesAt(previousUsage.value, position)) },
-    { key: "current", label: t("ปีงบ {0}", [yearLabel(activeFiscalYear.value?.year)]), slot: 1, data: yearAxis.value.map((position) => pagesAt(usage.value, position)) },
+    { key: "previous", label: t("ปีงบ {0}", [yearLabel(previousFiscalYear.value.year)]), slot: 3, data: FISCAL_POSITIONS.map((position) => pagesAt(previousUsage.value, position)) },
+    { key: "current", label: t("ปีงบ {0}", [yearLabel(activeFiscalYear.value?.year)]), slot: 1, data: FISCAL_POSITIONS.map((position) => pagesAt(usage.value, position)) },
   ]
   : [
     {

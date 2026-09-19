@@ -43,15 +43,18 @@ describe("ไฟล์ Excel ของการเปรียบเทียบ
     expect(chart).toContain("&apos;เปรียบเทียบ&apos;!$H$3:$I$3");
   });
 
-  test("แผ่นอันดับ: ทุกหน่วยงานเรียงมาก→น้อยแม้เลือกไว้รายการเดียว พร้อมกราฟแท่งแนวนอน (#115)", async () => {
+  test("แผ่นอันดับ: ทุกหน่วยงานเรียงมาก→น้อยแม้เลือกไว้รายการเดียว พร้อมกราฟแท่งแนวนอนใบเดียว (#115)", async () => {
     const model = buildComparison({ rows, dimension: "department", items: ["20"], metric: "rawPages" });
     const { workbook, files } = await open([comparisonSheet(model), rankingSheet(model), detailSheet(model.scopeRows)]);
     expect(workbook.SheetNames).toEqual(["เปรียบเทียบ", "อันดับ", "ข้อมูลรายละเอียด"]);
     const table = XLSX.utils.sheet_to_json(workbook.Sheets["อันดับ"], { header: 1, defval: null });
     expect(table.slice(1).map((line) => line.slice(0, 4))).toEqual([[1, "แผนก A1", "ฝ่าย A", 300], [2, "แผนก B2", "ฝ่าย B", 50], [3, "แผนก B1", "ฝ่าย B", 0]]);
-    // กราฟใบแรกเป็นของแผ่นเปรียบเทียบ ใบที่สองของแผ่นอันดับ — สองใบแม้มีไม่ถึงสิบรายการ
+    // กราฟใบแรกเป็นของแผ่นเปรียบเทียบ ใบที่สองของแผ่นอันดับ — ไม่ถึงสิบรายการได้ใบเดียวที่มีครบ
+    // ทุกรายการ ถ้าแบ่งเป็นมากสุด/น้อยสุดจะได้สองใบที่ครอบแถวชุดเดียวกันแต่ติดป้ายขัดกันเอง
     const chart = strFromU8(files["xl/charts/chart2.xml"]);
-    expect(strFromU8(files["xl/charts/chart3.xml"])).toContain("น้อยสุด 10 อันดับ");
+    expect(files["xl/charts/chart3.xml"]).toBeUndefined();
+    expect(chart).toContain("ทั้งหมด 3 รายการ");
+    expect(chart).not.toContain("มากสุด");
     expect(chart).toContain('<c:barDir val="bar"/>');
     expect(chart).toContain("&apos;อันดับ&apos;!$B$2:$B$4");
     expect(chart).toContain("&apos;อันดับ&apos;!$D$2:$D$4");

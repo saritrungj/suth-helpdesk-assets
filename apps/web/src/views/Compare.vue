@@ -48,7 +48,7 @@ import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
 import UnitDifference from "../components/UnitDifference.vue";
 import ExportExcelButton from "../components/ExportExcelButton.vue";
-import { MAX_ITEMS, MAX_YEARS, YEAR_SCOPES, buildComparison, dimensionLabel, fiscalYearsMonths, groupKey, itemOptions, monthText, periodLabel, summarize, yearRows } from "../components/comparison";
+import { FISCAL_POSITIONS, MAX_ITEMS, MAX_YEARS, YEAR_SCOPES, buildComparison, defaultYearPair, dimensionLabel, fiscalYearsMonths, groupKey, itemOptions, monthText, periodLabel, summarize, yearComparisonOptions, yearRows } from "../components/comparison";
 import { conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, saveWorkbook, standardNotes } from "../components/comparison-export";
 import { compareSheet } from "../components/compare-export";
 import { useExportTask } from "../composables/useExportTask";
@@ -312,18 +312,12 @@ watch(() => route.query.months, () => {
  * ปีงบจึงใช้กราฟ ตาราง และไฟล์ชุดเดียวกับแบบสัญญา/อาคาร ไม่ได้เลือกปีเอง = ปีนี้กับปีก่อน
  */
 const yearMode = computed(() => comparisonType.value === "year");
-const defaultYears = computed(() => {
-  const current = Number(activeFiscalYear.value?.year);
-  return current ? [String(current - 1), String(current)] : [];
-});
+const defaultYears = computed(() => defaultYearPair(activeFiscalYear.value?.year));
 const chosenYears = computed(() => {
   const picked = selectedGroups.value.filter((value) => /^\d{4}$/.test(value));
   return picked.length ? [...picked].sort().slice(-MAX_YEARS) : defaultYears.value;
 });
-// ปีงบที่มีในระบบ รวมปีก่อนหน้าของปีที่ดูอยู่ — ยอดย้อนหลังนำเข้าได้แม้ยังไม่ได้ตั้งปีงบนั้นไว้
-const yearOptions = computed(() => [...new Set([...fiscalYearState.list.map((year) => String(year.year)), ...defaultYears.value])]
-  .sort((a, b) => Number(b) - Number(a))
-  .map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) })));
+const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, activeFiscalYear.value?.year));
 
 const monthlyParams = computed(() => ({
   // โหลดทั้งปีงบ แล้วกรองด้วย ID ที่ตั้งของแต่ละเดือนที่ rowMatches
@@ -350,7 +344,7 @@ const monthsWithData = computed(() => {
   const months = [...new Set(rawRows.value.filter(rowMatches).map((row) => row.month))].sort();
   if (!yearMode.value) return months;
   // แกนของการเทียบข้ามปีเริ่ม ต.ค. เสมอ เดือนที่ไม่มียอดเป็นช่องว่าง ไม่ใช่หายไปจากแกน
-  return Array.from({ length: 12 }, (_, index) => `P${String(index + 1).padStart(2, "0")}`);
+  return [...FISCAL_POSITIONS];
 });
 
 /* --------------------------------------------------------------------------
@@ -812,7 +806,7 @@ async function runCompareExport(kind) {
   await runExport(() => saveWorkbook(filename, sheets));
 }
 
-// Keep values, headings and chart axes from the same completed response together.
+// ตัวเลข หัวข้อ และแกนกราฟต้องมาจากคำขอที่เสร็จรอบเดียวกัน ไม่ปนของเก่ากับของใหม่
 const currentDisplay = computed(() => ({
   monthStats: monthStats.value, grouping: grouping.value, groupStats: groupStats.value,
   summaryFirst: summaryFirst.value, summaryLast: summaryLast.value,
@@ -972,7 +966,7 @@ onMounted(async () => {
         />
       </UiCard>
 
-      <div v-else :aria-busy="loading" :class="{ 'opacity-60': loading }">
+      <div v-else :aria-busy="loading" :class="{ 'opacity-45': loading }">
         <!-- บทสรุปอัตโนมัติ — เฉพาะโหมดเดือน โหมดแยกกลุ่มไม่มี "ยอดเดียว" ให้สรุป -->
         <template v-if="!display.grouping">
           <UiCard

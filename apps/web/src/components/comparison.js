@@ -445,6 +445,11 @@ export const MAX_YEARS = 3;
 export const YEAR_SCOPES = ["overall", "division", "department", "building", "device"];
 
 const POSITION = /^P(\d{2})$/;
+/**
+ * แกนเดือนของปีงบ "P01" (ต.ค.) ถึง "P12" (ก.ย.) — ที่เดียวที่สร้างลำดับนี้
+ * หน้าที่วาดแกนข้ามปีงบ (ภาพรวม เปรียบเทียบ รายละเอียดเครื่อง) นำเข้าไปใช้ ไม่สร้างเอง
+ */
+export const FISCAL_POSITIONS = Object.freeze(Array.from({ length: 12 }, (_, index) => `P${String(index + 1).padStart(2, "0")}`));
 /** ปีงบใดก็ได้ — ใช้แค่ลำดับเดือนของปีงบ (ต.ค.→ก.ย.) จาก domain ไม่เขียนกฎนั้นซ้ำที่นี่ (ADR-0001) */
 const ANY_FISCAL_YEAR = 2569;
 
@@ -462,6 +467,28 @@ export function monthText(key, options) {
   if (!match) return formatMonth(key, options);
   const calendar = fiscalYearMonths(getFiscalYearRange(ANY_FISCAL_YEAR))[Number(match[1]) - 1];
   return MONTH_NAMES[Number(calendar.slice(5)) - 1];
+}
+
+/**
+ * ปีงบตั้งต้นของการเทียบข้ามปี — ปีที่ดูอยู่กับปีก่อนหน้า ว่างเมื่อยังไม่รู้ปีที่ดูอยู่
+ * @param {number|string|null|undefined} currentYear ปีงบ พ.ศ. ที่เลือกอยู่บนแถบบนสุด
+ */
+export function defaultYearPair(currentYear) {
+  const current = Number(currentYear);
+  return current ? [String(current - 1), String(current)] : [];
+}
+
+/**
+ * ตัวเลือกปีงบของการเทียบข้ามปี เรียงจากใหม่ไปเก่า
+ *
+ * รวมปีก่อนหน้าของปีที่ดูอยู่เสมอแม้ยังไม่ได้ตั้งปีงบนั้นไว้ในระบบ เพราะยอดย้อนหลังนำเข้าได้
+ * @param {Array<{year: number|string}>} fiscalYears ปีงบที่มีในระบบ
+ * @param {number|string|null|undefined} currentYear ปีงบ พ.ศ. ที่เลือกอยู่
+ */
+export function yearComparisonOptions(fiscalYears, currentYear) {
+  return [...new Set([...(fiscalYears ?? []).map((year) => String(year.year)), ...defaultYearPair(currentYear)])]
+    .sort((a, b) => Number(b) - Number(a))
+    .map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) }));
 }
 
 /** เดือนทั้งหมดของหลายปีงบ — พารามิเตอร์ month ของ /dashboard/monthly-kpi */
@@ -503,7 +530,7 @@ export function buildYearComparison({ rows = [], years = [], scope = null, metri
   const shifted = yearRows(scoped, chosen);
   let months = positions?.length ? [...new Set(positions)].sort() : [];
   if (!months.length) {
-    months = Array.from({ length: 12 }, (_, index) => `P${String(index + 1).padStart(2, "0")}`);
+    months = [...FISCAL_POSITIONS];
   }
   const options = chosen.map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) }));
   const model = buildComparison({ rows: shifted.filter(row => months.includes(row.month)), dimension: "fiscalYear", items: chosen, metric, options, months });
