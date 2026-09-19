@@ -1,6 +1,6 @@
-import { fiscalYearMonths, fromSatang, getFiscalYearRange, monthIndex, sumCostSatang } from "@suth/domain";
+import { fiscalYearMonths, fiscalYearOfMonth, fromSatang, getFiscalYearRange, monthIndex, sumCostSatang } from "@suth/domain";
 import { t } from "../lib/locale";
-import { formatMonth, yearLabel } from "../lib/locale-format";
+import { MONTH_NAMES, formatMonth, yearLabel } from "../lib/locale-format";
 
 /**
  * comparison.js — ตรรกะการเปรียบเทียบที่หน้าภาพรวมการพิมพ์และหน้าเปรียบเทียบใช้ร่วมกัน
@@ -25,14 +25,13 @@ import { formatMonth, yearLabel } from "../lib/locale-format";
 
 /** ชุดสีของกราฟมี 8 สีที่แยกกันได้และไม่วนซ้ำ — เลือกรายการมาเทียบได้ไม่เกินนี้ */
 export const MAX_ITEMS = 8;
-/** จำนวนที่อ่านกราฟได้สบาย ใช้เป็นคำแนะนำ ไม่ได้บังคับ */
+/**
+ * จำนวนที่อ่านกราฟได้สบาย ใช้เป็นคำแนะนำ และเป็นจำนวนที่ระบบเลือกให้เมื่อผู้ใช้ยังไม่ได้เลือกเอง
+ */
 export const SUGGESTED_ITEMS = 5;
 
-export const DIMENSIONS = ["overall", "division", "department", "contract"];
+export const DIMENSIONS = ["overall", "division", "department", "contract", "building", "device", "fiscalYear"];
 export const METRICS = ["cost", "rawPages"];
-export const VIEWS = ["select", "rank"];
-export const DIRECTIONS = ["high", "low"];
-export const LIMITS = [5, 10];
 
 const GROUPING = {
   division: { id: "division_id", name: "division_name" },
@@ -41,7 +40,17 @@ const GROUPING = {
   contract: { id: "billing_contract_id", name: "billing_contract_no" },
   // อาคารของเดือนนั้นจากประวัติการย้าย — ID แยกตัวตนออกจากชื่อที่แสดง
   building: { id: "building_id", name: "building_name" },
+  // เครื่องนับตามตัวเครื่อง ไม่ใช่ตามที่ตั้ง — เครื่องที่ย้ายระหว่างปียังเป็นเส้นเดียว (#115)
+  device: { id: "device_id", name: "serial_number" },
+  // เทียบข้ามปีงบ — แถวถูกย้ายมาอยู่บนแกนเดือนของปีงบก่อนด้วย yearRows()
+  fiscalYear: { id: "fiscal_year", name: "fiscal_year_label" },
 };
+
+/** ที่ตั้งล่าสุดของเครื่องในแถวชุดนี้ — แถวเรียงตามเดือนจาก API จึงใช้แถวสุดท้าย */
+function deviceLocation(rows) {
+  const last = rows?.at(-1);
+  return last ? [last.building_name, last.location].filter(Boolean).join(" ") : "";
+}
 
 export function dimensionLabel(dimension) {
   return {
@@ -50,6 +59,8 @@ export function dimensionLabel(dimension) {
     department: t("แผนก"),
     contract: t("สัญญา"),
     building: t("อาคาร"),
+    device: t("เครื่อง"),
+    fiscalYear: t("ปีงบ"),
   }[dimension] ?? "";
 }
 
@@ -59,6 +70,7 @@ function emptyLabel(dimension) {
     department: t("ไม่ระบุแผนก"),
     contract: t("ไม่ผูกสัญญา"),
     building: t("ไม่ระบุอาคาร"),
+    device: t("ไม่ระบุเครื่อง"),
   }[dimension] ?? t("ไม่ระบุ");
 }
 
@@ -188,7 +200,7 @@ export function groupRows(rows, dimension) {
  * ในข้อมูลอ้างอิง (รวม "ไม่ระบุ") เพื่อให้เลือกหน่วยงานที่ยังไม่มียอดได้ และเห็นว่า
  * "ไม่มีข้อมูล" แทนที่จะหาไม่เจอ
  */
-export function itemOptions(dimension, { divisions = [], departments = [], contracts = [] } = {}, rows = []) {
+export function itemOptions(dimension, { divisions = [], departments = [], contracts = [], buildings = [] } = {}, rows = []) {
   const divisionName = new Map(divisions.map((division) => [String(division.id), division.name]));
   const source = {
     division: divisions.map((division) => ({ value: String(division.id), label: division.name })),
@@ -200,6 +212,13 @@ export function itemOptions(dimension, { divisions = [], departments = [], contr
       const hint = contract.fiscal_year ? t("ปีงบ {0}", [yearLabel(contract.fiscal_year)]) : "";
       return { value: String(contract.id), label: contract.contract_no, hint, keywords: hint };
     }),
+    building: buildings.map((building) => ({ value: String(building.id), label: building.name })),
+    // เครื่องที่มียอดในช่วงนี้ ค้นได้ทั้ง Serial ยี่ห้อ/รุ่น และที่ตั้ง
+    device: [...groupRows(rows, "device").entries()].filter(([key]) => key !== "unassigned").map(([key, list]) => {
+      const hint = deviceLocation(list);
+      const first = list[0];
+      return { value: key, label: first.serial_number || key, hint, keywords: [hint, first.brand_name, first.model].filter(Boolean).join(" ") };
+    }).sort((a, b) => String(a.label).localeCompare(String(b.label))),
   }[dimension] ?? [];
 
   const options = new Map(source.map((option) => [option.value, option]));
@@ -221,6 +240,7 @@ function describe(key, dimension, groupRowsList, options) {
   const first = groupRowsList?.[0];
   const option = options.find((item) => item.value === key);
   if (key === "unassigned") return { label: emptyLabel(dimension), hint: "" };
+  if (dimension === "device") return { label: (first && first.serial_number) || option?.label || key, hint: deviceLocation(groupRowsList) || option?.hint || "" };
   return {
     label: (first && first[spec.name]) || option?.label || emptyLabel(dimension),
     hint: spec.hint ? (first?.[spec.hint] ?? option?.hint ?? "") : "",
@@ -231,12 +251,14 @@ function describe(key, dimension, groupRowsList, options) {
  * แผนกชื่อซ้ำกันข้ามฝ่ายมีได้จริง — เติมชื่อฝ่ายต่อท้ายเฉพาะชื่อที่ซ้ำ ไม่งั้นกราฟมี
  * สองแท่งชื่อเดียวกันแต่ไม่ต้องยาวทุกแท่งเพื่อกันกรณีที่เกิดไม่บ่อย
  */
-function disambiguate(entries) {
+function disambiguate(entries, dimension) {
   const counts = new Map();
   for (const entry of entries) counts.set(entry.label, (counts.get(entry.label) ?? 0) + 1);
   return entries.map((entry) => ({
     ...entry,
-    displayLabel: counts.get(entry.label) > 1 && entry.hint ? `${entry.label} (${entry.hint})` : entry.label,
+    // Serial อย่างเดียวคนจำไม่ได้ว่าเครื่องไหน — ป้ายของเครื่องมีที่ตั้งกำกับเสมอ
+    displayLabel: dimension === "device" && entry.hint ? `${entry.label} · ${entry.hint}`
+      : counts.get(entry.label) > 1 && entry.hint ? `${entry.label} (${entry.hint})` : entry.label,
   }));
 }
 
@@ -251,22 +273,30 @@ function entryFor(key, dimension, groupRowsList, options, months) {
 }
 
 /**
- * จัดอันดับมาก–น้อย
+ * จัดอันดับมาก–น้อยของทุกรายการ — อันดับอยู่ในไฟล์ Excel เท่านั้น ไม่มีบนหน้าจอ (#115)
  *
+ * คืนทุกรายการที่มีข้อมูลเรียงจากมากไปน้อย อันดับต้นและท้ายจึงอยู่ในรายการเดียวกัน
  * กลุ่มที่ไม่มีรายการเลยไม่ถูกจัดอันดับ (ไม่สร้างศูนย์ให้) และเมื่อกลุ่มใดในขอบเขตยัง
- * ยืนยันราคาไม่ครบ อันดับค่าใช้จ่ายคืน null — ให้หน้าจอบอกเหตุผลแทน (Q30)
- * ค่าที่เท่ากันเรียงด้วยชื่อ เพื่อให้ผลเดิมทุกครั้งที่เปิด
+ * ยืนยันราคาไม่ครบ อันดับค่าใช้จ่ายคืน null — ให้ไฟล์บอกเหตุผลแทน (Q30)
+ * ค่าที่เท่ากันเรียงด้วยชื่อ เพื่อให้ผลเดิมทุกครั้งที่ส่งออก
  */
-export function rankEntries(entries, { metric, direction = "high", limit = 5 }) {
+export function rankEntries(entries, { metric }) {
   const recorded = (entries ?? []).filter((entry) => entry.summary.readings > 0);
   if (metric === "cost" && recorded.some((entry) => entry.summary.unpriced > 0)) return null;
-  const factor = direction === "low" ? 1 : -1;
   return recorded
     .slice()
-    .sort((a, b) => factor * (sortValue(a.summary, metric) - sortValue(b.summary, metric))
+    .sort((a, b) => sortValue(b.summary, metric) - sortValue(a.summary, metric)
       || String(a.label).localeCompare(String(b.label), "th"))
-    .slice(0, limit === 10 ? 10 : 5)
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
+}
+
+/**
+ * รายการที่ระบบเลือกให้เมื่อผู้ใช้ยังไม่ได้เลือกเอง — ยอดสูงสุดตามตัวชี้วัดที่ดูอยู่
+ * ถ้าค่าใช้จ่ายยังจัดลำดับไม่ได้เพราะราคาไม่ครบ ใช้ยอดพิมพ์จริงแทน ไม่งั้นหน้าเปิดมาว่าง
+ */
+function suggestedKeys(entries, metric) {
+  const ranked = rankEntries(entries, { metric }) ?? rankEntries(entries, { metric: "rawPages" });
+  return ranked.slice(0, SUGGESTED_ITEMS).map((entry) => entry.key);
 }
 
 /**
@@ -275,54 +305,50 @@ export function rankEntries(entries, { metric, direction = "high", limit = 5 }) 
  * @param {object} input
  * @param {object[]} input.rows แถวของช่วงเวลาที่เลือก (กรองเดือนแล้ว)
  * @param {"overall"|"division"|"department"|"contract"} input.dimension
- * @param {"select"|"rank"} input.view
- * @param {string[]} input.items key ของรายการที่ผู้ใช้เลือก (มุมมองเลือกรายการ)
+ * @param {string[]} input.items key ของรายการที่ผู้ใช้เลือก — ว่าง = ระบบเลือกยอดสูงสุดให้
  * @param {"cost"|"rawPages"} input.metric
  * @param {object[]} input.options ตัวเลือกจาก itemOptions() ใช้หาชื่อของรายการที่ไม่มีข้อมูล
  * @param {string[]} [input.months] เดือนที่ผู้ใช้เลือกแสดง — ใส่มาเมื่อเดือนที่ไม่มีข้อมูลต้อง
  *   ยังเป็นช่องว่างบนแกนและในไฟล์ (หน้าเปรียบเทียบ) ไม่ใส่ = เฉพาะเดือนที่มีแถว
  */
-export function buildComparison({ rows = [], dimension = "overall", view = "select", items = [], metric = "cost", direction = "high", limit = 5, options = [], months: shownMonths = null }) {
+export function buildComparison({ rows = [], dimension = "overall", items = [], metric = "cost", options = [], months: shownMonths = null }) {
   const months = shownMonths?.length ? [...shownMonths].sort() : [...new Set(rows.map((row) => row.month))].sort();
   const total = summarize(rows);
-  const base = { dimension, metric, months, total, direction, limit };
+  const base = { dimension, metric, months, total };
 
   if (dimension === "overall") {
     const entries = months.map((month) => {
       const monthRows = rows.filter((row) => row.month === month);
       return { key: month, label: formatMonth(month), displayLabel: formatMonth(month), hint: "", summary: summarize(monthRows) };
     });
-    return { ...base, view: "overall", entries, scopeRows: rows, scope: total, blocked: rows.length ? null : "no-data" };
+    return { ...base, view: "overall", entries, scopeRows: rows, scope: total, ranking: null, blocked: rows.length ? null : "no-data" };
   }
 
   const groups = groupRows(rows, dimension);
+  const all = disambiguate([...groups.entries()].map(([key, list]) => entryFor(key, dimension, list, options)), dimension);
+  const ranked = rankEntries(all, { metric });
+  const ranking = {
+    entries: ranked ?? [],
+    from: all.filter((entry) => entry.summary.readings > 0).length,
+    blocked: !rows.length ? "no-data" : ranked === null ? "unpriced" : null,
+  };
 
-  if (view === "rank") {
-    const all = [...groups.entries()].map(([key, list]) => entryFor(key, dimension, list, options));
-    const ranked = rankEntries(all, { metric, direction, limit });
-    return {
-      ...base,
-      view: "rank",
-      entries: ranked ? disambiguate(ranked) : [],
-      // ข้อมูลรายละเอียดเป็นของทุกกลุ่มก่อนตัดอันดับ — อันดับเป็นผลสรุป ไม่ใช่ขอบเขตของข้อมูล
-      scopeRows: rows,
-      scope: total,
-      rankedFrom: all.filter((entry) => entry.summary.readings > 0).length,
-      blocked: !rows.length ? "no-data" : ranked === null ? "unpriced" : null,
-    };
-  }
-
-  const chosen = [...new Set(items.map(String))].slice(0, MAX_ITEMS);
+  // ยังไม่ได้เลือกเอง = ระบบเลือกยอดสูงสุดให้ก่อน เปิดหน้ามาจึงเห็นกราฟทันที (#115)
+  // ขอบเขตของตัวเลขยังเป็นทุกแถว เพราะผู้ใช้ไม่ได้ตั้งใจจำกัดขอบเขตไว้ที่รายการเหล่านี้
+  const autoPicked = !items.length;
+  const chosen = autoPicked ? suggestedKeys(all, metric) : [...new Set(items.map(String))].slice(0, MAX_ITEMS);
   const chosenSet = new Set(chosen);
-  const scopeRows = rows.filter((row) => chosenSet.has(groupKey(row, dimension)));
-  const entries = disambiguate(chosen.map((key) => entryFor(key, dimension, groups.get(key), options, months)));
+  const scopeRows = autoPicked ? rows : rows.filter((row) => chosenSet.has(groupKey(row, dimension)));
+  const entries = disambiguate(chosen.map((key) => entryFor(key, dimension, groups.get(key), options, months)), dimension);
   return {
     ...base,
     view: "select",
+    autoPicked,
     entries,
     scopeRows,
     scope: summarize(scopeRows),
-    blocked: !chosen.length ? "no-items" : !scopeRows.length ? "no-data" : null,
+    ranking,
+    blocked: !chosen.length || !scopeRows.length ? "no-data" : null,
   };
 }
 
@@ -333,12 +359,11 @@ export function buildComparison({ rows = [], dimension = "overall", view = "sele
  * กราฟแสดงเฉพาะฝ่ายที่เลือก กดการ์ดแล้วแผงรายละเอียดกลับเห็นแค่บางฝ่าย และ
  * เปอร์เซ็นต์เทียบช่วงก่อนเอายอดที่เลือกไปเทียบกับยอดทั้งองค์กรของช่วงก่อน
  *
- * มุมมองเลือกรายการ (ที่เลือกแล้ว) = เฉพาะรายการที่เลือก ส่วนภาพรวม อันดับ และยัง
- * ไม่ได้เลือก = ทุกแถว — อันดับเป็นผลสรุปของขอบเขต ไม่ใช่ขอบเขต เปลี่ยน 5/10 จึง
- * ไม่เปลี่ยนยอดรวม
+ * รายการที่ผู้ใช้เลือกเอง = เฉพาะรายการที่เลือก ส่วนภาพรวมและรายการที่ระบบเลือกให้
+ * = ทุกแถว — ระบบเลือกให้เพื่อให้กราฟมีอะไรให้ดู ไม่ได้แปลว่าผู้ใช้จำกัดขอบเขตไว้
  */
 export function comparisonScope(model) {
-  if (model?.view !== "select" || !model.entries?.length) return { selected: false, dimension: model?.dimension, keys: null, label: "" };
+  if (model?.view !== "select" || model.autoPicked || !model.entries?.length) return { selected: false, dimension: model?.dimension, keys: null, label: "" };
   return {
     selected: true,
     dimension: model.dimension,
@@ -372,7 +397,6 @@ function chartLabel(entry, metric) {
  * ข้อมูลของกราฟบนหน้าจอ — ชนิดกราฟเลือกตามคำถาม
  *
  *   ภาพรวม           แท่งตั้ง (ค่าใช้จ่ายแต่ละเดือน) หรือเส้น (แนวโน้มยอดพิมพ์)
- *   อันดับ             แท่งแนวนอน — ชื่อหน่วยงานยาวอ่านได้ครบ
  *   เลือกรายการ ≥ 2 เดือน เส้นหนึ่งเส้นต่อรายการ ดูแนวโน้มรายเดือน
  *   เลือกรายการ 1 เดือน  แท่งแนวนอน — เส้นที่มีจุดเดียวไม่บอกอะไร
  */
@@ -393,7 +417,7 @@ export function comparisonChart(model) {
     return {
       kind: "line",
       horizontal: false,
-      labels: months.map((month) => formatMonth(month)),
+      labels: months.map((month) => monthText(month)),
       categoryLabel: t("เดือน"),
       series: entries.map((entry) => ({
         key: entry.key,
@@ -409,6 +433,81 @@ export function comparisonChart(model) {
     categoryLabel: dimensionLabel(model.dimension),
     series: [{ key: metric, label: seriesLabel, data: entries.map((entry) => metricValue(entry.summary, metric)) }],
   };
+}
+
+/* --------------------------------------------------------------------------
+   เทียบข้ามปีงบ (#115)
+   -------------------------------------------------------------------------- */
+
+/** เลือกเทียบได้ไม่เกินสามปีงบ — เส้นมากกว่านั้นซ้อนกันจนอ่านไม่ออก */
+export const MAX_YEARS = 3;
+/** ขอบเขตของการเทียบข้ามปี — ไม่มีสัญญา เพราะสัญญาผูกกับปีงบเดียว เทียบข้ามปีไม่มีความหมาย */
+export const YEAR_SCOPES = ["overall", "division", "department", "building", "device"];
+
+const POSITION = /^P(\d{2})$/;
+/** ปีงบใดก็ได้ — ใช้แค่ลำดับเดือนของปีงบ (ต.ค.→ก.ย.) จาก domain ไม่เขียนกฎนั้นซ้ำที่นี่ (ADR-0001) */
+const ANY_FISCAL_YEAR = 2569;
+
+/** ตำแหน่งของเดือนในปีงบ "P01" (ต.ค.) ถึง "P12" (ก.ย.) — เดือนเดียวกันของต่างปีงบได้ตำแหน่งเดียวกัน */
+export function fiscalPosition(month) {
+  const year = fiscalYearOfMonth(month);
+  if (!year) return null;
+  const index = fiscalYearMonths(getFiscalYearRange(year)).indexOf(month);
+  return index < 0 ? null : `P${String(index + 1).padStart(2, "0")}`;
+}
+
+/** ชื่อของแกนเดือน — เดือนจริง ("ต.ค. 2568") หรือตำแหน่งในปีงบ ("ต.ค.") เมื่อเทียบข้ามปี */
+export function monthText(key, options) {
+  const match = POSITION.exec(String(key ?? ""));
+  if (!match) return formatMonth(key, options);
+  const calendar = fiscalYearMonths(getFiscalYearRange(ANY_FISCAL_YEAR))[Number(match[1]) - 1];
+  return MONTH_NAMES[Number(calendar.slice(5)) - 1];
+}
+
+/** เดือนทั้งหมดของหลายปีงบ — พารามิเตอร์ month ของ /dashboard/monthly-kpi */
+export function fiscalYearsMonths(years) {
+  return (years ?? []).flatMap((year) => fiscalYearMonths(getFiscalYearRange(Number(year))));
+}
+
+/**
+ * วางแถวของหลายปีงบบนแกนเดียวกันตามตำแหน่งเดือนในปีงบ
+ *
+ * `month` กลายเป็นตำแหน่ง ("P01") ส่วนเดือนจริงเก็บไว้ที่ `calendar_month` — ไฟล์และแผง
+ * รายละเอียดยังแสดงเดือนจริงได้ แถวของปีที่ไม่ได้เลือกถูกตัดออก
+ */
+export function yearRows(rows, years) {
+  const wanted = new Set((years ?? []).map(String));
+  return (rows ?? []).flatMap((row) => {
+    const year = fiscalYearOfMonth(row.month);
+    if (!wanted.has(String(year))) return [];
+    return [{ ...row, calendar_month: row.month, month: fiscalPosition(row.month), fiscal_year: String(year), fiscal_year_label: t("ปีงบ {0}", [yearLabel(year)]) }];
+  });
+}
+
+/**
+ * แบบจำลองของการเทียบข้ามปีงบ — รูปเดียวกับการเลือกรายการ (หนึ่งเส้นต่อปีงบ) กราฟ ตาราง
+ * และไฟล์จึงใช้โค้ดชุดเดิม
+ *
+ * แกนครบ ต.ค. ถึง ก.ย. เสมอ เดือนที่ปีหนึ่งยังไม่มียอด
+ * เป็นช่องว่าง ไม่ใช่ศูนย์ และไม่ประมาณยอดของเดือนที่ยังไม่ถึง
+ *
+ * @param {object} input
+ * @param {object[]} input.rows แถวของทุกปีงบที่เลือก (เดือนจริง)
+ * @param {Array<string|number>} input.years ปีงบ พ.ศ. ที่เทียบ ไม่เกิน MAX_YEARS
+ * @param {{dimension: string, key: string}|null} [input.scope] ขอบเขตเดียว เช่น ฝ่ายหนึ่งฝ่าย — ว่าง = ทั้งองค์กร
+ * @param {string[]} [input.positions] ตำแหน่งเดือนที่ต้องแสดง (จากช่วงเวลาที่ผู้ใช้เลือก)
+ */
+export function buildYearComparison({ rows = [], years = [], scope = null, metric = "cost", positions = null }) {
+  const chosen = [...new Set((years ?? []).map(String))].sort().slice(-MAX_YEARS);
+  const scoped = scope?.key ? rows.filter((row) => groupKey(row, scope.dimension) === String(scope.key)) : rows;
+  const shifted = yearRows(scoped, chosen);
+  let months = positions?.length ? [...new Set(positions)].sort() : [];
+  if (!months.length) {
+    months = Array.from({ length: 12 }, (_, index) => `P${String(index + 1).padStart(2, "0")}`);
+  }
+  const options = chosen.map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) }));
+  const model = buildComparison({ rows: shifted.filter(row => months.includes(row.month)), dimension: "fiscalYear", items: chosen, metric, options, months });
+  return { ...model, years: chosen, yearScope: scope?.key ? scope : null, ranking: null };
 }
 
 /**
@@ -598,18 +697,23 @@ const itemsFrom = (value) => [...new Set(listFrom(value))].slice(0, MAX_ITEMS);
  * includes() ไม่ใช่การมี property บน object ("constructor" ต้องไม่ผ่าน)
  *
  * `?contract=` เป็นตัวกรองสัญญาเดิมของหน้าภาพรวม — แปลงเป็น "เทียบตามสัญญา" ให้ลิงก์เก่ายังพาไปดูสัญญานั้น
+ * `?view=` `?dir=` `?n=` ของมุมมองอันดับเดิมไม่มีความหมายแล้ว (อันดับอยู่ในไฟล์ Excel เท่านั้น
+ * #115) ลิงก์เก่าที่มีค่าเหล่านี้จึงเปิดเป็นการเลือกรายการ และ URL ถูกล้างค่าเหล่านั้นออก
  */
 export function comparisonFromQuery(query = {}) {
   const legacyContract = itemsFrom(query.contract);
   const by = pick(query.by, DIMENSIONS, legacyContract.length ? "contract" : "overall");
   const items = itemsFrom(query.items);
+  const scope = pick(query.scope, YEAR_SCOPES, "overall");
   return {
     by,
-    view: pick(query.view, VIEWS, legacyContract.length && !query.by ? "select" : "rank"),
     items: items.length ? items : !query.by ? legacyContract : [],
     metric: pick(query.measure, ["cost", "pages"], "cost") === "pages" ? "rawPages" : "cost",
-    direction: pick(query.dir, DIRECTIONS, "high"),
-    limit: query.n === "10" ? 10 : 5,
+    // เทียบข้ามปีงบ — ว่าง = ปีงบที่เลือกอยู่กับปีก่อนหน้า
+    years: [...new Set(String(Array.isArray(query.years) ? query.years[0] ?? "" : query.years ?? "")
+      .split(",").map((item) => item.trim()).filter((item) => /^\d{4}$/.test(item)))].sort().slice(-MAX_YEARS),
+    scope,
+    scopeItem: scope === "overall" ? "" : listFrom(query.scopeItem)[0] ?? "",
   };
 }
 
@@ -618,11 +722,14 @@ export function comparisonToQuery(state) {
   const overall = state.by === "overall";
   return {
     by: overall ? undefined : state.by,
-    view: overall || state.view === "rank" ? undefined : state.view,
-    items: !overall && state.view === "select" && state.items.length ? state.items.join(",") : undefined,
+    items: !overall && state.items.length ? state.items.join(",") : undefined,
     measure: state.metric === "rawPages" ? "pages" : undefined,
-    dir: !overall && state.view === "rank" && state.direction === "low" ? "low" : undefined,
-    n: !overall && state.view === "rank" && state.limit === 10 ? "10" : undefined,
+    years: state.by === "fiscalYear" && state.years?.length ? state.years.join(",") : undefined,
+    scope: state.by === "fiscalYear" && state.scope && state.scope !== "overall" ? state.scope : undefined,
+    scopeItem: state.by === "fiscalYear" && state.scope !== "overall" && state.scopeItem ? state.scopeItem : undefined,
+    view: undefined,
+    dir: undefined,
+    n: undefined,
     contract: undefined,
   };
 }

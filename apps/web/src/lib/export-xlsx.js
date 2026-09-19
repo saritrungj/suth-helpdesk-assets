@@ -75,6 +75,7 @@ export function monthCell(month) {
  *   ตัวอักษรเดิม (เช่น Serial ที่ขึ้นต้นด้วยศูนย์) ไม่ระบุความกว้าง = คำนวณจากข้อความจริง
  * @param {boolean} [spec.sheets[].filter=true] เปิดตัวกรองที่หัวตาราง
  * @param {object} [spec.sheets[].chart] กราฟของแผ่นนี้ ดู chartXml
+ * @param {object[]} [spec.sheets[].charts] หลายกราฟในแผ่นเดียว เรียงลงมาใต้ตารางตามลำดับ
  * @returns {Promise<Uint8Array>}
  */
 export async function createWorkbook({ sheets }) {
@@ -232,6 +233,7 @@ async function enhanceWorkbook(bytes, sheets) {
   const read = (path) => strFromU8(files[path]);
   const write = (path, value) => { files[path] = strToU8(value); };
   const overrides = [];
+  let drawingNumber = 0;
   let chartNumber = 0;
 
   sheets.forEach((sheet, index) => {
@@ -239,20 +241,22 @@ async function enhanceWorkbook(bytes, sheets) {
     let xml = read(path);
     if (sheet.header) xml = freezeHeader(xml);
 
-    if (sheet.chart && sheet.rowCount > 0) {
-      chartNumber += 1;
+    const charts = sheet.charts ?? (sheet.chart ? [sheet.chart] : []);
+    if (charts.length && sheet.rowCount > 0) {
+      drawingNumber += 1;
+      const numbers = charts.map(() => (chartNumber += 1));
       if (!xml.includes("xmlns:r=")) {
         xml = xml.replace("<worksheet ", `<worksheet xmlns:r="${SHEET_REL_TYPE}" `);
       }
       xml = xml.replace("</worksheet>", `<drawing r:id="${DRAWING_RELATIONSHIP_ID}"/></worksheet>`);
-      write(`xl/worksheets/_rels/sheet${index + 1}.xml.rels`, sheetRelationships(chartNumber));
-      write(`xl/drawings/drawing${chartNumber}.xml`, drawingXml(sheet, chartNumber));
-      write(`xl/drawings/_rels/drawing${chartNumber}.xml.rels`, drawingRelationships(chartNumber));
-      write(`xl/charts/chart${chartNumber}.xml`, chartXml(sheet));
-      overrides.push(
-        `<Override PartName="/xl/drawings/drawing${chartNumber}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`,
-        `<Override PartName="/xl/charts/chart${chartNumber}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`
-      );
+      write(`xl/worksheets/_rels/sheet${index + 1}.xml.rels`, sheetRelationships(drawingNumber));
+      write(`xl/drawings/drawing${drawingNumber}.xml`, drawingXml(sheet, charts, numbers));
+      write(`xl/drawings/_rels/drawing${drawingNumber}.xml.rels`, drawingRelationships(numbers));
+      overrides.push(`<Override PartName="/xl/drawings/drawing${drawingNumber}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`);
+      charts.forEach((chart, position) => {
+        write(`xl/charts/chart${numbers[position]}.xml`, chartXml(sheet, chart));
+        overrides.push(`<Override PartName="/xl/charts/chart${numbers[position]}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`);
+      });
     }
     write(path, xml);
   });
@@ -270,36 +274,45 @@ function sheetRelationships(number) {
     + "</Relationships>";
 }
 
-function drawingRelationships(number) {
+function drawingRelationships(numbers) {
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    + `<Relationship Id="rId1" Type="${SHEET_REL_TYPE}/chart" Target="../charts/chart${number}.xml"/>`
+    + numbers.map((number, position) => `<Relationship Id="rId${position + 1}" Type="${SHEET_REL_TYPE}/chart" Target="../charts/chart${number}.xml"/>`).join("")
     + "</Relationships>";
 }
 
 /** 1 ซม. ในหน่วย EMU ของ DrawingML */
 const EMU_PER_CM = 360000;
+/** ความสูงแถวปกติของ Excel (15pt) เป็นเซนติเมตร — ใช้หาแถวที่กราฟถัดไปเริ่ม */
+const ROW_CM = 0.53;
 
 /**
  * วางกราฟใต้ตาราง เว้นหนึ่งแถว ขนาดตายตัวเป็นเซนติเมตร
  *
  * วางใต้ตาราง เพราะตารางที่มีคอลัมน์รายเดือนกว้างเกินจอ การวางข้างขวาทำให้กราฟหลุด
  * จากจอตอนเปิดไฟล์ ส่วนขนาดตายตัว (oneCellAnchor) เพราะถ้ายึดตามขอบคอลัมน์ กราฟจะกว้าง
- * ตามหัวตารางที่ยาว จนได้กราฟแบนยาวหลายเมตรที่อ่านไม่ได้ แท่งแนวนอนสูงตามจำนวนแถว
+ * ตามหัวตารางที่ยาว จนได้กราฟแบนยาวหลายเมตรที่อ่านไม่ได้ แท่งแนวนอนสูงตามจำนวนหมวด
+ * หลายกราฟเรียงต่อกันลงมา แต่ละใบเริ่มที่แถวถัดจากใบก่อน
  */
-function drawingXml(sheet, number) {
-  const fromRow = sheet.rowCount + (sheet.header ? 1 : 0) + 1;
-  const { type = "bar", series = [] } = sheet.chart;
-  const bars = type === "bar" ? sheet.rowCount * Math.max(1, series.length) : 0;
-  const width = 18 * EMU_PER_CM;
-  const height = Math.round(Math.max(9, Math.min(24, 3.5 + bars * 0.9)) * EMU_PER_CM);
+function drawingXml(sheet, charts, numbers) {
+  let fromRow = sheet.rowCount + (sheet.header ? 1 : 0) + 1;
+  const anchors = charts.map((chart, position) => {
+    const { type = "bar", series = [] } = chart;
+    const categories = chart.categoryCount ?? sheet.rowCount;
+    const bars = type === "bar" ? categories * Math.max(1, series.length) : 0;
+    const heightCm = Math.max(9, Math.min(24, 3.5 + bars * 0.9));
+    const anchor = `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>`
+      + `<xdr:ext cx="${18 * EMU_PER_CM}" cy="${Math.round(heightCm * EMU_PER_CM)}"/>`
+      + `<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${numbers[position] + 1}" name="${escapeXml(chart.title)}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>`
+      + `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId${position + 1}"/></a:graphicData></a:graphic>`
+      + "</xdr:graphicFrame><xdr:clientData/></xdr:oneCellAnchor>";
+    fromRow += Math.ceil(heightCm / ROW_CM) + 1;
+    return anchor;
+  });
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
-    + `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>`
-    + `<xdr:ext cx="${width}" cy="${height}"/>`
-    + `<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${number + 1}" name="${escapeXml(sheet.chart.title)}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>`
-    + '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/></a:graphicData></a:graphic>'
-    + "</xdr:graphicFrame><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>";
+    + anchors.join("")
+    + "</xdr:wsDr>";
 }
 
 /** "'ชื่อแผ่น'!$B$2:$B$6" จากพิกัดเริ่มจากศูนย์ (รวมแถวหัว) */
@@ -342,8 +355,8 @@ function richText(text) {
  * แนบค่าที่คำนวณแล้ว (cache) ไว้ด้วย โปรแกรมดูตัวอย่างไฟล์ที่ไม่คำนวณสูตรเองจึงยังเห็นกราฟ
  * ส่วน Excel อ่านค่าจากเซลล์จริงทุกครั้งที่เปิด
  */
-export function chartXml(sheet) {
-  const { type = "bar", title, series, valueFormat = "General", valueTitle = "" } = sheet.chart;
+export function chartXml(sheet, chart = sheet.chart) {
+  const { type = "bar", title, series, valueFormat = "General", valueTitle = "" } = chart;
   const horizontal = type === "bar";
   const line = type === "line";
   const seriesXml = series.map((item, index) => {

@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ArrowUpRight, GitCompareArrows, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
-import { useContracts, useDepartments, useDivisions, useMonthlyKpi, useOverview } from '../api/queries';
-import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths } from '../store/fiscalYear';
+import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useOverview } from '../api/queries';
+import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState } from '../store/fiscalYear';
 import { t } from '../lib/locale';
 import { formatMonth, yearLabel } from '../lib/locale-format';
 import { formatBahtValue, formatCount, formatNetPages } from '../lib/format';
@@ -14,13 +14,15 @@ import ExecutiveDetails from './ExecutiveDetails.vue';
 import ExportExcelButton from './ExportExcelButton.vue';
 import PrintComparison from './PrintComparison.vue';
 import ComparisonTable from './ComparisonTable.vue';
-import { buildComparison, comparisonFromQuery, comparisonScope, comparisonToQuery, dimensionLabel, itemOptions, metricLabel, metricUnit, periodChange, periodLabel, rowsInScope, summarize } from './comparison';
-import { comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, saveWorkbook, standardNotes } from './comparison-export';
+import { buildComparison, buildYearComparison, comparisonFromQuery, comparisonScope, comparisonToQuery, dimensionLabel, fiscalPosition, fiscalYearsMonths, itemOptions, metricLabel, metricUnit, monthText, periodChange, periodLabel, rowsInScope, summarize } from './comparison';
+import { comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, rankingSheet, saveWorkbook, standardNotes } from './comparison-export';
 
 /**
  * ExecutiveDashboard — หน้าภาพรวมการพิมพ์
  *
- * โครงหน้าเรียงตามคำถาม: ตัวกรอง → ตัวเลขสำคัญ → พื้นที่เปรียบเทียบ/อันดับ → ตารางรายละเอียด
+ * โครงหน้าเรียงตามคำถาม: ตัวกรอง → ตัวเลขสำคัญ → พื้นที่เปรียบเทียบ → ตารางรายละเอียด
+ *
+ * อันดับมาก–น้อยไม่อยู่บนหน้าจอ แต่เป็นแผ่น "อันดับ" ในไฟล์ Excel ที่ส่งออก (#115)
  *
  * ตัวเลือกหลักมีชุดเดียว (ช่วงเวลา → เปรียบเทียบตาม → รายการ → ตัวชี้วัด) และกราฟ ตาราง
  * กับไฟล์ Excel อ่านจากแบบจำลองตัวเดียวกัน (comparison.js) — เดิมหน้านี้มีตัวเลือกตัวชี้วัด
@@ -56,7 +58,7 @@ watch(() => route.query, (query) => {
   }
   normalizeComparisonQuery(query, next);
 });
-const COMPARISON_QUERY_KEYS = ['by', 'view', 'items', 'measure', 'dir', 'n', 'contract'];
+const COMPARISON_QUERY_KEYS = ['by', 'items', 'measure', 'years', 'scope', 'scopeItem', 'view', 'dir', 'n', 'contract'];
 const queryText = (value) => String(Array.isArray(value) ? value[0] ?? '' : value ?? '');
 function normalizeComparisonQuery(query, value) {
   const normalized = comparisonToQuery(value);
@@ -74,9 +76,32 @@ const overview = useOverview(computed(() => ({ month: monthParam.value, fiscal_y
 const divisions = useDivisions();
 const departments = useDepartments();
 const contracts = useContracts();
+const buildings = useBuildings();
 
-const loading = computed(() => report.isPending.value || report.isPlaceholderData.value || overview.isPending.value || overview.isPlaceholderData.value);
-const failed = computed(() => report.isError.value || overview.isError.value);
+/*
+ * เทียบข้ามปีงบ (#115) — โหลดแถวของทุกปีที่เลือกแยกจากแถวของปีงบที่ดูอยู่ เพราะการ์ดตัวเลข
+ * ด้านบนยังเป็นของปีงบที่เลือกที่แถบบนสุด ส่วนกราฟวางหลายปีซ้อนกันตามเดือนของปีงบ
+ * ไม่ได้เลือกปีเอง = ปีงบที่ดูอยู่กับปีก่อนหน้า (ถ้ามีในระบบ)
+ */
+const yearMode = computed(() => state.value.by === 'fiscalYear');
+const defaultYears = computed(() => {
+  const current = Number(activeFiscalYear.value?.year);
+  return current ? [String(current - 1), String(current)] : [];
+});
+const chosenYears = computed(() => (state.value.years.length ? state.value.years : defaultYears.value));
+// ปีงบที่มีในระบบ รวมปีก่อนหน้าของปีที่ดูอยู่ — ยอดย้อนหลังนำเข้าได้แม้ยังไม่ได้ตั้งปีงบนั้นไว้
+const yearOptions = computed(() => [...new Set([...fiscalYearState.list.map((year) => String(year.year)), ...defaultYears.value])]
+  .sort((a, b) => Number(b) - Number(a))
+  .map((year) => ({ value: year, label: t('ปีงบ {0}', [yearLabel(year)]) })));
+const yearReport = useMonthlyKpi(
+  computed(() => ({ month: fiscalYearsMonths(chosenYears.value).join(',') || undefined })),
+  { enabled: computed(() => yearMode.value && chosenYears.value.length > 0) },
+);
+const yearSource = computed(() => (yearMode.value && !yearReport.isPlaceholderData.value ? yearReport.data.value ?? [] : []));
+
+const loading = computed(() => report.isPending.value || report.isPlaceholderData.value || overview.isPending.value || overview.isPlaceholderData.value
+  || (yearMode.value && (yearReport.isPending.value || yearReport.isPlaceholderData.value)));
+const failed = computed(() => report.isError.value || overview.isError.value || (yearMode.value && yearReport.isError.value));
 const ready = computed(() => !loading.value && !failed.value);
 // ห้ามแสดงข้อมูลของช่วงเดิมใต้ชื่อช่วงที่เพิ่งเลือก — ระหว่างโหลดจึงเป็นแถวว่างเสมอ
 const rows = computed(() => (loading.value || report.isError.value ? [] : (report.data.value || [])
@@ -87,27 +112,46 @@ const coverage = computed(() => overview.data.value?.coverage || {});
 const coverageLabel = computed(() => (coverage.value.verifiable === false ? t('รอยืนยันข้อมูล') : `${formatCount(coverage.value.annual_complete_months)} / ${formatCount(coverage.value.total_months)}`));
 const money = (value) => (value == null ? '—' : formatBahtValue(value));
 
-const options = computed(() => itemOptions(state.value.by, {
+const references = computed(() => ({
   divisions: divisions.data.value ?? [],
   departments: departments.data.value ?? [],
   contracts: contracts.data.value ?? [],
-}, rows.value));
-const model = computed(() => buildComparison({
-  rows: rows.value,
-  dimension: state.value.by,
-  view: state.value.view,
-  items: state.value.items,
-  metric: state.value.metric,
-  direction: state.value.direction,
-  limit: state.value.limit,
-  options: options.value,
+  buildings: buildings.data.value ?? [],
 }));
+const options = computed(() => (yearMode.value ? [] : itemOptions(state.value.by, references.value, rows.value)));
+const yearScopeOptions = computed(() => (yearMode.value && state.value.scope !== 'overall'
+  ? itemOptions(state.value.scope, references.value, yearSource.value) : []));
+const yearScope = computed(() => (state.value.scope !== 'overall' && state.value.scopeItem
+  ? { dimension: state.value.scope, key: state.value.scopeItem } : null));
+const model = computed(() => (yearMode.value
+  ? buildYearComparison({
+    rows: yearSource.value,
+    years: chosenYears.value,
+    scope: yearScope.value,
+    metric: state.value.metric,
+    // เลือกช่วงเดือนไว้ที่แถบบนสุด = เทียบเฉพาะเดือนเหล่านั้นของทุกปี
+    positions: filter.value.selected.map(fiscalPosition).filter(Boolean),
+  })
+  : buildComparison({
+    rows: rows.value,
+    dimension: state.value.by,
+    items: state.value.items,
+    metric: state.value.metric,
+    options: options.value,
+  })));
+const yearScopeLabel = computed(() => (yearScope.value
+  ? yearScopeOptions.value.find((option) => option.value === yearScope.value.key)?.label ?? yearScope.value.key : ''));
 
 /*
  * ตัวเลขสำคัญ แผงรายละเอียด และช่วงก่อนหน้า ใช้ขอบเขตเดียวกับกราฟ ตาราง และไฟล์ (R06)
  * เลือกฝ่าย A/B แล้วการ์ดต้องเป็นยอดของ A/B — ไม่ใช่ยอดทั้งองค์กรวางข้างกราฟของ A/B
  */
-const scope = computed(() => comparisonScope(model.value));
+// เทียบข้ามปีงบ: การ์ดเป็นยอดของปีงบที่ดูอยู่ในขอบเขตเดียวที่เลือก (หรือทั้งองค์กร)
+const scope = computed(() => (yearMode.value
+  ? yearScope.value
+    ? { selected: true, dimension: yearScope.value.dimension, keys: [yearScope.value.key], label: yearScopeLabel.value }
+    : { selected: false, dimension: 'overall', keys: null, label: '' }
+  : comparisonScope(model.value)));
 const scopedRows = computed(() => rowsInScope(rows.value, scope.value));
 const totals = computed(() => summarize(scopedRows.value));
 const costTitle = computed(() => (totals.value.unpriced ? t('ค่าใช้จ่ายที่ยืนยันแล้ว') : t('ค่าใช้จ่ายสุทธิ')));
@@ -159,16 +203,43 @@ const compareLink = computed(() => {
 const periodText = computed(() => (filter.value.selected.length
   ? periodLabel(filter.value.selected)
   : t('ทั้งปีงบ ({0})', [periodLabel(fyMonths.value)])));
-const noun = computed(() => dimensionLabel(state.value.by));
+const noun = computed(() => dimensionLabel(yearMode.value ? state.value.scope : state.value.by));
 const metricText = computed(() => `${metricLabel(model.value.metric, { incomplete: model.value.metric === 'cost' && model.value.scope.unpriced > 0 })} (${metricUnit(model.value.metric)})`);
 const scopeCaption = computed(() => (scope.value.selected ? `${noun.value}: ${scope.value.label}` : t('ทุกหน่วยงาน')));
 const itemsText = computed(() => {
+  if (yearMode.value) {
+    const years = model.value.entries.map((entry) => entry.displayLabel).join(', ');
+    return yearScope.value ? `${years} · ${noun.value}: ${yearScopeLabel.value}` : `${years} · ${t('ทั้งองค์กร')}`;
+  }
   if (model.value.view === 'overall') return t('ทุกหน่วยงาน');
-  if (model.value.view === 'rank') return t('{0} {1} อันดับจากทุก{2}', [model.value.direction === 'low' ? t('น้อยสุด') : t('มากสุด'), model.value.limit, noun.value]);
+  if (model.value.autoPicked) return t('{0}ที่ยอดสูงสุด {1} รายการ', [noun.value, formatCount(model.value.entries.length)]);
   return model.value.entries.length ? `${noun.value}: ${model.value.entries.map((entry) => entry.displayLabel).join(', ')}` : t('ยังไม่ได้เลือก{0}', [noun.value]);
 });
 const yearText = computed(() => t('ปีงบ {0}', [yearLabel(activeFiscalYear.value?.year)]));
-const scopeText = computed(() => [yearText.value, periodText.value, itemsText.value, metricText.value].join(' · '));
+const scopeText = computed(() => (yearMode.value ? [periodText.value, itemsText.value, metricText.value] : [yearText.value, periodText.value, itemsText.value, metricText.value]).join(' · '));
+
+// ระหว่างเปลี่ยนช่วง คงแบบจำลองพร้อมคำอธิบายเดิมไว้ด้วยกัน ไม่ติดหัวข้อใหม่บนยอดเก่า
+const settledTable = ref(null);
+watch([model, periodText, ready], ([value, period, isReady]) => {
+  if (isReady) settledTable.value = { model: value, description: `${comparisonTitle(value)} · ${period}` };
+}, { immediate: true });
+const tableView = computed(() => loading.value && settledTable.value
+  ? settledTable.value : { model: model.value, description: `${comparisonTitle(model.value)} · ${periodText.value}` });
+const stats = computed(() => ({
+  totals: totals.value, costTitle: costTitle.value, costHint: costHint.value,
+  caption: t('ตัวเลขของ {0} · {1}', [scopeCaption.value, periodText.value]),
+  fleet: fleet.value, coverageLabel: coverageLabel.value, delta: change.value?.percent ?? null,
+}));
+const settledStats = ref(null);
+watch([stats, ready], ([value, isReady]) => { if (isReady) settledStats.value = value; }, { immediate: true });
+const shownStats = computed(() => loading.value && settledStats.value ? settledStats.value : stats.value);
+const statsReady = computed(() => ready.value || (loading.value && Boolean(settledStats.value)));
+
+/** เดือนล่าสุดที่มีข้อมูลของปีงบที่ดูอยู่ */
+const latestMonth = computed(() => rows.value.reduce((latest, row) => (row.month > latest ? row.month : latest), ''));
+
+/** แถวของแผงรายละเอียด — เทียบข้ามปีงบใช้แถวของทุกปีที่เทียบ โดยคืนเดือนจริงให้แต่ละแถว */
+const detailRows = computed(() => (yearMode.value ? model.value.scopeRows.map((row) => ({ ...row, month: row.calendar_month })) : rows.value));
 
 watch(monthParam, () => { detailOpen.value = false; exportError.value = ''; });
 
@@ -181,7 +252,11 @@ function openDetails(group = 'department', entry = null) {
     const dimension = model.value.view === 'overall' ? 'month' : state.value.by;
     detailScope.value = { dimension, key: entry.key, label: entry.displayLabel };
     detailGroup.value = 'device';
-  } else if (model.value.view === 'select' && model.value.entries.length) {
+  } else if (yearMode.value) {
+    // ทุกปีที่เทียบ ในขอบเขตเดียวที่เลือก — แผงแบ่งตามปีงบให้เห็นที่มาของแต่ละเส้น
+    detailScope.value = scope.value.selected ? { dimension: scope.value.dimension, keys: scope.value.keys, label: scope.value.label } : null;
+    detailGroup.value = 'fiscalYear';
+  } else if (scope.value.selected) {
     detailScope.value = { dimension: state.value.by, keys: model.value.entries.map((item) => item.key), label: model.value.entries.map((item) => item.displayLabel).join(', ') };
     detailGroup.value = state.value.by === 'contract' ? 'contract' : state.value.by;
   } else {
@@ -190,46 +265,51 @@ function openDetails(group = 'department', entry = null) {
   }
   detailOpen.value = true;
 }
-function reload() { report.refetch(); overview.refetch(); }
+function reload() { report.refetch(); overview.refetch(); if (yearMode.value) yearReport.refetch(); }
 
 /* --------------------------------------------------------------------------
    ส่งออก — ไฟล์เดียวสามแผ่น หรือข้อมูลดิบอย่างเดียว
    -------------------------------------------------------------------------- */
 const blockedReason = computed(() => {
   if (!ready.value) return t('รอข้อมูลโหลดเสร็จ');
-  switch (model.value.blocked) {
-    case 'no-items': return t('เลือก{0}ที่จะเทียบก่อน', [noun.value]);
-    case 'no-data': return t('ยังไม่มียอดพิมพ์ในขอบเขตนี้');
-    case 'unpriced': return t('ยังจัดอันดับค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ');
-    default: return '';
-  }
+  return model.value.blocked === 'no-data' ? t('ยังไม่มียอดพิมพ์ในขอบเขตนี้') : '';
 });
 
 function filenameFor(kind) {
   const m = model.value;
   return exportFilename([
     kind === 'raw' ? 'print-usage-data' : 'print-comparison',
-    `fy${activeFiscalYear.value?.year ?? 'all'}`,
+    yearMode.value ? `fy${m.years.join('_')}` : `fy${activeFiscalYear.value?.year ?? 'all'}`,
     monthsSlug(filter.value.selected, fyMonths.value),
     m.dimension,
-    m.view === 'overall' ? null : m.view,
-    m.view === 'rank' ? `${m.direction}${m.limit}` : null,
     kind === 'raw' ? null : m.metric === 'rawPages' ? 'pages' : 'cost',
   ]);
 }
 
 function conditions(m, kind) {
-  const detailScopeText = m.view === 'select'
+  const detailScopeText = yearMode.value
+    ? t('ทุกเครื่องของ {0}', [m.entries.map((entry) => entry.displayLabel).join(', ')])
+    : m.view === 'select' && !m.autoPicked
     ? t('เฉพาะ{0}ที่เลือก {1} รายการ', [noun.value, formatCount(m.entries.length)])
-    : m.view === 'rank' ? t('ทุก{0}ในช่วงที่เลือก ก่อนตัดอันดับ', [noun.value]) : t('ทุกเครื่องในช่วงที่เลือก');
-  return [
+    : t('ทุกเครื่องในช่วงที่เลือก');
+  const ranking = m.ranking && !m.ranking.blocked
+    ? t('ทุก{0} {1} รายการ เรียงตาม{2}จากมากไปน้อย (แผ่น “อันดับ”)', [noun.value, formatCount(m.ranking.from), metricLabel(m.metric)])
+    : m.ranking?.blocked === 'unpriced' ? t('ยังจัดอันดับค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ') : '';
+  const yearRows = yearMode.value ? [
+    [t('ปีงบที่เปรียบเทียบ'), m.entries.map((entry) => entry.displayLabel).join(', ')],
+    [t('เดือนของปีงบบนแกน'), m.months.map((month) => monthText(month)).join(', ') || t('ไม่มี')],
+    [t('ขอบเขต'), yearScope.value ? `${noun.value}: ${yearScopeLabel.value}` : t('ทั้งองค์กร')],
+  ] : [
     [t('ปีงบประมาณ'), yearLabel(activeFiscalYear.value?.year)],
-    [t('ช่วงเวลา'), periodText.value],
     [t('เดือนที่มีข้อมูล'), periodLabel(m.months) || t('ไม่มี')],
+  ];
+  return [
+    ...yearRows,
+    [t('ช่วงเวลา'), periodText.value],
     [t('เปรียบเทียบตาม'), dimensionLabel(m.dimension)],
-    [t('มุมมอง'), m.view === 'overall' ? t('ภาพรวมรายเดือน') : m.view === 'select' ? t('เลือกรายการมาเทียบ') : t('อันดับมาก–น้อย')],
-    ...(m.view === 'select' ? [[t('รายการที่เปรียบเทียบ'), m.entries.map((entry) => entry.displayLabel).join(', ')]] : []),
-    ...(m.view === 'rank' ? [[t('อันดับ'), t('{0} {1} อันดับ จาก {2} {3}ที่มีข้อมูล', [m.direction === 'low' ? t('น้อยสุด') : t('มากสุด'), m.limit, formatCount(m.rankedFrom ?? 0), noun.value])]] : []),
+    ...(m.view === 'select' && !yearMode.value ? [[t('รายการที่เปรียบเทียบ'), m.entries.map((entry) => entry.displayLabel).join(', ')]] : []),
+    ...(m.autoPicked ? [[t('วิธีเลือกรายการ'), t('ไม่ได้เลือกเอง — {0} รายการที่ยอดสูงสุดตามตัวชี้วัด', [formatCount(m.entries.length)])]] : []),
+    ...(kind !== 'raw' && ranking ? [[t('อันดับ'), ranking]] : []),
     ...(kind === 'raw' ? [] : [[t('ตัวชี้วัด'), metricText.value]]),
     ...(kind !== 'raw' && m.view === 'select' && m.months.length >= 2 ? [[t('ค่าในคอลัมน์รายเดือน'), metricText.value]] : []),
     [t('ขอบเขตข้อมูลรายละเอียด'), detailScopeText],
@@ -247,8 +327,9 @@ async function runExport(kind) {
   // จับแบบจำลองชุดเดียวไว้ก่อน await — ถ้าผู้ใช้เปลี่ยนตัวเลือกระหว่างสร้างไฟล์ ไฟล์ยังเป็นชุดที่กด
   const m = model.value;
   const filename = filenameFor(kind);
+  const ranking = kind === 'report' ? rankingSheet(m) : null;
   const sheets = kind === 'report'
-    ? [comparisonSheet(m), detailSheet(m.scopeRows), conditionsSheet(filename, conditions(m, kind))]
+    ? [comparisonSheet(m), ...(ranking ? [ranking] : []), detailSheet(m.scopeRows), conditionsSheet(filename, conditions(m, kind))]
     : [detailSheet(m.scopeRows), conditionsSheet(filename, conditions(m, kind))];
   try { await saveWorkbook(filename, sheets); }
   catch (error) { exportError.value = errorMessage(error, t('ส่งออกไม่สำเร็จ')); }
@@ -258,7 +339,7 @@ async function runExport(kind) {
 
 <template>
   <div>
-    <UiPageHeader :title="t('ภาพรวมการพิมพ์')" :description="t('ค่าใช้จ่ายและยอดพิมพ์ของปีงบที่เลือก เปรียบเทียบตามฝ่าย แผนก หรือสัญญา แล้วส่งออกเป็น Excel')">
+    <UiPageHeader :title="t('ภาพรวมการพิมพ์')" :description="t('ค่าใช้จ่ายและยอดพิมพ์ของปีงบที่เลือก เปรียบเทียบตามฝ่าย แผนก สัญญา อาคาร เครื่อง หรือปีงบ แล้วส่งออกเป็น Excel')">
       <template #actions>
         <UiButton variant="secondary" :disabled="!ready || !rows.length" @click="openDetails()">
           <template #icon><PanelRightOpen :size="16" /></template>{{ t('ดูรายละเอียด') }}
@@ -269,38 +350,38 @@ async function runExport(kind) {
     <!-- ตัวกรอง: ช่วงเวลาเป็นขอบเขตของตัวเลขทั้งหน้า จึงอยู่บนสุดแถวเดียว -->
     <div class="flex flex-wrap items-end gap-x-3 gap-y-2 mb-4" data-print="hide">
       <DashboardFilter bare @filter="(next) => (filter = { ...next })" />
-      <p class="text-xs text-ink-mute ml-auto pb-2">{{ model.months.length ? t('ข้อมูลล่าสุด {0}', [formatMonth(model.months.at(-1))]) : '' }}</p>
-      <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value || overview.isFetching.value" @click="reload"><RefreshCw :size="16" /></UiButton>
+      <p class="text-xs text-ink-mute ml-auto pb-2">{{ latestMonth ? t('ข้อมูลล่าสุด {0}', [formatMonth(latestMonth)]) : '' }}</p>
+      <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value || overview.isFetching.value || yearReport.isFetching.value" @click="reload"><RefreshCw :size="16" /></UiButton>
     </div>
 
     <UiAlert v-if="failed" tone="danger" class="mb-4">
-      {{ errorMessage(report.error.value || overview.error.value, t('โหลดภาพรวมไม่สำเร็จ')) }}
+      {{ errorMessage(report.error.value || overview.error.value || yearReport.error.value, t('โหลดภาพรวมไม่สำเร็จ')) }}
       <template #actions><UiButton variant="secondary" @click="reload">{{ t('ลองใหม่') }}</UiButton></template>
     </UiAlert>
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
     <!-- ตัวเลขสำคัญของขอบเขตเดียวกับกราฟ ตาราง และไฟล์ด้านล่าง — เลือกฝ่าย A/B แล้วเป็นยอดของ A/B -->
-    <p class="text-xs text-ink-mute mb-1.5">{{ t('ตัวเลขของ {0} · {1}', [scopeCaption, periodText]) }}</p>
-    <section class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading">
+    <p class="text-xs text-ink-mute mb-1.5">{{ shownStats.caption }}</p>
+    <section class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
       <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring rounded-l-lg" :disabled="!ready || !rows.length" :aria-label="t('ดูที่มาของค่าใช้จ่าย')" @click="openDetails('department')">
-        <UiStat plain :label="costTitle" :value="failed ? '—' : money(totals.cost)" :unit="t('บาท')" :loading="loading" :delta="ready ? change?.percent ?? null : null" delta-inverse
-          :hint="costHint">
+        <UiStat plain :label="shownStats.costTitle" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats" :delta="statsReady ? shownStats.delta : null" delta-inverse
+          :hint="shownStats.costHint">
           <template #icon><ArrowUpRight :size="16" class="text-brand-ink" /></template>
         </UiStat>
       </button>
       <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring" :disabled="!ready || !rows.length" :aria-label="t('วิเคราะห์รายเครื่อง')" @click="openDetails('device')">
-        <UiStat plain tone="ink" :label="t('ยอดพิมพ์จริง')" :value="ready ? formatCount(totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading"
-          :hint="ready ? t('สุทธิหลังหัก 2% {0} หน้า', [formatNetPages(totals.netPages)]) : ''">
+        <UiStat plain tone="ink" :label="t('ยอดพิมพ์จริง')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
+          :hint="statsReady ? t('สุทธิหลังหัก 2% {0} หน้า', [formatNetPages(shownStats.totals.netPages)]) : ''">
           <template #icon><ArrowUpRight :size="16" class="text-brand-ink" /></template>
         </UiStat>
       </button>
       <!-- จำนวนเครื่องในทะเบียนวันนี้ไม่ใช่จำนวนเครื่องที่มียอดย้อนหลัง จึงเป็นข้อมูลอ้างอิงแยก
            ส่วนความครบถ้วนนับทั้งองค์กรทั้งปีงบ ยังไม่มีตัวเลขของขอบเขตที่เลือก จึงบอกไว้ตรงๆ -->
-      <UiStat plain tone="ink" :label="t('เครื่องที่มียอดในช่วงนี้')" :value="ready ? formatCount(totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading"
-        :hint="ready ? `${t('ทะเบียนวันนี้ {0} เครื่อง', [formatCount(fleet.total_devices)])} · ${t('ใช้งานอยู่ {0} เครื่อง', [formatCount(fleet.active_devices)])} · ${t('เดือนที่บันทึกครบทั้งองค์กร')} ${coverageLabel}` : ''" />
+      <UiStat plain tone="ink" :label="t('เครื่องที่มียอดในช่วงนี้')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"
+        :hint="statsReady ? `${t('ทะเบียนวันนี้ {0} เครื่อง', [formatCount(shownStats.fleet.total_devices)])} · ${t('ใช้งานอยู่ {0} เครื่อง', [formatCount(shownStats.fleet.active_devices)])} · ${t('เดือนที่บันทึกครบทั้งองค์กร')} ${shownStats.coverageLabel}` : ''" />
     </section>
 
-    <PrintComparison v-model:state="state" :model="model" :options="options" :loading="loading" :failed="failed" :scope-text="scopeText"
+    <PrintComparison v-model:state="state" :model="model" :options="options" :year-options="yearOptions" :scope-options="yearScopeOptions" :loading="loading" :failed="failed" :scope-text="scopeText"
       @details="(entry) => openDetails('device', entry)">
       <template #actions>
         <!-- จอแคบเหลือแค่ไอคอน (ชื่อยังอยู่ให้โปรแกรมอ่านหน้าจอ) ไม่งั้นแถวปุ่มดันหน้าล้นแนวนอนที่ 320px -->
@@ -312,7 +393,7 @@ async function runExport(kind) {
       </template>
     </PrintComparison>
 
-    <ComparisonTable class="mb-4" :model="model" :loading="loading" :description="`${comparisonTitle(model)} · ${periodText}`"
+    <ComparisonTable class="mb-4" :model="tableView.model" :loading="loading" :description="tableView.description"
       @details="(entry) => openDetails('device', entry)" />
 
     <!-- หมายเหตุขอบเขตของตัวเลขบนหน้านี้ ไม่ใช่ที่เก็บงานค้าง — งานค้างอยู่ในลิ้นชัก
@@ -320,6 +401,6 @@ async function runExport(kind) {
     <footer class="text-xs text-ink-mute leading-relaxed">
       <p>{{ t('ข้อมูลเฉพาะเดือนที่บันทึกแล้ว') }} · {{ t('เดือนที่บันทึกเป็นศูนย์ยังแสดงในรายงาน') }} · {{ t('ยอดพิมพ์จริงคือจำนวนหน้าที่บันทึก ส่วนค่าใช้จ่ายคิดจากหน้าสุทธิหลังหัก 2%') }}</p>
     </footer>
-    <ExecutiveDetails v-model:open="detailOpen" :rows="rows" :scope="detailScope" :context="`${yearText} · ${periodText}`" :initial-group="detailGroup" />
+    <ExecutiveDetails v-model:open="detailOpen" :rows="detailRows" :scope="detailScope" :context="yearMode ? scopeText : `${yearText} · ${periodText}`" :initial-group="detailGroup" />
   </div>
 </template>

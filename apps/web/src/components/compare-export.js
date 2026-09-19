@@ -1,6 +1,6 @@
 import { FORMATS } from "../lib/export-xlsx";
 import { comparisonSheet } from "./comparison-export";
-import { formatMonth } from "../lib/locale-format";
+import { monthText } from "./comparison";
 
 /**
  * Compare has five metrics; Dashboard rankings intentionally have only two.
@@ -32,7 +32,7 @@ export function compareSheet(model, metric, series) {
   // null even when that known subtotal is positive. Keep status as the last
   // column of the monthly overview, as in the shared export.
   const column = model.view === "overall" ? sheet.header.length - 1 : sheet.header.length;
-  sheet.header.splice(column, 0, model.view === "overall" ? heading : formatMonth(model.months[0]));
+  sheet.header.splice(column, 0, model.view === "overall" ? heading : monthText(model.months[0]));
   sheet.columns.splice(column, 0, { format });
   sheet.rows.forEach((row, index) => {
     const value = model.view === "overall" ? series[0]?.data[index] : series[index]?.data[0];

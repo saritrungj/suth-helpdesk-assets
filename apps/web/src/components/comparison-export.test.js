@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { strFromU8, unzipSync } from "fflate";
 import { createWorkbook } from "../lib/export-xlsx";
 import { buildComparison, buildDifference } from "./comparison";
-import { comparisonSheet, conditionsSheet, detailSheet, differenceSheet, exportFilename, monthsSlug } from "./comparison-export";
+import { comparisonSheet, conditionsSheet, departmentRankingSheet, detailSheet, differenceSheet, exportFilename, monthsSlug, rankingSheet } from "./comparison-export";
 
 const row = (overrides) => ({
   device_id: 1, serial_number: "00123", brand_name: "HP", model: "M404", month: "2025-10",
@@ -27,7 +27,7 @@ async function open(sheets) {
 
 describe("ไฟล์ Excel ของการเปรียบเทียบ — ไฟล์เดียวสามแผ่น", () => {
   test("แผ่นเปรียบเทียบของรายการที่เลือกมีตัวเลขชุดเดียวกับบนจอ และกราฟเส้นหนึ่งเส้นต่อรายการ", async () => {
-    const model = buildComparison({ rows, dimension: "division", view: "select", items: ["1", "2"], metric: "rawPages" });
+    const model = buildComparison({ rows, dimension: "division", items: ["1", "2"], metric: "rawPages" });
     const { workbook, files } = await open([comparisonSheet(model), detailSheet(model.scopeRows), conditionsSheet("test", [["ช่วงเวลา", "ต.ค. 2568 – พ.ย. 2568"]])]);
     expect(workbook.SheetNames).toEqual(["เปรียบเทียบ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
 
@@ -43,16 +43,67 @@ describe("ไฟล์ Excel ของการเปรียบเทียบ
     expect(chart).toContain("&apos;เปรียบเทียบ&apos;!$H$3:$I$3");
   });
 
-  test("อันดับ: กราฟแท่งแนวนอนของตัวชี้วัด และข้อมูลรายละเอียดครบทุกหน่วยงานก่อนตัดอันดับ", async () => {
-    const model = buildComparison({ rows, dimension: "department", view: "rank", metric: "rawPages", limit: 5, direction: "high" });
-    const { workbook, files } = await open([comparisonSheet(model), detailSheet(model.scopeRows)]);
-    const table = XLSX.utils.sheet_to_json(workbook.Sheets["เปรียบเทียบ"], { header: 1, defval: null });
+  test("แผ่นอันดับ: ทุกหน่วยงานเรียงมาก→น้อยแม้เลือกไว้รายการเดียว พร้อมกราฟแท่งแนวนอน (#115)", async () => {
+    const model = buildComparison({ rows, dimension: "department", items: ["20"], metric: "rawPages" });
+    const { workbook, files } = await open([comparisonSheet(model), rankingSheet(model), detailSheet(model.scopeRows)]);
+    expect(workbook.SheetNames).toEqual(["เปรียบเทียบ", "อันดับ", "ข้อมูลรายละเอียด"]);
+    const table = XLSX.utils.sheet_to_json(workbook.Sheets["อันดับ"], { header: 1, defval: null });
     expect(table.slice(1).map((line) => line.slice(0, 4))).toEqual([[1, "แผนก A1", "ฝ่าย A", 300], [2, "แผนก B2", "ฝ่าย B", 50], [3, "แผนก B1", "ฝ่าย B", 0]]);
-    const chart = strFromU8(files["xl/charts/chart1.xml"]);
+    // กราฟใบแรกเป็นของแผ่นเปรียบเทียบ ใบที่สองของแผ่นอันดับ — สองใบแม้มีไม่ถึงสิบรายการ
+    const chart = strFromU8(files["xl/charts/chart2.xml"]);
+    expect(strFromU8(files["xl/charts/chart3.xml"])).toContain("น้อยสุด 10 อันดับ");
     expect(chart).toContain('<c:barDir val="bar"/>');
-    expect(chart).toContain("&apos;เปรียบเทียบ&apos;!$B$2:$B$4");
-    expect(chart).toContain("&apos;เปรียบเทียบ&apos;!$D$2:$D$4");
-    expect(XLSX.utils.sheet_to_json(workbook.Sheets["ข้อมูลรายละเอียด"])).toHaveLength(rows.length);
+    expect(chart).toContain("&apos;อันดับ&apos;!$B$2:$B$4");
+    expect(chart).toContain("&apos;อันดับ&apos;!$D$2:$D$4");
+  });
+
+  test("แผ่นอันดับที่มีเกินสิบรายการมีกราฟ 10 อันดับแรกและ 10 อันดับท้ายในแผ่นเดียว", async () => {
+    const many = Array.from({ length: 14 }, (_, index) => ({
+      ...rows[0], device_id: 100 + index, division_id: 100 + index, division_name: `ฝ่าย ${String(index + 1).padStart(2, "0")}`, pages_printed: (index + 1) * 10,
+    }));
+    const model = buildComparison({ rows: many, dimension: "division", items: [], metric: "rawPages" });
+    const { files } = await open([rankingSheet(model)]);
+    const top = strFromU8(files["xl/charts/chart1.xml"]);
+    const bottom = strFromU8(files["xl/charts/chart2.xml"]);
+    expect(top).toContain("มากสุด 10 อันดับ");
+    expect(top).toContain("&apos;อันดับ&apos;!$B$2:$B$11");
+    expect(bottom).toContain("น้อยสุด 10 อันดับ");
+    expect(bottom).toContain("&apos;อันดับ&apos;!$B$6:$B$15");
+    const drawing = strFromU8(files["xl/drawings/drawing1.xml"]);
+    expect(drawing.match(/<xdr:oneCellAnchor>/g)).toHaveLength(2);
+    expect(strFromU8(files["xl/drawings/_rels/drawing1.xml.rels"])).toContain("chart2.xml");
+  });
+
+  test("แผ่นอันดับค่าใช้จ่ายที่ราคาไม่ครบบอกเหตุผลแทนตาราง และภาพรวมรายเดือนไม่มีแผ่นอันดับ", async () => {
+    const model = buildComparison({ rows, dimension: "department", items: [], metric: "cost" });
+    const sheet = rankingSheet(model);
+    expect(sheet.rows[0][0]).toMatch(/ยังจัดอันดับแผนกตามค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ 1 รายการ/);
+    expect(sheet.charts).toBeUndefined();
+    expect(rankingSheet(buildComparison({ rows, dimension: "overall" }))).toBeNull();
+  });
+
+  test("อันดับแผนกของหน้าค่าใช้จ่ายแยกแผนก: เรียงตามค่าใช้จ่าย ราคาไม่ครบเรียงตามหน้าสุทธิ แผนกที่ไม่มีรายการไม่ถูกจัด", async () => {
+    const device = (months) => ({ monthly: months.map((month) => ({ month })) });
+    const divisions = [
+      { name: "ฝ่าย A", departments: [
+        { name: "งานเดียวกัน", total_pages: 900, total_cost: 405, total_cost_satang: 40500, device_count: 1, unpriced_readings: 0, devices: [device(["2025-10"])] },
+        { name: "งานว่าง", total_pages: 0, total_cost: 0, total_cost_satang: 0, device_count: 0, unpriced_readings: 0, devices: [] },
+      ] },
+      { name: "ฝ่าย B", departments: [
+        { name: "งานเดียวกัน", total_pages: 100, total_cost: 900, total_cost_satang: 90000, device_count: 2, unpriced_readings: 0, devices: [device(["2025-10"]), device(["2025-11"])] },
+        { name: "งานศูนย์", total_pages: 0, total_cost: 0, total_cost_satang: 0, device_count: 1, unpriced_readings: 0, devices: [device(["2025-10"])] },
+      ] },
+    ];
+    const priced = departmentRankingSheet(divisions);
+    expect(priced).toMatchObject({ basis: "cost", count: 3 });
+    expect(priced.sheet.rows.map((line) => line.slice(0, 4))).toEqual([[1, "งานเดียวกัน", "ฝ่าย B", 900], [2, "งานเดียวกัน", "ฝ่าย A", 405], [3, "งานศูนย์", "ฝ่าย B", 0]]);
+    const { files } = await open([priced.sheet]);
+    expect(strFromU8(files["xl/charts/chart1.xml"])).toContain("&apos;อันดับ&apos;!$D$2:$D$4");
+
+    divisions[1].departments[0].unpriced_readings = 1;
+    const unpriced = departmentRankingSheet(divisions);
+    expect(unpriced.basis).toBe("netPages");
+    expect(unpriced.sheet.rows.map((line) => [line[0], line[2]])).toEqual([[1, "ฝ่าย A"], [2, "ฝ่าย B"], [3, "ฝ่าย B"]]);
   });
 
   test("ข้อมูลรายละเอียด: เดือนเป็นวันที่ ปีงบตามกฎ ต.ค.–ก.ย. รหัสไม่เสียเลขศูนย์ และราคาที่ไม่รู้เป็นเซลล์ว่าง", async () => {
@@ -101,8 +152,8 @@ describe("ไฟล์ Excel ของการเปรียบเทียบ
   });
 
   test("ชื่อไฟล์บอกขอบเขตเป็น ASCII", () => {
-    expect(exportFilename(["print-comparison", "fy2569", monthsSlug(["2025-11", "2025-10"]), "department", "rank"]))
-      .toBe("print-comparison-fy2569-2025-10_2025-11-department-rank");
+    expect(exportFilename(["print-comparison", "fy2569", monthsSlug(["2025-11", "2025-10"]), "department"]))
+      .toBe("print-comparison-fy2569-2025-10_2025-11-department");
     expect(monthsSlug([], ["2025-10"])).toBe("full-year");
   });
 });

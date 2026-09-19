@@ -9,7 +9,7 @@ import { dataStatus, dimensionLabel, statusLabel } from "./comparison";
 /**
  * ComparisonTable — ตารางรายละเอียดใต้พื้นที่เปรียบเทียบของหน้าภาพรวม
  *
- * แถวเดียวกับที่กราฟวาด (เดือน / รายการที่เลือก / อันดับ) แต่แสดงครบทุกตัวเลข —
+ * แถวเดียวกับที่กราฟวาด (เดือน / รายการที่เทียบ) แต่แสดงครบทุกตัวเลข —
  * ยอดพิมพ์จริง หน้าสุทธิหลังหัก 2% ค่าใช้จ่ายที่ยืนยันแล้ว จำนวนเครื่อง และสถานะ —
  * แล้วเปิดรายละเอียดรายเครื่องของแถวนั้นได้ แทนรายการ "ค่าใช้จ่ายตามแผนก/สัญญา" เดิม
  * ที่แสดงตัวเลขชุดเดียวกันซ้ำอีกรอบ
@@ -21,17 +21,13 @@ const props = defineProps({
 });
 const emit = defineEmits(["details"]);
 
-const emptyText = computed(() => ({
-  "no-items": t("ยังไม่ได้เลือกรายการที่จะเทียบ"),
-  unpriced: t("ยังจัดอันดับค่าใช้จ่ายไม่ได้จนกว่าราคาจะครบ — ดูอันดับตามยอดพิมพ์จริงได้"),
-}[props.model.blocked] ?? t("ไม่มีข้อมูลในช่วงที่เลือก")));
+const emptyText = computed(() => t("ไม่มีข้อมูลในช่วงที่เลือก"));
 const money = (value) => (value === null || value === undefined ? "—" : formatBahtValue(value));
 const noData = (summary) => !summary?.readings;
 const costComplete = computed(() => !props.model.scope.unpriced);
 
 const columns = computed(() => {
   const list = [];
-  if (props.model.view === "rank") list.push({ key: "rank", label: t("อันดับ"), align: "right", width: "5rem" });
   list.push({ key: "label", label: props.model.view === "overall" ? t("เดือน") : dimensionLabel(props.model.dimension), value: (row) => row.displayLabel, sortable: props.model.view !== "overall" });
   list.push(
     { key: "rawPages", label: t("ยอดพิมพ์จริง (หน้า)"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.rawPages) },
@@ -46,11 +42,11 @@ const columns = computed(() => {
 </script>
 
 <template>
-  <UiCard flush :title="t('ตารางรายละเอียด')" :description="description">
+  <UiCard flush :title="t('ตารางรายละเอียด')" :description="description" :aria-busy="loading" :class="loading && model.entries.length && 'opacity-45'">
     <UiDataTable
       :rows="model.entries"
       :columns="columns"
-      :loading="loading"
+      :loading="loading && !model.entries.length"
       row-key="key"
       :caption="t('ตารางรายละเอียดของการเปรียบเทียบ')"
       :searchable="false"
@@ -76,7 +72,7 @@ const columns = computed(() => {
         <span :class="dataStatus(row.summary) === 'complete' ? 'text-ink-mute' : 'text-warn-ink'">{{ statusLabel(row.summary) }}</span>
       </template>
       <template #actions="{ row }">
-        <UiButton size="sm" variant="ghost" :disabled="noData(row.summary)" :aria-label="t('ดูรายละเอียดของ {0}', [row.displayLabel])" @click="emit('details', row)">
+        <UiButton size="sm" variant="ghost" :disabled="loading || noData(row.summary)" :aria-label="t('ดูรายละเอียดของ {0}', [row.displayLabel])" @click="emit('details', row)">
           {{ t("ดูรายละเอียด") }}<template #trailing><ArrowUpRight :size="14" /></template>
         </UiButton>
       </template>

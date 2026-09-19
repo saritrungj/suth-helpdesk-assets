@@ -174,12 +174,12 @@ const title = computed(() => (state.value.basis === "periods"
 const chart = computed(() => differenceChart(model.value, { currentLabel: currentLabel.value, referenceLabel: referenceLabel.value }));
 const hasChart = computed(() => chart.value.series.some((series) => series.data.some((value) => value !== null)));
 const valueText = (summary) => {
-  const value = metricValue(summary, state.value.metric);
+  const value = metricValue(summary, display.value.state.metric);
   if (value === null) return summary?.readings ? t("ยังไม่รู้ยอด") : t("ไม่มีข้อมูล");
-  return isCost.value ? formatBahtValue(value) : formatCount(value);
+  return display.value.isCost ? formatBahtValue(value) : formatCount(value);
 };
 const netText = (summary) => (summary?.readings ? formatNetPages(summary.netPages) : t("ไม่มีข้อมูล"));
-const diffText = (result) => (result?.diff === null || result?.diff === undefined ? "—" : formatSigned(result.diff, isCost.value ? formatBahtValue : formatCount));
+const diffText = (result) => (result?.diff === null || result?.diff === undefined ? "—" : formatSigned(result.diff, display.value.isCost ? formatBahtValue : formatCount));
 const ratioText = (result) => (result?.ratio === null || result?.ratio === undefined ? "—" : formatSignedPercent(result.ratio));
 const trendIcon = (result) => (!result?.diff ? Minus : result.diff > 0 ? TrendingUp : TrendingDown);
 
@@ -224,6 +224,16 @@ const columns = computed(() => {
 /* --------------------------------------------------------------------------
    ส่งออก
    -------------------------------------------------------------------------- */
+// ภาพที่อ่านอยู่กับคำอธิบายต้องเปลี่ยนพร้อมกันหลังคำขอช่วงใหม่เสร็จ
+const currentDisplay = computed(() => ({
+  model: model.value, chart: chart.value, title: title.value, statement: statement.value,
+  year: activeFiscalYear.value?.year, columns: columns.value, hasChart: hasChart.value,
+  isCost: isCost.value, unit: unit.value, noun: noun.value, state: { ...state.value },
+  spread: spread.value, unpricedCount: unpricedCount.value,
+}));
+const settledDisplay = ref(null);
+watch([currentDisplay, ready], ([value, isReady]) => { if (isReady) settledDisplay.value = value; }, { immediate: true });
+const display = computed(() => loading.value && settledDisplay.value ? settledDisplay.value : currentDisplay.value);
 const exportBusy = ref(false);
 const exportError = ref("");
 const blockedReason = computed(() => {
@@ -319,34 +329,34 @@ function reload() { yearQuery.refetch(); if (state.value.basis === "periods") ba
     </UiAlert>
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
-    <UiCard class="mb-4" :title="title" :description="`${t('ปีงบ {0}', [yearLabel(activeFiscalYear?.year)])} · ${statement}`" :aria-busy="loading">
+    <UiCard class="mb-4" :class="loading && settledDisplay && 'opacity-45'" :title="display.title" :description="`${t('ปีงบ {0}', [yearLabel(display.year)])} · ${display.statement}`" :aria-busy="loading">
 
-      <UiSkeleton v-if="loading" height="16rem" />
+      <UiSkeleton v-if="loading && !settledDisplay" height="16rem" />
       <UiEmpty v-else-if="failed" :title="t('โหลดข้อมูลไม่สำเร็จ')" compact />
-      <UiEmpty v-else-if="model.blocked === 'no-items'" compact
-        :title="state.basis === 'periods' ? t('เลือก{0}ที่จะเทียบระหว่างสองช่วง', [noun]) : t('เลือก{0}อย่างน้อยสองรายการ', [noun])"
-        :description="state.basis === 'periods' ? t('แต่ละรายการแสดงยอดของช่วงฐานคู่กับช่วงที่ดู') : t('รายการแรกเป็นฐานของการเทียบ เปลี่ยนฐานได้จากช่อง “ฐานของการเทียบ”')" />
-      <UiEmpty v-else-if="model.blocked === 'no-data' || !hasChart" compact :title="t('{0}ที่เลือกยังไม่มียอดพิมพ์ในช่วงนี้', [noun])" />
-      <UiChart v-else kind="bar" horizontal :labels="chart.labels" :series="chart.series"
-        :height="`${Math.max(10, chart.labels.length * (chart.series.length > 1 ? 3.6 : 2.6) + 4)}rem`"
-        :format-value="isCost ? formatBahtValue : formatCount" :format-axis="formatCompact" :unit="unit" :category-label="noun" />
+      <UiEmpty v-else-if="display.model.blocked === 'no-items'" compact
+        :title="display.state.basis === 'periods' ? t('เลือก{0}ที่จะเทียบระหว่างสองช่วง', [display.noun]) : t('เลือก{0}อย่างน้อยสองรายการ', [display.noun])"
+        :description="display.state.basis === 'periods' ? t('แต่ละรายการแสดงยอดของช่วงฐานคู่กับช่วงที่ดู') : t('รายการแรกเป็นฐานของการเทียบ เปลี่ยนฐานได้จากช่อง “ฐานของการเทียบ”')" />
+      <UiEmpty v-else-if="display.model.blocked === 'no-data' || !display.hasChart" compact :title="t('{0}ที่เลือกยังไม่มียอดพิมพ์ในช่วงนี้', [display.noun])" />
+      <UiChart v-else :loading="loading" kind="bar" horizontal :labels="display.chart.labels" :series="display.chart.series"
+        :height="`${Math.max(10, display.chart.labels.length * (display.chart.series.length > 1 ? 3.6 : 2.6) + 4)}rem`"
+        :format-value="display.isCost ? formatBahtValue : formatCount" :format-axis="formatCompact" :unit="display.unit" :category-label="display.noun" />
 
       <template #footer><p class="text-xs text-ink-mute">{{ formula }}</p></template>
     </UiCard>
 
-    <UiCard v-if="!loading && !failed && model.entries.length" flush class="mb-4" :title="t('ตารางความแตกต่าง')" :description="statement">
-      <UiDataTable :rows="model.entries" :columns="columns" row-key="key" :caption="t('ตารางความแตกต่าง')"
+    <UiCard v-if="!failed && display.model.entries.length" :aria-busy="loading" flush class="mb-4" :class="loading && settledDisplay && 'opacity-45'" :title="t('ตารางความแตกต่าง')" :description="display.statement">
+      <UiDataTable :rows="display.model.entries" :columns="display.columns" row-key="key" :caption="t('ตารางความแตกต่าง')"
         :searchable="false" :show-export="false" :show-fullscreen="false" :show-column-picker="false" max-height="none">
         <template #cell-label="{ row }">
           <span class="font-medium text-ink">{{ row.displayLabel }}</span>
           <UiBadge v-if="row.isBase" tone="brand" size="sm" class="ml-2">{{ t("ฐาน") }}</UiBadge>
-          <span v-if="row.hint && state.level === 'department'" class="block text-xs text-ink-mute">{{ row.hint }}</span>
+          <span v-if="row.hint && display.state.level === 'department'" class="block text-xs text-ink-mute">{{ row.hint }}</span>
         </template>
         <template #cell-reference="{ row }">{{ valueText(row.reference) }}</template>
         <template #cell-referenceNet="{ row }">{{ netText(row.reference) }}</template>
         <template #cell-current="{ row }">
           {{ valueText(row.summary) }}
-          <span v-if="isCost && row.summary.unpriced && row.summary.cost !== null" class="block text-2xs text-warn-ink">{{ t("เฉพาะที่ยืนยันแล้ว") }}</span>
+          <span v-if="display.isCost && row.summary.unpriced && row.summary.cost !== null" class="block text-2xs text-warn-ink">{{ t("เฉพาะที่ยืนยันแล้ว") }}</span>
         </template>
         <template #cell-currentNet="{ row }">{{ netText(row.summary) }}</template>
         <template #cell-diff="{ row }">
@@ -357,22 +367,22 @@ function reload() { yearQuery.refetch(); if (state.value.basis === "periods") ba
         </template>
         <template #cell-ratio="{ row }">{{ row.isBase ? "—" : ratioText(row.difference) }}</template>
         <template #cell-devices="{ row }">
-          <template v-if="state.basis === 'periods'">{{ formatCount(row.reference.devices) }} → {{ formatCount(row.summary.devices) }}</template>
+          <template v-if="display.state.basis === 'periods'">{{ formatCount(row.reference.devices) }} → {{ formatCount(row.summary.devices) }}</template>
           <template v-else>{{ formatCount(row.summary.devices) }}</template>
         </template>
         <template #cell-note="{ row }">
           <span class="text-xs" :class="row.difference?.reason && row.difference.reason !== 'zero-base' ? 'text-warn-ink' : 'text-ink-mute'">
             {{ differenceNote(row.difference, { isBase: row.isBase }) || statusLabel(row.summary) }}
           </span>
-          <span v-if="state.basis === 'periods' && dataStatus(row.reference) !== 'complete'" class="block text-2xs text-ink-mute">{{ t("ช่วงฐาน: {0}", [statusLabel(row.reference)]) }}</span>
+          <span v-if="display.state.basis === 'periods' && dataStatus(row.reference) !== 'complete'" class="block text-2xs text-ink-mute">{{ t("ช่วงฐาน: {0}", [statusLabel(row.reference)]) }}</span>
         </template>
       </UiDataTable>
 
       <template #footer>
         <ul class="flex flex-col gap-1.5 text-xs text-ink-mute list-none">
-          <li v-if="unpricedCount" class="flex gap-2"><Info :size="14" class="shrink-0 mt-0.5" aria-hidden="true" />{{ t("ยังยืนยันราคาไม่ได้ {0} รายการ — ยอดเงินเป็นเฉพาะส่วนที่ยืนยันแล้ว และยังไม่คิดส่วนต่างค่าใช้จ่ายของขอบเขตนี้", [formatCount(unpricedCount)]) }}</li>
-          <li v-if="spread && !spread.periods" class="flex gap-2"><Info :size="14" class="shrink-0 mt-0.5" aria-hidden="true" />{{ t("จำนวนเครื่องที่มีข้อมูลต่างกัน ({0}–{1} เครื่อง) ยอดรวมจึงต่างกันได้ตามจำนวนเครื่อง ไม่ได้แปลว่าแต่ละเครื่องใช้งานต่างกัน", [formatCount(spread.min), formatCount(spread.max)]) }}</li>
-          <li v-if="spread?.periods" class="flex gap-2"><Info :size="14" class="shrink-0 mt-0.5" aria-hidden="true" />{{ t("จำนวนเครื่องที่มีข้อมูลของสองช่วงไม่เท่ากัน ({0}) ยอดรวมจึงต่างกันได้เองโดยที่การใช้งานต่อเครื่องไม่เปลี่ยน", [spread.periods.join(", ")]) }}</li>
+          <li v-if="display.unpricedCount" class="flex gap-2"><Info :size="14" class="shrink-0 mt-0.5" aria-hidden="true" />{{ t("ยังยืนยันราคาไม่ได้ {0} รายการ — ยอดเงินเป็นเฉพาะส่วนที่ยืนยันแล้ว และยังไม่คิดส่วนต่างค่าใช้จ่ายของขอบเขตนี้", [formatCount(display.unpricedCount)]) }}</li>
+          <li v-if="display.spread && !display.spread.periods" class="flex gap-2"><Info :size="14" class="shrink-0 mt-0.5" aria-hidden="true" />{{ t("จำนวนเครื่องที่มีข้อมูลต่างกัน ({0}–{1} เครื่อง) ยอดรวมจึงต่างกันได้ตามจำนวนเครื่อง ไม่ได้แปลว่าแต่ละเครื่องใช้งานต่างกัน", [formatCount(display.spread.min), formatCount(display.spread.max)]) }}</li>
+          <li v-if="display.spread?.periods" class="flex gap-2"><Info :size="14" class="shrink-0 mt-0.5" aria-hidden="true" />{{ t("จำนวนเครื่องที่มีข้อมูลของสองช่วงไม่เท่ากัน ({0}) ยอดรวมจึงต่างกันได้เองโดยที่การใช้งานต่อเครื่องไม่เปลี่ยน", [display.spread.periods.join(", ")]) }}</li>
           <li class="flex gap-2"><Info :size="14" class="shrink-0 mt-0.5" aria-hidden="true" />{{ t("ยอดที่สูงกว่าไม่ได้แปลว่าสิ้นเปลือง และยอดที่ลดลงไม่ได้แปลว่าประหยัดเสมอ ให้อ่านคู่กับจำนวนเครื่องและลักษณะงานของหน่วยงาน") }}</li>
         </ul>
       </template>

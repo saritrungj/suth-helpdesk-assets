@@ -99,7 +99,7 @@ export function useChartTheme(element) {
       maintainAspectRatio: false,
       // ปิดแอนิเมชันทั้งหมดเมื่อผู้ใช้ขอให้ลดการเคลื่อนไหว — Chart.js เคลื่อนไหว
       // ด้วย JavaScript บน canvas กฎ prefers-reduced-motion ใน CSS จึงคุมไม่ถึง
-      animation: reducedMotion.value ? false : undefined,
+      animation: reducedMotion.value ? false : { duration: 300 },
       color: c.text,
       font: { family: "Anuphan, sans-serif" },
       interaction: { mode: "index", intersect: false },

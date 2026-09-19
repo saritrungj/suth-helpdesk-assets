@@ -7,6 +7,24 @@ vi.mock("../lib/export-xlsx", () => ({ exportSheet: (...args) => exportSheet(...
 
 const { default: UiDataTable } = await import("./UiDataTable.vue");
 
+test("malformed saved search falls back to an empty search", () => {
+  window.sessionStorage.setItem("suth:table:Master:years", JSON.stringify({ search: 42 }));
+  let wrapper;
+  try {
+    wrapper = mount(UiDataTable, {
+      global: { config: { globalProperties: { $route: { name: "Master" } } } },
+      props: {
+        stateKey: "years", rows: [{ id: 1, year: 2569 }],
+        columns: [{ key: "year", label: "Year" }], maxHeight: "none", showExport: false,
+      },
+    });
+    expect(wrapper.get("tbody").text()).toContain("2569");
+  } finally {
+    wrapper?.unmount();
+    window.sessionStorage.removeItem("suth:table:Master:years");
+  }
+});
+
 test("a descending default still lets the user sort years ascending", async () => {
   const wrapper = mount(UiDataTable, {
     props: {

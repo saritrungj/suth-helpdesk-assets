@@ -1,5 +1,6 @@
 <script setup>
 import { reportContext } from "../components/report-context";
+import { usePageState } from "../composables/use-page-state";
 import { deviceLocationLabel } from "../lib/device-location";
 import { formatMonth } from "../lib/locale-format";
 
@@ -16,8 +17,9 @@ import { t } from "../lib/locale";
  *   1. ต้นไม้รายละเอียด ไล่ดูตัวเลขจนถึงระดับเครื่องและเดือน
  *   2. อันดับรายเครื่อง เครื่องไหนใช้หนักที่สุด/เบาที่สุด พร้อมตัวกรองของตัวเอง
  *
- * การเปรียบเทียบฝ่าย/แผนก (กราฟ อันดับมาก–น้อย และส่วนต่าง) อยู่ที่หน้าภาพรวมและ
- * หน้าเปรียบเทียบ ซึ่งใช้ตรรกะชุดเดียวกันใน components/comparison.js (#103)
+ * การเปรียบเทียบฝ่าย/แผนก (กราฟและส่วนต่าง) อยู่ที่หน้าภาพรวมและหน้าเปรียบเทียบ ซึ่งใช้
+ * ตรรกะชุดเดียวกันใน components/comparison.js (#103) ส่วนอันดับแผนกมาก–น้อยอยู่ในไฟล์
+ * Excel ของหน้านี้ (แผ่น "อันดับ") ไม่ได้อยู่บนหน้าจอ (#115)
  *
  * ยอดรวมด้านบนอ้างอิง "ทั้งปีงบ" เสมอ ไม่ขึ้นกับช่วงที่เลือกเปรียบเทียบ —
  * ตั้งใจให้เป็นเลขนิ่งที่เอาไปอ้างอิงได้ตลอด และเขียนกำกับไว้ในการ์ด
@@ -26,7 +28,8 @@ import { t } from "../lib/locale";
  * บริบทค่าใช้จ่ายคือเรื่องไม่ดี ซึ่งตรงข้ามกับสัญชาตญาณของสีเขียว/แดงทั่วไป
  */
 import { computed, onActivated, onMounted, ref, watch } from "vue";
-import { exportSheet } from "../lib/export-xlsx";
+import { createWorkbook, downloadWorkbook, reportStamp } from "../lib/export-xlsx";
+import { departmentRankingSheet } from "../components/comparison-export";
 import { useExportTask } from "../composables/useExportTask";
 import {
   Building2,
@@ -477,18 +480,30 @@ async function exportTreeExcel() {
     )
   );
 
-  await runExport(() => exportSheet({
-    header,
-    rows,
-    sheetName: t("แยกตามฝ่าย-แผนก"),
-    filename: "expense-by-department",
-    context: reportContext({
+  // จับข้อมูลไว้ก่อน await — เปลี่ยนคำค้นระหว่างสร้างไฟล์ ไฟล์ยังเป็นชุดที่กด
+  const filename = "expense-by-department";
+  const ranking = departmentRankingSheet(filteredDivisions.value);
+  const context = [
+    ...reportContext({
       filters: { search: search.value },
       labels: { search: t("ค้นหา") },
       unpricedReadings: unpricedReadings.value,
     }),
-  }));
+    [t("อันดับ"), ranking.basis === "cost"
+      ? t("ทุกแผนกที่มียอด {0} แผนก เรียงตามค่าใช้จ่ายสุทธิจากมากไปน้อย (แผ่น “อันดับ”)", [ranking.count])
+      : t("ทุกแผนกที่มียอด {0} แผนก เรียงตามจำนวนหน้าสุทธิ เพราะราคายังยืนยันไม่ครบ จึงยังจัดอันดับค่าใช้จ่ายไม่ได้ (แผ่น “อันดับ”)", [ranking.count])],
+  ];
+  await runExport(async () => downloadWorkbook(await createWorkbook({
+    sheets: [
+      { name: t("แยกตามฝ่าย-แผนก"), header, rows },
+      ranking.sheet,
+      { name: t("บริบทรายงาน"), rows: [...reportStamp(filename), ...context] },
+    ],
+  }), filename));
 }
+
+// คำค้น ช่วงเดือน กิ่งที่กางไว้ และตัวกรองตารางอันดับ ยังอยู่เมื่อกลับมาหน้านี้ (#115)
+usePageState({ search, trendMonthSelection, openDivisions, openDepartments, usageFilters }, { key: "department" });
 
 onMounted(async () => {
   await loadMonths();
