@@ -135,3 +135,7 @@ Single-context — ADR อยู่ที่ `docs/decisions/` (ไม่ใช�
 ### Bug fixing and diff review
 
 เมื่อแก้บั๊ก รีวิว diff หรือเตรียมส่งมอบ implementation ให้ใช้ [workflow ตรวจบั๊กและรีวิว](docs/agents/review-workflow.md): ทำ reproduction ให้แดงก่อน ตรวจทุกไฟล์สามมิติ และปิดทุก finding ด้วยหลักฐานก่อนรันด่านส่งมอบ
+
+### Subagents
+
+`.claude/agents/` มี subagent สำหรับรันชุดตรวจ และรีวิวด้าน security กับกฎโดเมนคู่กับ `/code-review` session หลักเป็นผู้เขียนโค้ดคนเดียว ดู [subagents.md](docs/agents/subagents.md)
