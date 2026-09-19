@@ -1,4 +1,6 @@
 <script setup>
+import { resolveReference } from "../lib/reference-filters";
+import { useReferenceFilters } from "../composables/use-reference-filters";
 import { formatMonth } from "../lib/locale-format";
 
 import { t } from "../lib/locale";
@@ -104,8 +106,6 @@ const groupsFromQuery = () =>
 const filtersFromQuery = () => ({
   building: queryText(route.query.building),
   floor: queryText(route.query.floor),
-  division: "",
-  department: "",
   contract: /^\d+$/.test(queryText(route.query.contract)) ? queryText(route.query.contract) : "",
 });
 
@@ -114,6 +114,8 @@ const selectedGroups = ref(groupsFromQuery());
 
 const filters = ref(filtersFromQuery());
 
+const referenceError = ref("");
+const referencesReady = ref(false);
 const buildings = ref([]);
 const floors = ref([]);
 const contracts = ref([]);
@@ -122,41 +124,21 @@ const departmentQuery = useDepartments();
 const divisions = computed(() => divisionQuery.data.value ?? []);
 const departments = computed(() => departmentQuery.data.value ?? []);
 
-const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.name }));
+const { buildingOptions, floorOptions, referenceLabel, normalizeReferences } =
+  useReferenceFilters(filters, { buildings, floors, divisions, departments });
 
-const buildingOptions = computed(() => toOptions(buildings.value));
-const divisionOptions = computed(() => toOptions(divisions.value));
 const contractOptions = computed(() =>
   contracts.value.map((contract) => ({ value: String(contract.id), label: contract.contract_no }))
 );
 
-const floorOptions = computed(() => {
-  const building = buildings.value.find((b) => b.name === filters.value.building);
-  const source = building
-    ? floors.value.filter((f) => Number(f.building_id) === Number(building.id))
-    : floors.value;
-
-  const seen = new Set();
-  return source.filter((f) => !seen.has(f.name) && seen.add(f.name)).map((f) => ({ value: f.name, label: f.name }));
-});
-
-const departmentOptions = computed(() => {
-  const division = divisions.value.find((d) => d.name === filters.value.division);
-  const source = division
-    ? departments.value.filter((d) => Number(d.division_id) === Number(division.id))
-    : departments.value;
-  return toOptions(source);
-});
-
 // อ่านค่าจาก URL ห้ามถูกล้างตาม — เปิดลิงก์ที่มีทั้งอาคารและชั้นต้องได้ทั้งสองค่า
 let syncingScopeFromRoute = false;
-watch(() => filters.value.building, () => { if (!syncingScopeFromRoute) filters.value.floor = ""; }, { flush: "sync" });
-watch(() => filters.value.division, () => { if (!syncingScopeFromRoute) filters.value.department = ""; }, { flush: "sync" });
+const referenceNotice = ref("");
 
 const hasActiveFilter = computed(() => Object.values(filters.value).some(Boolean));
 
 function resetFilters() {
-  filters.value = { building: "", floor: "", division: "", department: "", contract: "" };
+  filters.value = { building: "", floor: "", contract: "" };
 }
 
 function clearAll() {
@@ -189,12 +171,14 @@ watch(() => route.query.type, () => {
 function rowMatches(row) {
   const f = filters.value;
   return (
-    (!f.building || row.building_name === f.building) &&
-    (!f.floor || row.floor_name === f.floor) &&
-    (!f.division || row.division_name === f.division) &&
-    (!f.department || row.department_name === f.department) &&
+    (!f.building || String(row.building_id) === f.building) &&
+    (!f.floor || String(row.floor_id) === f.floor) &&
     (!f.contract || String(row.billing_contract_id) === f.contract)
   );
+}
+
+async function retryReferences() {
+  await Promise.all([(comparisonType.value !== "department" || referenceError.value) ? loadMasterData() : Promise.resolve(), divisionQuery.refetch(), departmentQuery.refetch()]);
 }
 
 let masterDataLoaded = false;
@@ -202,6 +186,7 @@ let masterDataPromise = null;
 async function loadMasterData() {
   if (masterDataLoaded) return;
   if (masterDataPromise) return masterDataPromise;
+  referenceError.value = "";
   masterDataPromise = (async () => {
     try {
       const [building, floor, contract] = await Promise.all([
@@ -214,8 +199,9 @@ async function loadMasterData() {
       floors.value = floor.data ?? [];
       contracts.value = contract.data ?? [];
       masterDataLoaded = true;
+      referencesReady.value = true;
     } catch (err) {
-      console.error("Load master data error:", err);
+      referenceError.value = t("โหลดข้อมูลอ้างอิงไม่สำเร็จ");
     } finally {
       masterDataPromise = null;
     }
@@ -232,23 +218,30 @@ const scopeQuery = (groups, f) => ({
   building: f.building || undefined,
   floor: f.floor || undefined,
 });
-const SCOPE_KEYS = ["groups", "contract", "building", "floor"];
 
 watch([selectedGroups, filters], ([groups, f]) => {
   if (syncingScopeFromRoute) return;
   router.replace({ query: { ...route.query, ...scopeQuery(groups, f) } });
 }, { deep: true, flush: "sync" });
 
-watch(() => route.query, (query) => {
-  const groups = groupsFromQuery();
-  const next = filtersFromQuery();
+watch([() => route.query, referencesReady], ([query]) => {
+  if (!referencesReady.value) return;
+  // Normalize the entire scope with one route write; separate writers can restore
+  // each other's legacy values when a link includes both groups and location.
+  let groups = groupsFromQuery();
+  const resolved = normalizeReferences(filtersFromQuery());
+  if (comparisonType.value === "building") {
+    const results = groups.map((value) => ({ raw: value, ...resolveReference(value, buildingOptions.value) }));
+    resolved.rejected.push(...results.filter((result) => result.rejected).map((result) => result.raw));
+    groups = [...new Set(results.map((result) => result.value).filter(Boolean))];
+  }
+  if (resolved.rejected.length) referenceNotice.value = t("ล้างตัวกรองจากลิงก์ที่ไม่พบหรือระบุได้ไม่แน่ชัด: {0}", [resolved.rejected.join(", ")]);
   syncingScopeFromRoute = true;
-  if (groups.join(",") !== selectedGroups.value.join(",")) selectedGroups.value = groups;
-  if (JSON.stringify(next) !== JSON.stringify(filters.value)) filters.value = next;
+  selectedGroups.value = groups;
+  filters.value = resolved.values;
   syncingScopeFromRoute = false;
-  // ค่าที่อ่านไม่ได้หรือเกินจำนวนสีถูกเขียนกลับให้ URL ตรงกับสิ่งที่หน้าใช้จริง
-  const normalized = scopeQuery(groups, next);
-  if (SCOPE_KEYS.some((key) => queryText(query[key]) !== queryText(normalized[key]))) {
+  const normalized = scopeQuery(groups, resolved.values);
+  if (Object.keys(normalized).some((key) => queryText(query[key]) !== queryText(normalized[key]))) {
     router.replace({ query: { ...query, ...normalized } });
   }
 });
@@ -284,8 +277,7 @@ watch(() => route.query.months, () => {
 });
 
 const monthlyParams = computed(() => ({
-  // โหมดแยกตามอาคารต้องได้ทุกอาคาร ตัวกรองอาคารจึงส่งไปเฉพาะโหมดเดือน
-  building_name: comparisonType.value === "month" ? filters.value.building || undefined : undefined,
+  // โหลดทั้งปีงบ แล้วกรองด้วย ID ที่ตั้งของแต่ละเดือนที่ rowMatches
   month: activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value).join(",") : undefined,
 }));
 const monthlyQuery = useMonthlyKpi(monthlyParams);
@@ -430,7 +422,7 @@ const GROUPING = {
     noun: t("สัญญา"),
   },
   building: {
-    id: (row) => row.building_name || "",
+    id: (row) => String(row.building_id ?? ""),
     label: (row) => row.building_name || t("ไม่ระบุอาคาร"),
     noun: t("อาคาร"),
   },
@@ -712,8 +704,8 @@ function exportConditions(model, kind) {
     ...(grouping.value ? [[t("รายการที่เปรียบเทียบ"), model.entries.map((entry) => entry.displayLabel).join(", ")]] : []),
     ...(grouping.value && !selectedGroups.value.length ? [[t("วิธีเลือกรายการ"), t("ไม่ได้เลือกเอง — {0} รายการที่มียอดพิมพ์สูงสุดในปีงบ", [MAX_SERIES])]] : []),
     ...(f.contract ? [[t("สัญญาที่คิดเงิน"), contractOptions.value.find((option) => option.value === f.contract)?.label ?? f.contract]] : []),
-    ...(f.building ? [[t("อาคาร"), f.building]] : []),
-    ...(f.floor ? [[t("ชั้น"), f.floor]] : []),
+    ...(f.building ? [[t("อาคาร"), referenceLabel("building", f.building)]] : []),
+    ...(f.floor ? [[t("ชั้น"), referenceLabel("floor", f.floor)]] : []),
     ...(kind === "raw" ? [] : [[t("ตัวชี้วัด"), `${chartMetric.value.label} (${chartMetric.value.unit})`]]),
     [t("ตัวชี้วัดบนหน้าจอ"), chartMetric.value.label],
     [t("จำนวนรายการยอดพิมพ์"), formatCount(model.scopeRows.length)],
@@ -752,6 +744,15 @@ onMounted(async () => {
       :title="t(&quot;เปรียบเทียบ&quot;)"
       :description="t(&quot;เทียบยอดพิมพ์และค่าใช้จ่ายระหว่างเดือน ระหว่างสัญญา ระหว่างอาคาร หรือระหว่างหน่วยงาน&quot;)"
     />
+
+    <UiAlert v-if="referenceError || divisionQuery.isError.value || departmentQuery.isError.value" tone="danger" class="mb-4">
+      {{ t("โหลดข้อมูลอ้างอิงไม่สำเร็จ") }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="retryReferences()">{{ t("ลองใหม่") }}</UiButton>
+      </template>
+    </UiAlert>
+
+    <UiAlert v-if="referenceNotice" tone="warn" class="mb-4">{{ referenceNotice }}</UiAlert>
 
     <!-- ฝ่าย/แผนกมีตัวเลือกและผลของตัวเอง (ตรวจความแตกต่าง) รวมช่อง "เทียบระหว่าง" ไว้ในแถบเดียวกัน -->
     <UnitDifference v-if="comparisonType === 'department'" v-model:type="comparisonType" :types="COMPARISON_TYPES" />

@@ -658,3 +658,14 @@ test("report division filter follows the division of each month (#104)", async (
     expect(totals["CI-SN-032"] ?? 0, `CI-SN-032 ใน${division}`).toBe(pagesOf(overlapping, division));
   }
 });
+
+
+test("monthly KPI exposes the month-effective location IDs (#107)", async () => {
+  const [devices, readings] = await Promise.all([apiFetch("/devices"), fiscalYearReadings()]);
+  const moved = devices.find((device) => device.serial_number === "CI-SN-031");
+  expect(moved, "CI-SN-031 from the isolated CI seed").toBeTruthy();
+  const rows = readings.filter((row) => row.device_id === moved.id).sort((a, b) => a.month.localeCompare(b.month));
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toMatchObject({ building_id: 1, floor_id: 1, division_id: 1, department_id: 2, brand_id: 1 });
+  expect(rows[1]).toMatchObject({ building_id: 2, floor_id: 2, division_id: 2, department_id: 3, brand_id: 1 });
+});
