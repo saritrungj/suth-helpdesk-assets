@@ -1147,5 +1147,9 @@
   "ยังไม่กำหนด": "Not set",
   "ยังไม่มีราคา": "No price yet",
   "ไม่มีกำหนดสิ้นสุด": "No end date",
-  "สัญญาที่คิดเงิน": "Billing contract"
+  "สัญญาที่คิดเงิน": "Billing contract",
+  "รหัส {0}": "ID {0}",
+  "โหลดรายการ{0}ไม่สำเร็จ กดลองใหม่ก่อนบันทึก": "Could not load the {0} list. Retry before saving",
+  "รอโหลดรายการ{0}ให้เสร็จก่อนบันทึก": "Wait for the {0} list to load before saving",
+  "ชื่อในตารางจึงแสดงเป็นรหัส และยังบันทึกรายการใหม่ไม่ได้": "names in the table show as IDs and new items cannot be saved yet"
 }
