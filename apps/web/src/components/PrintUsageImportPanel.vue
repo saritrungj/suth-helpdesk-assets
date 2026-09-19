@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from "vue";
+import { currentMonth } from "@suth/domain";
 import { Download, Upload } from "lucide-vue-next";
 import api from "../services/api";
 import { errorMessage } from "../lib/api-error";
@@ -8,6 +9,8 @@ import { toCsv } from "../lib/export-csv";
 import { UiAlert, UiButton } from "../ui";
 import FileDropzone from "./FileDropzone.vue";
 import { t } from "../lib/locale";
+import { formatMonth } from "../lib/locale-format";
+import { meterHeader, overwriteCsv, recentMonths, templateCsv } from "./print-usage-import";
 
 const emit = defineEmits(["imported"]);
 const file = ref(null);
@@ -15,11 +18,23 @@ const uploading = ref(false);
 const preview = ref(null);
 const result = ref(null);
 
-const TEMPLATE_CSV = [
-  "SN.,meter 10/67,meter 11/67,meter 12/67",
-  "SN-HP-001,1200,1350,1420",
-  "SN-CN-002,800,,950",
-].join("\r\n");
+/** เดือนของไฟล์ตัวอย่าง — สามเดือนล่าสุด ผู้ใช้เปลี่ยนหัวคอลัมน์เป็นเดือนที่จะนำเข้าเอง */
+const templateMonths = recentMonths(currentMonth(), 3);
+const templateExample = meterHeader(templateMonths.at(-1));
+
+/**
+ * รายการที่จะเขียนทับแสดง 10 แถวแรกก่อน แล้วกดดูครบได้ในหน้าเดียวกัน (#106)
+ *
+ * เดิมเห็นได้แค่ 10 แถวแรกโดยไม่มีทางดูที่เหลือ ทั้งที่การยืนยันคือการเขียนทับ "ทุกแถว"
+ * ผู้ใช้จึงยืนยันค่าที่ไม่เคยเห็น
+ */
+const OVERWRITE_PREVIEW = 10;
+const showAllOverwrites = ref(false);
+const overwriteRows = computed(() => preview.value?.overwrite_rows ?? []);
+const visibleOverwrites = computed(() =>
+  showAllOverwrites.value ? overwriteRows.value : overwriteRows.value.slice(0, OVERWRITE_PREVIEW)
+);
+const monthsFound = computed(() => (preview.value?.months_found ?? []).map((month) => formatMonth(month)).join(", "));
 
 const canCommit = computed(() =>
   preview.value?.valid
@@ -27,14 +42,21 @@ const canCommit = computed(() =>
   && ((preview.value.new_rows?.length ?? 0) + (preview.value.overwrite_rows?.length ?? 0) > 0)
 );
 
-function downloadTemplate() {
-  const blob = new Blob(["\ufeff" + TEMPLATE_CSV], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
+function downloadCsv(content, filename) {
+  const url = URL.createObjectURL(new Blob(["\ufeff" + content], { type: "text/csv;charset=utf-8;" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = "template-import-print-usage.csv";
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function downloadTemplate() {
+  downloadCsv(templateCsv(templateMonths), "template-import-print-usage.csv");
+}
+
+function downloadOverwrites() {
+  downloadCsv(overwriteCsv(overwriteRows.value), "print-usage-import-overwrites.csv");
 }
 
 function downloadErrors() {
@@ -56,6 +78,7 @@ function selectFile(value) {
   file.value = value;
   preview.value = null;
   result.value = null;
+  showAllOverwrites.value = false;
 }
 
 async function send(mode, previewToken = "") {
@@ -71,6 +94,7 @@ async function inspectFile() {
   uploading.value = true;
   preview.value = null;
   result.value = null;
+  showAllOverwrites.value = false;
   try {
     const res = await send("preview");
     preview.value = res.data;
@@ -103,7 +127,7 @@ async function commitImport() {
       <UiButton size="sm" variant="secondary" @click="downloadTemplate">
         <template #icon><Download :size="14" /></template>{{ t("ดาวน์โหลดไฟล์ตัวอย่าง") }}
       </UiButton>
-      <span class="text-xs text-ink-mute">{{ t("หัวตารางต้องมี SN. และ meter M/YY เช่น meter 10/67") }}</span>
+      <span class="text-xs text-ink-mute">{{ t("หัวตารางต้องมี SN. และ meter M/YY ปี พ.ศ. เช่น {0} — เปลี่ยนหัวคอลัมน์ในไฟล์ตัวอย่างเป็นเดือนที่จะนำเข้า", [templateExample]) }}</span>
     </div>
 
     <FileDropzone :model-value="file" :disabled="uploading" @update:model-value="selectFile" />
@@ -130,18 +154,39 @@ async function commitImport() {
         </UiButton>
       </UiAlert>
 
-      <div v-else class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4" role="status">
+      <p v-if="monthsFound" class="mt-4 text-sm text-ink-soft">
+        {{ t("เดือนในไฟล์") }}: <strong class="text-ink">{{ monthsFound }}</strong>
+      </p>
+
+      <div v-if="!preview.errors?.length" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4" role="status">
         <div class="rounded-lg bg-surface-2 p-3"><span class="block text-xs text-ink-mute">{{ t("รายการใหม่") }}</span><strong class="numeral text-lg text-ink">{{ formatCount(preview.new_rows?.length ?? 0) }}</strong></div>
         <div class="rounded-lg bg-warn-soft p-3"><span class="block text-xs text-warn-ink">{{ t("จะเขียนทับข้อมูลเดิม") }}</span><strong class="numeral text-lg text-ink">{{ formatCount(preview.overwrite_rows?.length ?? 0) }}</strong></div>
         <div class="rounded-lg bg-surface-2 p-3"><span class="block text-xs text-ink-mute">{{ t("ค่าเดิม ไม่เปลี่ยน") }}</span><strong class="numeral text-lg text-ink">{{ formatCount(preview.unchanged_rows?.length ?? 0) }}</strong></div>
       </div>
 
-      <div v-if="preview.overwrite_rows?.length" class="mt-4 overflow-x-auto">
-        <p class="text-sm font-semibold text-ink mb-2">{{ t("ตัวอย่างข้อมูลที่จะเขียนทับ") }}</p>
-        <table class="w-full text-sm">
-          <thead><tr class="border-b border-line-soft text-left text-ink-mute"><th class="py-2">Serial</th><th>{{ t("เดือน") }}</th><th class="text-right">{{ t("ค่าเดิม") }}</th><th class="text-right">{{ t("ค่าใหม่") }}</th></tr></thead>
-          <tbody><tr v-for="row in preview.overwrite_rows.slice(0, 10)" :key="`${row.device_id}-${row.month}`" class="border-b border-line-soft"><td class="py-2 font-mono">{{ row.serial_number }}</td><td>{{ row.month }}</td><td class="text-right numeral">{{ formatCount(row.previous_pages) }}</td><td class="text-right numeral font-semibold">{{ formatCount(row.pages) }}</td></tr></tbody>
-        </table>
+      <div v-if="overwriteRows.length" class="mt-4">
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <p class="text-sm font-semibold text-ink mr-auto">{{ t("ข้อมูลที่จะเขียนทับ {0} รายการ", [formatCount(overwriteRows.length)]) }}</p>
+          <UiButton
+            v-if="overwriteRows.length > OVERWRITE_PREVIEW"
+            size="sm"
+            variant="ghost"
+            data-testid="show-all-overwrites"
+            :aria-expanded="showAllOverwrites"
+            @click="showAllOverwrites = !showAllOverwrites"
+          >
+            {{ showAllOverwrites ? t("แสดงแค่ {0} รายการแรก", [OVERWRITE_PREVIEW]) : t("แสดงทั้งหมด {0} รายการ", [formatCount(overwriteRows.length)]) }}
+          </UiButton>
+          <UiButton size="sm" variant="secondary" @click="downloadOverwrites">
+            <template #icon><Download :size="14" /></template>{{ t("ดาวน์โหลดรายการที่จะเขียนทับ") }}
+          </UiButton>
+        </div>
+        <div class="overflow-x-auto max-h-80 overflow-y-auto" tabindex="0" role="region" :aria-label="t('ข้อมูลที่จะเขียนทับ {0} รายการ', [formatCount(overwriteRows.length)])">
+          <table class="w-full text-sm">
+            <thead><tr class="border-b border-line-soft text-left text-ink-mute"><th class="py-2">Serial</th><th>{{ t("เดือน") }}</th><th class="text-right">{{ t("ค่าเดิม") }}</th><th class="text-right">{{ t("ค่าใหม่") }}</th></tr></thead>
+            <tbody><tr v-for="row in visibleOverwrites" :key="`${row.device_id}-${row.month}`" data-testid="overwrite-row" class="border-b border-line-soft"><td class="py-2 font-mono">{{ row.serial_number }}</td><td>{{ formatMonth(row.month) }}</td><td class="text-right numeral">{{ formatCount(row.previous_pages) }}</td><td class="text-right numeral font-semibold">{{ formatCount(row.pages) }}</td></tr></tbody>
+          </table>
+        </div>
       </div>
 
       <div class="flex flex-wrap justify-end gap-2 mt-4">

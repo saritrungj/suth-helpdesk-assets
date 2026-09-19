@@ -157,6 +157,15 @@ function currentMonth(now = new Date()) {
   return `${year}-${month}`;
 }
 
+/** `count` เดือนล่าสุด รวมเดือน ค.ศ. `current` เรียงจากเก่าไปใหม่ */
+function recentMonths(current, count = 3) {
+  const [year, month] = String(current).split("-").map(Number);
+  return Array.from({ length: count }, (_, index) => {
+    const offset = year * 12 + (month - 1) - (count - 1 - index);
+    return `${Math.floor(offset / 12)}-${String((offset % 12) + 1).padStart(2, "0")}`;
+  });
+}
+
 /** Numeric position of a canonical Gregorian YYYY-MM month for adjacency checks. */
 function monthIndex(month) {
   const [year, value] = String(month).split("-").map(Number);
@@ -168,6 +177,7 @@ module.exports = {
   BE_OFFSET,
   BE_YEAR_THRESHOLD,
   currentMonth,
+  recentMonths,
   CE_YEAR_MIN,
   CE_YEAR_MAX,
   isBuddhistYear,
