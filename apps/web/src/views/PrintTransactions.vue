@@ -1,4 +1,6 @@
 <script setup>
+import { useReferenceQuery } from "../composables/use-reference-query";
+import { useReferenceFilters } from "../composables/use-reference-filters";
 import { reportContext } from "../components/report-context";
 import { formatFiscalYearRange, formatMonth } from "../lib/locale-format";
 import { dueMonthCount, requiredDeviceCount } from "../lib/entry-coverage";
@@ -89,6 +91,8 @@ let summaryRequest = 0;
 const devices = ref([]);
 const filledSummary = ref({});
 
+const referenceError = ref("");
+const referencesReady = ref(false);
 const buildings = ref([]);
 const floors = ref([]);
 const divisions = ref([]);
@@ -199,6 +203,7 @@ async function loadDevices() {
 }
 
 async function loadMasterData() {
+  referenceError.value = "";
   try {
     const [building, floor, division, department, brand, contract] = await Promise.all([
       api.get("/buildings"),
@@ -215,8 +220,9 @@ async function loadMasterData() {
     departments.value = department.data ?? [];
     brands.value = brand.data ?? [];
     contracts.value = contract.data ?? [];
+    referencesReady.value = true;
   } catch (err) {
-    console.error("Load master data error:", err);
+    referenceError.value = t("โหลดข้อมูลอ้างอิงไม่สำเร็จ");
   }
 }
 
@@ -480,38 +486,17 @@ watch(
 // ไม่ต้อง watch เดือนเพื่อโหลดเองแล้ว — useMonthPages ผูกกับ key ตามเดือน
 // พอเดือนเปลี่ยน key เปลี่ยน แล้วมันดึงชุดใหม่ให้เอง โดยคำตอบของเดือนเก่า
 // ไปเข้า cache ของเดือนเก่า ไม่มีทางมาทับเดือนที่กำลังแสดงอยู่
-watch(() => filters.value.building, () => (filters.value.floor = ""));
-watch(() => filters.value.division, () => (filters.value.department = ""));
 
 /* --------------------------------------------------------------------------
    ตัวเลือกตัวกรอง
    -------------------------------------------------------------------------- */
-const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.name }));
+const { buildingOptions, floorOptions, divisionOptions, departmentOptions, brandOptions, referenceLabel, normalizeReferences } =
+  useReferenceFilters(filters, { buildings, floors, divisions, departments, brands });
+const referenceNotice = useReferenceQuery(filters, referencesReady, normalizeReferences);
 
-const buildingOptions = computed(() => toOptions(buildings.value));
-const divisionOptions = computed(() => toOptions(divisions.value));
-const brandOptions = computed(() => toOptions(brands.value));
 const contractOptions = computed(() =>
   contracts.value.map((contract) => ({ value: String(contract.id), label: contract.contract_no }))
 );
-
-const floorOptions = computed(() => {
-  const building = buildings.value.find((b) => b.name === filters.value.building);
-  const source = building
-    ? floors.value.filter((f) => Number(f.building_id) === Number(building.id))
-    : floors.value;
-
-  const seen = new Set();
-  return source.filter((f) => !seen.has(f.name) && seen.add(f.name)).map((f) => ({ value: f.name, label: f.name }));
-});
-
-const departmentOptions = computed(() => {
-  const division = divisions.value.find((d) => d.name === filters.value.division);
-  const source = division
-    ? departments.value.filter((d) => Number(d.division_id) === Number(division.id))
-    : departments.value;
-  return toOptions(source);
-});
 
 const hasActiveFilter = computed(() => search.value !== "" || Object.values(filters.value).some(Boolean));
 
@@ -547,6 +532,9 @@ function optionLabel(options, value, key = "value", labelKey = "label") {
 const tableReportContext = computed(() => {
   const contextFilters = { ...filters.value };
   delete contextFilters.month;
+  for (const key of ["building", "floor", "division", "department", "brand"]) {
+    contextFilters[key] = referenceLabel(key, contextFilters[key]);
+  }
 
   if (contextFilters.fillStatus) {
     contextFilters.fillStatus = optionLabel(FILL_STATUS_OPTIONS, contextFilters.fillStatus);
@@ -573,7 +561,7 @@ const filterChips = computed(() => {
     const value = filters.value[key];
     if (!value) continue;
 
-    let shown = value;
+    let shown = referenceLabel(key, value);
     if (key === "fillStatus") shown = optionLabel(FILL_STATUS_OPTIONS, value);
     if (key === "deviceStatus") shown = optionLabel(DEVICE_STATUS_OPTIONS, value);
 
@@ -653,11 +641,11 @@ const filteredDevices = computed(() => {
 
     return (
       matchKeyword &&
-      (!f.building || d.building_name === f.building) &&
-      (!f.floor || d.floor_name === f.floor) &&
-      (!f.division || d.division_name === f.division) &&
-      (!f.department || d.department_name === f.department) &&
-      (!f.brand || d.brand_name === f.brand) &&
+      (!f.building || String(d.building_id) === f.building) &&
+      (!f.floor || String(d.floor_id) === f.floor) &&
+      (!f.division || String(d.division_id) === f.division) &&
+      (!f.department || String(d.department_id) === f.department) &&
+      (!f.brand || String(d.brand_id) === f.brand) &&
       (!f.contract || String(d.contract_id) === f.contract) &&
       (!f.deviceStatus || d.status === f.deviceStatus) &&
       (!f.fillStatus || (mode.value === "month" && f.fillStatus === "none" ? !Object.hasOwn(monthPages.value, d.id) : fillStatusOf(d.id) === f.fillStatus)) &&
@@ -1020,6 +1008,15 @@ onUnmounted(unregisterFiscalYearGuard);
     <!-- ตัวกรอง — ค้นหากับเดือนอยู่ในสายตาเสมอ ที่เหลือซ่อนอยู่หลังปุ่ม
          เพราะจากตัวกรองเก้าช่อง มีสองช่องที่คนแตะเกือบทุกครั้ง ส่วนอีกเจ็ดช่อง
          แทบไม่ถูกแตะเลย แต่กินความสูงจนตารางที่คนมากรอกหลุดใต้เส้นพับ -->
+    <UiAlert v-if="referenceError" tone="danger" class="mb-4">
+      {{ t("โหลดข้อมูลอ้างอิงไม่สำเร็จ") }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="loadMasterData()">{{ t("ลองใหม่") }}</UiButton>
+      </template>
+    </UiAlert>
+
+    <UiAlert v-if="referenceNotice" tone="warn" class="mb-4">{{ referenceNotice }}</UiAlert>
+
     <UiFilterBar :chips="filterChips" @remove="removeFilter" @clear="resetFilters">
       <template #primary>
         <UiField :label="t('ค้นหา')" class="flex-1 min-w-[16rem] max-w-md">

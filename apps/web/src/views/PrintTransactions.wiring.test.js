@@ -26,6 +26,7 @@ vi.mock("../services/api", () => ({
 vi.mock("vue-router", () => ({
   onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ query: {} }),
+  useRouter: () => ({ replace: vi.fn() }),
   RouterLink: { template: "<a><slot /></a>" },
 }));
 

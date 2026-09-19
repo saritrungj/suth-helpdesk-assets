@@ -1,4 +1,6 @@
 <script setup>
+import { useReferenceQuery } from "../composables/use-reference-query";
+import { useReferenceFilters } from "../composables/use-reference-filters";
 import { reportContext } from "../components/report-context";
 import { yearLabel } from "../lib/locale-format";
 import { formatDate, formatMonth } from "../lib/locale-format";
@@ -57,6 +59,8 @@ const devices = ref([]);
 const readings = ref({});
 const locationHistory = ref([]);
 
+const referenceError = ref("");
+const referencesReady = ref(false);
 const buildings = ref([]);
 const floors = ref([]);
 const divisions = ref([]);
@@ -111,35 +115,13 @@ const displayMonths = computed(() =>
 /* --------------------------------------------------------------------------
    ตัวเลือกตัวกรอง
    -------------------------------------------------------------------------- */
-const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.name }));
+const { buildingOptions, floorOptions, divisionOptions, departmentOptions, brandOptions, referenceLabel, normalizeReferences } =
+  useReferenceFilters(filters, { buildings, floors, divisions, departments, brands });
+const referenceNotice = useReferenceQuery(filters, referencesReady, normalizeReferences);
 
-const buildingOptions = computed(() => toOptions(buildings.value));
-const divisionOptions = computed(() => toOptions(divisions.value));
-const brandOptions = computed(() => toOptions(brands.value));
 const contractOptions = computed(() =>
   contracts.value.map((contract) => ({ value: String(contract.id), label: contract.contract_no }))
 );
-
-const floorOptions = computed(() => {
-  const building = buildings.value.find((b) => b.name === filters.value.building);
-  const source = building
-    ? floors.value.filter((f) => Number(f.building_id) === Number(building.id))
-    : floors.value;
-
-  const seen = new Set();
-  return source.filter((f) => !seen.has(f.name) && seen.add(f.name)).map((f) => ({ value: f.name, label: f.name }));
-});
-
-const departmentOptions = computed(() => {
-  const division = divisions.value.find((d) => d.name === filters.value.division);
-  const source = division
-    ? departments.value.filter((d) => Number(d.division_id) === Number(division.id))
-    : departments.value;
-  return toOptions(source);
-});
-
-watch(() => filters.value.building, () => (filters.value.floor = ""));
-watch(() => filters.value.division, () => (filters.value.department = ""));
 
 const hasActiveFilter = computed(() => search.value !== "" || Object.values(filters.value).some(Boolean));
 
@@ -162,7 +144,7 @@ const CHIP_LABELS = {
 const chipValue = (key, value) => {
   if (key === "contract") return contractOptions.value.find((o) => o.value === value)?.label ?? value;
   if (key === "deviceStatus") return DEVICE_STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value;
-  return value;
+  return referenceLabel(key, value);
 };
 
 const filterChips = computed(() =>
@@ -209,6 +191,7 @@ function resetFilters() {
    โหลดข้อมูล
    -------------------------------------------------------------------------- */
 async function loadMasterData() {
+  referenceError.value = "";
   try {
     const [building, floor, division, department, brand, contract] = await Promise.all([
       api.get("/buildings"),
@@ -225,8 +208,9 @@ async function loadMasterData() {
     departments.value = department.data ?? [];
     brands.value = brand.data ?? [];
     contracts.value = contract.data ?? [];
+    referencesReady.value = true;
   } catch (err) {
-    console.error("Load master data error:", err);
+    referenceError.value = t("โหลดข้อมูลอ้างอิงไม่สำเร็จ");
   }
 }
 
@@ -338,11 +322,11 @@ const reportRows = computed(() => {
         r.model?.toLowerCase().includes(keyword) ||
         r.department_name?.toLowerCase().includes(keyword) ||
         r.contract_no?.toLowerCase().includes(keyword)) &&
-      (!f.building || r.building_name === f.building) &&
-      (!f.floor || r.floor_name === f.floor) &&
-      (!f.division || r.division_name === f.division) &&
-      (!f.department || r.department_name === f.department) &&
-      (!f.brand || r.brand_name === f.brand) &&
+      (!f.building || String(r.building_id) === f.building) &&
+      (!f.floor || String(r.floor_id) === f.floor) &&
+      (!f.division || String(r.division_id) === f.division) &&
+      (!f.department || String(r.department_id) === f.department) &&
+      (!f.brand || String(r.brand_id) === f.brand) &&
       (!f.contract || String(r.contract_id) === f.contract) &&
       (!f.deviceStatus || r.status === f.deviceStatus) &&
       (!f.fillStatus || r._record_status === f.fillStatus)
@@ -442,6 +426,15 @@ onMounted(async () => {
       ระบบเดียวจึงมีสองแบบแผน คนที่เรียนแถบเดียวจากสามหน้าแรกต้องเรียนใหม่ที่นี่
       ตอนนี้ใช้ UiFilterBar ตัวเดียวกับหน้าทะเบียน และเครื่องมือตารางมาต่อท้ายแถว
     -->
+    <UiAlert v-if="referenceError" tone="danger" class="mb-4">
+      {{ t("โหลดข้อมูลอ้างอิงไม่สำเร็จ") }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" @click="loadMasterData()">{{ t("ลองใหม่") }}</UiButton>
+      </template>
+    </UiAlert>
+
+    <UiAlert v-if="referenceNotice" tone="warn" class="mb-4">{{ referenceNotice }}</UiAlert>
+
     <UiFilterBar :chips="filterChips" data-print="hide" @remove="clearFilter" @clear="resetFilters">
       <template #primary>
         <UiField :label="t('ค้นหา')" class="flex-1 min-w-[14rem] max-w-md">

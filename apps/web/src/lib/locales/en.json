@@ -1155,5 +1155,6 @@
   "รหัส {0}": "ID {0}",
   "โหลดรายการ{0}ไม่สำเร็จ กดลองใหม่ก่อนบันทึก": "Could not load the {0} list. Retry before saving",
   "รอโหลดรายการ{0}ให้เสร็จก่อนบันทึก": "Wait for the {0} list to load before saving",
-  "ชื่อในตารางจึงแสดงเป็นรหัส และยังบันทึกรายการใหม่ไม่ได้": "names in the table show as IDs and new items cannot be saved yet"
+  "ชื่อในตารางจึงแสดงเป็นรหัส และยังบันทึกรายการใหม่ไม่ได้": "names in the table show as IDs and new items cannot be saved yet",
+  "ล้างตัวกรองจากลิงก์ที่ไม่พบหรือระบุได้ไม่แน่ชัด: {0}": "Removed unknown or ambiguous filters from the link: {0}"
 }

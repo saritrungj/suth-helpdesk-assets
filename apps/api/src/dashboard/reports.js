@@ -37,6 +37,9 @@ router.get(
 
     const [rows] = await db.query(
       `SELECT m.*,
+         CASE WHEN h.id IS NOT NULL THEN h.building_id ELSE d.building_id END AS building_id,
+         CASE WHEN h.id IS NOT NULL THEN h.floor_id ELSE d.floor_id END AS floor_id,
+         d.brand_id,
          CASE WHEN h.id IS NOT NULL THEN hb.name ELSE b.name END AS building_name,
          CASE WHEN h.id IS NOT NULL THEN hf.name ELSE f.name END AS floor_name,
          CASE WHEN h.id IS NOT NULL THEN h.location ELSE d.location END AS location,

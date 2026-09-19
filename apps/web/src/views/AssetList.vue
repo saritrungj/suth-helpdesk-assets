@@ -1,4 +1,6 @@
 <script setup>
+import { useReferenceQuery } from "../composables/use-reference-query";
+import { useReferenceFilters } from "../composables/use-reference-filters";
 import { yearLabel } from "../lib/locale-format";
 import { t } from "../lib/locale";
 import { errorMessage } from "../lib/api-error";
@@ -62,12 +64,12 @@ const refreshing = ref(false);
 
 const fiscalYears = ref([]);
 const brands = ref([]);
+const referencesReady = ref(false);
 const buildings = ref([]);
 const floors = ref([]);
 const divisions = ref([]);
 const departments = ref([]);
 const contracts = ref([]);
-
 
 /**
  * ค่าเริ่มต้นของตัวกรอง — ประกาศไว้ที่เดียวแล้วใช้ทั้งตอนเริ่มและตอนล้าง
@@ -112,36 +114,13 @@ const contractOptions = computed(() => [
 /* --------------------------------------------------------------------------
    ตัวเลือกของตัวกรอง
    -------------------------------------------------------------------------- */
-const toOptions = (list) => list.map((item) => ({ value: item.name, label: item.name }));
-
-const brandOptions = computed(() => toOptions(brands.value));
-const buildingOptions = computed(() => toOptions(buildings.value));
-const divisionOptions = computed(() => toOptions(divisions.value));
+const { brandOptions, buildingOptions, divisionOptions, floorOptions, departmentOptions, referenceLabel, normalizeReferences } =
+  useReferenceFilters(filters, { brands, buildings, floors, divisions, departments });
+const referenceNotice = useReferenceQuery(filters, referencesReady, normalizeReferences);
 
 const fiscalYearOptions = computed(() =>
   fiscalYears.value.map((f) => ({ value: String(f.year), label: t("ปีงบ {0}", [yearLabel(f.year)]) }))
 );
-
-/** ชั้นที่เลือกได้ = เฉพาะชั้นในอาคารที่เลือกไว้ และตัดชื่อซ้ำออก */
-const floorOptions = computed(() => {
-  const building = buildings.value.find((b) => b.name === filters.value.building);
-  const source = building
-    ? floors.value.filter((f) => Number(f.building_id) === Number(building.id))
-    : floors.value;
-
-  const seen = new Set();
-  return source
-    .filter((f) => !seen.has(f.name) && seen.add(f.name))
-    .map((f) => ({ value: f.name, label: f.name }));
-});
-
-const departmentOptions = computed(() => {
-  const division = divisions.value.find((d) => d.name === filters.value.division);
-  const source = division
-    ? departments.value.filter((d) => Number(d.division_id) === Number(division.id))
-    : departments.value;
-  return toOptions(source);
-});
 
 /* --------------------------------------------------------------------------
    ชิปสรุปเงื่อนไขที่ใช้อยู่ — เห็นได้ตลอดแม้พับแผงตัวกรองแล้ว
@@ -170,7 +149,7 @@ const activeFilters = computed(() =>
             ? t("ยังไม่ผูกสัญญา")
             : key === "contract"
               ? (contractOptions.value.find((option) => option.value === value)?.label ?? value)
-            : value,
+            : referenceLabel(key, value),
     }))
 );
 
@@ -198,12 +177,9 @@ function resetFilters() {
   search.value = "";
 }
 
-// เปลี่ยนอาคาร/ฝ่ายแล้ว ชั้น/แผนกที่เลือกไว้อาจไม่อยู่ในตัวเลือกใหม่ ล้างทิ้ง
 // คำอธิบายนี้พูดถึงผลของการบันทึกครั้งนั้นกับเงื่อนไขชุดนั้น พอผู้ใช้เปลี่ยน
 // คำค้นหรือตัวกรองเอง มันก็ไม่ตรงกับสิ่งที่เห็นอยู่แล้ว
 watch([search, filters], () => (refreshNotice.value = ""), { deep: true });
-watch(() => filters.value.building, () => (filters.value.floor = ""));
-watch(() => filters.value.division, () => (filters.value.department = ""));
 
 /* --------------------------------------------------------------------------
    ข้อมูล
@@ -211,11 +187,11 @@ watch(() => filters.value.division, () => (filters.value.department = ""));
 const filteredAssets = computed(() =>
   assets.value.filter(
     (a) =>
-      (!filters.value.brand || a.brand_name === filters.value.brand) &&
-      (!filters.value.building || a.building_name === filters.value.building) &&
-      (!filters.value.floor || a.floor_name === filters.value.floor) &&
-      (!filters.value.division || a.division_name === filters.value.division) &&
-      (!filters.value.department || a.department_name === filters.value.department) &&
+      (!filters.value.brand || String(a.brand_id) === filters.value.brand) &&
+      (!filters.value.building || String(a.building_id) === filters.value.building) &&
+      (!filters.value.floor || String(a.floor_id) === filters.value.floor) &&
+      (!filters.value.division || String(a.division_id) === filters.value.division) &&
+      (!filters.value.department || String(a.department_id) === filters.value.department) &&
       (!filters.value.fiscalYear || String(a.fiscal_year) === filters.value.fiscalYear) &&
       (!filters.value.status || a.status === filters.value.status) &&
       (!filters.value.contract ||
@@ -373,6 +349,7 @@ async function loadFilterData() {
     divisions.value = division.data ?? [];
     departments.value = department.data ?? [];
     contracts.value = contract.data ?? [];
+    referencesReady.value = true;
   } catch (err) {
     console.error("Load filter data error:", err);
     filterError.value = t("โหลดข้อมูลอ้างอิงไม่สำเร็จ");
@@ -475,6 +452,8 @@ onMounted(async () => {
     <!-- ตัวกรอง — ใช้ UiFilterBar ตัวเดียวกับหน้าบันทึกยอดพิมพ์
          เดิมหน้านี้เขียนแผงพับกับชิปขึ้นเองแยกต่างหาก ทำให้สองหน้าที่ทำงาน
          เหมือนกันหน้าตาไม่เหมือนกัน และเวลาแก้พฤติกรรมต้องแก้สองที่ -->
+    <UiAlert v-if="referenceNotice" tone="warn" class="mb-4">{{ referenceNotice }}</UiAlert>
+
     <UiFilterBar :chips="filterChips" @remove="clearFilter" @clear="resetFilters">
       <template #primary>
         <UiField :label="t('ค้นหา')" class="flex-1 min-w-[14rem] max-w-md">

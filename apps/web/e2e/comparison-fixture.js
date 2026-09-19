@@ -46,6 +46,7 @@ function reading(month, device, department, contract, pages, price = 0.45) {
     contract_no: CONTRACTS[8],
     billing_contract_id: contract,
     billing_contract_no: contract ? CONTRACTS[contract] : null,
+    building_id: 1, floor_id: 1, brand_id: 1,
     building_name: "อาคารผู้ป่วยนอก",
   };
 }

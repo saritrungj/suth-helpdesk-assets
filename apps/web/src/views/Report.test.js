@@ -108,7 +108,7 @@ const column = (wrapper, key) => wrapper.vm.columns.find((col) => col.key === ke
 describe("ยอดของเครื่องที่ย้ายอยู่กับหน่วยงานของเดือนนั้น (R02)", () => {
   test("กรองฝ่ายเดิมยังเห็นยอดตอนที่เครื่องอยู่ที่นั่น", async () => {
     const wrapper = await mountReport();
-    wrapper.vm.filters.division = "ฝ่าย A";
+    wrapper.vm.filters.division = "1";
     await nextTick();
 
     expect(wrapper.vm.reportRows).toHaveLength(1);
@@ -118,7 +118,7 @@ describe("ยอดของเครื่องที่ย้ายอยู�
 
   test("กรองฝ่ายปัจจุบันไม่พ่วงแถวของฝ่ายเดิม", async () => {
     const wrapper = await mountReport();
-    wrapper.vm.filters.division = "ฝ่าย B";
+    wrapper.vm.filters.division = "2";
     await nextTick();
 
     expect(wrapper.vm.reportRows.map((row) => row.division_name)).toEqual(["ฝ่าย B"]);
@@ -127,7 +127,7 @@ describe("ยอดของเครื่องที่ย้ายอยู�
 
   test("กรองแผนกและอาคารก็ใช้ที่ตั้งของช่วงนั้นเช่นกัน", async () => {
     const wrapper = await mountReport();
-    wrapper.vm.filters.building = "ตึก A";
+    wrapper.vm.filters.building = "10";
     await nextTick();
     expect(wrapper.vm.reportRows.map((row) => row.department_name)).toEqual(["แผนก A1"]);
   });

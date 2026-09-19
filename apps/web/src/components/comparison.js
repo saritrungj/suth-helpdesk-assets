@@ -39,8 +39,8 @@ const GROUPING = {
   department: { id: "department_id", name: "department_name", hint: "division_name" },
   // สัญญาที่คิดเงินของเดือนนั้น ไม่ใช่สัญญาปัจจุบันของเครื่อง (ADR-0019)
   contract: { id: "billing_contract_id", name: "billing_contract_no" },
-  // อาคารของเดือนนั้นจากประวัติการย้าย — API ส่งเฉพาะชื่อ จึงใช้ชื่อเป็น key (หน้าเปรียบเทียบ)
-  building: { id: "building_name", name: "building_name" },
+  // อาคารของเดือนนั้นจากประวัติการย้าย — ID แยกตัวตนออกจากชื่อที่แสดง
+  building: { id: "building_id", name: "building_name" },
 };
 
 export function dimensionLabel(dimension) {
