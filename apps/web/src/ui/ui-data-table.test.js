@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
-import { mount } from "@vue/test-utils";
-import { expect, test } from "vitest";
-import UiDataTable from "./UiDataTable.vue";
+import { flushPromises, mount } from "@vue/test-utils";
+import { expect, test, vi } from "vitest";
+
+const exportSheet = vi.fn(async () => {});
+vi.mock("../lib/export-xlsx", () => ({ exportSheet: (...args) => exportSheet(...args) }));
+
+const { default: UiDataTable } = await import("./UiDataTable.vue");
 
 test("a descending default still lets the user sort years ascending", async () => {
   const wrapper = mount(UiDataTable, {
@@ -19,5 +23,25 @@ test("a descending default still lets the user sort years ascending", async () =
   expect(firstYear()).toBe("2568");
   await wrapper.get("thead button").trigger("click");
   expect(firstYear()).toBe("2569");
+  wrapper.unmount();
+});
+
+test("export keeps a missing value as an empty cell and a recorded zero as 0", async () => {
+  const wrapper = mount(UiDataTable, {
+    attachTo: document.body,
+    props: {
+      rows: [{ id: 1, pages: 0 }, { id: 2, pages: null }],
+      columns: [{ key: "pages", label: "Pages", csv: (row) => row.pages }],
+      maxHeight: "none",
+    },
+  });
+  await flushPromises();
+
+  const button = [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Excel"));
+  button.click();
+  await flushPromises();
+
+  expect(exportSheet).toHaveBeenCalledTimes(1);
+  expect(exportSheet.mock.calls[0][0].rows).toEqual([[0], [null]]);
   wrapper.unmount();
 });

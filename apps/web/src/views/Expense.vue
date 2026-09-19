@@ -21,6 +21,7 @@ import { t } from "../lib/locale";
  */
 import { computed, onActivated, onMounted, ref, watch } from "vue";
 import { exportSheet } from "../lib/export-xlsx";
+import { useExportTask } from "../composables/useExportTask";
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, Printer, ReceiptText, Search, TriangleAlert } from "lucide-vue-next";
 import { fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
@@ -246,6 +247,8 @@ async function loadExpense() {
  * ส่งออก Excel — หนึ่งแถวต่อหนึ่งเครื่อง ตามเดือนและคำค้นที่แสดงอยู่บนจอ
  * คำค้นถูกบันทึกไว้ในแผ่น "บริบทรายงาน" ด้วย คนที่เปิดไฟล์ทีหลังจึงรู้ว่าไม่ใช่ชุดเต็ม
  */
+const { busy: exporting, error: exportError, run: runExport } = useExportTask();
+
 async function exportExcel() {
   const header = [
     t("เลขที่สัญญา"),
@@ -267,7 +270,7 @@ async function exportExcel() {
       contract.contract_no,
       Number(contract.price_per_page || 0),
       // ว่าง ไม่ใช่ 0 — null แปลว่าเครื่องนี้ใช้หลายราคาในช่วงนี้หรือยังไม่มีราคา ไม่ใช่ฟรี
-      device.effective_price == null ? "" : Number(device.effective_price),
+      device.effective_price == null ? null : Number(device.effective_price),
       device.price_source === "device_override" ? t("ราคาพิเศษเฉพาะเครื่อง") : t("ราคาตามสัญญา"),
       device.serial_number || "",
       device.brand_name || "",
@@ -280,7 +283,7 @@ async function exportExcel() {
 
   const suffix = month.value ? `-${month.value.replace(/,/g, "_")}` : "";
 
-  await exportSheet({
+  await runExport(() => exportSheet({
     header,
     rows,
     sheetName: t("ค่าใช้จ่ายตามสัญญา"),
@@ -292,7 +295,7 @@ async function exportExcel() {
       labels: { search: t("ค้นหา") },
       unpricedReadings: unpricedReadings.value,
     }),
-  });
+  }));
 }
 
 // ปีงบเป็น state กลางที่แถบบนเป็นคนตั้ง หน้านี้แค่ตามไปโหลดใหม่เมื่อค่าเปลี่ยน
@@ -332,7 +335,7 @@ onMounted(() => {
         <UiTooltip :content="t(&quot;พับทั้งหมด&quot;)">
           <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;พับทั้งหมด&quot;)" @click="collapseAll"><ChevronsDownUp :size="15" /></UiButton>
         </UiTooltip>
-        <UiButton size="sm" variant="secondary" :disabled="!contracts.length || loading || !!loadError" @click="exportExcel">
+        <UiButton size="sm" variant="secondary" :disabled="!contracts.length || loading || !!loadError" :loading="exporting" @click="exportExcel">
           <template #icon><Download :size="15" /></template>
           Excel
         </UiButton>
@@ -366,6 +369,13 @@ onMounted(() => {
         {{ formatCount(totalDevices) }}
       </UiStat>
     </div>
+
+    <UiAlert v-if="exportError" tone="danger" class="mb-4">
+      {{ exportError }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" :loading="exporting" @click="exportExcel"> {{ t("ลองใหม่") }} </UiButton>
+      </template>
+    </UiAlert>
 
     <UiAlert v-if="loadError" tone="danger" class="mb-4">
       {{ loadError }}

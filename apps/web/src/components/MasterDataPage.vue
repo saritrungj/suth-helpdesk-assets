@@ -70,6 +70,18 @@ const queryClient = useQueryClient();
 /** ตัวเลือกของช่องแบบ select ที่ต้องดึงจาก endpoint อื่น — โหลดครั้งเดียวตอนเปิดหน้า */
 const optionSets = reactive({});
 
+/**
+ * สถานะของตัวเลือกแต่ละชุด: "loading" | "ready" | "error" (#105)
+ *
+ * เดิมโหลดล้มแล้วกลายเป็นรายการว่างเงียบๆ ช่องเลือกอาคารว่างและตารางแสดงชื่ออาคารเป็น
+ * "—" ทุกแถว ซึ่งหน้าตาเหมือนระบบยังไม่มีอาคารเลย ผู้ใช้จึงไปเพิ่มอาคารซ้ำ หรือบันทึก
+ * ฟอร์มที่เลือกค่าไม่ได้ ต้องบอกให้ชัดว่า "โหลดไม่สำเร็จ" ต่างจาก "ไม่มี"
+ */
+const optionStatus = reactive({});
+const optionFields = computed(() => props.fields.filter((field) => field.optionsFrom));
+const failedOptionFields = computed(() => optionFields.value.filter((field) => optionStatus[field.key] === "error"));
+const failedOptionsText = computed(() => t("โหลดรายการ{0}ไม่สำเร็จ", [failedOptionFields.value.map((field) => field.label).join(", ")]));
+
 const dialogOpen = ref(false);
 const editingId = ref(null);
 const form = reactive({});
@@ -92,9 +104,15 @@ const tableColumns = computed(() =>
 
     return {
       ...column,
-      value: (row) =>
-        optionSets[column.optionKey]?.find((o) => String(o.value) === String(row[column.key]))
-          ?.label ?? "—",
+      value: (row) => {
+        const id = row[column.key];
+        if (id === null || id === undefined || id === "") return "—";
+        const label = optionSets[column.optionKey]?.find((o) => String(o.value) === String(id))?.label;
+        if (label !== undefined) return label;
+        // ยังโหลดชื่อไม่ได้ ≠ ไม่มีค่า — แสดงรหัสไว้แทน ไม่ให้ดูเหมือนแถวนี้ไม่ได้ผูกอะไรเลย
+        const status = optionStatus[column.optionKey];
+        return status === "error" || status === "loading" ? t("รหัส {0}", [id]) : "—";
+      },
     };
   })
 );
@@ -114,23 +132,31 @@ async function load() {
   }
 }
 
-async function loadOptions() {
-  const sources = props.fields.filter((f) => f.optionsFrom);
-
+/**
+ * โหลดตัวเลือก — ส่ง fields มาเพื่อลองใหม่เฉพาะชุดที่ล้ม ชุดที่ล้มเก็บตัวเลือกเดิมไว้
+ * (ถ้าเคยโหลดได้) ไม่ล้างทิ้ง ค่าที่ผู้ใช้กรอกในฟอร์มไม่ถูกแตะเลย
+ */
+async function loadOptions(fields = optionFields.value) {
   await Promise.all(
-    sources.map(async (field) => {
+    fields.map(async (field) => {
+      optionStatus[field.key] = "loading";
       try {
         const res = await api.get(field.optionsFrom);
         optionSets[field.key] = (res.data ?? []).map((item) => ({
           value: item[field.optionValue ?? "id"],
           label: String(item[field.optionLabel ?? "name"] ?? ""),
         }));
+        optionStatus[field.key] = "ready";
       } catch (err) {
         console.error(`Load options ${field.optionsFrom} error:`, err);
-        optionSets[field.key] = [];
+        optionStatus[field.key] = "error";
       }
     })
   );
+}
+
+function retryOptions() {
+  return loadOptions(failedOptionFields.value);
 }
 
 function openCreate() {
@@ -152,6 +178,12 @@ function openEdit(row) {
  * ไม่ได้แทนการตรวจฝั่ง API ซึ่งยังเป็นด่านตัดสินจริงเสมอ
  */
 function validate() {
+  // ช่องเลือกที่รายการยังใช้ไม่ได้ ห้ามบันทึก — ค่าที่เลือกไว้อาจไม่ใช่สิ่งที่ผู้ใช้เห็น
+  for (const field of optionFields.value) {
+    if (optionStatus[field.key] === "error") return t("โหลดรายการ{0}ไม่สำเร็จ กดลองใหม่ก่อนบันทึก", [field.label]);
+    if (optionStatus[field.key] === "loading") return t("รอโหลดรายการ{0}ให้เสร็จก่อนบันทึก", [field.label]);
+  }
+
   for (const field of props.fields) {
     const raw = form[field.key];
     const value = typeof raw === "string" ? raw.trim() : raw;
@@ -283,6 +315,13 @@ onMounted(async () => {
       </template>
     </UiAlert>
 
+    <UiAlert v-if="failedOptionFields.length" tone="danger" class="mb-4">
+      {{ failedOptionsText }} — {{ t("ชื่อในตารางจึงแสดงเป็นรหัส และยังบันทึกรายการใหม่ไม่ได้") }}
+      <template #actions>
+        <UiButton size="sm" variant="secondary" data-testid="retry-options" @click="retryOptions"> {{ t("ลองใหม่") }} </UiButton>
+      </template>
+    </UiAlert>
+
     <UiDataTable
       :rows="rows"
       :columns="tableColumns"
@@ -364,6 +403,13 @@ onMounted(async () => {
             @enter="submit"
           />
         </UiField>
+
+        <UiAlert v-if="failedOptionFields.length" tone="danger">
+          {{ failedOptionsText }}
+          <template #actions>
+            <UiButton size="sm" variant="secondary" @click="retryOptions"> {{ t("ลองใหม่") }} </UiButton>
+          </template>
+        </UiAlert>
 
         <UiAlert v-if="formError" tone="danger">{{ formError }}</UiAlert>
 

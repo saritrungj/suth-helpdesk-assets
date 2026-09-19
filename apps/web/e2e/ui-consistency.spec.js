@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { prototypeFixture } from "./prototype-fixture.js";
+import { comparisonFixture } from "./comparison-fixture.js";
 
 for (const theme of ["light", "dark"]) {
   test(`comparison uses billing contracts and keeps selected colors (${theme})`, async ({ page }, testInfo) => {
@@ -38,16 +39,16 @@ for (const theme of ["light", "dark"]) {
   });
 }
 
-test("department comparison has one month selector", async ({ page }, testInfo) => {
-  await prototypeFixture(page);
-  await page.goto("/compare?type=department");
-  await expect(page.getByLabel("เดือนที่จะเปรียบเทียบ")).toBeVisible();
-  await page.getByLabel("ฝ่ายที่จะนำมาเทียบ").click();
-  await page.getByRole("option", { name: "ฝ่ายการพยาบาล", exact: true }).click();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "ค่าใช้จ่ายของฝ่าย / แผนกที่เลือก", exact: true })).toBeVisible();
+test("department comparison has one period selector and one metric control", async ({ page }, testInfo) => {
+  await comparisonFixture(page);
+  await page.goto("/compare?type=department&items=1,2");
+  // ช่วงเวลา ตัวชี้วัด และ "เทียบระหว่าง" มีชุดเดียวในแถบเดียว — ไม่มีตัวเลือกช่วงที่แสดงซ้อนของกราฟเดิม
+  await expect(page.getByLabel(/^ช่วงเวลา/)).toHaveCount(1);
+  await expect(page.getByRole("radio", { name: "ค่าใช้จ่าย", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("radiogroup", { name: "เทียบระหว่าง" })).toHaveCount(1);
   await expect(page.getByLabel("เดือนเริ่มต้นของช่วงที่แสดง")).toHaveCount(0);
   await expect(page.getByLabel("เดือนสิ้นสุดของช่วงที่แสดง")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "ค่าใช้จ่ายที่ยืนยันแล้วของฝ่ายที่เลือก เทียบกับฐาน", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("compare-department.png"), fullPage: true });
 });
 

@@ -101,7 +101,7 @@ onUnmounted(() => window.removeEventListener("scroll", rememberScroll));
 
       <template #department>
         <KeepAlive>
-          <ByDepartment v-if="visited.has('department')" :show-comparison="false" />
+          <ByDepartment v-if="visited.has('department')" />
         </KeepAlive>
       </template>
     </UiTabs>
