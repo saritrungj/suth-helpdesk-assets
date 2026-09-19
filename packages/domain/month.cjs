@@ -157,7 +157,14 @@ function currentMonth(now = new Date()) {
   return `${year}-${month}`;
 }
 
+/** Numeric position of a canonical Gregorian YYYY-MM month for adjacency checks. */
+function monthIndex(month) {
+  const [year, value] = String(month).split("-").map(Number);
+  return year * 12 + value;
+}
+
 module.exports = {
+  monthIndex,
   BE_OFFSET,
   BE_YEAR_THRESHOLD,
   currentMonth,
