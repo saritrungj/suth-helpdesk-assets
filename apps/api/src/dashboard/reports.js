@@ -42,13 +42,15 @@ router.get(
          CASE WHEN h.id IS NOT NULL THEN h.location ELSE d.location END AS location,
          CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END AS department_id,
          dep.name AS department_name,
+         CASE WHEN h.id IS NOT NULL THEN h.division_id ELSE d.division_id END AS division_id,
          divi.name AS division_name,
          brand.name AS brand_name,
          d.model,
          d.contract_id,
          c.contract_no,
          dch.contract_id AS billing_contract_id,
-         billing_contract.contract_no AS billing_contract_no
+         billing_contract.contract_no AS billing_contract_no,
+         h.id AS location_history_id
        FROM v_monthly_kpi m
        LEFT JOIN devices d ON m.device_id = d.id
        LEFT JOIN building b ON d.building_id = b.id

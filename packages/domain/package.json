@@ -21,6 +21,7 @@
     "money.cjs",
     "constraints.cjs",
     "coverage.cjs",
+    "location-history.cjs",
     "locale-format.cjs"
   ],
   "scripts": {
