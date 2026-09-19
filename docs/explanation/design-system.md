@@ -33,6 +33,8 @@ src/app/      เปลือกแอป   แถบเมนู แถบบ�
 | Topbar | ปีงบ loading/list/empty, account menu, ภาษา, theme และ density ที่จำค่า | `e2e/shell.spec.js`, store tests เดิม |
 | Command search | closed/open, keyboard cursor, empty result, route filtered by role | `e2e/shell.spec.js` |
 | ทะเบียน / drawer | loading, error + retry, empty, filtered-empty, dirty confirmation, pending, validation, success; keyboard focus trap/restore | `e2e/asset-drawer.spec.js`, `e2e/asset-evidence.spec.js` |
+| ตารางข้อมูล (`UiDataTable`) | คำค้น การเรียง หน้า และคอลัมน์ที่ซ่อน ที่จำไว้ต่อหน้าในแท็บนี้; สถานะจางระหว่างโหลดที่ยังคงแถวเดิมไว้ | `ui/ui-data-table.test.js`, `e2e/comparison-state.spec.js` |
+| กราฟ (`UiChart`) | ค่าเดิมคงไว้แบบจางพร้อม `aria-busy` ระหว่างรอข้อมูลใหม่ แทนการกลับไปเป็นโครงร่าง | `e2e/print-comparison.spec.js`, `e2e/comparison-state.spec.js` |
 
 ### Drawer contract
 

@@ -131,17 +131,23 @@ export function comparisonSheet(model) {
 const RANKING_CHART_SIZE = 10;
 
 /**
- * กราฟของแผ่นอันดับสองใบ: 10 อันดับแรกและ 10 อันดับท้าย ใช้เท่าที่มีเมื่อไม่ครบสิบ
+ * กราฟของแผ่นอันดับ: 10 อันดับแรกและ 10 อันดับท้าย
+ *
  * ตารางเรียงมาก→น้อยอยู่แล้ว ใบแรกจึงเป็นแถวบนสุด ใบที่สองเป็นแถวล่างสุดของตาราง
+ * เมื่อมีรายการไม่เกินสิบ สองใบจะครอบแถวชุดเดียวกันทั้งคู่ — คืนใบเดียวที่มีครบทุกรายการ
+ * แทน ไม่งั้นได้กราฟซ้ำสองใบที่ติดป้าย "มากสุด/น้อยสุด 10 อันดับ" ทั้งที่แสดงของชุดเดียวกัน
  */
 function rankingCharts(count, { labelColumn, valueColumn, valueFormat, valueTitle, noun, measure }) {
   const chartOf = (title, r1, r2) => ({
     type: "bar", title, valueFormat, valueTitle, categoryCount: r2 - r1 + 1,
     series: [{ name: { c1: valueColumn, r1: 0 }, categories: { c1: labelColumn, r1, r2 }, values: { c1: valueColumn, r1, r2 } }],
   });
+  if (count <= RANKING_CHART_SIZE) {
+    return [chartOf(t("{0}ตาม{1} — ทั้งหมด {2} รายการ", [noun, measure, count]), 1, count)];
+  }
   return [
-    chartOf(t("{0}ตาม{1} — มากสุด {2} อันดับ", [noun, measure, RANKING_CHART_SIZE]), 1, Math.min(count, RANKING_CHART_SIZE)),
-    chartOf(t("{0}ตาม{1} — น้อยสุด {2} อันดับ", [noun, measure, RANKING_CHART_SIZE]), Math.max(1, count - RANKING_CHART_SIZE + 1), count),
+    chartOf(t("{0}ตาม{1} — มากสุด {2} อันดับ", [noun, measure, RANKING_CHART_SIZE]), 1, RANKING_CHART_SIZE),
+    chartOf(t("{0}ตาม{1} — น้อยสุด {2} อันดับ", [noun, measure, RANKING_CHART_SIZE]), count - RANKING_CHART_SIZE + 1, count),
   ];
 }
 

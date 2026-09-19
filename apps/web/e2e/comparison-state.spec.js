@@ -35,14 +35,21 @@ test("Dashboard compares buildings and keeps a moved device on one line", async 
   await expect(comparisonCard(page).getByRole("table").getByRole("rowheader")).toHaveCount(3);
 });
 
-test("department export includes every ranking and both native charts", async ({ page }) => {
+test("department export ranks every department with a native chart that matches the count", async ({ page }) => {
   await prototypeFixture(page);
   await page.goto("/expense?tab=department");
   const file = await download(page, () => page.getByRole("button", { name: "Excel", exact: true }).first().click());
   expect(file.workbook.SheetNames).toContain("อันดับ");
-  expect(file.rows("อันดับ").length).toBeGreaterThan(1);
+  const ranked = file.rows("อันดับ").length - 1;
+  expect(ranked).toBeGreaterThan(0);
   const charts = Object.entries(file.zip).filter(([name]) => /^xl\/charts\/chart\d+\.xml$/.test(name)).map(([, bytes]) => strFromU8(bytes));
-  expect(charts.filter(xml => xml.includes("10"))).toHaveLength(2);
+  // ไม่เกินสิบแผนกได้กราฟใบเดียวที่มีครบทุกแผนก — แบ่งมากสุด/น้อยสุดจะได้สองใบที่ซ้ำกันเป๊ะ
+  const rankingCharts = charts.filter((xml) => xml.includes("อันดับ&apos;!"));
+  expect(rankingCharts).toHaveLength(ranked > 10 ? 2 : 1);
+  if (ranked <= 10) {
+    expect(rankingCharts[0]).toContain(`ทั้งหมด ${ranked} รายการ`);
+    expect(rankingCharts[0]).not.toContain("มากสุด");
+  }
 });
 
 test("changing fiscal year clears months and keeps selected items", async ({ page }) => {

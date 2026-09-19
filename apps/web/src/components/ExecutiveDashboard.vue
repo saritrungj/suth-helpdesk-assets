@@ -14,7 +14,7 @@ import ExecutiveDetails from './ExecutiveDetails.vue';
 import ExportExcelButton from './ExportExcelButton.vue';
 import PrintComparison from './PrintComparison.vue';
 import ComparisonTable from './ComparisonTable.vue';
-import { buildComparison, buildYearComparison, comparisonFromQuery, comparisonScope, comparisonToQuery, dimensionLabel, fiscalPosition, fiscalYearsMonths, itemOptions, metricLabel, metricUnit, monthText, periodChange, periodLabel, rowsInScope, summarize } from './comparison';
+import { buildComparison, buildYearComparison, comparisonFromQuery, comparisonScope, comparisonToQuery, defaultYearPair, dimensionLabel, fiscalPosition, fiscalYearsMonths, itemOptions, metricLabel, metricUnit, monthText, periodChange, periodLabel, rowsInScope, summarize, yearComparisonOptions } from './comparison';
 import { comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, rankingSheet, saveWorkbook, standardNotes } from './comparison-export';
 
 /**
@@ -84,15 +84,9 @@ const buildings = useBuildings();
  * ไม่ได้เลือกปีเอง = ปีงบที่ดูอยู่กับปีก่อนหน้า (ถ้ามีในระบบ)
  */
 const yearMode = computed(() => state.value.by === 'fiscalYear');
-const defaultYears = computed(() => {
-  const current = Number(activeFiscalYear.value?.year);
-  return current ? [String(current - 1), String(current)] : [];
-});
+const defaultYears = computed(() => defaultYearPair(activeFiscalYear.value?.year));
 const chosenYears = computed(() => (state.value.years.length ? state.value.years : defaultYears.value));
-// ปีงบที่มีในระบบ รวมปีก่อนหน้าของปีที่ดูอยู่ — ยอดย้อนหลังนำเข้าได้แม้ยังไม่ได้ตั้งปีงบนั้นไว้
-const yearOptions = computed(() => [...new Set([...fiscalYearState.list.map((year) => String(year.year)), ...defaultYears.value])]
-  .sort((a, b) => Number(b) - Number(a))
-  .map((year) => ({ value: year, label: t('ปีงบ {0}', [yearLabel(year)]) })));
+const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, activeFiscalYear.value?.year));
 const yearReport = useMonthlyKpi(
   computed(() => ({ month: fiscalYearsMonths(chosenYears.value).join(',') || undefined })),
   { enabled: computed(() => yearMode.value && chosenYears.value.length > 0) },
