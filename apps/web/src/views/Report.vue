@@ -1,5 +1,6 @@
 <script setup>
 import { useReferenceQuery } from "../composables/use-reference-query";
+import { usePageState } from "../composables/use-page-state";
 import { useReferenceFilters } from "../composables/use-reference-filters";
 import { reportContext } from "../components/report-context";
 import { yearLabel } from "../lib/locale-format";
@@ -401,6 +402,9 @@ const columns = computed(() => [
  * ค้างว่างทั้งที่เลือกปีงบไว้ถูกแล้ว — onMounted จึง await ปีงบให้เสร็จก่อนแล้วสั่งเอง
  */
 watch(() => fiscalYearState.activeId, (id) => id && loadReport());
+
+// คำค้น ตัวกรอง และแถวที่กางไว้ ยังอยู่เมื่อกลับมาหน้านี้ — ตัวกรองอ้างอิงใน URL ยังชนะเมื่อเปิดจากลิงก์ (#115)
+usePageState({ search, filters, expandedDeviceIds });
 
 onMounted(async () => {
   await loadFiscalYears();

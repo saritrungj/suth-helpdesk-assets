@@ -292,7 +292,7 @@ onBeforeUnmount(() => sizeWatcher?.disconnect());
     </div>
 
     <!-- มุมมองตาราง — ช่องทางอ่านค่าที่ไม่ต้องพึ่งสีและไม่ต้องชี้เมาส์ -->
-    <div v-show="view === 'table'" class="overflow-auto rounded-lg border border-line-soft" :style="{ maxHeight: height }">
+    <div v-show="view === 'table'" class="overflow-auto rounded-lg border border-line-soft" :class="loading && 'opacity-45'" :aria-busy="loading" :style="{ maxHeight: height }">
       <table class="w-full text-sm">
         <caption class="sr-only"> {{ t("ค่าตัวเลขของกราฟด้านบน") }} </caption>
         <thead class="sticky top-0 bg-surface-2">

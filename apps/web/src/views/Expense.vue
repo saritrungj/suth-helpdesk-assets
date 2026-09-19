@@ -1,5 +1,6 @@
 <script setup>
 import { reportContext } from "../components/report-context";
+import { usePageState } from "../composables/use-page-state";
 import { deviceLocationLabel } from "../lib/device-location";
 import { formatMonth } from "../lib/locale-format";
 
@@ -308,6 +309,9 @@ onActivated(() => {
     loadUnassignedDevices();
   }
 });
+
+// คำค้น ช่วงเดือน สัญญาที่กางไว้ และส่วนที่เปิดดูไว้ ยังอยู่เมื่อกลับมาหน้านี้ (#115)
+usePageState({ search, monthSelection, openContracts, showUnassigned, showOutsideYear }, { key: "contract" });
 
 onMounted(() => {
   loadMonths();

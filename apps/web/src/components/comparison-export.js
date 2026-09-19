@@ -1,16 +1,16 @@
 import { fiscalYearOfMonth } from "@suth/domain";
 import { t } from "../lib/locale";
-import { formatMonth } from "../lib/locale-format";
 import { FORMATS, createWorkbook, downloadWorkbook, monthCell, reportStamp } from "../lib/export-xlsx";
-import { differenceNote, dimensionLabel, metricLabel, metricUnit, statusLabel } from "./comparison";
+import { differenceNote, dimensionLabel, metricLabel, metricUnit, monthText, statusLabel } from "./comparison";
 
 /**
  * comparison-export.js — ไฟล์ Excel ของการเปรียบเทียบ ใช้ร่วมกันสองหน้า
  *
- * ไฟล์เดียวมีสามแผ่น เรียงตามลำดับที่คนเปิดอ่าน
+ * ไฟล์เดียวมีหลายแผ่น เรียงตามลำดับที่คนเปิดอ่าน
  *
  *   เปรียบเทียบ       ตารางตัวเลขชุดเดียวกับบนจอ + กราฟ Excel ที่อ้างอิงตารางนั้น
- *   ข้อมูลรายละเอียด  แถวรายเครื่องรายเดือนครบตามขอบเขต (ก่อนตัดอันดับ) ไว้ตรวจและวิเคราะห์ต่อ
+ *   อันดับ            ทุกรายการเรียงมาก→น้อย + กราฟ 10 อันดับแรกและท้าย (มีเฉพาะในไฟล์ #115)
+ *   ข้อมูลรายละเอียด  แถวรายเครื่องรายเดือนครบตามขอบเขต ไว้ตรวจและวิเคราะห์ต่อ
  *   เงื่อนไขรายงาน    ช่วงเวลา ตัวเลือก ตัวชี้วัด หน่วย สถานะข้อมูล และเวลาที่ส่งออก
  *
  * ทุกตัวเลขมาจากแบบจำลองใน comparison.js ตัวเดียวกับที่หน้าจอวาด — ไฟล์นี้จัดวางเท่านั้น
@@ -45,7 +45,8 @@ function measureColumns(summaryOf, suffix = "") {
 const METRIC_COLUMN = { rawPages: 0, cost: 2 };
 
 function labelColumns(dimension) {
-  const columns = [{ header: dimensionLabel(dimension), text: dimension === "contract", value: (entry) => entry.displayLabel }];
+  // เลขสัญญาและ Serial เป็นรหัส ต้องคงตัวอักษรเดิม (Serial ขึ้นต้นด้วยศูนย์ได้)
+  const columns = [{ header: dimensionLabel(dimension), text: dimension === "contract" || dimension === "device", value: (entry) => entry.displayLabel }];
   if (dimension === "department") columns.push({ header: t("ฝ่าย"), value: (entry) => entry.hint || "" });
   return columns;
 }
@@ -56,9 +57,10 @@ export function comparisonTitle(model) {
   const metric = metricLabel(model.metric, { incomplete });
   const dimension = dimensionLabel(model.dimension);
   if (model.view === "overall") return t("{0}รายเดือน", [metric]);
-  if (model.view === "rank") {
-    if (model.blocked === "unpriced") return t("อันดับ{0}ตามค่าใช้จ่าย — ยังจัดอันดับไม่ได้จนกว่าราคาจะครบ", [dimension]);
-    return t("อันดับ{0}ตาม{1} — {2} {3} อันดับ", [dimension, metric, model.direction === "low" ? t("ต่ำสุด") : t("สูงสุด"), model.limit]);
+  if (model.autoPicked) {
+    return model.months.length >= 2
+      ? t("{0}รายเดือนของ{1}ที่ยอดสูงสุด {2} รายการ", [metric, dimension, model.entries.length])
+      : t("{0}ของ{1}ที่ยอดสูงสุด {2} รายการ", [metric, dimension, model.entries.length]);
   }
   return model.months.length >= 2
     ? t("{0}รายเดือนของ{1}ที่เลือก", [metric, dimension])
@@ -84,14 +86,12 @@ export function comparisonSheet(model) {
     });
   }
 
-  const leading = model.view === "rank"
-    ? [{ header: t("อันดับ"), format: FORMATS.count, value: (entry) => entry.rank }, ...labelColumns(model.dimension)]
-    : labelColumns(model.dimension);
-  const labelColumn = model.view === "rank" ? 1 : 0;
+  const leading = labelColumns(model.dimension);
+  const labelColumn = 0;
   const measures = measureColumns((entry) => entry.summary);
-  const monthly = model.view === "select" && model.months.length >= 2
+  const monthly = model.months.length >= 2
     ? model.months.map((month, index) => ({
-      header: formatMonth(month),
+      header: monthText(month),
       format: valueFormat,
       value: (entry) => {
         const summary = entry.monthly[index];
@@ -125,6 +125,102 @@ export function comparisonSheet(model) {
       series: [{ name: { c1: valueColumn, r1: 0 }, categories: { c1: labelColumn, r1: 1, r2: rowsEnd }, values: { c1: valueColumn, r1: 1, r2: rowsEnd } }],
     },
   });
+}
+
+/** จำนวนรายการในกราฟอันดับแต่ละใบ — แท่งแนวนอนสิบแท่งยังอ่านชื่อหน่วยงานได้ครบ */
+const RANKING_CHART_SIZE = 10;
+
+/**
+ * กราฟของแผ่นอันดับสองใบ: 10 อันดับแรกและ 10 อันดับท้าย ใช้เท่าที่มีเมื่อไม่ครบสิบ
+ * ตารางเรียงมาก→น้อยอยู่แล้ว ใบแรกจึงเป็นแถวบนสุด ใบที่สองเป็นแถวล่างสุดของตาราง
+ */
+function rankingCharts(count, { labelColumn, valueColumn, valueFormat, valueTitle, noun, measure }) {
+  const chartOf = (title, r1, r2) => ({
+    type: "bar", title, valueFormat, valueTitle, categoryCount: r2 - r1 + 1,
+    series: [{ name: { c1: valueColumn, r1: 0 }, categories: { c1: labelColumn, r1, r2 }, values: { c1: valueColumn, r1, r2 } }],
+  });
+  return [
+    chartOf(t("{0}ตาม{1} — มากสุด {2} อันดับ", [noun, measure, RANKING_CHART_SIZE]), 1, Math.min(count, RANKING_CHART_SIZE)),
+    chartOf(t("{0}ตาม{1} — น้อยสุด {2} อันดับ", [noun, measure, RANKING_CHART_SIZE]), Math.max(1, count - RANKING_CHART_SIZE + 1), count),
+  ];
+}
+
+/**
+ * แผ่น "อันดับ" — ทุกรายการของมิติที่เลือกเรียงจากมากไปน้อยตามตัวชี้วัดบนจอ (#115)
+ *
+ * อันดับอยู่ในไฟล์เท่านั้น บนหน้าจอไม่มีมุมมองอันดับ ตารางจึงมีครบทุกรายการ (ไม่ต้องเลือก
+ * 5 หรือ 10 ตอนส่งออก) และมีกราฟสองใบ: 10 อันดับแรกและ 10 อันดับท้าย ใช้เท่าที่มีเมื่อไม่ครบสิบ
+ * รายการ ค่าใช้จ่ายที่ราคายังไม่ครบไม่ถูกจัดอันดับ (Q30) — แผ่นบอกเหตุผลแทนตาราง
+ *
+ * @param {object} model แบบจำลองจาก buildComparison ที่ไม่ใช่ภาพรวม
+ * @returns {object|null} null เมื่อไม่มีอะไรให้จัดอันดับ (ภาพรวมรายเดือน)
+ */
+export function rankingSheet(model) {
+  const ranking = model.ranking;
+  if (!ranking) return null;
+  const name = t("อันดับ");
+  const dimension = dimensionLabel(model.dimension);
+  const metric = metricLabel(model.metric);
+  if (ranking.blocked) {
+    const reason = ranking.blocked === "unpriced"
+      ? t("ยังจัดอันดับ{0}ตามค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ {1} รายการ — อันดับจากยอดเงินบางส่วนจะชี้ผิดรายการ ส่งออกด้วยตัวชี้วัดยอดพิมพ์จริงเพื่อดูอันดับ", [dimension, model.total.unpriced])
+      : t("ยังไม่มียอดพิมพ์ในช่วงที่เลือก");
+    return { name, header: [t("หมายเหตุ")], rows: [[reason]], columns: [{ width: 90 }], filter: false };
+  }
+  const valueFormat = model.metric === "cost" ? FORMATS.baht : FORMATS.count;
+  const valueTitle = `${metric} (${metricUnit(model.metric)})`;
+  const leading = [{ header: t("อันดับ"), format: FORMATS.count, value: (entry) => entry.rank }, ...labelColumns(model.dimension)];
+  const columns = [...leading, ...measureColumns((entry) => entry.summary)];
+  const valueColumn = leading.length + METRIC_COLUMN[model.metric];
+  const charts = rankingCharts(ranking.entries.length, { labelColumn: 1, valueColumn, valueFormat, valueTitle, noun: dimension, measure: metric });
+  return sheetOf(name, columns, ranking.entries, { charts });
+}
+
+/**
+ * แผ่น "อันดับ" ของหน้าค่าใช้จ่ายแยกแผนก — ทุกแผนกที่มีรายการยอดพิมพ์ เรียงมาก→น้อย (#115)
+ *
+ * หน้านั้นมีแต่หน้าสุทธิกับค่าใช้จ่าย (ไม่มีหน้าดิบ) อันดับจึงเรียงตามค่าใช้จ่ายสุทธิ และเมื่อ
+ * ราคายังยืนยันไม่ครบแม้แผนกเดียว จะเรียงตามจำนวนหน้าสุทธิแทน เพราะอันดับจากยอดเงินบางส่วน
+ * ชี้ผิดแผนกได้ (Q30) — `basis` บอกผู้เรียกว่าเรียงด้วยอะไร เพื่อเขียนไว้ในแผ่นบริบท
+ * แผนกที่ไม่มีรายการเลยไม่ถูกจัดอันดับ ส่วนแผนกที่บันทึก 0 หน้าจริงอยู่ท้ายตาราง
+ *
+ * @param {object[]} divisions ต้นไม้ฝ่าย → แผนก → เครื่อง จาก /dashboard/by-department
+ */
+export function departmentRankingSheet(divisions) {
+  const entries = (divisions ?? []).flatMap((division) => (division.departments ?? []).map((department) => ({
+    label: department.name,
+    hint: division.name,
+    readings: (department.devices ?? []).reduce((sum, device) => sum + (device.monthly?.length ?? 0), 0),
+    netPages: Number(department.total_pages || 0),
+    costSatang: Number(department.total_cost_satang ?? Math.round(Number(department.total_cost || 0) * 100)),
+    cost: Number(department.total_cost || 0),
+    devices: Number(department.device_count ?? department.devices?.length ?? 0),
+    unpriced: Number(department.unpriced_readings || 0),
+  }))).filter((entry) => entry.readings > 0);
+  const basis = entries.some((entry) => entry.unpriced > 0) ? "netPages" : "cost";
+  const valueOf = (entry) => (basis === "cost" ? entry.costSatang : entry.netPages);
+  const ranked = entries
+    .sort((a, b) => valueOf(b) - valueOf(a) || String(a.label).localeCompare(String(b.label), "th"))
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+  const columns = [
+    { header: t("อันดับ"), format: FORMATS.count, value: (entry) => entry.rank },
+    { header: t("แผนก"), value: (entry) => entry.label },
+    { header: t("ฝ่าย"), value: (entry) => entry.hint },
+    { header: t("ค่าใช้จ่ายสุทธิ (บาท)"), format: FORMATS.baht, value: (entry) => entry.cost },
+    { header: t("จำนวนหน้าสุทธิ (หน้า)"), format: FORMATS.pages, value: (entry) => entry.netPages },
+    { header: t("เครื่องที่มีข้อมูล (เครื่อง)"), format: FORMATS.count, value: (entry) => entry.devices },
+    { header: t("รายการรอยืนยันราคา"), format: FORMATS.count, value: (entry) => entry.unpriced },
+  ];
+  const measure = basis === "cost" ? t("ค่าใช้จ่ายสุทธิ") : t("จำนวนหน้าสุทธิ");
+  const charts = ranked.length ? rankingCharts(ranked.length, {
+    labelColumn: 1,
+    valueColumn: basis === "cost" ? 3 : 4,
+    valueFormat: basis === "cost" ? FORMATS.baht : FORMATS.pages,
+    valueTitle: basis === "cost" ? t("ค่าใช้จ่ายสุทธิ (บาท)") : t("จำนวนหน้าสุทธิ (หน้า)"),
+    noun: t("แผนก"),
+    measure,
+  }) : undefined;
+  return { sheet: sheetOf(t("อันดับ"), columns, ranked, charts ? { charts } : {}), basis, count: ranked.length };
 }
 
 /** แผ่น "เปรียบเทียบ" ของหน้าเปรียบเทียบความแตกต่าง */
@@ -191,8 +287,9 @@ export function differenceSheet(model, { title, currentLabel, referenceLabel }) 
 }
 
 const DETAIL_COLUMNS = () => [
-  { header: t("เดือน"), format: FORMATS.month, value: (row) => monthCell(row.month) },
-  { header: t("ปีงบประมาณ"), format: "0", value: (row) => fiscalYearOfMonth(row.month) },
+  // แถวของการเทียบข้ามปีงบมีเดือนจริงอยู่ที่ calendar_month (month เป็นตำแหน่งในปีงบ)
+  { header: t("เดือน"), format: FORMATS.month, value: (row) => monthCell(row.calendar_month ?? row.month) },
+  { header: t("ปีงบประมาณ"), format: "0", value: (row) => fiscalYearOfMonth(row.calendar_month ?? row.month) },
   { header: "Serial", text: true, value: (row) => row.serial_number ?? "" },
   { header: t("ยี่ห้อ"), value: (row) => row.brand_name ?? "" },
   { header: t("รุ่น"), value: (row) => row.model ?? "" },
@@ -209,7 +306,7 @@ const DETAIL_COLUMNS = () => [
 
 /** แผ่น "ข้อมูลรายละเอียด" — หนึ่งแถวต่อเครื่องต่อเดือน เรียงตามเดือน หน่วยงาน และ Serial */
 export function detailSheet(rows) {
-  const sorted = [...rows].sort((a, b) => String(a.month).localeCompare(String(b.month))
+  const sorted = [...rows].sort((a, b) => String(a.calendar_month ?? a.month).localeCompare(String(b.calendar_month ?? b.month))
     || String(a.division_name ?? "").localeCompare(String(b.division_name ?? ""), "th")
     || String(a.department_name ?? "").localeCompare(String(b.department_name ?? ""), "th")
     || String(a.serial_number ?? "").localeCompare(String(b.serial_number ?? "")));

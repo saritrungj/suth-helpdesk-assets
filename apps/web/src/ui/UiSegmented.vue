@@ -40,7 +40,7 @@ const sizing = computed(() =>
 
 <template>
   <div
-    class="inline-flex items-center p-0.5 rounded-lg bg-surface-2 border border-line-soft"
+    class="inline-flex flex-wrap max-w-full items-center p-0.5 rounded-lg bg-surface-2 border border-line-soft"
     :class="block && 'flex w-full'"
     role="radiogroup"
     :aria-label="groupLabel"

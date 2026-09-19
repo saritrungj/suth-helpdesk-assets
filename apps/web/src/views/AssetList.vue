@@ -1,5 +1,6 @@
 <script setup>
 import { useReferenceQuery } from "../composables/use-reference-query";
+import { usePageState } from "../composables/use-page-state";
 import { useReferenceFilters } from "../composables/use-reference-filters";
 import { yearLabel } from "../lib/locale-format";
 import { t } from "../lib/locale";
@@ -223,6 +224,9 @@ const routeEditId = queryId("edit");
 const billingSuggestionConsumed = ref(false);
 
 const queryClient = useQueryClient();
+
+// คำค้นและตัวกรองยังอยู่เมื่อกลับมาหน้านี้ ส่วนลิงก์จากคำเตือนยังตั้งตัวกรองของมันเองได้ (#115)
+usePageState({ search, filters });
 
 onMounted(() => {
   if (route.query.status && STATUS_META[route.query.status]) {

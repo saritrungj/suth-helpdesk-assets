@@ -17,7 +17,9 @@ const exportError = ref('');
 watch(() => props.open, open => { if (open) { group.value = props.initialGroup; search.value = ''; exportError.value = ''; } });
 const options = computed(() => [
   { value: 'division', label: t('ฝ่าย') }, { value: 'department', label: t('แผนก') }, { value: 'contract', label: t('สัญญา') },
-  { value: 'device', label: t('เครื่อง') }, { value: 'month', label: t('เดือน') },
+  { value: 'building', label: t('อาคาร') }, { value: 'device', label: t('เครื่อง') }, { value: 'month', label: t('เดือน') },
+  // แถวของการเทียบข้ามปีงบมีปีงบกำกับ — แบ่งตามปีได้เฉพาะตอนนั้น
+  ...(props.rows.some(row => row.fiscal_year) ? [{ value: 'fiscalYear', label: t('ปีงบ') }] : []),
 ]);
 const scoped = computed(() => scopeReport(props.rows, props.scope));
 const label = row => group.value === 'month' ? formatMonth(row.key) : row.label || t('ไม่ระบุ');

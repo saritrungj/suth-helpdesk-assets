@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import { authState } from "../store/auth";
 import Login from "../views/Login.vue";
+import { installPageMemory } from "../lib/page-memory";
 
 /**
  * router/index.js — เส้นทางทั้งหมดของเว็บ
@@ -25,7 +26,8 @@ const routes = [
     path: "/login",
     name: "Login",
     component: Login,
-    meta: { layout: "auth" },
+    // ?redirect= เป็นของการล็อกอินครั้งนั้น ไม่ใช่มุมมองที่ควรจำ (#115)
+    meta: { layout: "auth", remember: false },
   },
 
   { path: "/", redirect: "/dashboard" },
@@ -179,5 +181,8 @@ router.beforeEach((to) => {
 
   return true;
 });
+
+// เปิดหน้าจากเมนูแล้วได้มุมมองล่าสุดของหน้านั้นในแท็บนี้ — ติดตั้งหลังด่านสิทธิ์ (#115)
+installPageMemory(router);
 
 export default router;

@@ -74,11 +74,11 @@ const STATES = [
     },
   },
   {
-    name: "ภาพรวม: อันดับค่าใช้จ่ายที่ยังจัดไม่ได้",
+    name: "ภาพรวม: ค่าใช้จ่ายที่ราคายังไม่ครบ",
     async setup(page) {
       await comparisonFixture(page);
       await page.goto("/dashboard?by=department");
-      await expect(page.getByRole("button", { name: "จัดอันดับตามยอดพิมพ์จริง" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "พื้นที่เปรียบเทียบ" })).toContainText("ยังยืนยันราคาไม่ได้");
     },
   },
   {

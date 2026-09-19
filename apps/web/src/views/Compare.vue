@@ -12,6 +12,7 @@ import { t } from "../lib/locale";
  *
  *   เดือน          ยอดรวมทีละเดือน — "เดือนนี้ต่างจากเดือนก่อนยังไง และเพราะอะไร"
  *   สัญญา / อาคาร  หนึ่งเส้นต่อหนึ่งสัญญา/อาคารบนกราฟเดียว (แบบ Comparisons ของ GA4)
+ *   ปีงบ           หนึ่งเส้นต่อหนึ่งปีงบ วางซ้อนตามเดือนของปีงบ ต.ค.→ก.ย. (#115)
  *   ฝ่าย / แผนก    ตรวจความแตกต่างของหน่วยงาน — ดู components/UnitDifference.vue
  *
  * เดิม "ตามสัญญา" กับ "ตามอาคาร" คำนวณชุดเดียวกันทุกประการ ต่างกันแค่ช่องตัวกรองที่
@@ -39,7 +40,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { CircleAlert, Info, Minus, TrendingDown, TrendingUp } from "lucide-vue-next";
 import { fiscalYearMonths, fromSatang, sumCostSatang } from "@suth/domain";
-import { activeFiscalYear, activeFiscalYearRange } from "../store/fiscalYear";
+import { activeFiscalYear, activeFiscalYearRange, fiscalYearState } from "../store/fiscalYear";
 import { yearLabel } from "../lib/locale-format";
 import api from "../services/api";
 import { useDepartments, useDivisions, useMonthlyKpi } from "../api/queries";
@@ -47,10 +48,11 @@ import { formatBahtValue, formatCount } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
 import UnitDifference from "../components/UnitDifference.vue";
 import ExportExcelButton from "../components/ExportExcelButton.vue";
-import { MAX_ITEMS, buildComparison, periodLabel, summarize } from "../components/comparison";
+import { MAX_ITEMS, MAX_YEARS, YEAR_SCOPES, buildComparison, dimensionLabel, fiscalYearsMonths, groupKey, itemOptions, monthText, periodLabel, summarize, yearRows } from "../components/comparison";
 import { conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, saveWorkbook, standardNotes } from "../components/comparison-export";
 import { compareSheet } from "../components/compare-export";
 import { useExportTask } from "../composables/useExportTask";
+import { modeMemory } from "../lib/session-memory";
 import {
   UiAlert,
   UiButton,
@@ -90,6 +92,7 @@ const COMPARISON_TYPES = [
   { value: "month", label: t("เดือน") },
   { value: "contract", label: t("สัญญา") },
   { value: "building", label: t("อาคาร") },
+  { value: "year", label: t("ปีงบ") },
   { value: "department", label: t("ฝ่าย / แผนก") },
 ];
 const comparisonTypeFromQuery = () =>
@@ -109,8 +112,18 @@ const filtersFromQuery = () => ({
   contract: /^\d+$/.test(queryText(route.query.contract)) ? queryText(route.query.contract) : "",
 });
 
-/** สัญญาหรืออาคารที่เลือกมาเทียบ — ว่าง = รายการที่มียอดมากที่สุดไม่เกินจำนวนสีที่มี */
+/** สัญญา อาคาร หรือปีงบที่เลือกมาเทียบ — ว่าง = ค่าเริ่มต้นของแบบนั้น (ยอดสูงสุด / ปีนี้กับปีก่อน) */
 const selectedGroups = ref(groupsFromQuery());
+
+/** ขอบเขตเดียวของการเทียบข้ามปีงบ เช่น ฝ่ายหนึ่งฝ่าย — "overall" = ทั้งองค์กร */
+const YEAR_SCOPE_OPTIONS = YEAR_SCOPES.map((value) => ({ value, label: value === "overall" ? t("ทั้งองค์กร") : dimensionLabel(value) }));
+const EMPTY_YEAR_SCOPE = () => ({ scope: "overall", item: "" });
+function yearScopeFromQuery() {
+  const scope = YEAR_SCOPES.includes(queryText(route.query.scope)) ? queryText(route.query.scope) : "overall";
+  const item = queryText(route.query.scopeItem);
+  return { scope, item: scope !== "overall" && /^(\d+|unassigned)$/.test(item) ? item : "" };
+}
+const yearScope = ref(yearScopeFromQuery());
 
 const filters = ref(filtersFromQuery());
 
@@ -137,26 +150,40 @@ const referenceNotice = ref("");
 
 const hasActiveFilter = computed(() => Object.values(filters.value).some(Boolean));
 
+/**
+ * แต่ละแบบการเทียบจำรายการและตัวกรองของตัวเอง (#115) — เดิมสลับแบบแล้วล้างทุกอย่าง
+ * เลือกสัญญา A, B ไว้ สลับไปดูอาคารแล้วกลับมา ต้องยังเห็น A, B ไม่ใช่เริ่มเลือกใหม่
+ * ปุ่ม "ล้างตัวกรอง" เป็นทางเดียวที่กลับไปค่าเริ่มต้น
+ */
+const memory = modeMemory("compare");
+const EMPTY_FILTERS = () => ({ building: "", floor: "", contract: "" });
+
 function resetFilters() {
-  filters.value = { building: "", floor: "", contract: "" };
+  filters.value = EMPTY_FILTERS();
 }
 
 function clearAll() {
   resetFilters();
   selectedGroups.value = [];
+  yearScope.value = EMPTY_YEAR_SCOPE();
+  memory.clear();
 }
 
 let syncingTypeFromRoute = false;
-watch(comparisonType, (value) => {
+watch(comparisonType, (value, previous) => {
   if (value !== "department") void loadMasterData();
-  // เปลี่ยนจาก URL (ย้อนกลับ/ลิงก์) มีกลุ่มและตัวกรองของมันเองมาด้วย — ห้ามล้างทิ้ง
+  // เปลี่ยนจาก URL (ย้อนกลับ/ลิงก์) มีกลุ่มและตัวกรองของมันเองมาด้วย — ห้ามทับด้วยความจำ
   if (syncingTypeFromRoute) return;
-  // ล้างแล้วเขียน URL ครั้งเดียว — ถ้าให้ watcher ของขอบเขตเขียนเองอีกรอบ สองคำสั่ง replace
-  // จะอ่าน route.query ชุดเดิม แล้วอันหลังพากลุ่มเก่ากลับมา
+  memory.save(previous, { groups: selectedGroups.value, filters: filters.value, yearScope: yearScope.value });
+  const saved = memory.restore(value);
+  // เปลี่ยนแล้วเขียน URL ครั้งเดียว — ถ้าให้ watcher ของขอบเขตเขียนเองอีกรอบ สองคำสั่ง replace
+  // จะอ่าน route.query ชุดเดิม แล้วอันหลังพากลุ่มของแบบเก่ากลับมา
   syncingScopeFromRoute = true;
-  clearAll();
+  selectedGroups.value = saved?.groups ?? [];
+  filters.value = { ...EMPTY_FILTERS(), ...saved?.filters };
+  yearScope.value = { ...EMPTY_YEAR_SCOPE(), ...saved?.yearScope };
   syncingScopeFromRoute = false;
-  router.replace({ query: { ...route.query, type: value, ...scopeQuery(selectedGroups.value, filters.value) } });
+  router.replace({ query: { ...route.query, type: value, ...scopeQuery(selectedGroups.value, filters.value, yearScope.value) } });
 }, { flush: "sync" });
 
 watch(() => route.query.type, () => {
@@ -212,16 +239,18 @@ async function loadMasterData() {
 /* --------------------------------------------------------------------------
    sync กลุ่มที่เลือกและตัวกรองกับ URL
    -------------------------------------------------------------------------- */
-const scopeQuery = (groups, f) => ({
+const scopeQuery = (groups, f, ys = EMPTY_YEAR_SCOPE()) => ({
   groups: groups.length ? groups.join(",") : undefined,
   contract: f.contract || undefined,
   building: f.building || undefined,
   floor: f.floor || undefined,
+  scope: ys.scope !== "overall" ? ys.scope : undefined,
+  scopeItem: ys.scope !== "overall" && ys.item ? ys.item : undefined,
 });
 
-watch([selectedGroups, filters], ([groups, f]) => {
+watch([selectedGroups, filters, yearScope], ([groups, f, ys]) => {
   if (syncingScopeFromRoute) return;
-  router.replace({ query: { ...route.query, ...scopeQuery(groups, f) } });
+  router.replace({ query: { ...route.query, ...scopeQuery(groups, f, ys) } });
 }, { deep: true, flush: "sync" });
 
 watch([() => route.query, referencesReady], ([query]) => {
@@ -231,16 +260,18 @@ watch([() => route.query, referencesReady], ([query]) => {
   let groups = groupsFromQuery();
   const resolved = normalizeReferences(filtersFromQuery());
   if (comparisonType.value === "building") {
-    const results = groups.map((value) => ({ raw: value, ...resolveReference(value, buildingOptions.value) }));
+    const results = groups.map((value) => ({ raw: value, ...(value === "unassigned" ? { value } : resolveReference(value, buildingOptions.value)) }));
     resolved.rejected.push(...results.filter((result) => result.rejected).map((result) => result.raw));
     groups = [...new Set(results.map((result) => result.value).filter(Boolean))];
   }
   if (resolved.rejected.length) referenceNotice.value = t("ล้างตัวกรองจากลิงก์ที่ไม่พบหรือระบุได้ไม่แน่ชัด: {0}", [resolved.rejected.join(", ")]);
+  const ys = yearScopeFromQuery();
   syncingScopeFromRoute = true;
   selectedGroups.value = groups;
   filters.value = resolved.values;
+  yearScope.value = ys;
   syncingScopeFromRoute = false;
-  const normalized = scopeQuery(groups, resolved.values);
+  const normalized = scopeQuery(groups, resolved.values, ys);
   if (Object.keys(normalized).some((key) => queryText(query[key]) !== queryText(normalized[key]))) {
     router.replace({ query: { ...query, ...normalized } });
   }
@@ -276,18 +307,51 @@ watch(() => route.query.months, () => {
   syncingFromRoute = false;
 });
 
+/*
+ * เทียบข้ามปีงบ: โหลดทุกเดือนของปีที่เลือก แล้ววางแถวบนแกนเดือนของปีงบ (ต.ค. = P01) กลุ่ม
+ * ปีงบจึงใช้กราฟ ตาราง และไฟล์ชุดเดียวกับแบบสัญญา/อาคาร ไม่ได้เลือกปีเอง = ปีนี้กับปีก่อน
+ */
+const yearMode = computed(() => comparisonType.value === "year");
+const defaultYears = computed(() => {
+  const current = Number(activeFiscalYear.value?.year);
+  return current ? [String(current - 1), String(current)] : [];
+});
+const chosenYears = computed(() => {
+  const picked = selectedGroups.value.filter((value) => /^\d{4}$/.test(value));
+  return picked.length ? [...picked].sort().slice(-MAX_YEARS) : defaultYears.value;
+});
+// ปีงบที่มีในระบบ รวมปีก่อนหน้าของปีที่ดูอยู่ — ยอดย้อนหลังนำเข้าได้แม้ยังไม่ได้ตั้งปีงบนั้นไว้
+const yearOptions = computed(() => [...new Set([...fiscalYearState.list.map((year) => String(year.year)), ...defaultYears.value])]
+  .sort((a, b) => Number(b) - Number(a))
+  .map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) })));
+
 const monthlyParams = computed(() => ({
   // โหลดทั้งปีงบ แล้วกรองด้วย ID ที่ตั้งของแต่ละเดือนที่ rowMatches
-  month: activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value).join(",") : undefined,
+  month: yearMode.value
+    ? fiscalYearsMonths(chosenYears.value).join(",") || undefined
+    : activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value).join(",") : undefined,
 }));
 const monthlyQuery = useMonthlyKpi(monthlyParams);
-const rawRows = computed(() => (monthlyQuery.data.value ?? []).filter((row) =>
-  !activeFiscalYearRange.value
-  || (row.month >= activeFiscalYearRange.value.startMonth && row.month <= activeFiscalYearRange.value.endMonth)
-));
-const loading = computed(() => monthlyQuery.isPending.value);
+const yearScopeOptions = computed(() => (yearScope.value.scope === "overall" ? [] : itemOptions(yearScope.value.scope, {
+  divisions: divisions.value, departments: departments.value, buildings: buildings.value,
+}, monthlyQuery.data.value ?? [])));
+const rawRows = computed(() => {
+  const rows = monthlyQuery.data.value ?? [];
+  if (yearMode.value) {
+    const { scope, item } = yearScope.value;
+    return yearRows(scope !== "overall" && item ? rows.filter((row) => groupKey(row, scope) === item) : rows, chosenYears.value);
+  }
+  return rows.filter((row) => !activeFiscalYearRange.value
+    || (row.month >= activeFiscalYearRange.value.startMonth && row.month <= activeFiscalYearRange.value.endMonth));
+});
+const loading = computed(() => monthlyQuery.isPending.value || monthlyQuery.isPlaceholderData.value);
 const loadError = computed(() => monthlyQuery.isError.value ? t("โหลดข้อมูลเปรียบเทียบไม่สำเร็จ") : "");
-const monthsWithData = computed(() => [...new Set(rawRows.value.filter(rowMatches).map((row) => row.month))].sort());
+const monthsWithData = computed(() => {
+  const months = [...new Set(rawRows.value.filter(rowMatches).map((row) => row.month))].sort();
+  if (!yearMode.value) return months;
+  // แกนของการเทียบข้ามปีเริ่ม ต.ค. เสมอ เดือนที่ไม่มียอดเป็นช่องว่าง ไม่ใช่หายไปจากแกน
+  return Array.from({ length: 12 }, (_, index) => `P${String(index + 1).padStart(2, "0")}`);
+});
 
 /* --------------------------------------------------------------------------
    ตัวชี้วัดและการคำนวณ
@@ -314,9 +378,9 @@ function aggregate(month, inGroup = () => true) {
 }
 
 const monthStats = computed(() =>
-  (selectedMonths.value.length ? selectedMonths.value : monthsWithData.value).map((m) => ({
+  (selectedMonths.value.length && !yearMode.value ? selectedMonths.value : monthsWithData.value).map((m) => ({
     month: m,
-    label: formatMonth(m, { long: true }),
+    label: yearMode.value ? monthText(m) : formatMonth(m, { long: true }),
     stats: aggregate(m),
   }))
 );
@@ -416,13 +480,20 @@ watch(() => route.query.metric, () => {
    แยกกลุ่มตามสัญญา / อาคาร
    -------------------------------------------------------------------------- */
 const GROUPING = {
+  // key เดียวกับแบบจำลองของ comparison.js — แถวที่ไม่มีสัญญา/อาคารเป็น "unassigned" ไม่ใช่
+  // ข้อความว่าง ซึ่งหลุดจาก ?groups= ทันทีที่เขียนลง URL จนเลือก "ไม่ผูกสัญญา" ไม่ได้ (#115)
   contract: {
-    id: (row) => (row.billing_contract_id == null ? "" : String(row.billing_contract_id)),
+    id: (row) => groupKey(row, "contract"),
     label: (row) => row.billing_contract_no || t("ไม่ผูกสัญญา"),
     noun: t("สัญญา"),
   },
+  year: {
+    id: (row) => row.fiscal_year ?? "",
+    label: (row) => row.fiscal_year_label,
+    noun: t("ปีงบ"),
+  },
   building: {
-    id: (row) => String(row.building_id ?? ""),
+    id: (row) => groupKey(row, "building"),
     label: (row) => row.building_name || t("ไม่ระบุอาคาร"),
     noun: t("อาคาร"),
   },
@@ -444,11 +515,13 @@ const availableGroups = computed(() => {
 });
 
 const activeGroups = computed(() => {
+  // ปีงบที่เลือกแสดงครบแม้ปีนั้นยังไม่มียอด — เส้นว่างบอกว่า "ไม่มีข้อมูล" ไม่ใช่หายไปเงียบๆ
+  if (yearMode.value) return chosenYears.value.map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) }));
   if (!selectedGroups.value.length) return availableGroups.value.slice(0, MAX_SERIES);
   const chosen = new Set(selectedGroups.value);
   return availableGroups.value.filter((group) => chosen.has(group.value)).slice(0, MAX_SERIES);
 });
-const groupsTruncated = computed(() =>
+const groupsTruncated = computed(() => !yearMode.value &&
   (selectedGroups.value.length || availableGroups.value.length) > MAX_SERIES
 );
 
@@ -555,10 +628,10 @@ function comparable(metric, before, after) {
 }
 
 /** ผลต่างเทียบกับเดือนก่อนหน้า "ในรายการที่เลือก" ไม่ใช่เดือนก่อนหน้าตามปฏิทิน */
-function deltaVsPrevious(metricKey, index) {
+function deltaVsPrevious(metricKey, index, entries = monthStats.value) {
   if (index === 0) return null;
-  const previous = monthStats.value[index - 1].stats;
-  const current = monthStats.value[index].stats;
+  const previous = entries[index - 1].stats;
+  const current = entries[index].stats;
   if (!comparable(METRIC_BY_KEY[metricKey], previous, current)) return null;
   return diffPercent(previous[metricKey], current[metricKey]);
 }
@@ -673,15 +746,12 @@ const exportRows = computed(() => {
 });
 /** แบบจำลองสรุปร่วมใช้สองตัวชี้วัด; compareSheet ใช้ chartSeries เพื่อส่งออกตัวชี้วัดจริงทั้งห้าแบบ */
 const exportMetric = computed(() => (chartMetric.value.needsPrice ? "cost" : "rawPages"));
-/** key ของกลุ่มในแบบจำลอง — กลุ่มที่ไม่มีค่า (ไม่ผูกสัญญา/ไม่ระบุอาคาร) ใช้ "unassigned" */
-const modelKey = (value) => (value === "" ? "unassigned" : value);
 const exportModel = computed(() => (grouping.value
   ? buildComparison({
     rows: exportRows.value,
-    dimension: comparisonType.value,
-    view: "select",
-    items: activeGroups.value.map((group) => modelKey(group.value)),
-    options: activeGroups.value.map((group) => ({ value: modelKey(group.value), label: group.label })),
+    dimension: yearMode.value ? "fiscalYear" : comparisonType.value,
+    items: activeGroups.value.map((group) => group.value),
+    options: activeGroups.value.map((group) => ({ value: group.value, label: group.label })),
     metric: exportMetric.value,
     months: exportMonths.value,
   })
@@ -697,12 +767,21 @@ function exportConditions(model, kind) {
   const f = filters.value;
   const typeLabel = COMPARISON_TYPES.find((type) => type.value === comparisonType.value)?.label ?? "";
   const summary = summarize(model.scopeRows);
-  return [
+  const { scope, item } = yearScope.value;
+  const period = yearMode.value ? [
+    [t("ปีงบที่เปรียบเทียบ"), activeGroups.value.map((group) => group.label).join(", ")],
+    [t("เดือนของปีงบบนแกน"), exportMonths.value.map((month) => monthText(month)).join(", ")],
+    [t("ขอบเขต"), scope !== "overall" && item
+      ? `${dimensionLabel(scope)}: ${yearScopeOptions.value.find((option) => option.value === item)?.label ?? item}` : t("ทั้งองค์กร")],
+  ] : [
     [t("ปีงบประมาณ"), yearLabel(activeFiscalYear.value?.year)],
     [t("ช่วงเวลา"), periodLabel(exportMonths.value)],
+  ];
+  return [
+    ...period,
     [t("เทียบระหว่าง"), typeLabel],
-    ...(grouping.value ? [[t("รายการที่เปรียบเทียบ"), model.entries.map((entry) => entry.displayLabel).join(", ")]] : []),
-    ...(grouping.value && !selectedGroups.value.length ? [[t("วิธีเลือกรายการ"), t("ไม่ได้เลือกเอง — {0} รายการที่มียอดพิมพ์สูงสุดในปีงบ", [MAX_SERIES])]] : []),
+    ...(grouping.value && !yearMode.value ? [[t("รายการที่เปรียบเทียบ"), model.entries.map((entry) => entry.displayLabel).join(", ")]] : []),
+    ...(grouping.value && !yearMode.value && !selectedGroups.value.length ? [[t("วิธีเลือกรายการ"), t("ไม่ได้เลือกเอง — {0} รายการที่มียอดพิมพ์สูงสุดในปีงบ", [MAX_SERIES])]] : []),
     ...(f.contract ? [[t("สัญญาที่คิดเงิน"), contractOptions.value.find((option) => option.value === f.contract)?.label ?? f.contract]] : []),
     ...(f.building ? [[t("อาคาร"), referenceLabel("building", f.building)]] : []),
     ...(f.floor ? [[t("ชั้น"), referenceLabel("floor", f.floor)]] : []),
@@ -721,8 +800,8 @@ async function runCompareExport(kind) {
   const model = exportModel.value;
   const filename = exportFilename([
     kind === "raw" ? "print-usage-data" : "print-comparison",
-    `fy${activeFiscalYear.value?.year ?? "all"}`,
-    monthsSlug(selectedMonths.value, activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value) : []),
+    yearMode.value ? `fy${chosenYears.value.join("_")}` : `fy${activeFiscalYear.value?.year ?? "all"}`,
+    yearMode.value ? "full-year" : monthsSlug(selectedMonths.value, activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value) : []),
     comparisonType.value,
     kind === "raw" ? null : ({ totalPages: "pages", netPages: "net-pages", totalCost: "cost", activeDevices: "devices", costPerPage: "cost-per-page" })[chartMetricKey.value],
   ]);
@@ -732,6 +811,21 @@ async function runCompareExport(kind) {
     : [detailSheet(model.scopeRows), conditions];
   await runExport(() => saveWorkbook(filename, sheets));
 }
+
+// Keep values, headings and chart axes from the same completed response together.
+const currentDisplay = computed(() => ({
+  monthStats: monthStats.value, grouping: grouping.value, groupStats: groupStats.value,
+  summaryFirst: summaryFirst.value, summaryLast: summaryLast.value,
+  summaryLines: summaryLines.value, summaryCaveats: summaryCaveats.value,
+  chartMetric: chartMetric.value, chartSeries: chartSeries.value, chartHasData: chartHasData.value,
+  unpricedInSelection: unpricedInSelection.value, groupsTruncated: groupsTruncated.value,
+  yearMode: yearMode.value, selectedGroups: [...selectedGroups.value],
+}));
+const settledDisplay = ref(null);
+watch([currentDisplay, loading, loadError], ([value, pending, error]) => {
+  if (!pending && !error) settledDisplay.value = value;
+}, { immediate: true });
+const display = computed(() => loading.value && settledDisplay.value ? settledDisplay.value : currentDisplay.value);
 
 onMounted(async () => {
   if (comparisonType.value !== "department") await loadMasterData();
@@ -768,7 +862,7 @@ onMounted(async () => {
           <UiSegmented v-model="comparisonType" :options="COMPARISON_TYPES" />
         </UiField>
 
-        <UiField :label="t(&quot;เดือน&quot;)" class="w-full sm:w-72">
+        <UiField v-if="!yearMode" :label="t(&quot;เดือน&quot;)" class="w-full sm:w-72">
           <PeriodPicker
             v-model="selectedMonths"
             :options="monthsWithData"
@@ -781,12 +875,33 @@ onMounted(async () => {
         <UiField v-if="grouping" :label="t(&quot;{0}ที่จะนำมาเทียบ&quot;, [grouping.noun])" class="w-full sm:w-80">
           <UiCombobox
             v-model="selectedGroups"
-            :options="availableGroups"
+            :options="yearMode ? yearOptions : availableGroups"
             multiple
-            :placeholder="t(&quot;ยอดพิมพ์สูงสุด {0} รายการ&quot;, [MAX_SERIES])"
+            :placeholder="yearMode ? t(&quot;ปีงบนี้กับปีก่อน&quot;) : t(&quot;ยอดพิมพ์สูงสุด {0} รายการ&quot;, [MAX_SERIES])"
             :search-placeholder="t(&quot;พิมพ์เพื่อค้นหา…&quot;)"
           />
         </UiField>
+
+        <!-- เทียบข้ามปีงบดูได้ทั้งองค์กรหรือขอบเขตเดียว — หลายรายการคูณหลายปีจะเกินจำนวนสีเร็วมาก -->
+        <template v-if="yearMode">
+          <UiField :label="t(&quot;ขอบเขต&quot;)">
+            <UiSegmented
+              :model-value="yearScope.scope"
+              :options="YEAR_SCOPE_OPTIONS"
+              size="sm"
+              @update:model-value="(scope) => (yearScope = { scope, item: '' })"
+            />
+          </UiField>
+          <UiField v-if="yearScope.scope !== 'overall'" :label="t(&quot;{0}ที่จะดู&quot;, [dimensionLabel(yearScope.scope)])" class="w-full sm:w-72">
+            <UiCombobox
+              :model-value="yearScope.item"
+              :options="yearScopeOptions"
+              :placeholder="t(&quot;เลือก{0}&quot;, [dimensionLabel(yearScope.scope)])"
+              :search-placeholder="t(&quot;พิมพ์เพื่อค้นหา…&quot;)"
+              @update:model-value="(item) => (yearScope = { ...yearScope, item: item ?? '' })"
+            />
+          </UiField>
+        </template>
 
         <template v-if="comparisonType === 'month'">
           <!-- ชื่อช่องบอกให้ตรงว่ากรองด้วยสัญญาที่คิดเงินของเดือนนั้น ไม่ใช่สัญญาปัจจุบัน
@@ -845,30 +960,30 @@ onMounted(async () => {
         </template>
       </UiAlert>
 
-      <div v-if="loading" class="flex flex-col gap-3">
+      <div v-if="loading && !settledDisplay" class="flex flex-col gap-3">
         <UiSkeleton height="8rem" />
         <UiSkeleton height="14rem" />
       </div>
 
-      <UiCard v-else-if="!monthStats.some((month) => month.stats)">
+      <UiCard v-else-if="!display.monthStats.some((month) => month.stats)">
         <UiEmpty
           :title="t(&quot;ยังไม่มีข้อมูลในช่วงที่เลือก&quot;)"
           :description="t(&quot;ยังไม่มียอดพิมพ์สำหรับปีงบและตัวกรองนี้&quot;)"
         />
       </UiCard>
 
-      <template v-else>
+      <div v-else :aria-busy="loading" :class="{ 'opacity-60': loading }">
         <!-- บทสรุปอัตโนมัติ — เฉพาะโหมดเดือน โหมดแยกกลุ่มไม่มี "ยอดเดียว" ให้สรุป -->
-        <template v-if="!grouping">
+        <template v-if="!display.grouping">
           <UiCard
-            v-if="summaryFirst?.stats && summaryLast?.stats"
+            v-if="display.summaryFirst?.stats && display.summaryLast?.stats"
             class="mb-4"
             :eyebrow="t(&quot;สรุปอัตโนมัติ&quot;)"
-            :title="t(&quot;{0} เทียบกับ {1}&quot;, [summaryFirst.label, summaryLast.label])"
-            :description="monthStats.length > 2 ? t(&quot;จากทั้งหมด {0} เดือนที่เลือก&quot;, [monthStats.length]) : ''"
+            :title="t(&quot;{0} เทียบกับ {1}&quot;, [display.summaryFirst.label, display.summaryLast.label])"
+            :description="display.monthStats.length > 2 ? t(&quot;จากทั้งหมด {0} เดือนที่เลือก&quot;, [display.monthStats.length]) : ''"
           >
             <ul class="flex flex-col gap-2 list-none">
-              <li v-for="(line, index) in summaryLines" :key="index" class="flex items-start gap-2 text-sm">
+              <li v-for="(line, index) in display.summaryLines" :key="index" class="flex items-start gap-2 text-sm">
                 <component
                   :is="line.incomplete ? CircleAlert : line.trend === 'up' ? TrendingUp : line.trend === 'down' ? TrendingDown : Minus"
                   :size="15"
@@ -888,19 +1003,19 @@ onMounted(async () => {
               ข้อจำกัดของการเทียบครั้งนี้ อยู่ในการ์ดเดียวกับบทสรุปโดยตั้งใจ — เป็น
               เงื่อนไขของตัวเลขข้างบน ไม่ใช่ข้อมูลเสริมที่จะย้ายไปไว้ที่อื่นก็ได้
             -->
-            <ul v-if="summaryCaveats.length" class="mt-3 pt-3 border-t border-line-soft flex flex-col gap-1.5 list-none">
-              <li v-for="(note, index) in summaryCaveats" :key="`caveat-${index}`" class="flex items-start gap-2 text-sm text-ink-mute">
+            <ul v-if="display.summaryCaveats.length" class="mt-3 pt-3 border-t border-line-soft flex flex-col gap-1.5 list-none">
+              <li v-for="(note, index) in display.summaryCaveats" :key="`caveat-${index}`" class="flex items-start gap-2 text-sm text-ink-mute">
                 <Info :size="15" class="shrink-0 mt-0.5" aria-hidden="true" />
                 <span>{{ note }}</span>
               </li>
             </ul>
           </UiCard>
 
-          <UiAlert v-else-if="summaryLast" tone="warn" class="mb-4">
+          <UiAlert v-else-if="display.summaryLast" tone="warn" class="mb-4">
             {{ t("ยังสรุปช่วงนี้ไม่ได้ เพราะเดือนแรกหรือเดือนสุดท้ายที่เลือกยังไม่มีข้อมูล") }}
           </UiAlert>
 
-          <UiAlert v-else tone="warn" class="mb-4"> {{ t("ตอนนี้เลือกไว้เดือนเดียว (") }} {{ summaryFirst?.label }} {{ t(") — เลือกอีกเดือนเพื่อให้ระบบเทียบให้") }} </UiAlert>
+          <UiAlert v-else tone="warn" class="mb-4"> {{ t("ตอนนี้เลือกไว้เดือนเดียว (") }} {{ display.summaryFirst?.label }} {{ t(") — เลือกอีกเดือนเพื่อให้ระบบเทียบให้") }} </UiAlert>
         </template>
 
         <!--
@@ -909,33 +1024,37 @@ onMounted(async () => {
         -->
         <UiCard
           class="mb-4"
-          :title="grouping ? t(&quot;{0} แยกตาม{1}&quot;, [chartMetric.label, grouping.noun]) : t(&quot;{0} รายเดือน&quot;, [chartMetric.label])"
-          :description="chartMetric.hint"
+          :title="display.grouping ? t(&quot;{0} แยกตาม{1}&quot;, [display.chartMetric.label, display.grouping.noun]) : t(&quot;{0} รายเดือน&quot;, [display.chartMetric.label])"
+          :description="display.chartMetric.hint"
         >
-          <UiAlert v-if="chartMetric.needsPrice && unpricedInSelection > 0" tone="warn" class="mb-3">
-            {{ t("ยังยืนยันราคาไม่ได้ {0} รายการในช่วงที่เลือก เดือนที่ราคายังไม่ครบจึงไม่มีจุดบนกราฟ", [formatCount(unpricedInSelection)]) }}
+          <UiAlert v-if="display.chartMetric.needsPrice && display.unpricedInSelection > 0" tone="warn" class="mb-3">
+            {{ t("ยังยืนยันราคาไม่ได้ {0} รายการในช่วงที่เลือก เดือนที่ราคายังไม่ครบจึงไม่มีจุดบนกราฟ", [formatCount(display.unpricedInSelection)]) }}
           </UiAlert>
 
-          <UiAlert v-if="grouping && groupsTruncated" tone="info" class="mb-3">
+          <UiAlert v-if="display.yearMode && display.selectedGroups.length > MAX_YEARS" tone="info" class="mb-3">
+            {{ t("เทียบได้ครั้งละไม่เกิน {0} ปีงบ เพื่อให้เส้นบนกราฟยังอ่านออก — แสดง {0} ปีหลังสุดที่เลือก", [MAX_YEARS]) }}
+          </UiAlert>
+
+          <UiAlert v-if="display.grouping && display.groupsTruncated" tone="info" class="mb-3">
             {{ t("แสดงได้ครั้งละ {0} รายการ เพราะชุดสีมี {0} สี — เลือกเองได้จากช่องด้านบน", [MAX_SERIES]) }}
           </UiAlert>
 
           <UiChart
-            v-if="chartHasData"
+            v-if="display.chartHasData"
             kind="line"
-            :labels="monthStats.map((s) => s.label)"
-            :series="chartSeries"
+            :labels="display.monthStats.map((s) => s.label)"
+            :series="display.chartSeries"
             height="20rem"
             :loading="loading"
-            :unit="chartMetric.unit"
-            :format-value="chartMetric.format"
+            :unit="display.chartMetric.unit"
+            :format-value="display.chartMetric.format"
             :category-label="t(&quot;เดือน&quot;)"
           />
           <UiEmpty
             v-else
             compact
-            :title="t(&quot;ยังวาดกราฟ{0}ไม่ได้&quot;, [chartMetric.label])"
-            :description="chartMetric.needsPrice ? t(&quot;ทุกเดือนที่เลือกยังมีรายการที่ยืนยันราคาไม่ได้ ยืนยันช่วงที่สัญญามีผลก่อน แล้วกราฟจะขึ้นเอง&quot;) : t(&quot;ยังไม่มียอดในช่วงที่เลือก&quot;)"
+            :title="t(&quot;ยังวาดกราฟ{0}ไม่ได้&quot;, [display.chartMetric.label])"
+            :description="display.chartMetric.needsPrice ? t(&quot;ทุกเดือนที่เลือกยังมีรายการที่ยืนยันราคาไม่ได้ ยืนยันช่วงที่สัญญามีผลก่อน แล้วกราฟจะขึ้นเอง&quot;) : t(&quot;ยังไม่มียอดในช่วงที่เลือก&quot;)"
           />
         </UiCard>
 
@@ -944,7 +1063,7 @@ onMounted(async () => {
           flush
           class="mb-4"
           :title="t(&quot;ตารางเปรียบเทียบ&quot;)"
-          :description="grouping ? t(&quot;{0} ของแต่ละ{1}&quot;, [chartMetric.label, grouping.noun]) : ''"
+          :description="display.grouping ? t(&quot;{0} ของแต่ละ{1}&quot;, [display.chartMetric.label, display.grouping.noun]) : ''"
         >
           <!-- กล่องที่เลื่อนแนวนอนได้ต้องรับโฟกัสจากคีย์บอร์ด ไม่งั้นคนที่ไม่ใช้เมาส์เลื่อนดูเดือนท้ายๆ ไม่ได้ -->
           <div class="overflow-x-auto scroll-hint-x" tabindex="0" role="region" :aria-label="t(&quot;ตารางเปรียบเทียบ&quot;)">
@@ -955,9 +1074,9 @@ onMounted(async () => {
                   <th
                     scope="col"
                     class="sticky left-0 z-[1] bg-surface-2 text-left text-xs font-semibold text-ink-mute px-4 py-2.5 border-b border-line-soft shadow-[1px_0_0_var(--line-soft)]"
-                  > {{ grouping ? grouping.noun : t("ตัวชี้วัด") }} </th>
+                  > {{ display.grouping ? display.grouping.noun : t("ตัวชี้วัด") }} </th>
                   <th
-                    v-for="stat in monthStats"
+                    v-for="stat in display.monthStats"
                     :key="stat.month"
                     scope="col"
                     class="text-right text-xs font-semibold text-ink-mute px-4 py-2.5 whitespace-nowrap border-b border-line-soft"
@@ -965,15 +1084,15 @@ onMounted(async () => {
                     {{ stat.label }}
                   </th>
                   <th
-                    v-if="grouping"
+                    v-if="display.grouping"
                     scope="col"
                     class="text-right text-xs font-semibold text-ink px-4 py-2.5 whitespace-nowrap border-b border-line-soft"
                   > {{ t("รวมทั้งช่วง") }} </th>
                 </tr>
               </thead>
 
-              <tbody v-if="grouping">
-                <tr v-for="group in groupStats" :key="group.value" class="border-b border-line-soft last:border-0">
+              <tbody v-if="display.grouping">
+                <tr v-for="group in display.groupStats" :key="group.value" class="border-b border-line-soft last:border-0">
                   <th
                     scope="row"
                     class="sticky left-0 z-[1] bg-surface text-left font-medium text-ink-soft px-4 py-2.5 whitespace-nowrap shadow-[1px_0_0_var(--line-soft)]"
@@ -982,14 +1101,14 @@ onMounted(async () => {
                   </th>
                   <td
                     v-for="(stats, index) in group.months"
-                    :key="monthStats[index].month"
+                    :key="display.monthStats[index].month"
                     class="px-4 py-2.5 text-right numeral whitespace-nowrap"
-                    :class="stats && metricValue(stats, chartMetric) === null ? 'text-ink-mute text-xs' : 'text-ink'"
+                    :class="stats && metricValue(stats, display.chartMetric) === null ? 'text-ink-mute text-xs' : 'text-ink'"
                   >
-                    {{ cellText(stats, chartMetric) }}
+                    {{ cellText(stats, display.chartMetric) }}
                   </td>
                   <td class="px-4 py-2.5 text-right numeral font-semibold text-ink whitespace-nowrap">
-                    {{ groupTotal(group.months, chartMetric) === null ? "—" : chartMetric.format(groupTotal(group.months, chartMetric)) }}
+                    {{ groupTotal(group.months, display.chartMetric) === null ? "—" : display.chartMetric.format(groupTotal(group.months, display.chartMetric)) }}
                   </td>
                 </tr>
               </tbody>
@@ -1004,7 +1123,7 @@ onMounted(async () => {
                     <span class="block text-2xs text-ink-mute">{{ metric.hint }}</span>
                   </th>
 
-                  <td v-for="(stat, index) in monthStats" :key="stat.month" class="px-4 py-2.5 text-right">
+                  <td v-for="(stat, index) in display.monthStats" :key="stat.month" class="px-4 py-2.5 text-right">
                     <span class="block font-semibold text-ink numeral whitespace-nowrap">
                       {{ stat.stats ? metric.format(stat.stats[metric.key]) : "—" }}<span
                         v-if="stat.stats && metric.key === 'totalCost' && stat.stats.unpriced > 0"
@@ -1014,16 +1133,16 @@ onMounted(async () => {
                     </span>
 
                     <span
-                      v-if="deltaVsPrevious(metric.key, index) !== null"
+                      v-if="deltaVsPrevious(metric.key, index, display.monthStats) !== null"
                       class="inline-flex items-center gap-0.5 text-2xs font-medium numeral"
-                      :class="deltaVsPrevious(metric.key, index) >= 0 ? 'text-danger-ink' : 'text-ok-ink'"
+                      :class="deltaVsPrevious(metric.key, index, display.monthStats) >= 0 ? 'text-danger-ink' : 'text-ok-ink'"
                     >
                       <component
-                        :is="deltaVsPrevious(metric.key, index) >= 0 ? TrendingUp : TrendingDown"
+                        :is="deltaVsPrevious(metric.key, index, display.monthStats) >= 0 ? TrendingUp : TrendingDown"
                         :size="11"
                         aria-hidden="true"
                       />
-                      {{ Math.abs(deltaVsPrevious(metric.key, index)).toFixed(1) }}%
+                      {{ Math.abs(deltaVsPrevious(metric.key, index, display.monthStats)).toFixed(1) }}%
                     </span>
                   </td>
                 </tr>
@@ -1031,11 +1150,11 @@ onMounted(async () => {
             </table>
           </div>
 
-          <template v-if="!grouping && unpricedInSelection > 0" #footer>
+          <template v-if="!display.grouping && display.unpricedInSelection > 0" #footer>
             <p class="text-xs text-ink-mute">{{ t("* ยอดเฉพาะส่วนที่ยืนยันราคาแล้ว — เดือนนั้นยังมีรายการที่ยืนยันราคาไม่ได้") }}</p>
           </template>
         </UiCard>
-      </template>
+      </div>
     </template>
   </div>
 </template>

@@ -1,5 +1,6 @@
 <script setup>
 import { useReferenceQuery } from "../composables/use-reference-query";
+import { usePageState } from "../composables/use-page-state";
 import { useReferenceFilters } from "../composables/use-reference-filters";
 import { reportContext } from "../components/report-context";
 import { formatFiscalYearRange, formatMonth } from "../lib/locale-format";
@@ -738,6 +739,9 @@ function guardAnnualUnload(event) {
   event.preventDefault();
   event.returnValue = "";
 }
+// คำค้น ตัวกรอง และมุมมองที่เลือกไว้ยังอยู่เมื่อกลับมาหน้านี้ (#115)
+usePageState({ search, filters, mode, yearExpanded });
+
 onMounted(() => window.addEventListener("beforeunload", guardAnnualUnload));
 onUnmounted(() => window.removeEventListener("beforeunload", guardAnnualUnload));
 

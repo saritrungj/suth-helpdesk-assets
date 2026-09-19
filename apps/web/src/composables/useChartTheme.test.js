@@ -48,15 +48,14 @@ describe("useChartTheme", () => {
     expect(baseChartOptions.value.animation).toBe(false);
   });
 
-  test("ไม่ได้ขอ — ปล่อยให้ Chart.js ใช้ค่าเริ่มต้นของตัวเอง", async () => {
+  test("ไม่ได้ขอ — กราฟเปลี่ยนค่าใน 300 มิลลิวินาที", async () => {
     stubMatchMedia(false);
 
     const { useChartTheme } = await import("./useChartTheme");
     const { baseChartOptions } = useChartTheme();
 
-    // `undefined` ไม่ใช่ `true` โดยตั้งใจ — ส่ง true ไปจะทับค่าเริ่มต้นของ Chart.js
-    // (duration, easing) ทิ้งทั้งชุด ซึ่งไม่ใช่สิ่งที่ต้องการ
-    expect(baseChartOptions.value.animation).toBeUndefined();
+    // จังหวะกราฟตามข้อกำหนด #115 โดยยังใช้ easing ของ Chart.js
+    expect(baseChartOptions.value.animation).toEqual({ duration: 300 });
   });
 
   test("เปลี่ยนการตั้งค่าระหว่างเปิดหน้าอยู่ ต้องมีผลโดยไม่ต้องรีเฟรช", async () => {
@@ -64,7 +63,7 @@ describe("useChartTheme", () => {
 
     const { useChartTheme } = await import("./useChartTheme");
     const { baseChartOptions } = useChartTheme();
-    expect(baseChartOptions.value.animation).toBeUndefined();
+    expect(baseChartOptions.value.animation).toEqual({ duration: 300 });
 
     expect(listeners.length).toBeGreaterThan(0);
     listeners.forEach((handler) => handler({ matches: true }));
@@ -80,6 +79,6 @@ describe("useChartTheme", () => {
     const { useChartTheme } = await import("./useChartTheme");
     const { baseChartOptions } = useChartTheme();
 
-    expect(baseChartOptions.value.animation).toBeUndefined();
+    expect(baseChartOptions.value.animation).toEqual({ duration: 300 });
   });
 });

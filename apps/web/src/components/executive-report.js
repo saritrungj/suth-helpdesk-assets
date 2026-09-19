@@ -19,7 +19,9 @@ const FIELDS = {
   division: ['division_id', 'division_name'],
   department: ['department_id', 'department_name'],
   contract: ['billing_contract_id', 'billing_contract_no'],
+  building: ['building_id', 'building_name'],
   device: ['device_id', 'serial_number'],
+  fiscalYear: ['fiscal_year', 'fiscal_year_label'],
 };
 
 export function groupReport(rows, dimension) {

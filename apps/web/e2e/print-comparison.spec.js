@@ -28,6 +28,19 @@ async function download(page, action) {
 }
 
 const conditionsOf = (file) => Object.fromEntries(file.rows("เงื่อนไขรายงาน").slice(1));
+
+test("Compare keeps monthly results while fiscal-year comparison loads", async ({ page }) => {
+  const fixture = await comparisonFixture(page);
+  await page.goto("/compare?type=month&months=2025-10,2025-11");
+  const table = page.getByRole("region", { name: "ตารางเปรียบเทียบ", exact: true });
+  await expect(table).toBeVisible();
+  const previous = await table.innerText();
+  fixture.delay = 1500;
+  await page.getByRole("radio", { name: "ปีงบ", exact: true }).click();
+  await expect(page.locator('[aria-busy="true"]').first()).toBeVisible();
+  expect(await table.innerText()).toBe(previous);
+  await expect(table).toContainText("ก.ย.");
+});
 const comparisonCard = (page) => page.getByRole("region", { name: "พื้นที่เปรียบเทียบ" });
 const detailTable = (page) => page.locator("section.card").filter({ has: page.getByRole("heading", { name: "ตารางรายละเอียด", exact: true }) });
 
@@ -68,11 +81,9 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await page.goto("/dashboard");
     const card = comparisonCard(page);
     await card.getByRole("radio", { name: "ฝ่าย", exact: true }).click();
-    await card.getByRole("radio", { name: "เลือกรายการมาเทียบ", exact: true }).click();
     await chooseItems(page, /^ฝ่ายที่จะเทียบ/, ["ฝ่ายการพยาบาล", "ฝ่ายบริหารทั่วไป"]);
     await card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true }).click();
     await expect(page).toHaveURL(/by=division/);
-    await expect(page).toHaveURL(/view=select/);
     await expect(page).toHaveURL(/items=1%2C2|items=1,2/);
     await expect(page).toHaveURL(/measure=pages/);
 
@@ -88,8 +99,8 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(card).toContainText("จำนวนเครื่องที่มีข้อมูลต่างกัน (2–3 เครื่อง)");
 
     const file = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
-    expect(file.name).toBe("print-comparison-fy2569-full-year-division-select-pages.xlsx");
-    expect(file.workbook.SheetNames).toEqual(["เปรียบเทียบ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
+    expect(file.name).toBe("print-comparison-fy2569-full-year-division-pages.xlsx");
+    expect(file.workbook.SheetNames).toEqual(["เปรียบเทียบ", "อันดับ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
     const [header, nursing, admin] = file.rows("เปรียบเทียบ");
     expect(header.slice(0, 7)).toEqual(["ฝ่าย", "ยอดพิมพ์จริง (หน้า)", "สุทธิหลังหัก 2% (หน้า)", "ค่าใช้จ่ายที่ยืนยันแล้ว (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)", "รายการรอยืนยันราคา", "สถานะข้อมูล"]);
     expect(nursing).toEqual(["ฝ่ายการพยาบาล", 4550, 4459, 1962.45, 3, 1, "รอยืนยันราคา 1 รายการ", 1500, 1600, 1450]);
@@ -131,42 +142,40 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     expect(new Set(file.rows("ข้อมูลรายละเอียด").slice(1).map((line) => line[7]))).toEqual(new Set(["CT-001/2569", "CT-002/2569", "ไม่ผูกสัญญา"]));
   });
 
-  test("อันดับมาก–น้อย: ยอดศูนย์อยู่ในอันดับ ข้อมูลขาดไม่ถูกจัด ค่าใช้จ่ายที่ราคาไม่ครบไม่จัดอันดับ", async ({ page }) => {
+  test("อันดับอยู่ในไฟล์ Excel เท่านั้น: หน้าจอเลือกยอดสูงสุดให้ ไฟล์มีทุกรายการเรียงมาก→น้อย (#115)", async ({ page }) => {
     await comparisonFixture(page);
-    await page.goto("/dashboard");
+    await page.goto("/dashboard?view=rank&dir=low&n=10");
+    await expect(page).not.toHaveURL(/view=|dir=|n=10/);
     const card = comparisonCard(page);
     await card.getByRole("radio", { name: "แผนก", exact: true }).click();
-    await expect(card.getByRole("radio", { name: "อันดับมาก–น้อย", exact: true })).toBeChecked();
+    for (const name of ["อันดับมาก–น้อย", "เลือกรายการมาเทียบ", "มากสุด", "น้อยสุด", "10"]) {
+      await expect(card.getByRole("radio", { name, exact: true })).toHaveCount(0);
+    }
 
-    await expect(card.getByRole("alert").or(card.locator(".bg-warn-soft"))).toContainText("ยังจัดอันดับค่าใช้จ่ายไม่ได้");
-    await expect(page.getByRole("heading", { name: /ยังจัดอันดับไม่ได้จนกว่าราคาจะครบ/ })).toBeVisible();
-    await expect(page.getByRole("group", { name: "ส่งออก Excel" }).getByRole("button", { name: "ส่งออก Excel" })).toBeDisabled();
-    await expect(detailTable(page)).toContainText("ยังจัดอันดับค่าใช้จ่ายไม่ได้จนกว่าราคาจะครบ");
-
-    await card.getByRole("button", { name: "จัดอันดับตามยอดพิมพ์จริง" }).click();
-    await expect(page).toHaveURL(/measure=pages/);
-    await expect(card).toContainText("อันดับใช้เพื่อหาจุดที่ควรตรวจสอบ ไม่ได้หมายความว่ารายการที่มียอดสูงสิ้นเปลือง");
+    // ค่าใช้จ่ายยังจัดลำดับไม่ได้ (ธ.ค. มีรายการรอราคา) ระบบจึงเลือกตามยอดพิมพ์จริง — หน้าไม่ว่าง
+    await expect(card).toContainText("ระบบเลือก 4 รายการที่ยอดสูงสุดให้");
     const table = detailTable(page);
     await expect(table.getByRole("row")).toHaveCount(5);
-    await expect(table.getByRole("row").nth(1)).toContainText(/1\s*งานผู้ป่วยนอก.*3,200/);
-    await expect(table.getByRole("row").nth(4)).toContainText(/4\s*งานคลังยา.*0/);
+    await expect(table.getByRole("row").nth(1)).toContainText(/งานผู้ป่วยนอก.*3,200/);
     await expect(table).not.toContainText("งานเอกซเรย์");
 
-    await card.getByRole("radio", { name: "น้อยสุด", exact: true }).click();
-    await expect(table.getByRole("row").nth(1)).toContainText(/1\s*งานคลังยา/);
-    await card.getByRole("radio", { name: "10", exact: true }).click();
-    await expect(page).toHaveURL(/n=10/);
-    await expect(page.getByRole("heading", { name: "อันดับแผนกตามยอดพิมพ์จริง — ต่ำสุด 10 อันดับ", exact: true })).toBeVisible();
+    const blocked = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
+    expect(blocked.workbook.SheetNames).toEqual(["เปรียบเทียบ", "อันดับ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
+    expect(blocked.rows("อันดับ")[1][0]).toMatch(/ยังจัดอันดับแผนกตามค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ 1 รายการ/);
 
+    await card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true }).click();
     const file = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
-    expect(file.name).toBe("print-comparison-fy2569-full-year-department-rank-low10-pages.xlsx");
-    expect(file.rows("เปรียบเทียบ").slice(1).map((line) => line.slice(0, 4))).toEqual([
-      [1, "งานคลังยา", "ฝ่ายเภสัชกรรม", 0], [2, "งานผู้ป่วยใน", "ฝ่ายการพยาบาล", 1350], [3, "งานการเงิน", "ฝ่ายบริหารทั่วไป", 1420], [4, "งานผู้ป่วยนอก", "ฝ่ายการพยาบาล", 3200],
+    expect(file.name).toBe("print-comparison-fy2569-full-year-department-pages.xlsx");
+    expect(file.rows("อันดับ").slice(1).map((line) => line.slice(0, 4))).toEqual([
+      [1, "งานผู้ป่วยนอก", "ฝ่ายการพยาบาล", 3200], [2, "งานการเงิน", "ฝ่ายบริหารทั่วไป", 1420], [3, "งานผู้ป่วยใน", "ฝ่ายการพยาบาล", 1350], [4, "งานคลังยา", "ฝ่ายเภสัชกรรม", 0],
     ]);
-    expect(file.chart()).toContain('<c:barDir val="bar"/>');
-    // ข้อมูลรายละเอียดครบทุกหน่วยงานก่อนตัดอันดับ
+    expect(file.chart(2)).toContain('<c:barDir val="bar"/>');
+    // ระบบเลือกให้ไม่ได้จำกัดขอบเขต — ข้อมูลรายละเอียดครบทุกหน่วยงาน
     expect(file.rows("ข้อมูลรายละเอียด")).toHaveLength(16);
-    expect(conditionsOf(file)["ขอบเขตข้อมูลรายละเอียด"]).toBe("ทุกแผนกในช่วงที่เลือก ก่อนตัดอันดับ");
+    const conditions = conditionsOf(file);
+    expect(conditions["ขอบเขตข้อมูลรายละเอียด"]).toBe("ทุกเครื่องในช่วงที่เลือก");
+    expect(conditions["วิธีเลือกรายการ"]).toBe("ไม่ได้เลือกเอง — 4 รายการที่ยอดสูงสุดตามตัวชี้วัด");
+    expect(conditions["อันดับ"]).toBe("ทุกแผนก 4 รายการ เรียงตามยอดพิมพ์จริงจากมากไปน้อย (แผ่น “อันดับ”)");
   });
 
   test("ข้อมูลดิบอย่างเดียวเป็นทางเลือกรอง ได้แผ่นข้อมูลกับเงื่อนไข ไม่มีกราฟ", async ({ page }) => {
@@ -218,7 +227,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     expect(new Set(detail.map((line) => line[5]))).toEqual(new Set(["ฝ่ายบริหารทั่วไป"]));
   });
 
-  test("ช่วงก่อนหน้าเทียบรายการชุดเดียวกัน ไม่ใช่ยอดทั้งองค์กร และอันดับ 5/10 ไม่เปลี่ยนยอดรวม (R06)", async ({ page }) => {
+  test("ช่วงก่อนหน้าเทียบรายการชุดเดียวกัน ไม่ใช่ยอดทั้งองค์กร และรายการที่ระบบเลือกให้ไม่จำกัดยอดรวม (R06)", async ({ page }) => {
     const state = await comparisonFixture(page);
     state.overviewComparison = { previous_months: ["2025-10"] };
     await page.goto("/dashboard?months=2025-11&by=division&view=select&items=2");
@@ -231,10 +240,9 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     const previous = state.requests.filter((request) => request.path.endsWith("/monthly-kpi")).map((request) => request.months.join(","));
     expect(previous).toContain("2025-10");
 
-    await page.goto("/dashboard?by=division&view=rank&measure=pages");
+    await page.goto("/dashboard?by=division&measure=pages");
     await expect(kpi).toContainText("5,970");
-    await comparisonCard(page).getByRole("radio", { name: "10", exact: true }).click();
-    await expect(kpi).toContainText("5,970");
+    await expect(page.getByText("ตัวเลขของ ทุกหน่วยงาน")).toBeVisible();
   });
 
   test("วิเคราะห์ส่วนต่างพาไปหน้าเปรียบเทียบพร้อมรายการเดิม แล้วย้อนกลับได้", async ({ page }) => {
@@ -268,7 +276,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     expect(file.name).toContain("full-year");
   });
 
-  test("เปลี่ยนช่วงเวลาแล้วไม่แสดงตัวเลขของช่วงเดิมระหว่างโหลด", async ({ page }) => {
+  test("เปลี่ยนช่วงเวลาแล้วคงข้อมูลและคำอธิบายช่วงเดิมไว้จนโหลดเสร็จ", async ({ page }) => {
     const state = await comparisonFixture(page);
     await page.goto("/dashboard?by=division&view=select&items=1,2&measure=pages");
     const table = detailTable(page);
@@ -278,7 +286,8 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await page.getByRole("option", { name: /เดือนล่าสุดที่มีข้อมูล/ }).click();
     await page.keyboard.press("Escape");
     await expect(comparisonCard(page)).toHaveAttribute("aria-busy", "true");
-    await expect(page.getByText("4,550")).toHaveCount(0);
+    await expect(table.getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550/ })).toBeVisible();
+    await expect(comparisonCard(page).getByRole("radio", { name: "ตาราง", exact: true })).toBeVisible();
     await expect(table.getByRole("row", { name: /ฝ่ายการพยาบาล\s+1,450/ })).toBeVisible({ timeout: 8000 });
     await expect(comparisonCard(page)).toContainText("ธ.ค. 2568");
   });
@@ -312,9 +321,9 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await card.getByRole("radio", { name: "ฝ่าย", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/by=division/);
-    await card.getByRole("radio", { name: "เลือกรายการมาเทียบ", exact: true }).focus();
+    await card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true }).focus();
     await page.keyboard.press("Space");
-    await expect(page).toHaveURL(/view=select/);
+    await expect(page).toHaveURL(/measure=pages/);
     await page.getByRole("button", { name: "ตัวเลือกการส่งออกอื่น" }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("menuitem", { name: "ข้อมูลดิบอย่างเดียว" })).toBeVisible();
@@ -331,6 +340,17 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 });
 
 test.describe("หน้าเปรียบเทียบ → ฝ่าย/แผนก", () => {
+  test("เปลี่ยนช่วงฐานแล้วกราฟและตารางเดิมยังอยู่ระหว่างโหลด", async ({ page }) => {
+    const fixture = await comparisonFixture(page);
+    await page.goto("/compare?type=department&basis=periods&items=1,2&months=2025-10&measure=pages");
+    const table = page.getByRole("table", { name: "ตารางความแตกต่าง" });
+    await expect(table).toBeVisible();
+    fixture.delay = 1500;
+    await page.getByLabel("ช่วงฐาน", { exact: true }).selectOption("previous-span");
+    await expect(page.locator('section.card[aria-busy="true"]').first()).toBeVisible();
+    expect(await table.isVisible()).toBe(true);
+    await expect(table.locator("xpath=ancestor::section")).toHaveAttribute("aria-busy", "true");
+  });
   test("เปิดโหมดฝ่าย/แผนกไม่โหลดข้อมูลอ้างอิงชุดเดิมซ้ำ และแก้ฐานจากลิงก์ให้เป็นรายการที่เลือก", async ({ page }) => {
     const state = await comparisonFixture(page);
     await page.goto("/compare?type=department&items=1,2&base=99&measure=pages");

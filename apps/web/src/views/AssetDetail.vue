@@ -28,14 +28,15 @@ import { t } from "../lib/locale";
  * ที่ตัวเองมาหา ซึ่งเกือบทุกครั้งคือ "เดือนนี้พิมพ์ไปเท่าไหร่" หรือ "อยู่ตรงไหน"
  */
 import { computed } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, MapPin, Move, Pencil } from "lucide-vue-next";
 
 import { errorMessage } from "../lib/api-error";
 import { useQueryClient } from "@tanstack/vue-query";
 import { keys, useDevice, useDeviceHistory, useDeviceUsage } from "../api/queries";
 import { authState } from "../store/auth";
-import { activeFiscalYear } from "../store/fiscalYear";
+import { activeFiscalYear, fiscalYearState } from "../store/fiscalYear";
+import { fiscalPosition, monthText } from "../components/comparison";
 import { formatBahtValue, formatCount, formatUnitPrice } from "../lib/format";
 import {
   UiAlert,
@@ -44,10 +45,13 @@ import {
   UiCard,
   UiChart,
   UiEmpty,
+  UiField,
+  UiSegmented,
   UiSkeleton,
 } from "../ui";
 
 const route = useRoute();
+const router = useRouter();
 
 const deviceId = computed(() => Number(route.params.id));
 const fiscalYearId = computed(() => activeFiscalYear.value?.id ?? null);
@@ -192,15 +196,48 @@ const estimatedCost = computed(() => {
   return totalPages.value * price;
 });
 
-const usageLabels = computed(() => usage.value.map((row) => formatMonth(row.month)));
-
-const usageSeries = computed(() => [
-  {
-    key: "pages",
-    label: t("จำนวนหน้า"),
-    data: usage.value.map((row) => Number(row.pages || 0)),
-  },
+/*
+ * เทียบกับปีงบก่อน (#115) — สองแท่งต่อเดือนของปีงบ (ต.ค.→ก.ย.) เดือนที่ปีใดยังไม่มียอดเป็น
+ * ช่องว่าง ตัวเลือกอยู่ใน URL (?compare=previous-year) กด F5 หรือย้อนกลับแล้วยังเทียบอยู่
+ * ต้องมีปีงบก่อนหน้าในระบบ เพราะ API ยอดรายเครื่องถามด้วยรหัสปีงบ
+ */
+const previousFiscalYear = computed(() => fiscalYearState.list
+  .find((year) => Number(year.year) === Number(activeFiscalYear.value?.year) - 1) ?? null);
+const USAGE_VIEWS = computed(() => [
+  { value: "current", label: t("ปีงบนี้") },
+  { value: "previous-year", label: t("เทียบกับปีงบก่อน") },
 ]);
+const usageView = computed({
+  get: () => (route.query.compare === "previous-year" && previousFiscalYear.value ? "previous-year" : "current"),
+  set: (value) => router.replace({ query: { ...route.query, compare: value === "previous-year" ? value : undefined } }),
+});
+const comparingYears = computed(() => usageView.value === "previous-year");
+const previousUsageQuery = useDeviceUsage(deviceId, computed(() => (comparingYears.value ? previousFiscalYear.value?.id ?? null : null)));
+const previousUsage = computed(() => previousUsageQuery.data.value ?? []);
+const yearAxis = computed(() => {
+  return Array.from({ length: 12 }, (_, index) => `P${String(index + 1).padStart(2, "0")}`);
+});
+const pagesAt = (rows, position) => {
+  const row = rows.find((item) => fiscalPosition(item.month) === position);
+  return row ? Number(row.pages || 0) : null;
+};
+
+const usageLabels = computed(() => (comparingYears.value
+  ? yearAxis.value.map((position) => monthText(position))
+  : usage.value.map((row) => formatMonth(row.month))));
+
+const usageSeries = computed(() => (comparingYears.value
+  ? [
+    { key: "previous", label: t("ปีงบ {0}", [yearLabel(previousFiscalYear.value.year)]), slot: 3, data: yearAxis.value.map((position) => pagesAt(previousUsage.value, position)) },
+    { key: "current", label: t("ปีงบ {0}", [yearLabel(activeFiscalYear.value?.year)]), slot: 1, data: yearAxis.value.map((position) => pagesAt(usage.value, position)) },
+  ]
+  : [
+    {
+      key: "pages",
+      label: t("จำนวนหน้า"),
+      data: usage.value.map((row) => Number(row.pages || 0)),
+    },
+  ]));
 </script>
 
 <template>
@@ -280,8 +317,19 @@ const usageSeries = computed(() => [
             </div>
           </template>
 
+          <UiField v-if="previousFiscalYear" :label="t(&quot;มุมมอง&quot;)" class="mb-3">
+            <UiSegmented v-model="usageView" :options="USAGE_VIEWS" size="sm" />
+          </UiField>
+
+          <UiAlert v-if="comparingYears && previousUsageQuery.isError.value" tone="danger">
+            {{ t("โหลดยอดพิมพ์ของเครื่องนี้ไม่สำเร็จ") }}
+            <template #actions>
+              <UiButton variant="secondary" @click="previousUsageQuery.refetch()">{{ t("ลองใหม่") }}</UiButton>
+            </template>
+          </UiAlert>
           <UiChart
-            v-if="usage.length"
+            v-else-if="usage.length || (comparingYears && previousUsage.length)"
+            :loading="comparingYears && previousUsageQuery.isPending.value"
             kind="bar"
             :labels="usageLabels"
             :series="usageSeries"

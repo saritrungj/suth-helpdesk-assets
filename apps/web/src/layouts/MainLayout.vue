@@ -48,7 +48,7 @@ import AppTopbar from "../app/AppTopbar.vue";
             <!-- key ตาม path เพื่อให้หน้าที่ใช้ component เดียวกันแต่คนละ route
                  (เช่น /expense กับ /by-department) ถูกสร้างใหม่จริง ไม่ใช้ state ค้างกัน -->
             <KeepAlive include="UsageReport">
-              <component :is="Component" :key="route.path" />
+              <component :is="Component" :key="route.path" class="route-fade" />
             </KeepAlive>
           </RouterView>
         </div>

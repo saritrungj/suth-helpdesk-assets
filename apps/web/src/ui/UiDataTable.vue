@@ -41,7 +41,8 @@ import { t } from "../lib/locale";
  *                 value?: (row) => any, csv?: (row) => any, sortValue?: (row) => any }
  *   sortValue ใช้เมื่อค่าที่แสดงเรียงไม่ได้ตรงๆ เช่น "—" ปนกับตัวเลข
  */
-import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
+import { computed, getCurrentInstance, nextTick, ref, useTemplateRef, watch } from "vue";
+import { readSession, writeSession } from "../lib/session-memory";
 import { useFullscreen } from "./use-fullscreen";
 import { useFillHeight } from "./use-fill-height";
 import { refDebounced } from "@vueuse/core";
@@ -111,7 +112,22 @@ const props = defineProps({
   caption: { type: String, default: "" },
   /** selector ของจุดวางกลุ่มเครื่องมือในแถบตัวกรองของหน้า เช่น "#registry-table-tools" */
   toolsTarget: { type: String, default: "" },
+  /**
+   * ชื่อที่ใช้จำคำค้น การเรียง หน้า และคอลัมน์ที่ซ่อนของตารางนี้ในแท็บ (#115) ไม่ใส่ = ใช้
+   * ชื่อไฟล์ส่งออกหรือชื่อตาราง — ตารางที่ไม่มีทั้งสามอย่างไม่จำอะไร
+   */
+  stateKey: { type: String, default: "" },
 });
+
+/*
+ * จำสถานะของตารางไว้ในแท็บนี้ (#115) — กดปุ่มอื่นในหน้าหรือออกไปหน้าอื่นแล้วกลับมา ตารางต้อง
+ * อยู่ที่คำค้น การเรียง และหน้าเดิม ไม่ใช่กลับไปหน้าแรก ผูกกับหน้าที่เปิดอยู่ (route) ด้วย
+ * ตารางที่วางนอก router (เช่นในเทสของ component) จึงไม่จำอะไรและไม่รบกวนกัน
+ */
+const route = getCurrentInstance()?.appContext.config.globalProperties.$route;
+const tableIdentity = props.stateKey || (props.exportFilename !== "data" ? props.exportFilename : "") || props.caption;
+const memoryKey = route?.name && tableIdentity ? `table:${String(route.name ?? route.path)}:${tableIdentity}` : "";
+const remembered = memoryKey ? readSession(memoryKey, null) : null;
 const { expanded, expandError, toggleExpanded, collapseExpanded } = useFullscreen(tableRoot);
 const toolsInline = computed(() => !props.toolsTarget || expanded.value);
 // หน้าที่วางช่องค้นหาไว้นอกตารางส่ง v-model เข้ามาอยู่แล้ว เมื่อเต็มจอให้สร้าง
@@ -128,7 +144,7 @@ const scrollStyle = computed(() => {
   return fillStretch.value ? { height: fillHeight.value } : { maxHeight: fillHeight.value };
 });
 const emit = defineEmits(["update:searchValue"]);
-const localSearch = ref("");
+const localSearch = ref(typeof remembered?.search === "string" ? remembered.search : "");
 const search = computed({
   get: () => props.searchValue ?? localSearch.value,
   set: (value) => { localSearch.value = value; emit("update:searchValue", value); },
@@ -152,11 +168,24 @@ const fullscreenContext = computed(() => {
  */
 const searchTerm = refDebounced(search, 180);
 
-const sortKey = ref(props.defaultSort?.key ?? null);
-const sortDir = ref(props.defaultSort?.dir ?? "asc");
+const sortKey = ref(props.columns.some(column => column.key === remembered?.sortKey) ? remembered.sortKey : props.defaultSort?.key ?? null);
+const sortDir = ref(["asc", "desc"].includes(remembered?.sortDir) ? remembered.sortDir : props.defaultSort?.dir ?? "asc");
 const currentPage = ref(1);
-const pageSize = ref(props.defaultPageSize);
-const hiddenKeys = ref(new Set(props.columns.filter((c) => c.hidden).map((c) => c.key)));
+const pageSize = ref(props.pageSizeOptions.includes(remembered?.pageSize) ? remembered.pageSize : props.defaultPageSize);
+const hiddenKeys = ref(new Set(Array.isArray(remembered?.hidden)
+  ? remembered.hidden.filter((key) => props.columns.some((c) => c.key === key))
+  : props.columns.filter((c) => c.hidden).map((c) => c.key)));
+// หน้าที่จำไว้ใช้ได้หลังแถวมาถึงแล้วเท่านั้น — ตอนเปิดหน้าตารางยังว่างและมีหน้าเดียว
+let pendingPage = Number.isSafeInteger(remembered?.page) && remembered.page > 1 ? remembered.page : 0;
+
+if (memoryKey) {
+  watch([localSearch, sortKey, sortDir, currentPage, pageSize, hiddenKeys], () => {
+    writeSession(memoryKey, {
+      search: localSearch.value, sortKey: sortKey.value, sortDir: sortDir.value,
+      page: currentPage.value, pageSize: pageSize.value, hidden: [...hiddenKeys.value],
+    });
+  }, { deep: true });
+}
 
 const visibleColumns = computed(() => props.columns.filter((c) => !hiddenKeys.value.has(c.key)));
 
@@ -249,9 +278,19 @@ const rangeEnd = computed(() =>
 watch([searchTerm, pageSize], () => {
   currentPage.value = 1;
 });
-watch(() => props.rows.length, () => {
+watch(() => props.rows.length, (length) => {
+  if (pendingPage && length) {
+    currentPage.value = Math.min(pendingPage, totalPages.value);
+    pendingPage = 0;
+    return;
+  }
   if (!props.preservePageOnRefresh) currentPage.value = 1;
 });
+// แถวมาจาก cache ตั้งแต่เปิดหน้า — watcher ด้านบนไม่ทำงาน จึงคืนหน้าที่จำไว้ตรงนี้
+if (pendingPage && props.rows.length) {
+  currentPage.value = Math.min(pendingPage, totalPages.value);
+  pendingPage = 0;
+}
 
 watch(totalPages, (tp) => {
   if (currentPage.value > tp) currentPage.value = tp;
