@@ -61,3 +61,23 @@ export function percentOf(value, total) {
   if (!total) return 0;
   return (Number(value ?? 0) / Number(total)) * 100;
 }
+
+/**
+ * หน้าสุทธิหลังหัก 2% — มีทศนิยมได้สองตำแหน่ง (101 หน้า → 98.98) ไม่ปัดเป็นจำนวนเต็ม
+ * ก่อนแสดง เพราะเป็นตัวเลขเดียวกับที่ใช้คิดเงินและที่อยู่ในไฟล์ Excel
+ */
+export function formatNetPages(value) {
+  return Number(value ?? 0).toLocaleString(TH(), { maximumFractionDigits: 2 });
+}
+
+/** ส่วนต่างพร้อมเครื่องหมาย เช่น "+1,250.00" / "−40" — ศูนย์ไม่มีเครื่องหมาย */
+export function formatSigned(value, formatter = formatCount) {
+  const n = Number(value ?? 0);
+  if (n === 0) return formatter(0);
+  return `${n > 0 ? "+" : "−"}${formatter(Math.abs(n))}`;
+}
+
+/** สัดส่วนเป็นเปอร์เซ็นต์พร้อมเครื่องหมาย เช่น 0.125 → "+12.5%" */
+export function formatSignedPercent(ratio) {
+  return `${formatSigned(Number(ratio) * 100, (n) => n.toLocaleString(TH(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }))}%`;
+}

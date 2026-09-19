@@ -6,6 +6,7 @@
 import domain from "./index.cjs";
 
 export const {
+  monthIndex,
   computeCoverage,
   locationPeriodCoversMonth,
   effectiveLocationPeriod,
@@ -24,6 +25,7 @@ export const {
   parseMonths,
   getFiscalYearRange,
   fiscalYearMonths,
+  fiscalYearOfMonth,
   MONTHS_TH,
   MONTHS_TH_FULL,
   toBuddhistYear,

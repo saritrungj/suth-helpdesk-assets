@@ -126,13 +126,15 @@ export const useContracts = () =>
  * params เป็น ref/computed ได้ พอค่าเปลี่ยน key เปลี่ยน แล้ว query จะดึงชุดใหม่เอง
  * โดยยังคืนชุดเดิมไว้ก่อนจนกว่าของใหม่จะมาถึง (placeholderData) — กราฟจึงไม่กระพริบ
  */
-export function useMonthlyKpi(params) {
+export function useMonthlyKpi(params, { enabled = true } = {}) {
   const key = computed(() => keys.monthlyKpi(unref(params) ?? {}));
 
   return useQuery({
     queryKey: key,
     queryFn: () => get("/dashboard/monthly-kpi", unref(params) ?? {}),
     placeholderData: (previous) => previous,
+    // ช่วงฐานของหน้าเปรียบเทียบดึงเฉพาะตอนเทียบช่วง A/B — ไม่ยิงคำขอที่ไม่มีใครใช้
+    enabled: computed(() => Boolean(unref(enabled))),
     ...LIVE,
   });
 }

@@ -42,6 +42,7 @@ router.get(
          CASE WHEN h.id IS NOT NULL THEN h.location ELSE d.location END AS location,
          CASE WHEN h.id IS NOT NULL THEN h.department_id ELSE d.department_id END AS department_id,
          dep.name AS department_name,
+         CASE WHEN h.id IS NOT NULL THEN h.division_id ELSE d.division_id END AS division_id,
          divi.name AS division_name,
          brand.name AS brand_name,
          d.model,

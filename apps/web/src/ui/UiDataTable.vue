@@ -46,6 +46,7 @@ import { useFullscreen } from "./use-fullscreen";
 import { useFillHeight } from "./use-fill-height";
 import { refDebounced } from "@vueuse/core";
 import { exportSheet } from "../lib/export-xlsx";
+import { useExportTask } from "../composables/useExportTask";
 import {
   ArrowDown,
   ArrowUp,
@@ -311,7 +312,10 @@ function toggleColumn(key) {
    ส่งออก Excel — ใช้ผลที่ค้นหาและเรียงแล้ว แต่ไม่ตัดตามหน้า เพราะคนกด export
    ต้องการทั้งชุดที่กรองไว้ ไม่ใช่แค่ 20 แถวที่เห็นอยู่
    -------------------------------------------------------------------------- */
+const { busy: exporting, error: exportError, run: runExport } = useExportTask();
+
 async function exportExcel() {
+  // จับคอลัมน์ แถว และคำค้นไว้ก่อน await — เปลี่ยนตัวกรองระหว่างสร้างไฟล์ ไฟล์ยังเป็นชุดที่กด
   // คอลัมน์ที่ซ่อนไว้เพื่อลดความรกบนจอแต่ยังต้องอยู่ในไฟล์ (alwaysExport) ส่งออกเสมอ
   const cols = props.columns.filter((c) => !hiddenKeys.value.has(c.key) || c.alwaysExport);
   const header = cols.map((c) => c.label);
@@ -325,14 +329,16 @@ async function exportExcel() {
     })
   );
 
+  const context = [...props.exportContext, [t("ค้นหา"), search.value]];
+
   // ความกว้างคอลัมน์คำนวณให้เองจากความยาวข้อความจริง (ดู lib/export-xlsx.js)
-  await exportSheet({
+  await runExport(() => exportSheet({
     header,
     rows: body,
     sheetName: t("ข้อมูล"),
     filename: props.exportFilename,
-    context: [...props.exportContext, [t("ค้นหา"), search.value]],
-  });
+    context,
+  }));
 }
 defineExpose({
   containsRow: (key) => searchedRows.value.some((row) => row[props.rowKey] === key),
@@ -410,11 +416,16 @@ defineExpose({
           variant="secondary"
           :label="t(&quot;ดาวน์โหลดข้อมูลที่กรองไว้เป็นไฟล์ Excel&quot;)"
           :disabled="!sortedRows.length || search !== searchTerm"
+          :loading="exporting"
           @click="exportExcel"
         >
           <template #icon><Download :size="15" /></template>
           <span class="hidden sm:inline">Excel</span>
         </UiButton>
+        <span v-if="exportError" role="alert" class="inline-flex items-center gap-1.5 text-xs text-danger-ink">
+          {{ exportError }}
+          <button type="button" class="underline font-medium" @click="exportExcel">{{ t("ลองใหม่") }}</button>
+        </span>
       </div>
       </Teleport>
     </div>

@@ -20,6 +20,7 @@
     "@vueuse/core": "^14.4.0",
     "axios": "^1.18.1",
     "chart.js": "^4.5.1",
+    "fflate": "^0.8.3",
     "lucide-vue-next": "^1.0.0",
     "reka-ui": "^2.10.4",
     "tailwindcss": "^4.3.1",
