@@ -8,6 +8,8 @@ import domain from "./index.cjs";
 export const {
   monthIndex,
   computeCoverage,
+  locationPeriodCoversMonth,
+  effectiveLocationPeriod,
   formatMonth,
   formatDate,
   formatFiscalYear,

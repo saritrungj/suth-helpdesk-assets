@@ -49,7 +49,8 @@ router.get(
          d.contract_id,
          c.contract_no,
          dch.contract_id AS billing_contract_id,
-         billing_contract.contract_no AS billing_contract_no
+         billing_contract.contract_no AS billing_contract_no,
+         h.id AS location_history_id
        FROM v_monthly_kpi m
        LEFT JOIN devices d ON m.device_id = d.id
        LEFT JOIN building b ON d.building_id = b.id
