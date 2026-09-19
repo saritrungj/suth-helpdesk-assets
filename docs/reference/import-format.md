@@ -39,7 +39,7 @@ serial_number, brand, model, building, floor, division, department, contract_no,
 
 เพดานความยาวอ่านจาก `MAX_LENGTH` ใน `packages/domain/constraints.cjs` ที่เดียว ไม่เขียนตัวเลขซ้ำในโค้ด
 
-ต้นฉบับของเทมเพลตอยู่ที่ตัวแปร `TEMPLATE_CSV` ใน `apps/web/src/views/ImportDevices.vue` และดาวน์โหลดได้จากหน้านำเข้าข้อมูลในระบบ — ที่นั่นคือแหล่งเดียว ไม่มีไฟล์ตัวอย่างเก็บซ้ำใน repository
+ต้นฉบับของเทมเพลตอยู่ที่ตัวแปร `TEMPLATE_CSV` ใน `apps/web/src/components/DeviceImportPanel.vue` และดาวน์โหลดได้จากหน้านำเข้าข้อมูลในระบบ — ที่นั่นคือแหล่งเดียว ไม่มีไฟล์ตัวอย่างเก็บซ้ำใน repository
 
 ## ยอดมิเตอร์
 
