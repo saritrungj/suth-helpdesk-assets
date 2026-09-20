@@ -1,7 +1,7 @@
 import { fiscalYearOfMonth } from "@suth/domain";
 import { t } from "../lib/locale";
 import { FORMATS, createWorkbook, downloadWorkbook, monthCell, reportStamp } from "../lib/export-xlsx";
-import { differenceNote, dimensionLabel, metricLabel, metricUnit, monthText, statusLabel } from "./comparison";
+import { differenceNote, dimensionLabel, metricLabel, metricUnit, monthText, statusLabel, summarize } from "./comparison";
 
 /**
  * comparison-export.js — ไฟล์ Excel ของการเปรียบเทียบ ใช้ร่วมกันสองหน้า
@@ -28,6 +28,48 @@ function sheetOf(name, columns, records, extra = {}) {
     columns: columns.map(({ format, text, width }) => ({ format, text, width })),
     ...extra,
   };
+}
+
+export function summarySheet(rows) {
+  const summary = summarize(rows);
+  const record = {
+    ...summary,
+    pagesPerDevice: summary.devices ? summary.rawPages / summary.devices : null,
+    costPerDevice: summary.devices && summary.cost != null ? summary.cost / summary.devices : null,
+  };
+  return sheetOf(t("สรุป"), [
+    { header: t("ยอดพิมพ์จริง (หน้า)"), format: FORMATS.count, value: (item) => item.rawPages },
+    { header: t("สุทธิหลังหัก 2% (หน้า)"), format: FORMATS.pages, value: (item) => item.netPages },
+    { header: t("ค่าใช้จ่ายที่ยืนยันแล้ว (บาท)"), format: FORMATS.baht, value: (item) => item.cost },
+    { header: t("เครื่องที่มีข้อมูล (เครื่อง)"), format: FORMATS.count, value: (item) => item.devices },
+    { header: t("หน้าต่อเครื่อง"), format: FORMATS.pages, value: (item) => item.pagesPerDevice },
+    { header: t("บาทต่อเครื่อง"), format: FORMATS.baht, value: (item) => item.costPerDevice },
+    { header: t("รายการรอยืนยันราคา"), format: FORMATS.count, value: (item) => item.unpriced },
+  ], [record]);
+}
+
+export function monthlySheet(rows) {
+  const months = [...new Set((rows ?? []).map((row) => row.calendar_month ?? row.month))].sort();
+  const records = months.map((month) => ({ month, summary: summarize(rows.filter((row) => (row.calendar_month ?? row.month) === month)) }));
+  return sheetOf(t("รายเดือน"), [
+    { header: t("เดือน"), value: (item) => monthText(item.month) },
+    ...measureColumns((item) => item.summary),
+  ], records);
+}
+
+export function qualitySheet(rows) {
+  const priced = (rows ?? []).filter((row) => row.total_cost != null);
+  const unpriced = (rows ?? []).filter((row) => row.total_cost == null);
+  const records = [
+    { label: t("ยืนยันราคาแล้ว"), summary: summarize(priced) },
+    { label: t("ยังยืนยันราคาไม่ได้"), summary: summarize(unpriced) },
+  ];
+  return sheetOf(t("คุณภาพข้อมูล"), [
+    { header: t("สถานะราคา"), value: (item) => item.label },
+    { header: t("จำนวนรายการ"), format: FORMATS.count, value: (item) => item.summary.readings },
+    { header: t("ยอดพิมพ์จริง (หน้า)"), format: FORMATS.count, value: (item) => item.summary.rawPages },
+    { header: t("จำนวนเครื่อง"), format: FORMATS.count, value: (item) => item.summary.devices },
+  ], records);
 }
 
 /** คอลัมน์ยอดของหนึ่งรายการ — ไม่มีข้อมูลเป็นเซลล์ว่าง ไม่ใช่ศูนย์ */

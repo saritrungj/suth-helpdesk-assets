@@ -3,7 +3,6 @@ import {
   Boxes,
   Building2,
   CalendarRange,
-  ChartColumnBig,
   CirclePlus,
   ClipboardCheck,
   BadgeCheck,
@@ -92,12 +91,6 @@ export const NAV_GROUPS = [
         label: t("ค่าใช้จ่าย"),
         icon: Wallet,
         keywords: t("expense cost เงิน ค่าใช้จ่าย งบ สัญญา แผนก"),
-      },
-      {
-        to: "/compare",
-        label: t("เปรียบเทียบ"),
-        icon: ChartColumnBig,
-        keywords: t("compare เทียบ เดือน month"),
       },
       {
         to: "/report",

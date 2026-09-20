@@ -164,6 +164,19 @@ describe("แบบจำลองของพื้นที่เปรีย�
     expect(buildComparison({ rows, dimension: "division", items: many }).entries).toHaveLength(8);
   });
 
+  test("Dashboard ปิดการเลือกรายการยอดสูงสุดอัตโนมัติได้และแสดงยอดรวมรายเดือน", () => {
+    const model = buildComparison({ rows, dimension: "department", items: [], metric: "rawPages", autoPick: false });
+    expect(model).toMatchObject({ view: "overall", autoPicked: false, blocked: null });
+    expect(model.entries.map((item) => item.key)).toEqual(["2025-10", "2025-11"]);
+    expect(model.scopeRows).toEqual(rows);
+  });
+
+  test("ตาราง Dashboard ขอทุกรายการได้โดยไม่ติดขีดจำกัดสีของกราฟ", () => {
+    const bigger = Array.from({ length: 10 }, (_, index) => row({ device_id: index + 10, department_id: 100 + index, department_name: `แผนก ${index}` }));
+    const items = bigger.map((item) => String(item.department_id));
+    expect(buildComparison({ rows: bigger, dimension: "department", items, itemLimit: null }).entries).toHaveLength(10);
+  });
+
   test("ตัวเลือกของรายการรวมหน่วยงานที่ยังไม่มียอดและกลุ่มที่ไม่ระบุ", () => {
     const options = itemOptions("department", {
       divisions: [{ id: 1, name: "ฝ่าย A" }],

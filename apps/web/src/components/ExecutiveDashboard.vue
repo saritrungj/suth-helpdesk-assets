@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowUpRight, GitCompareArrows, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
+import { ArrowUpRight, FileText, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
 import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useOverview } from '../api/queries';
 import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState } from '../store/fiscalYear';
 import { t } from '../lib/locale';
@@ -10,12 +10,15 @@ import { formatBahtValue, formatCount, formatNetPages } from '../lib/format';
 import { errorMessage } from '../lib/api-error';
 import { UiAlert, UiButton, UiPageHeader, UiStat } from '../ui';
 import DashboardFilter from './DashboardFilter.vue';
+import DashboardScopeFilter from './DashboardScopeFilter.vue';
 import ExecutiveDetails from './ExecutiveDetails.vue';
 import ExportExcelButton from './ExportExcelButton.vue';
 import PrintComparison from './PrintComparison.vue';
 import ComparisonTable from './ComparisonTable.vue';
-import { buildComparison, buildYearComparison, comparisonFromQuery, comparisonScope, comparisonToQuery, defaultYearPair, dimensionLabel, fiscalPosition, fiscalYearsMonths, itemOptions, metricLabel, metricUnit, monthText, periodChange, periodLabel, rowsInScope, summarize, yearComparisonOptions } from './comparison';
-import { comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportFilename, monthsSlug, priceStatusLine, rankingSheet, saveWorkbook, standardNotes } from './comparison-export';
+import { buildComparison, buildYearComparison, comparisonFromQuery, comparisonToQuery, defaultYearPair, dimensionLabel, fiscalPosition, fiscalYearsMonths, itemOptions, metricLabel, metricUnit, monthText, periodChange, periodLabel, summarize, yearComparisonOptions, yearRows } from './comparison';
+import { comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportFilename, monthlySheet, monthsSlug, priceStatusLine, qualitySheet, rankingSheet, saveWorkbook, standardNotes, summarySheet } from './comparison-export';
+import { dashboardScopeFromQuery, dashboardScopeToQuery, filterDashboardRows } from './dashboard-scope';
+import { dashboardCsv } from './dashboard-csv';
 
 /**
  * ExecutiveDashboard — หน้าภาพรวมการพิมพ์
@@ -24,7 +27,7 @@ import { comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportF
  *
  * อันดับมาก–น้อยไม่อยู่บนหน้าจอ แต่เป็นแผ่น "อันดับ" ในไฟล์ Excel ที่ส่งออก (#115)
  *
- * ตัวเลือกหลักมีชุดเดียว (ช่วงเวลา → เปรียบเทียบตาม → รายการ → ตัวชี้วัด) และกราฟ ตาราง
+ * ตัวเลือกหลักมีชุดเดียว (ช่วงเวลา → แยกข้อมูลตาม → รายการ → ข้อมูลที่แสดง) และกราฟ ตาราง
  * กับไฟล์ Excel อ่านจากแบบจำลองตัวเดียวกัน (comparison.js) — เดิมหน้านี้มีตัวเลือกตัวชี้วัด
  * สามชุด (กราฟรายเดือน, การ์ดอันดับ, รายการแผนก/สัญญา) ที่เลือกแยกกันได้ แล้วตัวเลขชุด
  * เดียวกันขึ้นซ้ำสามที่ (#103)
@@ -35,6 +38,7 @@ const route = useRoute();
 const router = useRouter();
 
 const filter = ref({ month: '', selected: [] });
+const dashboardScope = ref(dashboardScopeFromQuery(route.query));
 const state = ref(comparisonFromQuery(route.query));
 const detailOpen = ref(false);
 const detailScope = ref(null);
@@ -57,7 +61,12 @@ watch(() => route.query, (query) => {
     syncingFromRoute = false;
   }
   normalizeComparisonQuery(query, next);
+  const nextScope = dashboardScopeFromQuery(query);
+  if (JSON.stringify(nextScope) !== JSON.stringify(dashboardScope.value)) dashboardScope.value = nextScope;
 });
+watch(dashboardScope, (value) => {
+  router.replace({ query: { ...route.query, ...dashboardScopeToQuery(value) } });
+}, { deep: true });
 const COMPARISON_QUERY_KEYS = ['by', 'items', 'measure', 'years', 'scope', 'scopeItem', 'view', 'dir', 'n', 'contract'];
 const queryText = (value) => String(Array.isArray(value) ? value[0] ?? '' : value ?? '');
 function normalizeComparisonQuery(query, value) {
@@ -91,26 +100,33 @@ const yearReport = useMonthlyKpi(
   computed(() => ({ month: fiscalYearsMonths(chosenYears.value).join(',') || undefined })),
   { enabled: computed(() => yearMode.value && chosenYears.value.length > 0) },
 );
-const yearSource = computed(() => (yearMode.value && !yearReport.isPlaceholderData.value ? yearReport.data.value ?? [] : []));
+const yearSource = computed(() => (yearMode.value && !yearReport.isPlaceholderData.value
+  ? filterDashboardRows(yearReport.data.value ?? [], dashboardScope.value) : []));
 
 const loading = computed(() => report.isPending.value || report.isPlaceholderData.value || overview.isPending.value || overview.isPlaceholderData.value
   || (yearMode.value && (yearReport.isPending.value || yearReport.isPlaceholderData.value)));
 const failed = computed(() => report.isError.value || overview.isError.value || (yearMode.value && yearReport.isError.value));
 const ready = computed(() => !loading.value && !failed.value);
 // ห้ามแสดงข้อมูลของช่วงเดิมใต้ชื่อช่วงที่เพิ่งเลือก — ระหว่างโหลดจึงเป็นแถวว่างเสมอ
-const rows = computed(() => (loading.value || report.isError.value ? [] : (report.data.value || [])
+const rawRows = computed(() => (loading.value || report.isError.value ? [] : (report.data.value || [])
   .filter((row) => !monthParam.value || monthParam.value.split(',').includes(row.month))));
+const rows = computed(() => filterDashboardRows(rawRows.value, dashboardScope.value));
 
-const fleet = computed(() => overview.data.value?.totals || {});
-const coverage = computed(() => overview.data.value?.coverage || {});
-const coverageLabel = computed(() => (coverage.value.verifiable === false ? t('รอยืนยันข้อมูล') : `${formatCount(coverage.value.annual_complete_months)} / ${formatCount(coverage.value.total_months)}`));
 const money = (value) => (value == null ? '—' : formatBahtValue(value));
+const average = (value, devices) => (devices > 0 && value != null ? value / devices : null);
 
 const references = computed(() => ({
   divisions: divisions.data.value ?? [],
   departments: departments.data.value ?? [],
   contracts: contracts.data.value ?? [],
   buildings: buildings.data.value ?? [],
+}));
+const scopeOptions = computed(() => ({
+  divisions: itemOptions('division', references.value, rawRows.value),
+  departments: itemOptions('department', references.value, rawRows.value),
+  contracts: itemOptions('contract', references.value, rawRows.value),
+  buildings: itemOptions('building', references.value, rawRows.value),
+  devices: itemOptions('device', references.value, rawRows.value),
 }));
 const options = computed(() => (yearMode.value ? [] : itemOptions(state.value.by, references.value, rows.value)));
 const yearScopeOptions = computed(() => (yearMode.value && state.value.scope !== 'overall'
@@ -132,22 +148,27 @@ const model = computed(() => (yearMode.value
     items: state.value.items,
     metric: state.value.metric,
     options: options.value,
+    autoPick: false,
   })));
+const completeTableModel = computed(() => {
+  if (yearMode.value || state.value.by === 'overall') return model.value;
+  return buildComparison({
+    rows: rows.value,
+    dimension: state.value.by,
+    items: options.value.map((option) => option.value),
+    metric: state.value.metric,
+    options: options.value,
+    itemLimit: null,
+  });
+});
 const yearScopeLabel = computed(() => (yearScope.value
   ? yearScopeOptions.value.find((option) => option.value === yearScope.value.key)?.label ?? yearScope.value.key : ''));
 
 /*
- * ตัวเลขสำคัญ แผงรายละเอียด และช่วงก่อนหน้า ใช้ขอบเขตเดียวกับกราฟ ตาราง และไฟล์ (R06)
- * เลือกฝ่าย A/B แล้วการ์ดต้องเป็นยอดของ A/B — ไม่ใช่ยอดทั้งองค์กรวางข้างกราฟของ A/B
+ * การ์ดตัวเลขและช่วงก่อนหน้าอ่านจากตัวกรองขอบเขตด้านบนเท่านั้น รายการที่เลือกในกราฟ
+ * มีหน้าที่เลือกเส้นมาเปรียบเทียบ ไม่เปลี่ยนยอดรวมของหน้าโดยเงียบ ๆ
  */
-// เทียบข้ามปีงบ: การ์ดเป็นยอดของปีงบที่ดูอยู่ในขอบเขตเดียวที่เลือก (หรือทั้งองค์กร)
-const scope = computed(() => (yearMode.value
-  ? yearScope.value
-    ? { selected: true, dimension: yearScope.value.dimension, keys: [yearScope.value.key], label: yearScopeLabel.value }
-    : { selected: false, dimension: 'overall', keys: null, label: '' }
-  : comparisonScope(model.value)));
-const scopedRows = computed(() => rowsInScope(rows.value, scope.value));
-const totals = computed(() => summarize(scopedRows.value));
+const totals = computed(() => summarize(rows.value));
 const costTitle = computed(() => (totals.value.unpriced ? t('ค่าใช้จ่ายที่ยืนยันแล้ว') : t('ค่าใช้จ่ายสุทธิ')));
 
 /*
@@ -164,7 +185,11 @@ const previousTotals = computed(() => {
   if (!previousMonths.value.length || loading.value) return null;
   if (previousReport.isPending.value || previousReport.isPlaceholderData.value || previousReport.isError.value) return null;
   const months = new Set(previousMonths.value);
-  return summarize(rowsInScope((previousReport.data.value ?? []).filter((row) => months.has(row.month)), scope.value));
+  const previousRows = filterDashboardRows(
+    (previousReport.data.value ?? []).filter((row) => months.has(row.month)),
+    dashboardScope.value,
+  );
+  return summarize(previousRows);
 });
 const change = computed(() => (previousTotals.value ? periodChange(previousTotals.value, totals.value, 'cost') : null));
 const costHint = computed(() => {
@@ -178,28 +203,15 @@ const costHint = computed(() => {
   }
 });
 
-/** ทางไปหน้าเปรียบเทียบพร้อมขอบเขตเดิม — เปิดด้วย push กดย้อนกลับจึงกลับมาที่มุมมองนี้ */
-const compareLink = computed(() => {
-  const m = model.value;
-  if (!scope.value.selected || m.entries.length < 2 || !['division', 'department'].includes(m.dimension)) return null;
-  return {
-    path: '/compare',
-    query: {
-      type: 'department',
-      level: m.dimension === 'division' ? undefined : m.dimension,
-      items: scope.value.keys.join(','),
-      measure: m.metric === 'rawPages' ? 'pages' : undefined,
-      months: filter.value.selected.length ? filter.value.selected.join(',') : undefined,
-    },
-  };
-});
-
 const periodText = computed(() => (filter.value.selected.length
   ? periodLabel(filter.value.selected)
   : t('ทั้งปีงบ ({0})', [periodLabel(fyMonths.value)])));
 const noun = computed(() => dimensionLabel(yearMode.value ? state.value.scope : state.value.by));
 const metricText = computed(() => `${metricLabel(model.value.metric, { incomplete: model.value.metric === 'cost' && model.value.scope.unpriced > 0 })} (${metricUnit(model.value.metric)})`);
-const scopeCaption = computed(() => (scope.value.selected ? `${noun.value}: ${scope.value.label}` : t('ทุกหน่วยงาน')));
+const activeScopeCount = computed(() => Object.values(dashboardScope.value).reduce((count, values) => count + values.length, 0));
+const scopeCaption = computed(() => (activeScopeCount.value
+  ? t('ตัวกรองขอบเขต {0} รายการ', [formatCount(activeScopeCount.value)])
+  : t('ทุกหน่วยงาน')));
 const itemsText = computed(() => {
   if (yearMode.value) {
     const years = model.value.entries.map((entry) => entry.displayLabel).join(', ');
@@ -214,15 +226,14 @@ const scopeText = computed(() => (yearMode.value ? [periodText.value, itemsText.
 
 // ระหว่างเปลี่ยนช่วง คงแบบจำลองพร้อมคำอธิบายเดิมไว้ด้วยกัน ไม่ติดหัวข้อใหม่บนยอดเก่า
 const settledTable = ref(null);
-watch([model, periodText, ready], ([value, period, isReady]) => {
+watch([completeTableModel, periodText, ready], ([value, period, isReady]) => {
   if (isReady) settledTable.value = { model: value, description: `${comparisonTitle(value)} · ${period}` };
 }, { immediate: true });
 const tableView = computed(() => loading.value && settledTable.value
   ? settledTable.value : { model: model.value, description: `${comparisonTitle(model.value)} · ${periodText.value}` });
 const stats = computed(() => ({
   totals: totals.value, costTitle: costTitle.value, costHint: costHint.value,
-  caption: t('ตัวเลขของ {0} · {1}', [scopeCaption.value, periodText.value]),
-  fleet: fleet.value, coverageLabel: coverageLabel.value, delta: change.value?.percent ?? null,
+  caption: t('ตัวเลขของ {0} · {1}', [scopeCaption.value, periodText.value]), delta: change.value?.percent ?? null,
 }));
 const settledStats = ref(null);
 watch([stats, ready], ([value, isReady]) => { if (isReady) settledStats.value = value; }, { immediate: true });
@@ -232,8 +243,17 @@ const statsReady = computed(() => ready.value || (loading.value && Boolean(settl
 /** เดือนล่าสุดที่มีข้อมูลของปีงบที่ดูอยู่ */
 const latestMonth = computed(() => rows.value.reduce((latest, row) => (row.month > latest ? row.month : latest), ''));
 
-/** แถวของแผงรายละเอียด — เทียบข้ามปีงบใช้แถวของทุกปีที่เทียบ โดยคืนเดือนจริงให้แต่ละแถว */
-const detailRows = computed(() => (yearMode.value ? model.value.scopeRows.map((row) => ({ ...row, month: row.calendar_month })) : rows.value));
+/** แถวของทุกปีที่เทียบตามตัวกรองบนหน้า โดยคืนเดือนจริงให้แผงรายละเอียดและไฟล์ */
+const comparedYearRows = computed(() => {
+  if (!yearMode.value) return [];
+  const positions = filter.value.selected.map(fiscalPosition).filter(Boolean);
+  return yearRows(yearSource.value, chosenYears.value)
+    .filter((row) => !positions.length || positions.includes(row.month));
+});
+const exportRows = computed(() => (yearMode.value ? comparedYearRows.value : rows.value));
+const detailRows = computed(() => exportRows.value.map((row) => (
+  row.calendar_month ? { ...row, month: row.calendar_month } : row
+)));
 
 watch(monthParam, () => { detailOpen.value = false; exportError.value = ''; });
 
@@ -246,20 +266,33 @@ function openDetails(group = 'department', entry = null) {
     const dimension = model.value.view === 'overall' ? 'month' : state.value.by;
     detailScope.value = { dimension, key: entry.key, label: entry.displayLabel };
     detailGroup.value = 'device';
-  } else if (yearMode.value) {
-    // ทุกปีที่เทียบ ในขอบเขตเดียวที่เลือก — แผงแบ่งตามปีงบให้เห็นที่มาของแต่ละเส้น
-    detailScope.value = scope.value.selected ? { dimension: scope.value.dimension, keys: scope.value.keys, label: scope.value.label } : null;
-    detailGroup.value = 'fiscalYear';
-  } else if (scope.value.selected) {
-    detailScope.value = { dimension: state.value.by, keys: model.value.entries.map((item) => item.key), label: model.value.entries.map((item) => item.displayLabel).join(', ') };
-    detailGroup.value = state.value.by === 'contract' ? 'contract' : state.value.by;
   } else {
     detailScope.value = null;
-    detailGroup.value = group;
+    detailGroup.value = yearMode.value ? 'fiscalYear' : group;
   }
   detailOpen.value = true;
 }
+function openTableDetails(entry) {
+  if (!entry) return;
+  detailScope.value = { dimension: state.value.by === 'overall' ? 'month' : state.value.by, key: entry.key, label: entry.displayLabel };
+  detailGroup.value = 'device';
+  detailOpen.value = true;
+}
 function reload() { report.refetch(); overview.refetch(); if (yearMode.value) yearReport.refetch(); }
+
+function runCsvExport() {
+  if (!ready.value || !rows.value.length) return;
+  const content = dashboardCsv(rows.value);
+  const blob = new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `dashboard-details-${monthsSlug(filter.value.selected.length ? filter.value.selected : fyMonths.value)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 /* --------------------------------------------------------------------------
    ส่งออก — ไฟล์เดียวสามแผ่น หรือข้อมูลดิบอย่างเดียว
@@ -280,12 +313,8 @@ function filenameFor(kind) {
   ]);
 }
 
-function conditions(m, kind) {
-  const detailScopeText = yearMode.value
-    ? t('ทุกเครื่องของ {0}', [m.entries.map((entry) => entry.displayLabel).join(', ')])
-    : m.view === 'select' && !m.autoPicked
-    ? t('เฉพาะ{0}ที่เลือก {1} รายการ', [noun.value, formatCount(m.entries.length)])
-    : t('ทุกเครื่องในช่วงที่เลือก');
+function conditions(m, kind, includedRows) {
+  const detailScopeText = t('ทุกเครื่องตามตัวกรองบนหน้า');
   const ranking = m.ranking && !m.ranking.blocked
     ? t('ทุก{0} {1} รายการ เรียงตาม{2}จากมากไปน้อย (แผ่น “อันดับ”)', [noun.value, formatCount(m.ranking.from), metricLabel(m.metric)])
     : m.ranking?.blocked === 'unpriced' ? t('ยังจัดอันดับค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ') : '';
@@ -300,31 +329,32 @@ function conditions(m, kind) {
   return [
     ...yearRows,
     [t('ช่วงเวลา'), periodText.value],
-    [t('เปรียบเทียบตาม'), dimensionLabel(m.dimension)],
+    [t('แยกข้อมูลตาม'), dimensionLabel(m.dimension)],
     ...(m.view === 'select' && !yearMode.value ? [[t('รายการที่เปรียบเทียบ'), m.entries.map((entry) => entry.displayLabel).join(', ')]] : []),
-    ...(m.autoPicked ? [[t('วิธีเลือกรายการ'), t('ไม่ได้เลือกเอง — {0} รายการที่ยอดสูงสุดตามตัวชี้วัด', [formatCount(m.entries.length)])]] : []),
+    ...(m.autoPicked ? [[t('วิธีเลือกรายการ'), t('ไม่ได้เลือกเอง — {0} รายการที่ยอดสูงสุดตามข้อมูลที่แสดง', [formatCount(m.entries.length)])]] : []),
     ...(kind !== 'raw' && ranking ? [[t('อันดับ'), ranking]] : []),
-    ...(kind === 'raw' ? [] : [[t('ตัวชี้วัด'), metricText.value]]),
+    ...(kind === 'raw' ? [] : [[t('ข้อมูลที่แสดง'), metricText.value]]),
     ...(kind !== 'raw' && m.view === 'select' && m.months.length >= 2 ? [[t('ค่าในคอลัมน์รายเดือน'), metricText.value]] : []),
     [t('ขอบเขตข้อมูลรายละเอียด'), detailScopeText],
-    [t('จำนวนรายการยอดพิมพ์'), formatCount(m.scopeRows.length)],
-    [t('จำนวนเครื่องที่มีข้อมูล'), formatCount(summarize(m.scopeRows).devices)],
-    [t('สถานะราคา'), priceStatusLine(summarize(m.scopeRows).unpriced)],
+    [t('จำนวนรายการยอดพิมพ์'), formatCount(includedRows.length)],
+    [t('จำนวนเครื่องที่มีข้อมูล'), formatCount(summarize(includedRows).devices)],
+    [t('สถานะราคา'), priceStatusLine(summarize(includedRows).unpriced)],
     ...standardNotes(),
   ];
 }
 
 async function runExport(kind) {
-  if (kind === 'report' ? blockedReason.value : !ready.value || !model.value.scopeRows.length) return;
+  if (kind === 'report' ? blockedReason.value : !ready.value || !exportRows.value.length) return;
   exportBusy.value = true;
   exportError.value = '';
   // จับแบบจำลองชุดเดียวไว้ก่อน await — ถ้าผู้ใช้เปลี่ยนตัวเลือกระหว่างสร้างไฟล์ ไฟล์ยังเป็นชุดที่กด
   const m = model.value;
+  const includedRows = exportRows.value;
   const filename = filenameFor(kind);
   const ranking = kind === 'report' ? rankingSheet(m) : null;
   const sheets = kind === 'report'
-    ? [comparisonSheet(m), ...(ranking ? [ranking] : []), detailSheet(m.scopeRows), conditionsSheet(filename, conditions(m, kind))]
-    : [detailSheet(m.scopeRows), conditionsSheet(filename, conditions(m, kind))];
+    ? [summarySheet(includedRows), monthlySheet(includedRows), comparisonSheet(m), ...(ranking ? [ranking] : []), detailSheet(includedRows), qualitySheet(includedRows), conditionsSheet(filename, conditions(m, kind, includedRows))]
+    : [detailSheet(includedRows), conditionsSheet(filename, conditions(m, kind, includedRows))];
   try { await saveWorkbook(filename, sheets); }
   catch (error) { exportError.value = errorMessage(error, t('ส่งออกไม่สำเร็จ')); }
   finally { exportBusy.value = false; }
@@ -332,8 +362,8 @@ async function runExport(kind) {
 </script>
 
 <template>
-  <div>
-    <UiPageHeader :title="t('ภาพรวมการพิมพ์')" :description="t('ค่าใช้จ่ายและยอดพิมพ์ของปีงบที่เลือก เปรียบเทียบตามฝ่าย แผนก สัญญา อาคาร เครื่อง หรือปีงบ แล้วส่งออกเป็น Excel')">
+  <div class="w-full min-w-0 max-w-[calc(100vw-2rem)] overflow-x-clip">
+    <UiPageHeader :title="t('ภาพรวมการพิมพ์')" :description="t('ดูข้อมูลปัจจุบันและย้อนหลัง เลือกขอบเขต แยกข้อมูล และส่งออกเพื่อใช้ตัดสินใจลดต้นทุน')">
       <template #actions>
         <UiButton variant="secondary" :disabled="!ready || !rows.length" @click="openDetails()">
           <template #icon><PanelRightOpen :size="16" /></template>{{ t('ดูรายละเอียด') }}
@@ -348,15 +378,17 @@ async function runExport(kind) {
       <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value || overview.isFetching.value || yearReport.isFetching.value" @click="reload"><RefreshCw :size="16" /></UiButton>
     </div>
 
+    <DashboardScopeFilter v-model="dashboardScope" :options="scopeOptions" />
+
     <UiAlert v-if="failed" tone="danger" class="mb-4">
       {{ errorMessage(report.error.value || overview.error.value || yearReport.error.value, t('โหลดภาพรวมไม่สำเร็จ')) }}
       <template #actions><UiButton variant="secondary" @click="reload">{{ t('ลองใหม่') }}</UiButton></template>
     </UiAlert>
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
-    <!-- ตัวเลขสำคัญของขอบเขตเดียวกับกราฟ ตาราง และไฟล์ด้านล่าง — เลือกฝ่าย A/B แล้วเป็นยอดของ A/B -->
+    <!-- ตัวเลขสำคัญอ่านจากตัวกรองขอบเขตด้านบน รายการที่เลือกด้านล่างใช้เลือกเส้นในกราฟ -->
     <p class="text-xs text-ink-mute mb-1.5">{{ shownStats.caption }}</p>
-    <section class="card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
+    <section class="card grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
       <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring rounded-l-lg" :disabled="!ready || !rows.length" :aria-label="t('ดูที่มาของค่าใช้จ่าย')" @click="openDetails('department')">
         <UiStat plain :label="shownStats.costTitle" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats" :delta="statsReady ? shownStats.delta : null" delta-inverse
           :hint="shownStats.costHint">
@@ -369,26 +401,26 @@ async function runExport(kind) {
           <template #icon><ArrowUpRight :size="16" class="text-brand-ink" /></template>
         </UiStat>
       </button>
-      <!-- จำนวนเครื่องในทะเบียนวันนี้ไม่ใช่จำนวนเครื่องที่มียอดย้อนหลัง จึงเป็นข้อมูลอ้างอิงแยก
-           ส่วนความครบถ้วนนับทั้งองค์กรทั้งปีงบ ยังไม่มีตัวเลขของขอบเขตที่เลือก จึงบอกไว้ตรงๆ -->
       <UiStat plain tone="ink" :label="t('เครื่องที่มียอดในช่วงนี้')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"
-        :hint="statsReady ? `${t('ทะเบียนวันนี้ {0} เครื่อง', [formatCount(shownStats.fleet.total_devices)])} · ${t('ใช้งานอยู่ {0} เครื่อง', [formatCount(shownStats.fleet.active_devices)])} · ${t('เดือนที่บันทึกครบทั้งองค์กร')} ${shownStats.coverageLabel}` : ''" />
+        :hint="statsReady ? `${t('{0} รายการยอดพิมพ์', [formatCount(shownStats.totals.readings)])}${shownStats.totals.unpriced ? ` · ${t('รอราคา {0}', [formatCount(shownStats.totals.unpriced)])}` : ''}` : ''" />
+      <UiStat plain tone="ink" :label="t('ยอดพิมพ์เฉลี่ยต่อเครื่อง')" :value="statsReady && shownStats.totals.devices ? formatCount(average(shownStats.totals.rawPages, shownStats.totals.devices)) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
+      <UiStat plain tone="ink" :label="t('ค่าใช้จ่ายเฉลี่ยต่อเครื่อง')" :value="statsReady ? money(average(shownStats.totals.cost, shownStats.totals.devices)) : '—'" :unit="t('บาท')" :loading="loading && !settledStats"
+        :hint="shownStats.totals.unpriced ? t('คำนวณจากรายการที่ยืนยันราคาแล้ว') : ''" />
     </section>
 
     <PrintComparison v-model:state="state" :model="model" :options="options" :year-options="yearOptions" :scope-options="yearScopeOptions" :loading="loading" :failed="failed" :scope-text="scopeText"
       @details="(entry) => openDetails('device', entry)">
       <template #actions>
-        <!-- จอแคบเหลือแค่ไอคอน (ชื่อยังอยู่ให้โปรแกรมอ่านหน้าจอ) ไม่งั้นแถวปุ่มดันหน้าล้นแนวนอนที่ 320px -->
-        <UiButton v-if="compareLink" variant="secondary" :to="compareLink" :label="t('วิเคราะห์ส่วนต่าง')">
-          <template #icon><GitCompareArrows :size="16" /></template><span class="sr-only sm:not-sr-only">{{ t('วิเคราะห์ส่วนต่าง') }}</span>
-        </UiButton>
-        <ExportExcelButton :disabled="Boolean(blockedReason)" :raw-disabled="!ready || !model.scopeRows.length" :busy="exportBusy" :reason="blockedReason"
+        <ExportExcelButton :disabled="Boolean(blockedReason)" :raw-disabled="!ready || !exportRows.length" :busy="exportBusy" :reason="blockedReason"
           @report="runExport('report')" @raw="runExport('raw')" />
+        <UiButton variant="secondary" :disabled="!ready || !rows.length" @click="runCsvExport">
+          <template #icon><FileText :size="16" /></template>{{ t('ส่งออก CSV') }}
+        </UiButton>
       </template>
     </PrintComparison>
 
     <ComparisonTable class="mb-4" :model="tableView.model" :loading="loading" :description="tableView.description"
-      @details="(entry) => openDetails('device', entry)" />
+      @details="openTableDetails" />
 
     <!-- หมายเหตุขอบเขตของตัวเลขบนหน้านี้ ไม่ใช่ที่เก็บงานค้าง — งานค้างอยู่ในลิ้นชัก
          แจ้งเตือนที่เดียว ส่วนข้อจำกัดของตัวเลขแต่ละตัวติดอยู่กับตัวเลขนั้นเอง -->

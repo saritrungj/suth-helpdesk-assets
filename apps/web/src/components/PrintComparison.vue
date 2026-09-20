@@ -3,19 +3,18 @@ import { computed, ref, watch } from "vue";
 import { t } from "../lib/locale";
 import { formatBahtValue, formatCompact, formatCount } from "../lib/format";
 import { UiAlert, UiButton, UiCard, UiChart, UiCombobox, UiEmpty, UiField, UiFilterBar, UiSegmented, UiSkeleton } from "../ui";
-import { MAX_ITEMS, MAX_YEARS, SUGGESTED_ITEMS, comparisonChart, deviceSpread, dimensionLabel, stableSlots } from "./comparison";
+import { MAX_ITEMS, MAX_YEARS, comparisonChart, deviceSpread, dimensionLabel, stableSlots } from "./comparison";
 import { comparisonTitle } from "./comparison-export";
 import { modeMemory } from "../lib/session-memory";
 
 /**
  * PrintComparison — พื้นที่เปรียบเทียบของหน้าภาพรวมการพิมพ์
  *
- * ตัวเลือกเรียงตามลำดับที่คนคิด: เปรียบเทียบตาม → รายการที่จะเทียบ → ตัวชี้วัด
+ * ตัวเลือกเรียงตามลำดับที่คนคิด: แยกข้อมูลตาม → รายการที่เลือก → ข้อมูลที่แสดง
  * (ช่วงเวลาอยู่ที่แถบตัวกรองบนสุดของหน้า เพราะเป็นขอบเขตของตัวเลขทั้งหน้า)
  *
- * ผู้ใช้หยิบหน่วยงานหรือสัญญามาเทียบเอง — ดูแนวโน้มรายเดือนเป็นเส้น ถ้ายังไม่ได้เลือก ระบบ
- * เลือกรายการที่ยอดสูงสุด 5 รายการให้ก่อน เปิดหน้ามาจึงเห็นกราฟทันที อันดับมาก–น้อยไม่อยู่
- * บนหน้าจอ แต่อยู่ในไฟล์ Excel ที่ส่งออก (#115)
+ * ผู้ใช้หยิบหน่วยงานหรือสัญญามาเทียบเอง หากยังไม่เลือก Dashboard แสดงยอดรวมรายเดือน
+ * โดยไม่เลือกอันดับให้แทนผู้ใช้ ส่วนตารางด้านล่างแสดงทุกรายการในขอบเขต
  *
  * ตัวเลขทั้งหมดมาจาก `model` ตัวเดียวกับที่ตารางรายละเอียดและไฟล์ Excel ใช้
  */
@@ -148,11 +147,11 @@ function select({ index }) {
   <section class="mb-4" role="region" :aria-label="t('พื้นที่เปรียบเทียบ')" :aria-busy="loading">
     <UiFilterBar :collapsible="false">
       <template #primary>
-        <UiField :label="t('เปรียบเทียบตาม')">
+        <UiField :label="t('แยกข้อมูลตาม')">
           <UiSegmented v-model="dimension" :options="DIMENSION_OPTIONS" size="sm" />
         </UiField>
         <template v-if="state.by === 'fiscalYear'">
-          <UiField :label="t('ปีงบที่นำมาเทียบ')" class="w-full sm:w-64">
+          <UiField :label="t('ปีงบที่เลือก')" class="w-full sm:w-64">
             <UiCombobox v-model="years" :options="yearOptions" multiple :placeholder="t('ปีงบนี้กับปีก่อน')" :search-placeholder="t('พิมพ์เพื่อค้นหา…')" />
           </UiField>
           <UiField :label="t('ขอบเขต')">
@@ -162,10 +161,10 @@ function select({ index }) {
             <UiCombobox v-model="scopeItem" :options="scopeOptions" :placeholder="t('เลือก{0}', [scopeNoun])" :search-placeholder="t('พิมพ์เพื่อค้นหา…')" />
           </UiField>
         </template>
-        <UiField v-else-if="state.by !== 'overall'" :label="t('{0}ที่จะเทียบ', [noun])" class="w-full sm:w-80">
-          <UiCombobox v-model="items" :options="options" multiple :placeholder="t('ยอดสูงสุด {0} รายการ', [SUGGESTED_ITEMS])" :search-placeholder="t('พิมพ์เพื่อค้นหา…')" />
+        <UiField v-else-if="state.by !== 'overall'" :label="t('{0}ที่เลือก', [noun])" class="w-full sm:w-80">
+          <UiCombobox v-model="items" :options="options" multiple :placeholder="t('ไม่เลือก = ดูยอดรวม')" :search-placeholder="t('พิมพ์เพื่อค้นหา…')" />
         </UiField>
-        <UiField :label="t('ตัวชี้วัด')">
+        <UiField :label="t('ข้อมูลที่แสดง')">
           <UiSegmented v-model="metric" :options="METRIC_OPTIONS" size="sm" />
         </UiField>
         <UiButton v-if="customized" size="sm" variant="danger-ghost" class="self-end" @click="resetAll">{{ t("ล้างตัวเลือก") }}</UiButton>

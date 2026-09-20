@@ -311,7 +311,7 @@ function suggestedKeys(entries, metric) {
  * @param {string[]} [input.months] เดือนที่ผู้ใช้เลือกแสดง — ใส่มาเมื่อเดือนที่ไม่มีข้อมูลต้อง
  *   ยังเป็นช่องว่างบนแกนและในไฟล์ (หน้าเปรียบเทียบ) ไม่ใส่ = เฉพาะเดือนที่มีแถว
  */
-export function buildComparison({ rows = [], dimension = "overall", items = [], metric = "cost", options = [], months: shownMonths = null }) {
+export function buildComparison({ rows = [], dimension = "overall", items = [], metric = "cost", options = [], months: shownMonths = null, autoPick = true, itemLimit = MAX_ITEMS }) {
   const months = shownMonths?.length ? [...shownMonths].sort() : [...new Set(rows.map((row) => row.month))].sort();
   const total = summarize(rows);
   const base = { dimension, metric, months, total };
@@ -333,10 +333,21 @@ export function buildComparison({ rows = [], dimension = "overall", items = [], 
     blocked: !rows.length ? "no-data" : ranked === null ? "unpriced" : null,
   };
 
+  // Dashboard เปิดด้วยยอดรวมที่อธิบายขอบเขตได้ตรงๆ จนกว่าผู้ใช้จะเลือกรายการเอง
+  // หน้า Compare เดิมยังใช้การเสนอรายการยอดสูงสุดได้ผ่านค่าเริ่มต้น autoPick=true
+  if (!items.length && !autoPick) {
+    const entries = months.map((month) => {
+      const monthRows = rows.filter((row) => row.month === month);
+      return { key: month, label: formatMonth(month), displayLabel: formatMonth(month), hint: "", summary: summarize(monthRows) };
+    });
+    return { ...base, view: "overall", autoPicked: false, entries, scopeRows: rows, scope: total, ranking, blocked: rows.length ? null : "no-data" };
+  }
+
   // ยังไม่ได้เลือกเอง = ระบบเลือกยอดสูงสุดให้ก่อน เปิดหน้ามาจึงเห็นกราฟทันที (#115)
   // ขอบเขตของตัวเลขยังเป็นทุกแถว เพราะผู้ใช้ไม่ได้ตั้งใจจำกัดขอบเขตไว้ที่รายการเหล่านี้
   const autoPicked = !items.length;
-  const chosen = autoPicked ? suggestedKeys(all, metric) : [...new Set(items.map(String))].slice(0, MAX_ITEMS);
+  const requested = [...new Set(items.map(String))];
+  const chosen = autoPicked ? suggestedKeys(all, metric) : itemLimit == null ? requested : requested.slice(0, itemLimit);
   const chosenSet = new Set(chosen);
   const scopeRows = autoPicked ? rows : rows.filter((row) => chosenSet.has(groupKey(row, dimension)));
   const entries = disambiguate(chosen.map((key) => entryFor(key, dimension, groups.get(key), options, months)), dimension);

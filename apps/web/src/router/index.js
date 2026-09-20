@@ -69,18 +69,42 @@ const routes = [
     path: "/expense",
     name: "Expense",
     component: () => import("../views/UsageReport.vue"),
+    beforeEnter: (to) => to.query.tab === "department"
+      ? { path: "/dashboard", query: { ...to.query, tab: undefined, by: "division" } }
+      : true,
   },
 
   // path เดิมก่อนรวมสองหน้าเข้าด้วยกัน — เก็บไว้กันลิงก์เก่าและบุ๊กมาร์กพัง
   {
     path: "/by-department",
-    redirect: (to) => ({ path: "/expense", query: { ...to.query, tab: "department" } }),
+    redirect: (to) => ({ path: "/dashboard", query: { ...to.query, by: "division" } }),
   },
 
   {
     path: "/compare",
-    name: "Compare",
-    component: () => import("../views/Compare.vue"),
+    redirect: (to) => {
+      const type = Array.isArray(to.query.type) ? to.query.type[0] : to.query.type;
+      const by = ({ contract: "contract", building: "building", year: "fiscalYear", department: to.query.level === "department" ? "department" : "division" })[type];
+      return {
+        path: "/dashboard",
+        query: {
+          ...to.query,
+          by,
+          items: to.query.items ?? (type !== "year" ? to.query.groups : undefined),
+          years: type === "year" ? to.query.groups : to.query.years,
+          months: to.query.months,
+          measure: to.query.measure,
+          filterContracts: type === "month" ? to.query.contract : undefined,
+          filterBuildings: type === "month" ? to.query.building : undefined,
+          type: undefined,
+          groups: undefined,
+          level: undefined,
+          contract: undefined,
+          building: undefined,
+          floor: undefined,
+        },
+      };
+    },
   },
 
   {
