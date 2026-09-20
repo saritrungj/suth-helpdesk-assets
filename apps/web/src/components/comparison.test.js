@@ -1,25 +1,19 @@
 import { describe, expect, test } from "vitest";
 import {
   buildComparison,
-  buildDifference,
   buildYearComparison,
   fiscalPosition,
   fiscalYearsMonths,
   monthText,
   comparisonChart,
   comparisonFromQuery,
-  comparisonScope,
   comparisonToQuery,
   deviceSpread,
   difference,
-  differenceChart,
-  differenceFromQuery,
   itemOptions,
   periodChange,
   periodLabel,
   rankEntries,
-  referenceMonths,
-  rowsInScope,
   stableSlots,
   summarize,
 } from "./comparison";
@@ -265,34 +259,6 @@ describe("ตัวเลขสำคัญ รายละเอียด แ�
     row({ device_id: 3, month: "2025-10", division_id: 3, division_name: "ฝ่าย C", pages_printed: 9000, net_pages: 8820, total_cost: "4410.00" }),
   ];
 
-  test("เลือกฝ่าย A/B แล้ว ตัวเลขสำคัญเป็นของ A/B เท่ากับขอบเขตของกราฟและไฟล์", () => {
-    const model = buildComparison({ rows, dimension: "division", items: ["1", "2"], metric: "cost" });
-    const scope = comparisonScope(model);
-    expect(scope).toMatchObject({ selected: true, keys: ["1", "2"] });
-    expect(rowsInScope(rows, scope)).toEqual(model.scopeRows);
-    expect(summarize(rowsInScope(rows, scope)).rawPages).toBe(1300);
-  });
-
-  test("ช่วงก่อนหน้าคัดด้วยรายการชุดเดียวกัน ไม่ใช่ยอดทั้งองค์กร", () => {
-    const model = buildComparison({ rows, dimension: "division", items: ["1", "2"], metric: "cost" });
-    const scope = comparisonScope(model);
-    const before = summarize(rowsInScope(previous, scope));
-    expect(before.rawPages).toBe(900);
-    // (637 − 441) ÷ 441 — ถ้าใช้ยอดทั้งองค์กรของเดือนก่อน ฝ่าย C จะทำให้ดูเหมือนลดลงเกือบ 90%
-    expect(periodChange(before, summarize(rowsInScope(rows, scope)), "cost").percent).toBeCloseTo(44.44, 2);
-  });
-
-  test("ภาพรวม และรายการที่ระบบเลือกให้ ใช้ทุกแถว — ผู้ใช้ยังไม่ได้จำกัดขอบเขต", () => {
-    for (const input of [
-      { dimension: "overall" },
-      { dimension: "division", items: [] },
-    ]) {
-      const scope = comparisonScope(buildComparison({ rows, metric: "cost", ...input }));
-      expect(scope.selected).toBe(false);
-      expect(rowsInScope(rows, scope)).toEqual(rows);
-    }
-  });
-
   test("ราคาช่วงใดช่วงหนึ่งไม่ครบ ไม่คิดเปอร์เซ็นต์ค่าใช้จ่าย และฐานศูนย์ไม่มีเปอร์เซ็นต์", () => {
     const priced = summarize(rows);
     const unpricedBefore = summarize([...previous, row({ device_id: 9, month: "2025-10", total_cost: null })]);
@@ -302,73 +268,8 @@ describe("ตัวเลขสำคัญ รายละเอียด แ�
   });
 });
 
-describe("เปรียบเทียบความแตกต่างของฝ่าย/แผนก", () => {
-  const current = {
-    months: ["2025-10", "2025-11", "2025-12"],
-    rows: [
-      row({ device_id: 1, division_id: 1, pages_printed: 300, total_cost: "150.00" }),
-      row({ device_id: 2, division_id: 1, pages_printed: 100, total_cost: "50.00" }),
-      row({ device_id: 3, division_id: 2, division_name: "ฝ่าย B", pages_printed: 500, total_cost: "250.00" }),
-      row({ device_id: 4, division_id: 3, division_name: "ฝ่าย C", pages_printed: 0, total_cost: "0.00" }),
-    ],
-  };
-
-  test("หน่วยงานในช่วงเดียวกันเทียบกับรายการฐานที่เลือก", () => {
-    const model = buildDifference({ dimension: "division", basis: "units", items: ["1", "2", "3"], baseKey: "2", metric: "rawPages", current });
-    expect(model.baseEntry.key).toBe("2");
-    expect(model.entries.map((item) => [item.key, item.isBase, item.difference?.diff, item.difference?.ratio])).toEqual([
-      ["1", false, -100, -0.2], ["2", true, undefined, undefined], ["3", false, -500, -1],
-    ]);
-    expect(deviceSpread(model.entries.map((item) => item.summary))).toEqual({ min: 1, max: 2 });
-  });
-
-  test("ฐานที่บันทึกศูนย์ไม่มีเปอร์เซ็นต์ และต้องมีอย่างน้อยสองรายการ", () => {
-    const model = buildDifference({ dimension: "division", basis: "units", items: ["3", "2"], metric: "rawPages", current });
-    expect(model.entries[1].difference).toEqual({ diff: 500, ratio: null, reason: "zero-base" });
-    expect(buildDifference({ dimension: "division", basis: "units", items: ["3"], metric: "rawPages", current }).blocked).toBe("no-items");
-  });
-
-  test("ช่วง A/B ของหน่วยงานเดียวกัน: ราคาไม่ครบไม่คิดส่วนต่างค่าใช้จ่าย และกราฟมีสองชุด", () => {
-    const reference = { months: ["2024-10", "2024-11", "2024-12"], rows: [row({ month: "2024-10", division_id: 1, pages_printed: 200, total_cost: null })] };
-    const model = buildDifference({ dimension: "division", basis: "periods", items: ["1"], metric: "cost", current, reference });
-    expect(model.entries[0].difference.reason).toBe("unpriced");
-    const byPages = buildDifference({ dimension: "division", basis: "periods", items: ["1"], metric: "rawPages", current, reference });
-    expect(byPages.entries[0].difference).toEqual({ diff: 200, ratio: 1, reason: null });
-    expect(byPages.scopeRows).toHaveLength(3);
-    const chart = differenceChart(byPages, { currentLabel: "B", referenceLabel: "A" });
-    expect(chart.series.map((series) => [series.label, series.data])).toEqual([["A", [200]], ["B", [400]]]);
-  });
-
-  test("ราคาไม่ครบหนึ่งรายการระงับส่วนต่างค่าใช้จ่ายของขอบเขตเปรียบเทียบทั้งหมด", () => {
-    const mixed = {
-      ...current,
-      rows: current.rows.map((item) => (item.division_id === 3
-        ? { ...item, price_per_page: null, total_cost: null }
-        : item)),
-    };
-    const model = buildDifference({
-      dimension: "division", basis: "units", items: ["1", "2", "3"], baseKey: "2", metric: "cost", current: mixed,
-    });
-    expect(model.scope.unpriced).toBe(1);
-    expect(model.entries.map((item) => [item.key, item.isBase, item.difference?.reason])).toEqual([
-      ["1", false, "unpriced"], ["2", true, undefined], ["3", false, "unpriced"],
-    ]);
-  });
-});
-
 describe("ช่วงเวลาตามปีงบ ต.ค.–ก.ย.", () => {
   const fy2569 = { year: "2569", start_month: "2025-10", end_month: "2026-09" };
-
-  test("ช่วงเดียวกันของปีงบก่อนจับคู่ตามตำแหน่งในปีงบ", () => {
-    expect(referenceMonths(["2025-10", "2025-11", "2025-12"], "previous-year", fy2569)).toEqual(["2024-10", "2024-11", "2024-12"]);
-    expect(referenceMonths([], "previous-year", fy2569)).toHaveLength(12);
-    expect(referenceMonths([], "previous-year", fy2569)[0]).toBe("2024-10");
-  });
-
-  test("ช่วงก่อนหน้าที่ยาวเท่ากันข้ามรอยต่อ ก.ย. → ต.ค. ได้", () => {
-    expect(referenceMonths(["2025-10", "2025-11", "2025-12"], "previous-span", fy2569)).toEqual(["2025-07", "2025-08", "2025-09"]);
-    expect(referenceMonths(["2026-01", "2026-02", "2026-03"], "previous-span", fy2569)).toEqual(["2025-10", "2025-11", "2025-12"]);
-  });
 
   test("ชื่อช่วงเวลาเป็นภาษาคน", () => {
     expect(periodLabel(["2025-12", "2025-10", "2025-11"])).toBe("ต.ค. 2568 – ธ.ค. 2568");
@@ -403,7 +304,6 @@ describe("สถานะใน URL", () => {
   test("ลิงก์ตรงจำกัดรายการไว้ที่จำนวนสีของกราฟ ไม่ปล่อยให้ URL กับแบบจำลองแสดงคนละจำนวน", () => {
     const items = "1,2,3,4,5,6,7,8,9,10";
     expect(comparisonFromQuery({ by: "division", items }).items).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
-    expect(differenceFromQuery({ items }).items).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
   });
 
   test("เทียบข้ามปีงบ: ปีเป็นตัวเลขสี่หลักไม่เกินสามปี ขอบเขตเดียว และเขียนลงลิงก์เฉพาะตอนเทียบปีงบ", () => {
@@ -414,11 +314,6 @@ describe("สถานะใน URL", () => {
     expect(comparisonToQuery({ ...state, by: "division" })).toMatchObject({ years: undefined, scope: undefined, scopeItem: undefined });
   });
 
-  test("ฐานเปรียบเทียบจากลิงก์ต้องอยู่ในรายการที่เลือก มิฉะนั้นใช้รายการแรกเป็นฐาน", () => {
-    expect(differenceFromQuery({ items: "1,2", base: "99" })).toMatchObject({ items: ["1", "2"], base: "1" });
-    expect(differenceFromQuery({ items: "1,2", base: "2" })).toMatchObject({ items: ["1", "2"], base: "2" });
-    expect(differenceFromQuery({ items: "", base: "99" })).toMatchObject({ items: [], base: "" });
-  });
 });
 
 test("สีของรายการไม่เปลี่ยนเมื่อเอารายการอื่นออก และไม่ชนกัน", () => {

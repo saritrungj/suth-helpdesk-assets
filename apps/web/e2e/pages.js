@@ -16,7 +16,6 @@ export const PAGES = [
   { name: "ทะเบียนทรัพย์สิน", url: "/assets" },
   { name: "รายละเอียดเครื่อง", url: "/assets/:fixture" },
   { name: "ค่าใช้จ่าย", url: "/expense" },
-  { name: "เปรียบเทียบรายเดือน", url: "/compare" },
   { name: "รายงานสรุป", url: "/report" },
   { name: "สัญญา", url: "/admin/contracts" },
   { name: "จัดการผู้ใช้งาน", url: "/admin/users" },
@@ -28,5 +27,4 @@ export const PAGES = [
   { name: "ปีงบ", url: "/admin/fiscal-years" },
   { name: "เพิ่มทรัพย์สิน", url: "/admin/add-asset" },
   { name: "นำเข้าทรัพย์สิน", url: "/admin/add-asset?tab=import" },
-  { name: "ค่าใช้จ่ายแยกแผนก", url: "/expense?tab=department" },
 ];

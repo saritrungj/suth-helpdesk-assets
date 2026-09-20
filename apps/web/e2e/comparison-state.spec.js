@@ -35,23 +35,6 @@ test("Dashboard compares buildings and keeps a moved device on one line", async 
   await expect(comparisonCard(page).getByRole("table").getByRole("rowheader")).toHaveCount(3);
 });
 
-test("department export ranks every department with a native chart that matches the count", async ({ page }) => {
-  await prototypeFixture(page);
-  await page.goto("/expense?tab=department");
-  const file = await download(page, () => page.getByRole("button", { name: "Excel", exact: true }).first().click());
-  expect(file.workbook.SheetNames).toContain("อันดับ");
-  const ranked = file.rows("อันดับ").length - 1;
-  expect(ranked).toBeGreaterThan(0);
-  const charts = Object.entries(file.zip).filter(([name]) => /^xl\/charts\/chart\d+\.xml$/.test(name)).map(([, bytes]) => strFromU8(bytes));
-  // ไม่เกินสิบแผนกได้กราฟใบเดียวที่มีครบทุกแผนก — แบ่งมากสุด/น้อยสุดจะได้สองใบที่ซ้ำกันเป๊ะ
-  const rankingCharts = charts.filter((xml) => xml.includes("อันดับ&apos;!"));
-  expect(rankingCharts).toHaveLength(ranked > 10 ? 2 : 1);
-  if (ranked <= 10) {
-    expect(rankingCharts[0]).toContain(`ทั้งหมด ${ranked} รายการ`);
-    expect(rankingCharts[0]).not.toContain("มากสุด");
-  }
-});
-
 test("changing fiscal year clears months and keeps selected items", async ({ page }) => {
   await comparisonFixture(page);
   await page.route(/\/api\/fiscal-years$/, route => route.fulfill({ json: [
@@ -65,52 +48,6 @@ test("changing fiscal year clears months and keeps selected items", async ({ pag
   await expect(page).not.toHaveURL(/months=/);
   await expect(page).toHaveURL(/items=1(?:%2C|,)2/);
   await expect(page.getByRole("region", { name: "สรุปตัวเลขสำคัญ" })).toContainText("5,450");
-});
-
-/*
- * การเลือกและสถานะของหน้าเปรียบเทียบ (#115)
- *
- * คนเลือกรายการแล้วสลับไปดูมุมอื่นบ่อย — สิ่งที่เลือกไว้ต้องไม่หายไปเอง และ "ไม่ผูกสัญญา"
- * ต้องเลือกได้เหมือนสัญญาอื่น ไม่ใช่หลุดออกทันทีเพราะไม่มีรหัสสัญญา
- */
-
-const groupsBox = (page, noun) => page.getByLabel(new RegExp(`^${noun}ที่จะนำมาเทียบ`));
-
-async function chooseItems(page, box, names) {
-  await box.click();
-  for (const name of names) await page.getByRole("option", { name, exact: true }).click();
-  await page.keyboard.press("Escape");
-}
-
-test.describe("หน้าเปรียบเทียบ → สัญญา (#115)", () => {
-  test("ไม่ผูกสัญญาเลือกได้คู่กับสัญญาอื่น อยู่รอดหลังโหลดหน้าใหม่ และหลังสลับแบบการเทียบไปกลับ", async ({ page }) => {
-    await comparisonFixture(page);
-    await page.goto("/compare?type=contract&months=2025-12");
-    await chooseItems(page, groupsBox(page, "สัญญา"), ["ไม่ผูกสัญญา", "CT-002/2569"]);
-
-    await expect(page).toHaveURL(/groups=unassigned(?:%2C|,)8/);
-    const table = page.getByRole("region", { name: "ตารางเปรียบเทียบ" });
-    await expect(table.getByRole("rowheader")).toHaveText(["CT-002/2569", "ไม่ผูกสัญญา"]);
-
-    await page.reload();
-    await expect(groupsBox(page, "สัญญา")).toContainText("ไม่ผูกสัญญา");
-    await expect(table.getByRole("rowheader")).toHaveText(["CT-002/2569", "ไม่ผูกสัญญา"]);
-
-    await page.getByRole("radio", { name: "อาคาร", exact: true }).click();
-    await expect(page).toHaveURL(/type=building/);
-    await expect(page).not.toHaveURL(/groups=/);
-    await page.getByRole("radio", { name: "สัญญา", exact: true }).click();
-    await expect(page).toHaveURL(/groups=unassigned(?:%2C|,)8/);
-    await expect(table.getByRole("rowheader")).toHaveText(["CT-002/2569", "ไม่ผูกสัญญา"]);
-  });
-
-  test("ลิงก์ที่ระบุไม่ผูกสัญญาแสดงแถวนั้นพร้อมยอดของมัน", async ({ page }) => {
-    await comparisonFixture(page);
-    await page.goto("/compare?type=contract&months=2025-12&groups=unassigned&metric=totalPages");
-    const table = page.getByRole("region", { name: "ตารางเปรียบเทียบ" });
-    await expect(table.getByRole("rowheader")).toHaveText(["ไม่ผูกสัญญา"]);
-    await expect(table.getByRole("row").nth(1)).toContainText("100");
-  });
 });
 
 test.describe("หน้าภาพรวม → เทียบข้ามปีงบ (#115)", () => {
@@ -174,41 +111,6 @@ test.describe("หน้าภาพรวม → เทียบข้ามป
     await card.getByRole("radio", { name: "ปีงบ", exact: true }).click();
     await expect(page).toHaveURL(/years=2567(?:%2C|,)2568(?:%2C|,)2569/);
     await expect(page).toHaveURL(/scopeItem=1/);
-  });
-});
-
-test.describe("หน้าเปรียบเทียบ → ปีงบ (#115)", () => {
-  test("ปีนี้กับปีก่อนวางซ้อนตามเดือนของปีงบ ขอบเขตเดียว และสลับแบบไปกลับแล้วขอบเขตยังอยู่", async ({ page }) => {
-    await comparisonFixture(page);
-    await page.goto("/compare?type=year&metric=totalPages");
-    const table = page.getByRole("region", { name: "ตารางเปรียบเทียบ" });
-    await expect(table.getByRole("rowheader")).toHaveText(["ปีงบ 2568", "ปีงบ 2569"]);
-    await expect(table.getByRole("columnheader")).toHaveText(["ปีงบ", "ต.ค.", "พ.ย.", "ธ.ค.", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "รวมทั้งช่วง"]);
-    await expect(table.getByRole("row").nth(1)).toContainText(/1,200\s*900\s*1,300/);
-    await expect(table.getByRole("row").nth(2)).toContainText(/1,800\s*2,150\s*2,020/);
-    await expect(page.getByLabel(/^เดือน/)).toHaveCount(0);
-
-    await page.getByRole("radiogroup", { name: "ขอบเขต" }).getByRole("radio", { name: "ฝ่าย", exact: true }).click();
-    await page.getByLabel(/^ฝ่ายที่จะดู/).click();
-    await page.getByRole("option", { name: "ฝ่ายบริหารทั่วไป", exact: true }).click();
-    await expect(page).toHaveURL(/scope=division/);
-    await expect(page).toHaveURL(/scopeItem=2/);
-    await expect(table.getByRole("row").nth(1)).toContainText(/400\s*0\s*300/);
-
-    await page.getByRole("radio", { name: "สัญญา", exact: true }).click();
-    await expect(page).not.toHaveURL(/scope=/);
-    await page.getByRole("radio", { name: "ปีงบ", exact: true }).click();
-    await expect(page).toHaveURL(/scopeItem=2/);
-    await expect(table.getByRole("row").nth(2)).toContainText(/300\s*550\s*570/);
-
-    const file = await download(page, () => page.getByRole("button", { name: "ส่งออก Excel", exact: true }).click());
-    expect(file.name).toBe("print-comparison-fy2568_2569-full-year-year-pages.xlsx");
-    const [header, previous] = file.rows("เปรียบเทียบ");
-    expect(header.slice(-12, -9)).toEqual(["ต.ค.", "พ.ย.", "ธ.ค."]);
-    expect(previous.slice(-12, -9)).toEqual([400, 0, 300]);
-    expect(new Set(file.rows("ข้อมูลรายละเอียด").slice(1).map((line) => line[1]))).toEqual(new Set([2568, 2569]));
-    const conditions = Object.fromEntries(file.rows("เงื่อนไขรายงาน").slice(1));
-    expect(conditions["ขอบเขต"]).toBe("ฝ่าย: ฝ่ายบริหารทั่วไป");
   });
 });
 

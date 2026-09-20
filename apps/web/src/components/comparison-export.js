@@ -1,7 +1,7 @@
 import { fiscalYearOfMonth } from "@suth/domain";
 import { t } from "../lib/locale";
 import { FORMATS, createWorkbook, downloadWorkbook, monthCell, reportStamp } from "../lib/export-xlsx";
-import { differenceNote, dimensionLabel, metricLabel, metricUnit, monthText, statusLabel, summarize } from "./comparison";
+import { dimensionLabel, metricLabel, metricUnit, monthText, statusLabel, summarize } from "./comparison";
 
 /**
  * comparison-export.js — ไฟล์ Excel ของการเปรียบเทียบ ใช้ร่วมกันสองหน้า
@@ -222,116 +222,6 @@ export function rankingSheet(model) {
   const valueColumn = leading.length + METRIC_COLUMN[model.metric];
   const charts = rankingCharts(ranking.entries.length, { labelColumn: 1, valueColumn, valueFormat, valueTitle, noun: dimension, measure: metric });
   return sheetOf(name, columns, ranking.entries, { charts });
-}
-
-/**
- * แผ่น "อันดับ" ของหน้าค่าใช้จ่ายแยกแผนก — ทุกแผนกที่มีรายการยอดพิมพ์ เรียงมาก→น้อย (#115)
- *
- * หน้านั้นมีแต่หน้าสุทธิกับค่าใช้จ่าย (ไม่มีหน้าดิบ) อันดับจึงเรียงตามค่าใช้จ่ายสุทธิ และเมื่อ
- * ราคายังยืนยันไม่ครบแม้แผนกเดียว จะเรียงตามจำนวนหน้าสุทธิแทน เพราะอันดับจากยอดเงินบางส่วน
- * ชี้ผิดแผนกได้ (Q30) — `basis` บอกผู้เรียกว่าเรียงด้วยอะไร เพื่อเขียนไว้ในแผ่นบริบท
- * แผนกที่ไม่มีรายการเลยไม่ถูกจัดอันดับ ส่วนแผนกที่บันทึก 0 หน้าจริงอยู่ท้ายตาราง
- *
- * @param {object[]} divisions ต้นไม้ฝ่าย → แผนก → เครื่อง จาก /dashboard/by-department
- */
-export function departmentRankingSheet(divisions) {
-  const entries = (divisions ?? []).flatMap((division) => (division.departments ?? []).map((department) => ({
-    label: department.name,
-    hint: division.name,
-    readings: (department.devices ?? []).reduce((sum, device) => sum + (device.monthly?.length ?? 0), 0),
-    netPages: Number(department.total_pages || 0),
-    costSatang: Number(department.total_cost_satang ?? Math.round(Number(department.total_cost || 0) * 100)),
-    cost: Number(department.total_cost || 0),
-    devices: Number(department.device_count ?? department.devices?.length ?? 0),
-    unpriced: Number(department.unpriced_readings || 0),
-  }))).filter((entry) => entry.readings > 0);
-  const basis = entries.some((entry) => entry.unpriced > 0) ? "netPages" : "cost";
-  const valueOf = (entry) => (basis === "cost" ? entry.costSatang : entry.netPages);
-  const ranked = entries
-    .sort((a, b) => valueOf(b) - valueOf(a) || String(a.label).localeCompare(String(b.label), "th"))
-    .map((entry, index) => ({ ...entry, rank: index + 1 }));
-  const columns = [
-    { header: t("อันดับ"), format: FORMATS.count, value: (entry) => entry.rank },
-    { header: t("แผนก"), value: (entry) => entry.label },
-    { header: t("ฝ่าย"), value: (entry) => entry.hint },
-    { header: t("ค่าใช้จ่ายสุทธิ (บาท)"), format: FORMATS.baht, value: (entry) => entry.cost },
-    { header: t("จำนวนหน้าสุทธิ (หน้า)"), format: FORMATS.pages, value: (entry) => entry.netPages },
-    { header: t("เครื่องที่มีข้อมูล (เครื่อง)"), format: FORMATS.count, value: (entry) => entry.devices },
-    { header: t("รายการรอยืนยันราคา"), format: FORMATS.count, value: (entry) => entry.unpriced },
-  ];
-  const measure = basis === "cost" ? t("ค่าใช้จ่ายสุทธิ") : t("จำนวนหน้าสุทธิ");
-  const charts = ranked.length ? rankingCharts(ranked.length, {
-    labelColumn: 1,
-    valueColumn: basis === "cost" ? 3 : 4,
-    valueFormat: basis === "cost" ? FORMATS.baht : FORMATS.pages,
-    valueTitle: basis === "cost" ? t("ค่าใช้จ่ายสุทธิ (บาท)") : t("จำนวนหน้าสุทธิ (หน้า)"),
-    noun: t("แผนก"),
-    measure,
-  }) : undefined;
-  return { sheet: sheetOf(t("อันดับ"), columns, ranked, charts ? { charts } : {}), basis, count: ranked.length };
-}
-
-/** แผ่น "เปรียบเทียบ" ของหน้าเปรียบเทียบความแตกต่าง */
-export function differenceSheet(model, { title, currentLabel, referenceLabel }) {
-  const name = t("เปรียบเทียบ");
-  const unit = metricUnit(model.metric);
-  const valueFormat = model.metric === "cost" ? FORMATS.baht : FORMATS.count;
-  const incomplete = model.metric === "cost" && (model.scope.unpriced > 0 || (model.referenceScope?.unpriced ?? 0) > 0);
-  const metric = metricLabel(model.metric, { incomplete });
-  const valueOf = (summary) => (!summary?.readings ? null : model.metric === "cost" ? summary.cost : summary.rawPages);
-  const netValueOf = (summary) => (!summary?.readings ? null : summary.netPages);
-  const netColumn = (label, summaryOf) => ({
-    header: label ? `${t("สุทธิหลังหัก 2%")} — ${label} (${t("หน้า")})` : t("สุทธิหลังหัก 2% (หน้า)"),
-    format: FORMATS.pages,
-    value: (entry) => netValueOf(summaryOf(entry)),
-  });
-  const leading = labelColumns(model.dimension);
-  const rowsEnd = model.entries.length;
-  const diffColumns = [
-    { header: t("ส่วนต่าง ({0})", [unit]), format: valueFormat, value: (entry) => entry.difference?.diff ?? null },
-    { header: t("ส่วนต่าง (%)"), format: FORMATS.percent, value: (entry) => entry.difference?.ratio ?? null },
-    { header: t("หมายเหตุการเทียบ"), value: (entry) => differenceNote(entry.difference, { isBase: entry.isBase }) },
-  ];
-
-  if (model.basis === "periods") {
-    const referenceValueColumn = leading.length;
-    const currentValueColumn = leading.length + (model.metric === "rawPages" ? 2 : 1);
-    const columns = [
-      ...leading,
-      { header: `${referenceLabel} (${unit})`, format: valueFormat, value: (entry) => valueOf(entry.reference) },
-      ...(model.metric === "rawPages" ? [netColumn(referenceLabel, (entry) => entry.reference)] : []),
-      { header: `${currentLabel} (${unit})`, format: valueFormat, value: (entry) => valueOf(entry.summary) },
-      ...(model.metric === "rawPages" ? [netColumn(currentLabel, (entry) => entry.summary)] : []),
-      ...diffColumns,
-      { header: t("เครื่องที่มีข้อมูล — {0}", [referenceLabel]), format: FORMATS.count, value: (entry) => entry.reference.devices },
-      { header: t("เครื่องที่มีข้อมูล — {0}", [currentLabel]), format: FORMATS.count, value: (entry) => entry.summary.devices },
-      { header: t("สถานะข้อมูล — {0}", [referenceLabel]), value: (entry) => statusLabel(entry.reference) },
-      { header: t("สถานะข้อมูล — {0}", [currentLabel]), value: (entry) => statusLabel(entry.summary) },
-    ];
-    return sheetOf(name, columns, model.entries, {
-      chart: {
-        type: "bar", title, valueFormat, valueTitle: `${metric} (${unit})`,
-        series: [referenceValueColumn, currentValueColumn].map((column) => ({ name: { c1: column, r1: 0 }, categories: { c1: 0, r1: 1, r2: rowsEnd }, values: { c1: column, r1: 1, r2: rowsEnd } })),
-      },
-    });
-  }
-
-  const columns = [
-    ...leading,
-    { header: t("บทบาทในการเทียบ"), value: (entry) => (entry.isBase ? t("ฐาน") : t("เทียบกับฐาน")) },
-    { header: `${metric} (${unit})`, format: valueFormat, value: (entry) => valueOf(entry.summary) },
-    ...(model.metric === "rawPages" ? [netColumn("", (entry) => entry.summary)] : []),
-    ...diffColumns,
-    { header: t("เครื่องที่มีข้อมูล (เครื่อง)"), format: FORMATS.count, value: (entry) => entry.summary.devices },
-    { header: t("สถานะข้อมูล"), value: (entry) => statusLabel(entry.summary) },
-  ];
-  const valueColumn = leading.length + 1;
-  return sheetOf(name, columns, model.entries, {
-    chart: {
-      type: "bar", title, valueFormat, valueTitle: `${metric} (${unit})`,
-      series: [{ name: { c1: valueColumn, r1: 0 }, categories: { c1: 0, r1: 1, r2: rowsEnd }, values: { c1: valueColumn, r1: 1, r2: rowsEnd } }],
-    },
-  });
 }
 
 const DETAIL_COLUMNS = () => [

@@ -81,14 +81,6 @@ const STATES = [
       await expect(page.getByRole("region", { name: "พื้นที่เปรียบเทียบ" })).toContainText("ยังยืนยันราคาไม่ได้");
     },
   },
-  {
-    name: "เปรียบเทียบฝ่าย/แผนก: ช่วง A กับ B",
-    async setup(page) {
-      await comparisonFixture(page);
-      await page.goto("/compare?type=department&basis=periods&items=1,2&measure=pages");
-      await expect(page.getByRole("table", { name: "ตารางความแตกต่าง" })).toBeVisible();
-    },
-  },
 ];
 
 function loadBaseline() {
