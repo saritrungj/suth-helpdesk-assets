@@ -4,7 +4,7 @@ import { ArrowUpRight } from "lucide-vue-next";
 import { t } from "../lib/locale";
 import { formatBahtValue, formatCount, formatNetPages } from "../lib/format";
 import { UiButton, UiCard, UiDataTable } from "../ui";
-import { dataStatus, dimensionLabel, statusLabel } from "./comparison";
+import { averagePerDevice, dataStatus, dimensionLabel, statusLabel } from "./comparison";
 
 /**
  * ComparisonTable — ตารางรายละเอียดใต้พื้นที่เปรียบเทียบของหน้าภาพรวม
@@ -35,6 +35,8 @@ const columns = computed(() => {
     // ยอดเงินที่ยังไม่ครบห้ามถูกเรียงเป็นอันดับ (Q30) — ปิดการเรียงคอลัมน์นี้จนราคาครบ
     { key: "cost", label: t("ค่าใช้จ่ายที่ยืนยันแล้ว (บาท)"), align: "right", value: (row) => row.summary.cost, sortable: costComplete.value },
     { key: "devices", label: t("เครื่องที่มีข้อมูล"), align: "right", value: (row) => row.summary.devices },
+    { key: "pagesPerDevice", label: t("หน้าต่อเครื่อง"), align: "right", value: (row) => averagePerDevice(row.summary, "rawPages") },
+    { key: "costPerDevice", label: t("บาทต่อเครื่อง"), align: "right", value: (row) => averagePerDevice(row.summary, "cost"), sortable: costComplete.value },
     { key: "status", label: t("สถานะข้อมูล"), value: (row) => statusLabel(row.summary), sortable: false },
   );
   return list;
@@ -49,7 +51,7 @@ const columns = computed(() => {
       :loading="loading && !model.entries.length"
       row-key="key"
       :caption="t('ตารางรายละเอียดของการเปรียบเทียบ')"
-      :searchable="false"
+      searchable
       :show-export="false"
       :show-fullscreen="false"
       :show-column-picker="false"
@@ -68,6 +70,8 @@ const columns = computed(() => {
         <span v-if="row.summary.unpriced && row.summary.cost !== null" class="block text-2xs text-warn-ink">{{ t("เฉพาะที่ยืนยันแล้ว") }}</span>
       </template>
       <template #cell-devices="{ row }">{{ formatCount(row.summary.devices) }}</template>
+      <template #cell-pagesPerDevice="{ row }">{{ averagePerDevice(row.summary, "rawPages") == null ? "—" : formatCount(averagePerDevice(row.summary, "rawPages")) }}</template>
+      <template #cell-costPerDevice="{ row }">{{ money(averagePerDevice(row.summary, "cost")) }}</template>
       <template #cell-status="{ row }">
         <span :class="dataStatus(row.summary) === 'complete' ? 'text-ink-mute' : 'text-warn-ink'">{{ statusLabel(row.summary) }}</span>
       </template>

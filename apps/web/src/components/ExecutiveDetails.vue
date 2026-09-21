@@ -6,7 +6,9 @@ import { formatBahtValue, formatCount, formatNetPages } from '../lib/format';
 import { errorMessage } from '../lib/api-error';
 import { groupReport, reportTotals, scopeReport } from './executive-report';
 import { conditionsSheet, detailSheet, exportFilename, priceStatusLine, saveWorkbook, standardNotes } from './comparison-export';
-import { UiAlert, UiButton, UiDrawer, UiEmpty, UiInput, UiMetric, UiSegmented } from '../ui';
+import { dashboardCsv, downloadCsv } from './dashboard-csv';
+import ExportMenu from './ExportMenu.vue';
+import { UiAlert, UiDrawer, UiEmpty, UiInput, UiMetric, UiSegmented } from '../ui';
 
 const props = defineProps({ open: Boolean, rows: { type: Array, default: () => [] }, scope: { type: Object, default: null }, context: { type: String, default: '' }, initialGroup: { type: String, default: 'department' } });
 const emit = defineEmits(['update:open']);
@@ -30,18 +32,26 @@ const money = value => value === null ? '—' : formatBahtValue(value);
 // แผงนี้แสดงทั้งยอดพิมพ์และค่าใช้จ่าย — ชื่อ "เจาะค่าใช้จ่าย" ผิดเมื่อผู้ใช้กดมาจากยอดพิมพ์
 const title = computed(() => props.scope ? t('รายละเอียดข้อมูล · {0}', [props.scope.label]) : t('รายละเอียดข้อมูล'));
 
-/** ข้อมูลดิบของแผงนี้ — คอลัมน์ชุดเดียวกับแผ่น "ข้อมูลรายละเอียด" ของไฟล์เปรียบเทียบ */
+/** ชื่อไฟล์และเงื่อนไขของแผงนี้ — ทั้ง Excel และ CSV ใช้ขอบเขตเดียวกับที่เห็นในลิ้นชัก */
+const filename = computed(() => exportFilename(['print-usage-details', props.scope?.dimension, group.value]));
+
+function exportCsv() {
+  exportError.value = '';
+  try { downloadCsv(`${filename.value}.csv`, dashboardCsv(visibleRows.value)); }
+  catch (error) { exportError.value = errorMessage(error, t('ส่งออกไม่สำเร็จ')); }
+}
+
+/** ข้อมูลดิบของแผงนี้ — คอลัมน์ชุดเดียวกับแผ่น "ข้อมูลรายละเอียด" ของไฟล์รายงาน */
 async function exportRows() {
   exporting.value = true;
   exportError.value = '';
-  const filename = exportFilename(['dashboard-details', props.scope?.dimension, group.value]);
   try {
-    await saveWorkbook(filename, [
+    await saveWorkbook(filename.value, [
       detailSheet(visibleRows.value),
-      conditionsSheet(filename, [
+      conditionsSheet(filename.value, [
         [t('ช่วงรายงาน'), props.context],
         [t('ขอบเขต'), props.scope?.label || t('ทั้งหมด')],
-        [t('แยกรายละเอียดตาม'), options.value.find(option => option.value === group.value)?.label],
+        [t('แบ่งตาม'), options.value.find(option => option.value === group.value)?.label],
         [t('ค้นหา'), search.value],
         [t('จำนวนรายการยอดพิมพ์'), formatCount(visibleRows.value.length)],
         [t('สถานะราคา'), priceStatusLine(totals.value.unpriced)],
@@ -63,7 +73,7 @@ async function exportRows() {
           <UiMetric :label="t('สุทธิหลังหัก 2%')" :value="formatNetPages(totals.pages)" :unit="t('หน้า')" />
         </div>
         <p v-if="totals.unpriced" class="text-sm text-ink-soft">{{ t('ยังยืนยันราคาไม่ได้ {0} รายการ · ยอดเงินยังไม่ครบ', [formatCount(totals.unpriced)]) }}</p>
-        <UiSegmented v-model="group" :options="options" :label="t('แยกรายละเอียดตาม')" size="sm" />
+        <UiSegmented v-model="group" :options="options" :label="t('แบ่งตาม')" size="sm" />
         <UiInput v-model="search" :placeholder="t('ค้นหาในรายละเอียด')" :aria-label="t('ค้นหาในรายละเอียด')" />
         <UiEmpty v-if="!groups.length" :title="t('ไม่มีข้อมูลตามตัวกรองนี้')" compact />
         <div v-else class="overflow-x-auto">
@@ -80,6 +90,9 @@ async function exportRows() {
         <UiAlert v-if="exportError" tone="danger">{{ exportError }}</UiAlert>
       </div>
     </template>
-    <template #footer><span class="mr-auto text-xs text-ink-mute">{{ t('{0} รายการ', [formatCount(visibleRows.length)]) }}</span><UiButton :disabled="!visibleRows.length" :loading="exporting" @click="exportRows">{{ t('ส่งออกข้อมูลดิบ (Excel)') }}</UiButton></template>
+    <template #footer>
+      <span class="mr-auto text-xs text-ink-mute">{{ t('{0} รายการ', [formatCount(visibleRows.length)]) }}</span>
+      <ExportMenu :disabled="!visibleRows.length" :busy="exporting" :reason="t('ไม่มีรายการให้ส่งออก')" @excel="exportRows" @csv="exportCsv" />
+    </template>
   </UiDrawer>
 </template>

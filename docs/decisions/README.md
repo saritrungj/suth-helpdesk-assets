@@ -41,3 +41,4 @@
 | [0017](0017-two-percent-page-deduction.md) | หักจำนวนหน้าพิมพ์ 2% และใช้กับยอดย้อนหลังทุกปีงบ | Accepted — QA migrated; production pending |
 | [0018](0018-separate-installation-status.md) | แยกสถานะการติดตั้งจากสถานะการใช้งานของเครื่อง | Accepted — implemented; ยังไม่ได้รันกับฐานข้อมูลจริง |
 | [0019](0019-effective-pricing-history.md) | ใช้ราคาตามช่วงที่มีผลจริงในการคำนวณย้อนหลัง | Accepted — implemented; ยังไม่ได้รันกับฐานข้อมูลจริง |
+| [0020](0020-single-scope-dashboard.md) | หน้าภาพรวมมีตัวกรองชั้นเดียว และเป็นหน้าวิเคราะห์หน้าเดียว | Accepted |

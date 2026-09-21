@@ -22,10 +22,11 @@ for (const { language, theme, width, height } of COMBINATIONS) {
       localStorage.setItem("suth-ui-mode", theme);
     }, { language, theme });
     await prototypeFixture(page);
-    for (const [name, url] of [["entry", "/print-transactions"], ["expense", "/expense"], ["department", "/by-department"]]) {
+    for (const [name, url] of [["entry", "/print-transactions"], ["expense", "/expense"], ["dashboard", "/dashboard"]]) {
       await page.goto(url);
       await expect(page.locator("main h1")).toBeVisible();
-      await expect(page.getByRole("button", { name: /Excel/ }).first()).toBeVisible();
+      // หน้าภาพรวมใช้ปุ่มเดียวชื่อ "ส่งออก" แล้วเลือกรูปแบบในเมนู (ADR-0020)
+      await expect(page.getByRole("button", { name: /Excel|ส่งออก|Export/ }).first()).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
       await page.screenshot({ path: test.info().outputPath(process.env.SUTH_EVIDENCE_PHASE || "after", `${name}.png`) });
     }

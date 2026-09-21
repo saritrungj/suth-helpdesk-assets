@@ -52,6 +52,7 @@ const route = useRoute();
 const router = useRouter();
 
 const activeItem = computed(() => findActiveItem(route));
+const isAdmin = computed(() => authState.user?.role === "admin");
 
 const roleLabel = computed(
   () =>
@@ -193,7 +194,8 @@ async function logout() {
         </template>
 
         <p v-else class="px-2.5 py-3 text-xs text-ink-mute"> {{ t("ยังไม่มีปีงบในระบบ") }} <br />
-          <RouterLink to="/admin/fiscal-years" class="text-brand-ink hover:underline"> {{ t("ไปสร้างปีงบใหม่") }} </RouterLink>
+          <RouterLink v-if="isAdmin" to="/admin/fiscal-years" class="text-brand-ink hover:underline"> {{ t("ไปสร้างปีงบใหม่") }} </RouterLink>
+          <span v-else>{{ t("ติดต่อผู้ดูแลระบบเพื่อสร้างปีงบ") }}</span>
         </p>
       </UiMenu>
 

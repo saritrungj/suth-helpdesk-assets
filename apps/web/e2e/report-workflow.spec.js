@@ -25,12 +25,16 @@ for (const language of ["th", "en"]) {
     });
     await page.goto("/dashboard");
     await expect(page.locator("h1")).toContainText(language === "en" ? "Print overview" : "ภาพรวมการพิมพ์");
-    // ความครบถ้วนของปีงบยังมีให้ดูใต้กราฟหลัก และแปลตามภาษาที่เลือก
-    await expect(page.getByText(language === "en" ? "Complete months" : "เดือนที่บันทึกครบ")).toBeVisible();
+    // Dashboard แบบ single-scope ต้องแสดงพื้นที่เปรียบเทียบและตารางรายละเอียดชุดเดียวกัน
+    // ทั้งสองภาษาตาม ADR-0020 ส่วนกฎ coverage ถูกตรวจแยกด้วย API ด้านล่าง
+    await expect(page.getByRole("region", {
+      name: language === "en" ? "Comparison area" : "พื้นที่เปรียบเทียบ",
+    })).toBeVisible();
+    await expect(page.getByRole("heading", {
+      name: language === "en" ? "Detail table" : "ตารางรายละเอียด",
+      exact: true,
+    })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${language}.png`), fullPage: true });
-    await page.goto("/compare");
-    await expect(page.locator("h1")).toBeVisible();
-    await expect(page.getByRole("heading", { name: language === "en" ? "Comparison table" : "ตารางเปรียบเทียบ", exact: true })).toBeVisible();
     await page.goto("/assets");
     const searchName = language === "en" ? "Search serial, model, location…" : "ค้นหา Serial, รุ่น, ตำแหน่ง…";
     const search = page.getByRole("textbox", { name: searchName }).first();
@@ -47,7 +51,7 @@ for (const language of ["th", "en"]) {
     await page.getByRole("button", { name: language === "en" ? "Exit full screen" : "ย่อตาราง", exact: true }).click();
     await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(false);
     await expect(search).toHaveValue("HP");
-    for (const route of ["/expense", "/expense?tab=department", "/report", "/print-transactions", "/admin/users"]) {
+    for (const route of ["/expense", "/dashboard", "/report", "/print-transactions", "/admin/users"]) {
       await page.goto(route);
       await expect(page.locator("h1")).toBeVisible();
     }
@@ -107,13 +111,13 @@ test("report table uses the remaining viewport when expanded", async ({ page }) 
 });
 
 test("fullscreen is limited to long data tables", async ({ page }) => {
-  for (const route of ["/expense", "/compare", "/admin/users", "/admin/brands"]) {
+  for (const route of ["/expense", "/dashboard", "/admin/users", "/admin/brands"]) {
     await page.goto(route);
     await expect(page.locator("h1")).toBeVisible();
     await expect(page.getByRole("button", { name: "ขยายตาราง", exact: true })).toHaveCount(0);
   }
 
-  for (const route of ["/assets", "/report", "/print-transactions", "/expense?tab=department"]) {
+  for (const route of ["/assets", "/report", "/print-transactions"]) {
     await page.goto(route);
     await expect(page.locator("h1")).toBeVisible();
     const expand = page.getByRole("button", { name: "ขยายตาราง", exact: true });
@@ -182,8 +186,8 @@ test("graph selection retains the filter and follow-up links retain their scope"
 
 test("unavailable comparison month explains missing data", async ({ page }) => {
   await page.route("**/api/dashboard/monthly-kpi?**", (route) => route.fulfill({ json: [] }));
-  await page.goto("/compare?months=2026-09");
-  await expect(page.getByText("ยังไม่มีข้อมูลในช่วงที่เลือก", { exact: true })).toBeVisible();
+  await page.goto("/dashboard?months=2026-09");
+  await expect(page.getByText("ยังไม่มียอดพิมพ์ในขอบเขตที่เลือก", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/months=2026-09/);
 });
 
