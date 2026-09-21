@@ -100,20 +100,21 @@ INSERT INTO department (id, division_id, name, status) VALUES
 (2, 1, 'ฝ่ายบริหาร', 'active'),
 (3, 2, 'งานคลังยา', 'active');
 
--- สัญญาสองฉบับโดยตั้งใจ (ADR-0019)
---   ฉบับที่ 1 ยืนยันช่วงที่มีผลแล้ว → ยอดของเครื่องในสัญญานี้คิดเงินได้ตามปกติ
---   ฉบับที่ 2 ยังไม่ยืนยัน → ยอดของเครื่องในสัญญานี้ขึ้นว่า "ยังยืนยันราคาไม่ได้"
---
--- ถ้าทุกฉบับยืนยันครบ ชุด db จะไม่เคยเดินผ่านเส้นทางราคาที่ยืนยันไม่ได้เลยสักครั้ง
--- ซึ่งเป็นเส้นทางที่ผู้ใช้จริงจะเจอทันทีหลังรัน migration
+-- สัญญาสองฉบับพร้อมอายุและรายการราคา (ADR-0021/0023)
 INSERT INTO contracts
-(id, contract_no, fiscal_year_id, price_per_page, effective_from, effective_to, price_source, price_verified_at)
+(id, contract_no, effective_from, effective_to)
 VALUES
-(1, CONCAT('SUTH-CI-', @fy_be_year), 1, 0.45,
+(1, CONCAT('SUTH-CI-', @fy_be_year),
  STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'),
- LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d')),
- 'สัญญาตัวอย่างสำหรับชุดทดสอบ', CURRENT_TIMESTAMP),
-(2, CONCAT('SUTH-CI-PENDING-', @fy_be_year), 1, 0.50, NULL, NULL, NULL, NULL);
+ LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d'))),
+(2, CONCAT('SUTH-CI-ALT-', @fy_be_year),
+ STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'),
+ LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d')));
+
+INSERT INTO contract_price_line (contract_id, category_id, price_per_page)
+SELECT 1, id, 0.4500 FROM meter_category WHERE code = 'bw'
+UNION ALL
+SELECT 2, id, 0.5000 FROM meter_category WHERE code = 'bw';
 
 -- ------------------------------------------------------------------------------
 -- Devices — device_id 3 คือเครื่องที่ย้ายแล้ว สังกัดแผนกชื่อยาว เพื่อชนสองเคส
@@ -183,8 +184,6 @@ SELECT
   CONCAT('จุดบริการ ', seq.n),
   1,
   1 + MOD(seq.n, 2),
-  -- เครื่องสุดท้ายผูกกับสัญญาที่ยังไม่ยืนยันช่วงที่มีผล ยอดของมันจึงขึ้นว่า
-  -- "ยังยืนยันราคาไม่ได้" ซึ่งเป็นสถานะที่ผู้ใช้จริงเจอทันทีหลังรัน migration
   IF(seq.n = 30, 2, 1),
   NULL,
   'active',
@@ -195,6 +194,9 @@ FROM (
   SELECT n FROM counter
 ) seq;
 
+INSERT INTO device_meter (device_id, category_id)
+SELECT d.id, mc.id FROM devices d CROSS JOIN meter_category mc WHERE mc.code = 'bw';
+
 INSERT INTO device_service_period (device_id, effective_from, effective_to, verified_by, verified_at)
 SELECT d.id, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP
 FROM devices d WHERE d.id >= 7;
@@ -203,21 +205,21 @@ FROM devices d WHERE d.id >= 7;
 -- ยอดพิมพ์ — สองเดือนล่าสุด ให้แดชบอร์ด/รายงาน/เปรียบเทียบมีข้อมูลจริงให้ตรวจ
 -- ------------------------------------------------------------------------------
 
-INSERT INTO print_transactions (device_id, month, pages) VALUES
-(1, @month_prev, 1200),
-(1, @month_this, 1450),
-(2, @month_prev, 800),
-(2, @month_this, 950),
-(3, @month_prev, 300),
-(3, @month_this, 420);
+INSERT INTO print_transactions (device_id, meter_id, month, pages) VALUES
+(1, (SELECT id FROM device_meter WHERE device_id = 1), @month_prev, 1200),
+(1, (SELECT id FROM device_meter WHERE device_id = 1), @month_this, 1450),
+(2, (SELECT id FROM device_meter WHERE device_id = 2), @month_prev, 800),
+(2, (SELECT id FROM device_meter WHERE device_id = 2), @month_this, 950),
+(3, (SELECT id FROM device_meter WHERE device_id = 3), @month_prev, 300),
+(3, (SELECT id FROM device_meter WHERE device_id = 3), @month_this, 420);
 
 -- เครื่องเติมจำนวนมียอดด้วย ไม่งั้นรายงานตามเครื่องจะมีแถวว่างยาวเหยียดซึ่งไม่
 -- เหมือนข้อมูลจริง และตารางที่กรองเฉพาะเครื่องที่มียอดจะกลับไปสั้นเหมือนเดิม
-INSERT INTO print_transactions (device_id, month, pages)
-SELECT d.id, @month_prev, 200 + (d.id * 13) FROM devices d WHERE d.id >= 7;
+INSERT INTO print_transactions (device_id, meter_id, month, pages)
+SELECT d.id, dm.id, @month_prev, 200 + (d.id * 13) FROM devices d JOIN device_meter dm ON dm.device_id = d.id WHERE d.id >= 7;
 
-INSERT INTO print_transactions (device_id, month, pages)
-SELECT d.id, @month_this, 250 + (d.id * 11) FROM devices d WHERE d.id >= 7;
+INSERT INTO print_transactions (device_id, meter_id, month, pages)
+SELECT d.id, dm.id, @month_this, 250 + (d.id * 11) FROM devices d JOIN device_meter dm ON dm.device_id = d.id WHERE d.id >= 7;
 
 -- ------------------------------------------------------------------------------
 -- เครื่องที่ยอดต้องอยู่กับหน่วยงานของเดือนนั้น (#104, ADR-0014)
@@ -239,6 +241,9 @@ VALUES
 (31, 'CI-SN-031', 1, 'Office 400', 2, 2, 'ห้องจ่ายยา', 2, 3, 1, NULL, 'active', 'installed', NULL),
 (32, 'CI-SN-032', 1, 'Office 400', 2, 2, 'ห้องเก็บยา', 2, 3, 1, NULL, 'active', 'installed', NULL);
 
+INSERT INTO device_meter (device_id, category_id)
+SELECT d.id, mc.id FROM devices d CROSS JOIN meter_category mc WHERE d.id IN (31, 32) AND mc.code = 'bw';
+
 INSERT INTO device_service_period (device_id, effective_from, effective_to, verified_by, verified_at) VALUES
 (31, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
 (32, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP);
@@ -252,11 +257,11 @@ VALUES
 (32, 1, 1, 'เคาน์เตอร์ยาผู้ป่วยนอก', 1, 2, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL),
 (32, 2, 2, 'ห้องเก็บยา', 2, 3, STR_TO_DATE(CONCAT(@month_prev, '-01'), '%Y-%m-%d'), NULL);
 
-INSERT INTO print_transactions (device_id, month, pages) VALUES
-(31, @month_prev, 610),
-(31, @month_this, 340),
-(32, @month_prev, 500),
-(32, @month_this, 270);
+INSERT INTO print_transactions (device_id, meter_id, month, pages) VALUES
+(31, (SELECT id FROM device_meter WHERE device_id = 31), @month_prev, 610),
+(31, (SELECT id FROM device_meter WHERE device_id = 31), @month_this, 340),
+(32, (SELECT id FROM device_meter WHERE device_id = 32), @month_prev, 500),
+(32, (SELECT id FROM device_meter WHERE device_id = 32), @month_this, 270);
 
 -- ------------------------------------------------------------------------------
 -- ช่วงการคิดเงินของแต่ละเครื่อง (ADR-0019) — ตัวที่บอกว่าเดือนไหนใช้ราคาของสัญญาไหน

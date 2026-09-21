@@ -73,33 +73,56 @@ CREATE TABLE department (
 -- 2. Main Tables
 -- ------------------------------------------------------------------------------
 
+-- สัญญาเช่าเครื่อง (ADR-0023) — เลขที่สัญญาไม่ซ้ำ และมีอายุสัญญาของตัวเอง
+--
+-- อายุสัญญา (effective_from–effective_to) คร่อมได้หลายปีงบ เช่น 36 งวดครอบปีงบ
+-- 2569–2572 ปีงบที่สัญญาเกี่ยวข้องคำนวณจากช่วงนี้ ไม่ได้ผูกแยก ราคาอยู่ใน
+-- contract_price_line และมีผลทันทีที่บันทึกตลอดอายุสัญญา (ADR-0021)
 CREATE TABLE contracts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     contract_no VARCHAR(100) NOT NULL UNIQUE,
-    fiscal_year_id INT,
-    price_per_page DECIMAL(10,2),
+    effective_from DATE NOT NULL,
+    effective_to DATE NOT NULL,
 
-    -- ช่วงที่สัญญาฉบับนี้ (และราคาของมัน) มีผลจริง — ADR-0019
-    --
-    -- ⚠️ effective_from IS NULL = "ยังไม่มีใครยืนยันช่วงที่มีผล" ไม่ใช่ "มีผลตลอดกาล"
-    -- ราคาที่เก็บไว้เฉยๆ ไม่ใช่หลักฐานว่าราคานั้นมีผลกับเดือนไหนบ้าง ยอดพิมพ์ของ
-    -- เดือนที่ไม่มีราคาซึ่งยืนยันแล้วครอบคลุม จะรายงานว่า "ยังยืนยันราคาไม่ได้"
-    -- ไม่ใช่คิดเป็น 0 บาท (Q27) — ศูนย์บาทกับไม่รู้ราคาเป็นคนละเรื่อง และการ
-    -- แทนที่ด้วยศูนย์ทำให้ยอดพิมพ์จริงหายออกจากงบเงียบๆ
-    effective_from DATE DEFAULT NULL,
-    effective_to DATE DEFAULT NULL,
+    -- ค่าเช่าคงที่ต่อเดือนและอัตรา VAT (%) — มีเฉพาะสัญญาที่ใบแจ้งหนี้เรียกเก็บ
+    -- NULL = สัญญานี้ไม่มีรายการนั้น ดู v_contract_invoice
+    monthly_rental DECIMAL(12,2) NULL,
+    vat_rate DECIMAL(5,2) NULL,
 
-    -- ใครยืนยันช่วงและราคานี้ จากเอกสารอะไร (Q26 ให้ยึดเอกสารที่ตรวจสอบได้)
-    price_source VARCHAR(255) DEFAULT NULL,
-    price_verified_by INT DEFAULT NULL,
-    price_verified_at TIMESTAMP NULL DEFAULT NULL,
+    CONSTRAINT chk_contracts_term_order CHECK (effective_to >= effective_from),
+    CONSTRAINT chk_contracts_rental CHECK (monthly_rental IS NULL OR monthly_rental >= 0),
+    CONSTRAINT chk_contracts_vat CHECK (vat_rate IS NULL OR vat_rate BETWEEN 0 AND 100)
+);
 
-    FOREIGN KEY (fiscal_year_id) REFERENCES fiscal_year(id),
-    FOREIGN KEY (price_verified_by) REFERENCES users(id),
+-- หมวดมิเตอร์ — ใบแจ้งหนี้คิดเงินและปัดเศษแยกทีละหมวด แม้สองหมวดราคาเท่ากัน
+-- (ADR-0022) "ขาวดำ" คือหมวดทั่วไปของข้อมูลที่ย้ายมาจากรุ่นที่มีราคาเดียวต่อสัญญา
+CREATE TABLE meter_category (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(40) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    is_color TINYINT(1) NOT NULL DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0
+);
 
-    CONSTRAINT chk_contracts_effective_order CHECK (
-        effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from
-    )
+INSERT INTO meter_category (code, name, is_color, sort_order) VALUES
+    ('bw', 'ขาวดำ', 0, 10),
+    ('a4-laser-bw', 'A4 เลเซอร์ ขาวดำ', 0, 20),
+    ('a4-mfp-bw', 'A4 มัลติฟังก์ชัน ขาวดำ', 0, 30),
+    ('a3-bw', 'A3 ขาวดำ', 0, 40),
+    ('a3-color', 'A3 สี', 1, 50);
+
+-- รายการราคาของสัญญา — ราคาต่อหน้าของหมวดมิเตอร์หนึ่งในสัญญาหนึ่ง
+-- ⚠️ DECIMAL(10,4) ห้ามลดลง ราคาจริงคือ 0.365 บาท เก็บสองตำแหน่งจะกลายเป็น 0.37
+CREATE TABLE contract_price_line (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    contract_id INT NOT NULL,
+    category_id INT NOT NULL,
+    price_per_page DECIMAL(10,4) NOT NULL,
+
+    CONSTRAINT fk_price_line_contract FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_price_line_category FOREIGN KEY (category_id) REFERENCES meter_category(id),
+    UNIQUE KEY uq_contract_category (contract_id, category_id),
+    CONSTRAINT chk_price_line_price CHECK (price_per_page >= 0)
 );
 
 CREATE TABLE devices (
@@ -113,7 +136,7 @@ CREATE TABLE devices (
     division_id INT,
     department_id INT,
     contract_id INT,
-    price_override DECIMAL(10,2) DEFAULT NULL,
+    price_override DECIMAL(10,4) DEFAULT NULL,
     status ENUM('active','repair','retired') DEFAULT 'active',
 
     -- สถานะการติดตั้ง แยกจากสถานะการใช้งานด้านบน เพราะตอบคนละคำถาม (ADR-0018)
@@ -150,34 +173,56 @@ CREATE TABLE devices (
     FOREIGN KEY (contract_id) REFERENCES contracts(id)
 );
 
--- print_transactions ต้องมี UNIQUE KEY (device_id, month) เพราะ
--- backend/routes/print-transactions.js ทั้งตอนบันทึกทีละรายการ (POST /)
--- และบันทึกทีละหลายเครื่อง (POST /bulk) ใช้คำสั่ง
---   INSERT ... ON DUPLICATE KEY UPDATE pages = VALUES(pages)
--- ถ้าไม่มี UNIQUE KEY คู่นี้ คำสั่งข้างต้นจะไม่รู้ว่าแถวไหนซ้ำ และจะ INSERT
--- แถวใหม่ทุกครั้งที่กด "บันทึก" ซ้ำในเดือนเดิม ทำให้ยอดพิมพ์/ค่าใช้จ่ายถูกนับซ้ำ
--- (เดิมคีย์นี้อยู่แยกไว้ในไฟล์ migrations/migration_unique_print_transactions.sql
--- ตอนนี้รวมเข้ามาไว้ใน schema หลักเพื่อให้ setup ฐานข้อมูลใหม่ได้ครบในครั้งเดียว)
+-- มิเตอร์ของเครื่อง (ADR-0023) — เครื่องหนึ่งมีได้หลายมิเตอร์ เช่นเครื่อง A3 สีมีมิเตอร์
+-- ขาวดำกับมิเตอร์สี ราคาของมิเตอร์ในงวดหนึ่งคือรายการราคาหมวดเดียวกันของสัญญาที่
+-- คิดเงินเครื่องนั้นในงวดนั้น (device_contract_history)
+CREATE TABLE device_meter (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id INT NOT NULL,
+    category_id INT NOT NULL,
+
+    CONSTRAINT fk_device_meter_device FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
+    CONSTRAINT fk_device_meter_category FOREIGN KEY (category_id) REFERENCES meter_category(id),
+    UNIQUE KEY uq_device_category (device_id, category_id)
+);
+
+-- ยอดพิมพ์ของมิเตอร์หนึ่งในงวดหนึ่ง
+--
+-- UNIQUE KEY (meter_id, month) คือคีย์ที่ INSERT ... ON DUPLICATE KEY UPDATE ทุกจุด
+-- พึ่งอยู่ ถ้าไม่มี การกดบันทึกซ้ำในเดือนเดิมจะเพิ่มแถวใหม่และยอดถูกนับสองรอบ
+--
+-- device_id เก็บซ้ำกับของมิเตอร์ไว้ให้รายงานที่นับตามเครื่องไม่ต้อง join เพิ่ม
+-- ทุกทางเขียนต้องใส่ให้ตรงกับ device_meter.device_id
+--
+-- meter_start / meter_end คือเลขมิเตอร์ต้นงวด/สิ้นงวดจากไฟล์ผู้ให้เช่า เก็บไว้ให้
+-- ตรวจที่มาของ pages ได้ (pages = meter_end - meter_start) ยอดที่กรอกมือไม่มีค่าเหล่านี้
 CREATE TABLE print_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     device_id INT,
+    meter_id INT NOT NULL,
     month VARCHAR(7) NOT NULL,
+    meter_start INT UNSIGNED NULL,
+    meter_end INT UNSIGNED NULL,
     pages INT DEFAULT 0,
 
     FOREIGN KEY (device_id) REFERENCES devices(id),
-    UNIQUE KEY uq_device_month (device_id, month),
+    CONSTRAINT fk_print_transactions_meter FOREIGN KEY (meter_id) REFERENCES device_meter(id),
+    UNIQUE KEY uq_meter_month (meter_id, month),
+    KEY idx_print_transactions_device (device_id),
 
-    -- คอลัมน์นำของ uq_device_month คือ device_id คิวรี่ที่กรองด้วยช่วงเดือนอย่างเดียว
-    -- (`WHERE month BETWEEN ? AND ?` ซึ่งเป็นรูปแบบของแทบทุกรายงาน) จึงใช้คีย์นั้น
-    -- ไม่ได้เลยและต้องอ่านทั้งตาราง — ตารางนี้โตขึ้นทุกเดือนแบบไม่มีเพดาน
+    -- คิวรี่ที่กรองด้วยช่วงเดือนอย่างเดียว (รูปแบบของแทบทุกรายงาน) ใช้คีย์ข้างบน
+    -- ไม่ได้ ตารางนี้โตขึ้นทุกเดือนแบบไม่มีเพดาน
     KEY idx_print_transactions_month (month),
 
     -- เดือนเก็บเป็น ค.ศ. "YYYY-MM" เท่านั้น — รับ พ.ศ. เข้ามาได้ แต่ normalize ตั้งแต่ขาเข้า
-    -- (backend/utils/month.js) ถ้าปล่อยให้เก็บทั้ง "2568-10" และ "2025-10" ปนกัน UNIQUE KEY
-    -- ด้านบนจะกันยอดซ้ำของเดือนเดียวกันไม่ได้ และค่าใช้จ่ายจะถูกนับสองรอบ
+    -- ถ้าปล่อยให้เก็บทั้ง "2568-10" และ "2025-10" ปนกัน UNIQUE KEY ด้านบนจะกันยอดซ้ำ
+    -- ของเดือนเดียวกันไม่ได้ และค่าใช้จ่ายจะถูกนับสองรอบ
     CONSTRAINT chk_print_transactions_month_ce CHECK (
         month REGEXP '^[0-9]{4}-(0[1-9]|1[0-2])$'
         AND CAST(SUBSTRING(month, 1, 4) AS UNSIGNED) BETWEEN 1900 AND 2399
+    ),
+    CONSTRAINT chk_print_transactions_meter_order CHECK (
+        meter_start IS NULL OR meter_end IS NULL OR meter_end >= meter_start
     )
 );
 
@@ -267,7 +312,7 @@ CREATE TABLE device_contract_history (
     device_id INT NOT NULL,
 
     contract_id INT NULL,
-    price_override DECIMAL(10,2) NULL,
+    price_override DECIMAL(10,4) NULL,
 
     effective_from DATE NOT NULL,
     effective_to DATE NULL,
@@ -289,80 +334,115 @@ CREATE TABLE device_contract_history (
 -- Views
 -- ==============================================================================
 --
--- ## ราคาที่ใช้คิดเงินของเดือนหนึ่ง มาจากช่วงที่มีผลจริง ไม่ใช่ค่าปัจจุบัน (ADR-0019)
+-- ## v_monthly_kpi — หนึ่งแถวต่อมิเตอร์ต่องวด และเป็นที่เดียวที่คิดเงิน
 --
--- ทุก view ด้านล่างหาราคาแบบเดียวกันสามขั้น
---
+-- ราคา (ADR-0019, ADR-0021)
 --   1. หา "ช่วงการคิดเงิน" ของเครื่องที่ครอบคลุมเดือนนั้น (device_contract_history)
---      ช่วงที่เริ่มทีหลังชนะเมื่อซ้อนกัน โดยมี id เป็นตัวตัดสินสุดท้าย — กฎเดียวกับ
---      device_location_history ดู ADR-0014
---   2. ช่วงนั้นมีราคาเฉพาะเครื่องไหม ถ้ามีใช้เลย
---   3. ถ้าไม่มี ใช้ราคาของสัญญาที่ช่วงนั้นระบุ **เฉพาะเมื่อช่วงที่สัญญามีผลครอบคลุม
---      เดือนนั้นด้วย** ไม่งั้นถือว่ายังยืนยันราคาไม่ได้
+--      ช่วงที่เริ่มทีหลังชนะเมื่อซ้อนกัน โดยมี id เป็นตัวตัดสินสุดท้าย (ADR-0014)
+--   2. ช่วงนั้นมีราคาพิเศษเฉพาะเครื่องไหม ถ้ามีใช้กับมิเตอร์ขาวดำ — มิเตอร์สีใช้
+--      ราคาของสัญญาเสมอ เพราะราคาพิเศษที่ตกลงกันเป็นราคาขาวดำ
+--   3. ถ้าไม่มี ใช้รายการราคาหมวดเดียวกับมิเตอร์ของสัญญาที่ช่วงนั้นระบุ เฉพาะเมื่อ
+--      เดือนนั้นอยู่ในอายุสัญญา ไม่งั้นเป็น NULL = หาราคาไม่ได้ (ไม่ใช่ศูนย์บาท)
+--      ทางเขียนทุกทางปฏิเสธยอดที่หาราคาไม่ได้ NULL จึงเหลือเฉพาะข้อมูลเก่า
 --
--- price_per_page เป็น NULL แปลว่า "ยังยืนยันราคาไม่ได้" ไม่ใช่ "ราคาศูนย์"
--- total_cost จึงเป็น NULL ตามไปด้วย และ SUM() จะข้ามแถวเหล่านั้น — ทุกจุดที่แสดง
--- ยอดรวมต้องบอกจำนวนรายการที่ยังยืนยันราคาไม่ได้ควบคู่ไปเสมอ (Q27) ไม่งั้นผู้อ่าน
--- จะเข้าใจว่ายอดที่เห็นคือค่าใช้จ่ายทั้งหมด
+-- เงิน (ADR-0022) — ต้องเท่ากับใบแจ้งหนี้ของผู้ให้เช่าทุกสตางค์
+--   ยอดตามใบแจ้งหนี้ของหนึ่งรายการราคาในหนึ่งงวด = ROUND(ราคา × Σ หน้าสุทธิ, 2)
+--   แล้วแบ่งลงแต่ละมิเตอร์: ตัดส่วนของแต่ละแถวลงเป็นสตางค์ แล้วแจกสตางค์ที่เหลือ
+--   ให้แถวที่เศษมากที่สุดก่อน (largest remainder, เศษเท่ากันใช้ meter_id)
+--   ผลรวมของแถวใดๆ ในรายการราคาเดียวกันจึงเท่ายอดใบแจ้งหนี้พอดี ไม่ว่าจะรวมตาม
+--   แผนก อาคาร หรือเครื่อง
 --
--- ⚠️ ROUND(..., 2) คร่อมค่าใช้จ่ายของแต่ละแถวเสมอ ห้ามถอด — จุดปัดเศษของทั้งระบบ
--- อยู่ที่ "ทีละรายการยอดพิมพ์" ดู packages/domain/money.cjs
+-- ⚠️ ห้ามปัด total_cost ทีละแถวเอง และห้ามคำนวณเงินซ้ำนอก view นี้
+-- ⚠️ partition ต้องมี month เสมอ ตัวกรองที่ optimizer ดันเข้าไปใน derived table
+--    จึงเป็นได้แค่ตัวกรองตามคอลัมน์ของ partition ซึ่งไม่เปลี่ยนผล
 -- ==============================================================================
 
 CREATE OR REPLACE VIEW v_monthly_kpi AS
 SELECT
-    pt.device_id,
-    d.serial_number,
-    d.status AS device_status,
-    pt.month,
-    pt.pages AS pages_printed,
-
-    (pt.pages * 0.98) AS net_pages,
-
+    p.reading_id,
+    p.device_id,
+    p.serial_number,
+    p.device_status,
+    p.meter_id,
+    p.meter_category_id,
+    p.meter_category,
+    p.is_color,
+    p.month,
+    p.meter_start,
+    p.meter_end,
+    p.pages_printed,
+    p.net_pages,
+    p.billing_contract_id,
+    p.price_per_page,
     CASE
-        WHEN dch.price_override IS NOT NULL THEN dch.price_override
-        WHEN c.id IS NOT NULL
-             AND c.price_verified_at IS NOT NULL
-             AND c.effective_from IS NOT NULL
-             AND pt.month >= DATE_FORMAT(c.effective_from, '%Y-%m')
-             AND (c.effective_to IS NULL OR pt.month <= DATE_FORMAT(c.effective_to, '%Y-%m'))
-        THEN c.price_per_page
-        ELSE NULL
-    END AS price_per_page,
-
-    ROUND(
-        (pt.pages * 0.98) *
-        CASE
-            WHEN dch.price_override IS NOT NULL THEN dch.price_override
-            WHEN c.id IS NOT NULL
-                 AND c.price_verified_at IS NOT NULL
-                 AND c.effective_from IS NOT NULL
-                 AND pt.month >= DATE_FORMAT(c.effective_from, '%Y-%m')
-                 AND (c.effective_to IS NULL OR pt.month <= DATE_FORMAT(c.effective_to, '%Y-%m'))
-            THEN c.price_per_page
-            ELSE NULL
-        END,
-        2
-    ) AS total_cost
-
-FROM print_transactions pt
-
-JOIN devices d
-ON pt.device_id = d.id
-
-LEFT JOIN device_contract_history dch
-ON dch.id = (
-    SELECT h.id
-    FROM device_contract_history h
-    WHERE h.device_id = pt.device_id
-      AND pt.month >= DATE_FORMAT(h.effective_from, '%Y-%m')
-      AND (h.effective_to IS NULL OR pt.month <= DATE_FORMAT(h.effective_to, '%Y-%m'))
-    ORDER BY h.effective_from DESC, h.id DESC
-    LIMIT 1
-)
-
-LEFT JOIN contracts c
-ON c.id = dch.contract_id;
+        WHEN p.price_per_page IS NULL THEN NULL
+        ELSE CAST((
+            p.cents_floor
+            + CASE
+                WHEN ROW_NUMBER() OVER (
+                    PARTITION BY p.month, p.billing_contract_key, p.meter_category_id, p.price_per_page
+                    ORDER BY p.cents_remainder DESC, p.meter_id
+                ) <= ROUND(SUM(p.exact_cost) OVER (
+                        PARTITION BY p.month, p.billing_contract_key, p.meter_category_id, p.price_per_page
+                     ), 2) * 100
+                     - SUM(p.cents_floor) OVER (
+                        PARTITION BY p.month, p.billing_contract_key, p.meter_category_id, p.price_per_page
+                     )
+                THEN 1 ELSE 0
+              END
+        ) / 100 AS DECIMAL(14,2))
+    END AS total_cost
+FROM (
+    SELECT
+        b.*,
+        b.net_pages * b.price_per_page AS exact_cost,
+        FLOOR(b.net_pages * b.price_per_page * 100) AS cents_floor,
+        b.net_pages * b.price_per_page * 100 - FLOOR(b.net_pages * b.price_per_page * 100) AS cents_remainder
+    FROM (
+        SELECT
+            pt.id AS reading_id,
+            pt.device_id,
+            d.serial_number,
+            d.status AS device_status,
+            pt.meter_id,
+            dm.category_id AS meter_category_id,
+            mc.name AS meter_category,
+            mc.is_color,
+            pt.month,
+            pt.meter_start,
+            pt.meter_end,
+            pt.pages AS pages_printed,
+            (pt.pages * 0.98) AS net_pages,
+            dch.contract_id AS billing_contract_id,
+            COALESCE(dch.contract_id, 0) AS billing_contract_key,
+            CASE
+                WHEN dch.price_override IS NOT NULL AND mc.is_color = 0 THEN dch.price_override
+                -- งวดนับเป็นเดือนที่งวดสิ้นสุด (ADR-0023) สัญญาที่เริ่มกลางเดือนจึงเริ่มคิดเงินเดือนถัดไป
+                -- เช่น เริ่ม 24 ก.พ. งวดแรกคือ 24 ก.พ.–23 มี.ค. = เดือน มี.ค.
+                WHEN c.id IS NOT NULL
+                     AND pt.month >= DATE_FORMAT(c.effective_from + INTERVAL (DAY(c.effective_from) > 1) MONTH, '%Y-%m')
+                     AND pt.month <= DATE_FORMAT(c.effective_to, '%Y-%m')
+                THEN cpl.price_per_page
+                ELSE NULL
+            END AS price_per_page
+        FROM print_transactions pt
+        JOIN devices d ON d.id = pt.device_id
+        JOIN device_meter dm ON dm.id = pt.meter_id
+        JOIN meter_category mc ON mc.id = dm.category_id
+        LEFT JOIN device_contract_history dch
+        ON dch.id = (
+            SELECT h.id
+            FROM device_contract_history h
+            WHERE h.device_id = pt.device_id
+              AND pt.month >= DATE_FORMAT(h.effective_from, '%Y-%m')
+              AND (h.effective_to IS NULL OR pt.month <= DATE_FORMAT(h.effective_to, '%Y-%m'))
+            ORDER BY h.effective_from DESC, h.id DESC
+            LIMIT 1
+        )
+        LEFT JOIN contracts c ON c.id = dch.contract_id
+        LEFT JOIN contract_price_line cpl ON cpl.contract_id = c.id AND cpl.category_id = dm.category_id
+    ) b
+) p;
 
 
 CREATE OR REPLACE VIEW v_summary_by_building AS
@@ -374,7 +454,7 @@ SELECT
 
     SUM(v.total_cost) AS total_building_cost,
 
-    -- รายการที่ยังยืนยันราคาไม่ได้ในอาคารนี้ — ต้องแสดงคู่กับยอดเงินเสมอ (Q27)
+    -- รายการที่หาราคาไม่ได้ในอาคารนี้ (ยอดเก่าก่อน ADR-0021) — ต้องแสดงคู่กับยอดเงินเสมอ
     SUM(CASE WHEN v.total_cost IS NULL THEN 1 ELSE 0 END) AS unpriced_readings
 
 FROM v_monthly_kpi v
@@ -390,56 +470,67 @@ GROUP BY b.name;
 
 CREATE OR REPLACE VIEW v_compare_usage_costs AS
 SELECT
-
     v.month,
-
     fy.year AS fiscal_year,
-
     v.serial_number,
-
     v.device_status,
-
     b.name AS building_name,
-
     f.name AS floor_name,
-
     divi.name AS division_name,
-
     dept.name AS department_name,
-
     br.name AS brand_name,
-
     v.net_pages,
-
     v.price_per_page AS cost_per_page,
-
     v.total_cost
-
 FROM v_monthly_kpi v
+JOIN devices d ON v.device_id = d.id
+LEFT JOIN fiscal_year fy ON v.month BETWEEN fy.start_month AND fy.end_month
+LEFT JOIN building b ON d.building_id = b.id
+LEFT JOIN floor f ON d.floor_id = f.id
+LEFT JOIN division divi ON d.division_id = divi.id
+LEFT JOIN department dept ON d.department_id = dept.id
+LEFT JOIN brand br ON d.brand_id = br.id;
 
-JOIN devices d
-ON v.device_id = d.id
 
-LEFT JOIN contracts c
-ON d.contract_id = c.id
-
-LEFT JOIN fiscal_year fy
-ON c.fiscal_year_id = fy.id
-
-LEFT JOIN building b
-ON d.building_id = b.id
-
-LEFT JOIN floor f
-ON d.floor_id = f.id
-
-LEFT JOIN division divi
-ON d.division_id = divi.id
-
-LEFT JOIN department dept
-ON d.department_id = dept.id
-
-LEFT JOIN brand br
-ON d.brand_id = br.id;
+-- ยอดตามใบแจ้งหนี้รายสัญญารายงวด (ADR-0023 ส่วนค่าเช่าและ VAT)
+-- สัญญาที่มีค่าเช่าคงที่มีแถวทุกเดือนในอายุสัญญา แม้เดือนนั้นไม่มียอดพิมพ์
+CREATE OR REPLACE VIEW v_contract_invoice AS
+WITH RECURSIVE contract_months AS (
+    SELECT id AS contract_id,
+           -- งวดแรกคือเดือนที่งวดแรกสิ้นสุด — สัญญาที่เริ่มกลางเดือนเริ่มเก็บค่าเช่าเดือนถัดไป
+           STR_TO_DATE(DATE_FORMAT(effective_from + INTERVAL (DAY(effective_from) > 1) MONTH, '%Y-%m-01'), '%Y-%m-%d') AS month_date,
+           effective_to
+    FROM contracts
+    WHERE COALESCE(monthly_rental, 0) > 0
+    UNION ALL
+    SELECT contract_id, DATE_ADD(month_date, INTERVAL 1 MONTH), effective_to
+    FROM contract_months
+    WHERE DATE_ADD(month_date, INTERVAL 1 MONTH) <= effective_to
+),
+usage_totals AS (
+    SELECT billing_contract_id AS contract_id, month,
+           COALESCE(SUM(total_cost), 0) AS print_cost,
+           SUM(total_cost IS NULL) AS unpriced_readings
+    FROM v_monthly_kpi
+    WHERE billing_contract_id IS NOT NULL
+    GROUP BY billing_contract_id, month
+),
+invoice_months AS (
+    SELECT contract_id, month FROM usage_totals
+    UNION
+    SELECT contract_id, DATE_FORMAT(month_date, '%Y-%m') AS month FROM contract_months
+)
+SELECT im.contract_id, im.month,
+       COALESCE(u.print_cost, 0) AS print_cost,
+       COALESCE(c.monthly_rental, 0) AS rental,
+       COALESCE(u.print_cost, 0) + COALESCE(c.monthly_rental, 0) AS subtotal,
+       ROUND((COALESCE(u.print_cost, 0) + COALESCE(c.monthly_rental, 0)) * COALESCE(c.vat_rate, 0) / 100, 2) AS vat,
+       COALESCE(u.print_cost, 0) + COALESCE(c.monthly_rental, 0)
+         + ROUND((COALESCE(u.print_cost, 0) + COALESCE(c.monthly_rental, 0)) * COALESCE(c.vat_rate, 0) / 100, 2) AS invoice_total,
+       COALESCE(u.unpriced_readings, 0) AS unpriced_readings
+FROM invoice_months im
+JOIN contracts c ON c.id = im.contract_id
+LEFT JOIN usage_totals u ON u.contract_id = im.contract_id AND u.month = im.month;
 
 
 -- ==============================================================================
