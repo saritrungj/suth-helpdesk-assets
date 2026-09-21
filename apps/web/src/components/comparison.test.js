@@ -1,13 +1,14 @@
 import { describe, expect, test } from "vitest";
 import {
+  MAX_ITEMS,
   buildComparison,
+  chartState,
+  chartUnpriced,
   buildYearComparison,
   fiscalPosition,
   fiscalYearsMonths,
   monthText,
   comparisonChart,
-  comparisonFromQuery,
-  comparisonToQuery,
   deviceSpread,
   difference,
   itemOptions,
@@ -109,66 +110,62 @@ describe("แบบจำลองของพื้นที่เปรีย�
     expect(comparisonChart(buildComparison({ rows, dimension: "overall", metric: "rawPages" })).kind).toBe("line");
   });
 
-  test("เลือกฝ่าย A/B: กราฟ ตาราง และขอบเขตข้อมูลรายละเอียดมาจากรายการที่เลือกเท่านั้น", () => {
-    const model = buildComparison({ rows, dimension: "division", items: ["2", "1"], metric: "rawPages" });
-    expect(model.entries.map((item) => [item.key, item.summary.rawPages, item.summary.devices])).toEqual([["2", 40, 2], ["1", 1500, 1]]);
-    expect(model.scopeRows).toHaveLength(4);
+  test("แบ่งตามฝ่าย: ทุกฝ่ายในขอบเขต เรียงมาก→น้อย และยอดรวมไม่เปลี่ยนไปจากตัวกรอง", () => {
+    const model = buildComparison({ rows, dimension: "division", metric: "rawPages" });
+    expect(model.entries.map((item) => [item.key, item.summary.rawPages, item.summary.devices])).toEqual([["1", 1500, 1], ["2", 40, 2]]);
+    // แบบจำลองไม่คัดแถวออกอีก — ยอดรวมของมันเท่ากับตัวเลขสำคัญบนหัวหน้าเสมอ
+    expect(model.scopeRows).toEqual(rows);
+    expect(model.scope.rawPages).toBe(summarize(rows).rawPages);
     const chart = comparisonChart(model);
     expect(chart.kind).toBe("line");
     // ฝ่าย B ไม่มีรายการเดือน พ.ย. ของแผนก B1 แต่มีของ B2 — เส้นของฝ่ายเป็นยอดรวมจริงรายเดือน
-    expect(chart.series.map((series) => series.data)).toEqual([[0, 40], [1000, 500]]);
+    expect(chart.series.map((series) => series.data)).toEqual([[1000, 500], [0, 40]]);
   });
 
-  test("เลือกแผนก: หน่วยงานที่ไม่มีรายการในช่วงนี้เป็น 'ไม่มีข้อมูล' ต่างจากยอดศูนย์", () => {
+  test("กลุ่มที่เลือกไว้ในตัวกรองแต่ยังไม่มียอด ยังอยู่ในแบบจำลองเป็น \"ไม่มีข้อมูล\" ต่างจากยอดศูนย์", () => {
     const model = buildComparison({
       rows: rows.filter((item) => item.month === "2025-10"),
-      dimension: "department", items: ["20", "99"], metric: "rawPages",
+      dimension: "department", metric: "rawPages", include: ["20", "99"],
       options: [{ value: "99", label: "แผนกที่ยังไม่บันทึก" }],
     });
     const chart = comparisonChart(model);
     expect(chart).toMatchObject({ kind: "bar", horizontal: true });
-    expect(chart.series[0].data).toEqual([0, null]);
-    expect(chart.labels[1]).toBe("แผนกที่ยังไม่บันทึก · ไม่มีข้อมูล");
+    expect(chart.series[0].data).toEqual([1000, 0, null]);
+    expect(chart.labels[2]).toBe("แผนกที่ยังไม่บันทึก · ไม่มีข้อมูล");
   });
 
   test("หลายสัญญาใช้สัญญาที่คิดเงินของเดือนนั้น และยอดที่ไม่มีสัญญาอยู่ในกลุ่มไม่ผูกสัญญา", () => {
-    const model = buildComparison({ rows, dimension: "contract", items: ["7", "8", "unassigned"], metric: "cost" });
-    expect(model.entries.map((item) => [item.key, item.summary.cost, item.summary.unpriced])).toEqual([["7", 735, 0], ["8", 0, 0], ["unassigned", null, 1]]);
-    expect(model.entries[2].label).toBe("ไม่ผูกสัญญา");
+    const model = buildComparison({ rows, dimension: "contract", metric: "cost" });
+    // ราคายังไม่ครบ จัดอันดับด้วยยอดเงินไม่ได้ — เรียงด้วยยอดพิมพ์แทน ไม่ปล่อยให้ลำดับสุ่ม
+    expect(model.entries.map((item) => [item.key, item.summary.cost, item.summary.unpriced])).toEqual([["7", 735, 0], ["unassigned", null, 1], ["8", 0, 0]]);
+    expect(model.entries.find((item) => item.key === "unassigned").label).toBe("ไม่ผูกสัญญา");
   });
 
-  test("อันดับสำหรับไฟล์: ทุกกลุ่มของมิติแม้เลือกไว้บางรายการ และค่าใช้จ่ายที่ราคาไม่ครบไม่ถูกจัดอันดับ", () => {
-    const pages = buildComparison({ rows, dimension: "department", items: ["20"], metric: "rawPages" });
+  test("อันดับสำหรับไฟล์: ทุกกลุ่มของมิติ และค่าใช้จ่ายที่ราคาไม่ครบไม่ถูกจัดอันดับ", () => {
+    const pages = buildComparison({ rows, dimension: "department", metric: "rawPages" });
     expect(pages.ranking.entries.map((item) => [item.key, item.rank])).toEqual([["10", 1], ["21", 2], ["20", 3]]);
     expect(pages.ranking).toMatchObject({ from: 3, blocked: null });
-    const cost = buildComparison({ rows, dimension: "department", items: ["20"], metric: "cost" });
+    const cost = buildComparison({ rows, dimension: "department", metric: "cost" });
     expect(cost.ranking).toMatchObject({ blocked: "unpriced", entries: [] });
     expect(buildComparison({ rows, dimension: "overall" }).ranking).toBeNull();
   });
 
-  test("ยังไม่ได้เลือกรายการ ระบบเลือกยอดสูงสุดให้ไม่เกิน 5 รายการ และเลือกเกิน 8 ถูกตัดเหลือ 8", () => {
-    const auto = buildComparison({ rows, dimension: "department", items: [], metric: "rawPages" });
-    expect(auto).toMatchObject({ autoPicked: true, blocked: null });
-    expect(auto.entries.map((item) => item.key)).toEqual(["10", "21", "20"]);
-    // ค่าใช้จ่ายยังจัดลำดับไม่ได้ (ราคาไม่ครบ) — ระบบเลือกตามยอดพิมพ์แทน ไม่เปิดหน้ามาว่าง
-    expect(buildComparison({ rows, dimension: "department", items: [], metric: "cost" }).entries.map((item) => item.key)).toEqual(["10", "21", "20"]);
-    const bigger = Array.from({ length: 7 }, (_, index) => row({ device_id: index + 10, department_id: 100 + index, department_name: `แผนก ${index}`, pages_printed: 100 * (index + 1) }));
-    expect(buildComparison({ rows: bigger, dimension: "department", items: [], metric: "rawPages" }).entries.map((item) => item.key)).toEqual(["106", "105", "104", "103", "102"]);
-    const many = Array.from({ length: 10 }, (_, index) => String(index + 1));
-    expect(buildComparison({ rows, dimension: "division", items: many }).entries).toHaveLength(8);
+  test("ค่าใช้จ่ายที่ราคายังไม่ครบยังเรียงลำดับได้ด้วยยอดพิมพ์ ไม่ปล่อยให้ลำดับสุ่ม", () => {
+    const byCost = buildComparison({ rows, dimension: "department", metric: "cost" });
+    expect(byCost.entries.map((item) => item.key)).toEqual(["10", "21", "20"]);
   });
 
-  test("Dashboard ปิดการเลือกรายการยอดสูงสุดอัตโนมัติได้และแสดงยอดรวมรายเดือน", () => {
-    const model = buildComparison({ rows, dimension: "department", items: [], metric: "rawPages", autoPick: false });
-    expect(model).toMatchObject({ view: "overall", autoPicked: false, blocked: null });
-    expect(model.entries.map((item) => item.key)).toEqual(["2025-10", "2025-11"]);
-    expect(model.scopeRows).toEqual(rows);
-  });
-
-  test("ตาราง Dashboard ขอทุกรายการได้โดยไม่ติดขีดจำกัดสีของกราฟ", () => {
-    const bigger = Array.from({ length: 10 }, (_, index) => row({ device_id: index + 10, department_id: 100 + index, department_name: `แผนก ${index}` }));
-    const items = bigger.map((item) => String(item.department_id));
-    expect(buildComparison({ rows: bigger, dimension: "department", items, itemLimit: null }).entries).toHaveLength(10);
+  test("กราฟวาดเท่าที่มีสี ส่วนตารางและไฟล์ได้ครบทุกกลุ่ม พร้อมจำนวนที่ไม่ได้ขึ้นกราฟ", () => {
+    const bigger = Array.from({ length: 10 }, (_, index) => row({
+      device_id: index + 10, department_id: 100 + index, department_name: `แผนก ${index}`, pages_printed: 100 * (index + 1),
+    }));
+    const model = buildComparison({ rows: bigger, dimension: "department", metric: "rawPages" });
+    expect(model.entries).toHaveLength(10);
+    expect(model.chartEntries).toHaveLength(MAX_ITEMS);
+    expect(model.hidden).toBe(10 - MAX_ITEMS);
+    // กราฟเอากลุ่มที่ยอดสูงสุดขึ้นก่อน ไม่ใช่ตัดตามลำดับที่ข้อมูลมาถึง
+    expect(model.chartEntries[0].key).toBe("109");
+    expect(comparisonChart(model).series[0].data).toHaveLength(MAX_ITEMS);
   });
 
   test("ตัวเลือกของรายการรวมหน่วยงานที่ยังไม่มียอดและกลุ่มที่ไม่ระบุ", () => {
@@ -235,14 +232,15 @@ describe("เทียบข้ามปีงบ (#115)", () => {
     expect(model.scopeRows.every((line) => line.calendar_month && line.fiscal_year !== "2567")).toBe(true);
   });
 
-  test("ขอบเขตเดียว เช่น ฝ่ายหนึ่งฝ่าย และเลือกได้ไม่เกินสามปี", () => {
-    const scoped = buildYearComparison({ rows, years: [2568, 2569], scope: { dimension: "division", key: "2" }, metric: "rawPages" });
-    expect(scoped.entries.map((entry) => entry.summary.rawPages)).toEqual([0, 50]);
+  test("ขอบเขตมาจากตัวกรองของหน้า ปีงบเรียงตามเวลา และเลือกได้ไม่เกินสามปี", () => {
+    // ตัวกรองของหน้าคัดแถวมาก่อนแล้ว ฟังก์ชันนี้จึงไม่มีตัวเลือกขอบเขตของตัวเอง
+    const scoped = buildYearComparison({ rows: rows.filter((line) => line.division_id === 2), years: [2568, 2569], metric: "rawPages" });
+    expect(scoped.entries.map((entry) => [entry.key, entry.summary.rawPages])).toEqual([["2568", 0], ["2569", 50]]);
     expect(scoped.entries[0].summary.readings).toBe(0);
     expect(buildYearComparison({ rows, years: [2566, 2567, 2568, 2569] }).years).toEqual(["2567", "2568", "2569"]);
     expect(buildYearComparison({ rows, years: [2568, 2569], positions: ["P03", "P01"] }).months).toEqual(["P01", "P03"]);
     const october = buildYearComparison({ rows, years: [2568, 2569], positions: ["P01"], metric: "rawPages" });
-    expect(october.entries.map(entry => entry.summary.rawPages)).toEqual([800, 1050]);
+    expect(october.entries.map((entry) => [entry.key, entry.summary.rawPages])).toEqual([["2568", 800], ["2569", 1050]]);
     expect(october.scopeRows.every(row => row.month === "P01")).toBe(true);
   });
 });
@@ -277,47 +275,43 @@ describe("ช่วงเวลาตามปีงบ ต.ค.–ก.ย.", ()
   });
 });
 
-describe("สถานะใน URL", () => {
-  test("ค่าที่ไม่รู้จัก รวมถึง property ที่สืบทอดมา ตกไปที่ค่าเริ่มต้น", () => {
-    expect(comparisonFromQuery({ by: "constructor", measure: "toString", dir: "__proto__", n: "7", scope: "valueOf" })).toEqual({
-      by: "overall", items: [], metric: "cost", years: [], scope: "overall", scopeItem: "",
-    });
-  });
-
-  test("อ่านและเขียนกลับได้ค่าเดิม โดยค่าเริ่มต้นไม่ถูกเขียนลงลิงก์", () => {
-    const state = comparisonFromQuery({ by: "department", items: "10,20,unassigned,<x>", measure: "pages" });
-    expect(state).toMatchObject({ by: "department", items: ["10", "20", "unassigned"], metric: "rawPages" });
-    expect(comparisonToQuery(state)).toMatchObject({ by: "department", items: "10,20,unassigned", measure: "pages", dir: undefined });
-    expect(comparisonToQuery(comparisonFromQuery({}))).toEqual({ by: undefined, view: undefined, items: undefined, measure: undefined, years: undefined, scope: undefined, scopeItem: undefined, dir: undefined, n: undefined, contract: undefined });
-  });
-
-  test("ตัวกรองสัญญาเดิมของหน้าภาพรวมพาไปที่การเทียบตามสัญญานั้น", () => {
-    expect(comparisonFromQuery({ contract: "5" })).toMatchObject({ by: "contract", items: ["5"] });
-  });
-
-  test("ลิงก์เก่าของมุมมองอันดับเปิดเป็นการเลือกรายการ และค่าของอันดับถูกล้างจาก URL", () => {
-    const state = comparisonFromQuery({ by: "division", view: "rank", dir: "low", n: "10" });
-    expect(state).toMatchObject({ by: "division", items: [], metric: "cost" });
-    expect(comparisonToQuery(state)).toMatchObject({ view: undefined, dir: undefined, n: undefined });
-  });
-
-  test("ลิงก์ตรงจำกัดรายการไว้ที่จำนวนสีของกราฟ ไม่ปล่อยให้ URL กับแบบจำลองแสดงคนละจำนวน", () => {
-    const items = "1,2,3,4,5,6,7,8,9,10";
-    expect(comparisonFromQuery({ by: "division", items }).items).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
-  });
-
-  test("เทียบข้ามปีงบ: ปีเป็นตัวเลขสี่หลักไม่เกินสามปี ขอบเขตเดียว และเขียนลงลิงก์เฉพาะตอนเทียบปีงบ", () => {
-    const state = comparisonFromQuery({ by: "fiscalYear", years: "2569,2566,2568,2567,abc", scope: "division", scopeItem: "3,4" });
-    expect(state).toMatchObject({ years: ["2567", "2568", "2569"], scope: "division", scopeItem: "3" });
-    expect(comparisonToQuery(state)).toMatchObject({ by: "fiscalYear", years: "2567,2568,2569", scope: "division", scopeItem: "3" });
-    expect(comparisonFromQuery({ by: "fiscalYear", scope: "contract", scopeItem: "5" })).toMatchObject({ scope: "overall", scopeItem: "" });
-    expect(comparisonToQuery({ ...state, by: "division" })).toMatchObject({ years: undefined, scope: undefined, scopeItem: undefined });
-  });
-
-});
-
 test("สีของรายการไม่เปลี่ยนเมื่อเอารายการอื่นออก และไม่ชนกัน", () => {
   const first = stableSlots(new Map(), ["a", "b", "c"]);
   const second = stableSlots(first, ["a", "c", "d"]);
   expect([...second.entries()]).toEqual([["a", 1], ["c", 3], ["d", 2]]);
+});
+
+describe("สถานะของพื้นที่กราฟ", () => {
+  /** หนึ่งแถวต่อหนึ่งฝ่าย — ยอดสูงสุดเรียงตามหมายเลขฝ่าย กลุ่มท้ายจึงคือกลุ่มที่ตกจากกราฟ */
+  const division = (id, pages, cost) => row({
+    device_id: id, division_id: id, division_name: `ฝ่าย ${id}`,
+    pages_printed: pages, net_pages: pages, total_cost: cost,
+  });
+
+  test("กลุ่มที่ได้ขึ้นกราฟยังไม่มีราคา แต่กลุ่มที่ตกจากกราฟมี = บอกว่าราคายังไม่ครบ ไม่ใช่ไม่มียอดพิมพ์", () => {
+    // แปดกลุ่มแรกยอดสูงกว่าแต่ยังไม่มีราคา — กราฟวาดได้แค่ MAX_ITEMS (8) กลุ่มแรก
+    const rows = [
+      ...Array.from({ length: MAX_ITEMS }, (_, index) => division(index + 1, 1000 - index, null)),
+      division(MAX_ITEMS + 1, 10, "5.00"),
+    ];
+    const model = buildComparison({ rows, dimension: "division", metric: "cost" });
+
+    expect(model.chartEntries).toHaveLength(MAX_ITEMS);
+    expect(model.hidden).toBe(1);
+    expect(model.scope.unpriced).toBe(MAX_ITEMS);
+    expect(model.scope.readings).toBe(MAX_ITEMS + 1);
+    expect(chartState(model)).toBe("unpriced-chart");
+    expect(chartUnpriced(model)).toBe(MAX_ITEMS);
+  });
+
+  test("ทั้งขอบเขตยังไม่มีราคา = unpriced ส่วนยอดพิมพ์จริงของชุดเดียวกันวาดได้", () => {
+    const rows = [division(1, 100, null), division(2, 50, null)];
+    expect(chartState(buildComparison({ rows, dimension: "division", metric: "cost" }))).toBe("unpriced");
+    expect(chartState(buildComparison({ rows, dimension: "division", metric: "rawPages" }))).toBe("ready");
+  });
+
+  test("ไม่มีแถวเลย = no-data ส่วนราคาครบ = ready", () => {
+    expect(chartState(buildComparison({ rows: [], dimension: "division", metric: "cost" }))).toBe("no-data");
+    expect(chartState(buildComparison({ rows: [division(1, 100, "49.00")], dimension: "division", metric: "cost" }))).toBe("ready");
+  });
 });

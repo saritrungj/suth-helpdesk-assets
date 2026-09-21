@@ -59,7 +59,7 @@ export const NAV_GROUPS = [
         to: "/dashboard",
         label: t("ภาพรวมการพิมพ์"),
         icon: Gauge,
-        keywords: t("dashboard home หน้าแรก ภาพรวม สรุป งานค้าง"),
+        keywords: t("dashboard home หน้าแรก ภาพรวม สรุป งานค้าง compare เปรียบเทียบ ฝ่าย แผนก สัญญา ส่งออก"),
       },
     ],
   },

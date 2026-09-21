@@ -41,8 +41,8 @@ const ATTENTION = [
 ];
 
 /** overview ของตัวเองต้องลงทะเบียนทีหลัง prototypeFixture — route ที่มาทีหลังถูกเรียกก่อน */
-async function attentionFixture(page, attention = ATTENTION) {
-  await prototypeFixture(page, "admin");
+async function attentionFixture(page, attention = ATTENTION, role = "admin") {
+  await prototypeFixture(page, role);
   await page.route("**/api/dashboard/overview**", (route) => route.fulfill({
     json: {
       attention,
@@ -242,4 +242,31 @@ test("ป้ายบนกระดิ่งบอกได้ว่ามี�
   await page.goto("/dashboard");
   await expect(bellOf(page)).toContainText("3");
   await expect(bellOf(page)).toContainText(CRITICAL_BADGE);
+});
+
+test("viewer เห็นบริบทงานค้างแต่ไม่เห็น action ที่ต้องใช้สิทธิ์ admin", async ({ page }) => {
+  await attentionFixture(page, ATTENTION, "viewer");
+  await page.goto("/dashboard");
+  await bellOf(page).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByText(CRITICAL)).toBeVisible();
+  await expect(drawer.getByRole("link", { name: /ตรวจช่วงที่สัญญามีผล/ })).toHaveCount(0);
+  await expect(drawer.getByRole("link", { name: /ตรวจยืนยันการติดตั้ง/ })).toHaveCount(0);
+  await expect(drawer.getByRole("link", { name: /ดูรายการเครื่อง/ })).toHaveAttribute("href", /\/assets/);
+});
+
+test("viewer ไม่ได้ CTA ไปหน้า admin เมื่อยังไม่มีปีงบหรือสัญญา", async ({ page }) => {
+  await prototypeFixture(page, "viewer");
+  await page.route(/\/api\/fiscal-years$/, (route) => route.fulfill({ json: [] }));
+  await page.route(/\/api\/expense\/\d+\b/, (route) => route.fulfill({ json: { contracts: [] } }));
+
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "ปีงบ ยังไม่มี" }).click();
+  await expect(page.getByRole("link", { name: "ไปสร้างปีงบใหม่" })).toHaveCount(0);
+  await expect(page.getByText("ติดต่อผู้ดูแลระบบเพื่อสร้างปีงบ")).toBeVisible();
+
+  await page.goto("/expense");
+  await expect(page.getByText("ยังไม่มีสัญญาในปีงบนี้")).toBeVisible();
+  await expect(page.getByRole("link", { name: "ไปหน้าจัดการสัญญา" })).toHaveCount(0);
 });

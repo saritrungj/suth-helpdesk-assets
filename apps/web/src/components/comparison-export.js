@@ -1,7 +1,7 @@
 import { fiscalYearOfMonth } from "@suth/domain";
 import { t } from "../lib/locale";
 import { FORMATS, createWorkbook, downloadWorkbook, monthCell, reportStamp } from "../lib/export-xlsx";
-import { dimensionLabel, metricLabel, metricUnit, monthText, statusLabel, summarize } from "./comparison";
+import { averagePerDevice, dimensionLabel, metricLabel, metricUnit, monthText, statusLabel, summarize } from "./comparison";
 
 /**
  * comparison-export.js — ไฟล์ Excel ของการเปรียบเทียบ ใช้ร่วมกันสองหน้า
@@ -34,8 +34,8 @@ export function summarySheet(rows) {
   const summary = summarize(rows);
   const record = {
     ...summary,
-    pagesPerDevice: summary.devices ? summary.rawPages / summary.devices : null,
-    costPerDevice: summary.devices && summary.cost != null ? summary.cost / summary.devices : null,
+    pagesPerDevice: averagePerDevice(summary, "rawPages"),
+    costPerDevice: averagePerDevice(summary, "cost"),
   };
   return sheetOf(t("สรุป"), [
     { header: t("ยอดพิมพ์จริง (หน้า)"), format: FORMATS.count, value: (item) => item.rawPages },
@@ -99,14 +99,9 @@ export function comparisonTitle(model) {
   const metric = metricLabel(model.metric, { incomplete });
   const dimension = dimensionLabel(model.dimension);
   if (model.view === "overall") return t("{0}รายเดือน", [metric]);
-  if (model.autoPicked) {
-    return model.months.length >= 2
-      ? t("{0}รายเดือนของ{1}ที่ยอดสูงสุด {2} รายการ", [metric, dimension, model.entries.length])
-      : t("{0}ของ{1}ที่ยอดสูงสุด {2} รายการ", [metric, dimension, model.entries.length]);
-  }
   return model.months.length >= 2
-    ? t("{0}รายเดือนของ{1}ที่เลือก", [metric, dimension])
-    : t("{0}ของ{1}ที่เลือก", [metric, dimension]);
+    ? t("{0}รายเดือน แยกตาม{1}", [metric, dimension])
+    : t("{0} แยกตาม{1}", [metric, dimension]);
 }
 
 /** แผ่น "เปรียบเทียบ" ของหน้าภาพรวม — ตารางเดียวกับบนจอพร้อมกราฟที่อ้างอิงตารางนั้น */
@@ -115,7 +110,10 @@ export function comparisonSheet(model) {
   const title = comparisonTitle(model);
   const valueFormat = model.metric === "cost" ? FORMATS.baht : FORMATS.count;
   const valueTitle = `${metricLabel(model.metric, { incomplete: model.metric === "cost" && model.scope.unpriced > 0 })} (${metricUnit(model.metric)})`;
-  const rowsEnd = model.entries.length;
+  // ตารางในแผ่นมีครบทุกกลุ่ม แต่กราฟวาดเท่าที่อ่านออก — กลุ่มเรียงมาก→น้อยแล้ว
+  // แถวบนสุดจึงเป็นชุดเดียวกับที่กราฟบนจอแสดง
+  const charted = (model.chartEntries ?? model.entries).length;
+  const rowsEnd = charted;
 
   if (model.view === "overall") {
     const columns = [{ header: t("เดือน"), value: (entry) => entry.label }, ...measureColumns((entry) => entry.summary)];
@@ -151,7 +149,7 @@ export function comparisonSheet(model) {
     return sheetOf(name, columns, model.entries, {
       chart: {
         type: "line", title, valueFormat, valueTitle,
-        series: model.entries.map((_, index) => ({
+        series: model.entries.slice(0, charted).map((_, index) => ({
           name: { c1: labelColumn, r1: index + 1 },
           categories: { c1: first, r1: 0, c2: last, r2: 0 },
           values: { c1: first, r1: index + 1, c2: last, r2: index + 1 },
@@ -211,7 +209,7 @@ export function rankingSheet(model) {
   const metric = metricLabel(model.metric);
   if (ranking.blocked) {
     const reason = ranking.blocked === "unpriced"
-      ? t("ยังจัดอันดับ{0}ตามค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ {1} รายการ — อันดับจากยอดเงินบางส่วนจะชี้ผิดรายการ ส่งออกด้วยตัวชี้วัดยอดพิมพ์จริงเพื่อดูอันดับ", [dimension, model.total.unpriced])
+      ? t("ยังจัดอันดับ{0}ตามค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ {1} รายการ — อันดับจากยอดเงินบางส่วนจะชี้ผิดรายการ ส่งออกด้วยตัวชี้วัดยอดพิมพ์จริงเพื่อดูอันดับ", [dimension, model.scope.unpriced])
       : t("ยังไม่มียอดพิมพ์ในช่วงที่เลือก");
     return { name, header: [t("หมายเหตุ")], rows: [[reason]], columns: [{ width: 90 }], filter: false };
   }

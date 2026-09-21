@@ -27,4 +27,6 @@ export const PAGES = [
   { name: "ปีงบ", url: "/admin/fiscal-years" },
   { name: "เพิ่มทรัพย์สิน", url: "/admin/add-asset" },
   { name: "นำเข้าทรัพย์สิน", url: "/admin/add-asset?tab=import" },
+  { name: "ตรวจยืนยันการติดตั้ง", url: "/admin/installation-review" },
+  { name: "ตรวจช่วงสัญญา", url: "/admin/contract-prices" },
 ];

@@ -26,6 +26,7 @@ import { useExportTask } from "../composables/useExportTask";
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, Printer, ReceiptText, Search, TriangleAlert } from "lucide-vue-next";
 import { fromSatang, sumSatang, toSatang } from "@suth/domain";
 import api from "../services/api";
+import { authState } from "../store/auth";
 import { fiscalYearState } from "../store/fiscalYear";
 import { formatBahtValue, formatCount, formatUnitPrice } from "../lib/format";
 import PeriodPicker from "../components/PeriodPicker.vue";
@@ -47,6 +48,7 @@ function sumCost(rows) {
 }
 
 const loading = ref(false);
+const isAdmin = computed(() => authState.user?.role === "admin");
 const loadError = ref("");
 let loaded = false;
 let requestId = 0;
@@ -411,7 +413,7 @@ onMounted(() => {
         :title="t(&quot;ยังไม่มีสัญญาในปีงบนี้&quot;)"
         :description="t(&quot;เพิ่มสัญญาและผูกเครื่องเข้ากับสัญญา ระบบจึงจะคิดค่าใช้จ่ายให้ได้&quot;)"
       >
-        <template #actions>
+        <template v-if="isAdmin" #actions>
           <UiButton to="/admin/contracts" variant="primary" size="sm"> {{ t("ไปหน้าจัดการสัญญา") }} </UiButton>
         </template>
       </UiEmpty>

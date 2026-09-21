@@ -25,13 +25,7 @@ import { MONTH_NAMES, formatMonth, yearLabel } from "../lib/locale-format";
 
 /** ชุดสีของกราฟมี 8 สีที่แยกกันได้และไม่วนซ้ำ — เลือกรายการมาเทียบได้ไม่เกินนี้ */
 export const MAX_ITEMS = 8;
-/**
- * จำนวนที่อ่านกราฟได้สบาย ใช้เป็นคำแนะนำ และเป็นจำนวนที่ระบบเลือกให้เมื่อผู้ใช้ยังไม่ได้เลือกเอง
- */
-export const SUGGESTED_ITEMS = 5;
-
 export const DIMENSIONS = ["overall", "division", "department", "contract", "building", "device", "fiscalYear"];
-export const METRICS = ["cost", "rawPages"];
 
 const GROUPING = {
   division: { id: "division_id", name: "division_name" },
@@ -114,6 +108,19 @@ export function summarize(rows = []) {
     unpriced,
     devices: devices.size,
   };
+}
+
+/**
+ * ค่าเฉลี่ยต่อเครื่องของ summary เดียวกัน
+ *
+ * ค่าใช้จ่ายห้ามใช้ยอดที่ยืนยันแล้วเพียงบางส่วนหารด้วยเครื่องทั้งหมด (ADR-0019 Q29)
+ * ส่วนยอดพิมพ์ไม่มีสถานะราคา จึงคำนวณได้ตามปกติแม้ราคาไม่ครบ
+ */
+export function averagePerDevice(summary, field) {
+  if (!summary?.devices) return null;
+  if (field === "cost" && summary.unpriced > 0) return null;
+  const value = summary[field];
+  return value === null || value === undefined ? null : value / summary.devices;
 }
 
 /** ค่าที่แสดงของตัวชี้วัด — null = ไม่มีข้อมูล (หรือยังไม่รู้ยอดเงินเลยสักรายการ) */
@@ -280,41 +287,44 @@ export function rankEntries(entries, { metric }) {
 }
 
 /**
- * รายการที่ระบบเลือกให้เมื่อผู้ใช้ยังไม่ได้เลือกเอง — ยอดสูงสุดตามตัวชี้วัดที่ดูอยู่
- * ถ้าค่าใช้จ่ายยังจัดลำดับไม่ได้เพราะราคาไม่ครบ ใช้ยอดพิมพ์จริงแทน ไม่งั้นหน้าเปิดมาว่าง
- */
-function suggestedKeys(entries, metric) {
-  const ranked = rankEntries(entries, { metric }) ?? rankEntries(entries, { metric: "rawPages" });
-  return ranked.slice(0, SUGGESTED_ITEMS).map((entry) => entry.key);
-}
-
-/**
- * แบบจำลองของพื้นที่เปรียบเทียบบนหน้าภาพรวม — กราฟ ตาราง และไฟล์อ่านจากที่นี่ชุดเดียว
+ * แบบจำลองของพื้นที่เปรียบเทียบ — กราฟ ตาราง และไฟล์ Excel อ่านจากที่นี่ชุดเดียว
+ *
+ * `rows` ผ่านตัวกรองของหน้ามาแล้ว ฟังก์ชันนี้จึง **ไม่คัดข้อมูลออกอีก** หน้าที่เดียว
+ * คือแบ่งแถวชุดนั้นตามมิติที่เลือกแล้วเรียงจากมากไปน้อย — ตัวเลขรวมของแบบจำลองจึง
+ * เท่ากับตัวเลขสำคัญบนหัวหน้าเสมอ ไม่ว่าผู้ใช้จะเทียบตามอะไร
+ *
+ * กราฟมีสีที่แยกกันออกจำกัด จึงวาดได้ `chartLimit` รายการแรก ส่วน `entries` มีครบทุก
+ * กลุ่มให้ตารางและไฟล์ — จำนวนที่ไม่ได้ขึ้นกราฟอยู่ที่ `hidden` เพื่อให้หน้าจอบอกผู้ใช้
+ * ตรงๆ แทนที่จะตัดทิ้งเงียบๆ
  *
  * @param {object} input
- * @param {object[]} input.rows แถวของช่วงเวลาที่เลือก (กรองเดือนแล้ว)
- * @param {"overall"|"division"|"department"|"contract"} input.dimension
- * @param {string[]} input.items key ของรายการที่ผู้ใช้เลือก — ว่าง = ระบบเลือกยอดสูงสุดให้
+ * @param {object[]} input.rows แถวรายเครื่องรายเดือนที่ผ่านตัวกรองของหน้าแล้ว
+ * @param {"overall"|"division"|"department"|"contract"|"building"|"device"|"fiscalYear"} input.dimension
  * @param {"cost"|"rawPages"} input.metric
- * @param {object[]} input.options ตัวเลือกจาก itemOptions() ใช้หาชื่อของรายการที่ไม่มีข้อมูล
- * @param {string[]} [input.months] เดือนที่ผู้ใช้เลือกแสดง — ใส่มาเมื่อเดือนที่ไม่มีข้อมูลต้อง
- *   ยังเป็นช่องว่างบนแกนและในไฟล์ (หน้าเปรียบเทียบ) ไม่ใส่ = เฉพาะเดือนที่มีแถว
+ * @param {object[]} [input.options] ตัวเลือกจาก itemOptions() ใช้หาชื่อของกลุ่มที่ไม่มีข้อมูล
+ * @param {string[]} [input.include] รหัสที่ผู้ใช้เลือกไว้ในตัวกรอง — กลุ่มที่เลือกแล้วไม่มียอด
+ *   ต้องยังอยู่ในตารางพร้อมคำว่า "ไม่มีข้อมูล"
+ * @param {string[]} [input.months] เดือนที่ต้องมีบนแกน — ใส่มาเมื่อเดือนที่ไม่มีข้อมูลต้อง
+ *   เป็นช่องว่าง ไม่ใช่หายไปจากแกน
+ * @param {number} [input.chartLimit] จำนวนเส้น/แท่งสูงสุดบนกราฟ
  */
-export function buildComparison({ rows = [], dimension = "overall", items = [], metric = "cost", options = [], months: shownMonths = null, autoPick = true, itemLimit = MAX_ITEMS }) {
+export function buildComparison({ rows = [], dimension = "overall", metric = "cost", options = [], include = [], months: shownMonths = null, chartLimit = MAX_ITEMS }) {
   const months = shownMonths?.length ? [...shownMonths].sort() : [...new Set(rows.map((row) => row.month))].sort();
-  const total = summarize(rows);
-  const base = { dimension, metric, months, total };
+  const scope = summarize(rows);
+  const base = { dimension, metric, months, scope, scopeRows: rows };
 
   if (dimension === "overall") {
     const entries = months.map((month) => {
-      const monthRows = rows.filter((row) => row.month === month);
-      return { key: month, label: formatMonth(month), displayLabel: formatMonth(month), hint: "", summary: summarize(monthRows) };
+      const label = formatMonth(month);
+      return { key: month, label, displayLabel: label, hint: "", summary: summarize(rows.filter((row) => row.month === month)) };
     });
-    return { ...base, view: "overall", entries, scopeRows: rows, scope: total, ranking: null, blocked: rows.length ? null : "no-data" };
+    return { ...base, view: "overall", entries, chartEntries: entries, hidden: 0, ranking: null, blocked: rows.length ? null : "no-data" };
   }
 
   const groups = groupRows(rows, dimension);
-  const all = disambiguate([...groups.entries()].map(([key, list]) => entryFor(key, dimension, list, options)), dimension);
+  // กลุ่มที่มียอด บวกกลุ่มที่ผู้ใช้เลือกไว้แต่ยังไม่มียอดในช่วงนี้
+  const keys = [...new Set([...groups.keys(), ...include.map(String)])];
+  const all = disambiguate(keys.map((key) => entryFor(key, dimension, groups.get(key), options, months)), dimension);
   const ranked = rankEntries(all, { metric });
   const ranking = {
     entries: ranked ?? [],
@@ -322,33 +332,21 @@ export function buildComparison({ rows = [], dimension = "overall", items = [], 
     blocked: !rows.length ? "no-data" : ranked === null ? "unpriced" : null,
   };
 
-  // Dashboard เปิดด้วยยอดรวมที่อธิบายขอบเขตได้ตรงๆ จนกว่าผู้ใช้จะเลือกรายการเอง
-  // หน้า Compare เดิมยังใช้การเสนอรายการยอดสูงสุดได้ผ่านค่าเริ่มต้น autoPick=true
-  if (!items.length && !autoPick) {
-    const entries = months.map((month) => {
-      const monthRows = rows.filter((row) => row.month === month);
-      return { key: month, label: formatMonth(month), displayLabel: formatMonth(month), hint: "", summary: summarize(monthRows) };
-    });
-    return { ...base, view: "overall", autoPicked: false, entries, scopeRows: rows, scope: total, ranking, blocked: rows.length ? null : "no-data" };
-  }
+  // เรียงมาก→น้อยตามตัวชี้วัดที่ดูอยู่ ถ้าเงินยังจัดอันดับไม่ได้เพราะราคาไม่ครบ ใช้ยอดพิมพ์
+  // จัดลำดับแทน แล้วต่อท้ายด้วยกลุ่มที่ยังไม่มียอดเลย เรียงตามชื่อให้ผลคงที่ทุกครั้ง
+  const order = ranked ?? rankEntries(all, { metric: "rawPages" }) ?? [];
+  const seen = new Set(order.map((entry) => entry.key));
+  const rest = all.filter((entry) => !seen.has(entry.key)).sort((x, y) => String(x.label).localeCompare(String(y.label), "th"));
+  const entries = [...order.map(({ rank: _rank, ...entry }) => entry), ...rest];
 
-  // ยังไม่ได้เลือกเอง = ระบบเลือกยอดสูงสุดให้ก่อน เปิดหน้ามาจึงเห็นกราฟทันที (#115)
-  // ขอบเขตของตัวเลขยังเป็นทุกแถว เพราะผู้ใช้ไม่ได้ตั้งใจจำกัดขอบเขตไว้ที่รายการเหล่านี้
-  const autoPicked = !items.length;
-  const requested = [...new Set(items.map(String))];
-  const chosen = autoPicked ? suggestedKeys(all, metric) : itemLimit == null ? requested : requested.slice(0, itemLimit);
-  const chosenSet = new Set(chosen);
-  const scopeRows = autoPicked ? rows : rows.filter((row) => chosenSet.has(groupKey(row, dimension)));
-  const entries = disambiguate(chosen.map((key) => entryFor(key, dimension, groups.get(key), options, months)), dimension);
   return {
     ...base,
-    view: "select",
-    autoPicked,
+    view: "group",
     entries,
-    scopeRows,
-    scope: summarize(scopeRows),
+    chartEntries: entries.slice(0, chartLimit),
+    hidden: Math.max(0, entries.length - chartLimit),
     ranking,
-    blocked: !chosen.length || !scopeRows.length ? "no-data" : null,
+    blocked: !rows.length ? "no-data" : null,
   };
 }
 
@@ -369,12 +367,15 @@ function chartLabel(entry, metric) {
 /**
  * ข้อมูลของกราฟบนหน้าจอ — ชนิดกราฟเลือกตามคำถาม
  *
- *   ภาพรวม           แท่งตั้ง (ค่าใช้จ่ายแต่ละเดือน) หรือเส้น (แนวโน้มยอดพิมพ์)
- *   เลือกรายการ ≥ 2 เดือน เส้นหนึ่งเส้นต่อรายการ ดูแนวโน้มรายเดือน
- *   เลือกรายการ 1 เดือน  แท่งแนวนอน — เส้นที่มีจุดเดียวไม่บอกอะไร
+ *   ภาพรวม            แท่งตั้งของแต่ละเดือน (ค่าใช้จ่าย) หรือเส้น (ยอดพิมพ์)
+ *   แบ่งกลุ่ม ≥ 2 เดือน  เส้นหนึ่งเส้นต่อกลุ่ม เทียบกันตลอดช่วง
+ *   แบ่งกลุ่ม 1 เดือน    แท่งแนวนอน — เส้นที่มีจุดเดียวไม่บอกอะไร
+ *
+ * วาดเฉพาะ `chartEntries` ส่วนตารางและไฟล์ใช้ `entries` ที่มีครบทุกกลุ่ม
  */
 export function comparisonChart(model) {
-  const { metric, entries, months } = model;
+  const { metric, months } = model;
+  const entries = model.chartEntries ?? model.entries;
   const incomplete = metric === "cost" && model.scope.unpriced > 0;
   const seriesLabel = metricLabel(metric, { incomplete });
   if (model.view === "overall") {
@@ -386,7 +387,7 @@ export function comparisonChart(model) {
       series: [{ key: metric, label: seriesLabel, data: entries.map((entry) => metricValue(entry.summary, metric)) }],
     };
   }
-  if (model.view === "select" && months.length >= 2) {
+  if (model.view === "group" && months.length >= 2) {
     return {
       kind: "line",
       horizontal: false,
@@ -408,15 +409,41 @@ export function comparisonChart(model) {
   };
 }
 
+/**
+ * สถานะของพื้นที่กราฟ — บอกว่าจะวาดได้ไหม และถ้าไม่ได้ เพราะอะไร
+ *
+ *   "ready"          วาดได้ มีอย่างน้อยหนึ่งจุดที่เป็นตัวเลข
+ *   "no-data"        ไม่มียอดพิมพ์ในขอบเขตที่เลือก
+ *   "unpriced"       ทั้งขอบเขตยังยืนยันราคาไม่ได้ จึงไม่มียอดเงินให้วาด
+ *   "unpriced-chart" มีกลุ่มที่ราคาครบอยู่ แต่ **กลุ่มที่ได้ขึ้นกราฟ** ยังไม่ครบ
+ *
+ * กรณีสุดท้ายเกิดจริงเมื่อกลุ่มยอดสูงสุดตามจำนวนที่กราฟวาดได้ยังรอราคา ส่วนกลุ่มที่ 9
+ * ขึ้นไปราคาครบแล้ว — เดิมหน้าจอบอกว่า "ยังไม่มียอดพิมพ์" ซึ่งไม่จริง ยอดพิมพ์มีครบ
+ * ขาดแค่ราคา คนอ่านจึงไปไล่หาข้อมูลที่ไม่ได้หาย
+ */
+export function chartState(model) {
+  if (model.blocked) return model.blocked;
+  const drawable = comparisonChart(model).series.some((item) => item.data.some((value) => value !== null));
+  if (drawable) return "ready";
+
+  const entries = model.chartEntries ?? model.entries ?? [];
+  const charted = entries.some((entry) => (entry.summary?.readings ?? 0) > 0);
+  if (model.metric !== "cost" || !charted) return "no-data";
+  return model.scope.readings > 0 && model.scope.unpriced === model.scope.readings ? "unpriced" : "unpriced-chart";
+}
+
+/** จำนวนรายการที่ยังยืนยันราคาไม่ได้ เฉพาะกลุ่มที่ได้ขึ้นกราฟ */
+export function chartUnpriced(model) {
+  return (model.chartEntries ?? model.entries ?? [])
+    .reduce((sum, entry) => sum + (entry.summary?.unpriced ?? 0), 0);
+}
+
 /* --------------------------------------------------------------------------
    เทียบข้ามปีงบ (#115)
    -------------------------------------------------------------------------- */
 
 /** เลือกเทียบได้ไม่เกินสามปีงบ — เส้นมากกว่านั้นซ้อนกันจนอ่านไม่ออก */
 export const MAX_YEARS = 3;
-/** ขอบเขตของการเทียบข้ามปี — ไม่มีสัญญา เพราะสัญญาผูกกับปีงบเดียว เทียบข้ามปีไม่มีความหมาย */
-export const YEAR_SCOPES = ["overall", "division", "department", "building", "device"];
-
 const POSITION = /^P(\d{2})$/;
 /**
  * แกนเดือนของปีงบ "P01" (ต.ค.) ถึง "P12" (ก.ย.) — ที่เดียวที่สร้างลำดับนี้
@@ -497,17 +524,24 @@ export function yearRows(rows, years) {
  * @param {{dimension: string, key: string}|null} [input.scope] ขอบเขตเดียว เช่น ฝ่ายหนึ่งฝ่าย — ว่าง = ทั้งองค์กร
  * @param {string[]} [input.positions] ตำแหน่งเดือนที่ต้องแสดง (จากช่วงเวลาที่ผู้ใช้เลือก)
  */
-export function buildYearComparison({ rows = [], years = [], scope = null, metric = "cost", positions = null }) {
+export function buildYearComparison({ rows = [], years = [], metric = "cost", positions = null }) {
   const chosen = [...new Set((years ?? []).map(String))].sort().slice(-MAX_YEARS);
-  const scoped = scope?.key ? rows.filter((row) => groupKey(row, scope.dimension) === String(scope.key)) : rows;
-  const shifted = yearRows(scoped, chosen);
-  let months = positions?.length ? [...new Set(positions)].sort() : [];
-  if (!months.length) {
-    months = [...FISCAL_POSITIONS];
-  }
+  const shifted = yearRows(rows, chosen);
+  const months = positions?.length ? [...new Set(positions)].sort() : [...FISCAL_POSITIONS];
   const options = chosen.map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) }));
-  const model = buildComparison({ rows: shifted.filter(row => months.includes(row.month)), dimension: "fiscalYear", items: chosen, metric, options, months });
-  return { ...model, years: chosen, yearScope: scope?.key ? scope : null, ranking: null };
+  const model = buildComparison({
+    rows: shifted.filter((row) => months.includes(row.month)),
+    dimension: "fiscalYear", metric, options, months,
+    // ปีที่เลือกแล้วยังไม่มียอดต้องเป็นเส้นว่าง ไม่ใช่หายไปจากกราฟ
+    include: chosen,
+    chartLimit: MAX_YEARS,
+  });
+  // ปีงบเรียงตามเวลาเสมอ ไม่เรียงตามยอด — สีและลำดับในคำอธิบายกราฟต้องไม่สลับที่
+  // เมื่อปีหนึ่งแซงอีกปีระหว่างปี และอันดับของปีงบก็ไม่มีความหมาย เพราะปีที่ผ่านมา
+  // ครบปีย่อมมากกว่าปีที่เพิ่งเริ่มเสมอ
+  const byYear = new Map(model.entries.map((entry) => [entry.key, entry]));
+  const entries = chosen.map((year) => byYear.get(year)).filter(Boolean);
+  return { ...model, entries, chartEntries: entries, hidden: 0, years: chosen, ranking: null };
 }
 
 /**
@@ -554,64 +588,4 @@ export function periodLabel(months) {
   if (list.length === 1) return formatMonth(list[0]);
   const contiguous = list.every((month, index) => index === 0 || monthIndex(month) === monthIndex(list[index - 1]) + 1);
   return contiguous ? `${formatMonth(list[0])} – ${formatMonth(list.at(-1))}` : list.map((month) => formatMonth(month)).join(", ");
-}
-
-/* --------------------------------------------------------------------------
-   สถานะใน URL — เปิดลิงก์เดิมหรือกดย้อนกลับแล้วได้มุมมองเดิม
-   -------------------------------------------------------------------------- */
-
-const pick = (value, allowed, fallback) => {
-  const text = Array.isArray(value) ? value[0] : value;
-  return allowed.includes(text) ? text : fallback;
-};
-
-const listFrom = (value) => String(Array.isArray(value) ? value[0] ?? "" : value ?? "")
-  .split(",")
-  .map((item) => item.trim())
-  .filter((item) => /^(\d+|unassigned)$/.test(item));
-
-// URL ข้ามข้อจำกัดของ UiCombobox ได้ จึงต้องบังคับกฎเดียวกับหน้าจอตั้งแต่ตอนอ่าน
-// รวมทั้งตัดค่าซ้ำเพื่อให้จำนวนที่ URL แสดงตรงกับจำนวนชุดข้อมูลที่แบบจำลองใช้จริง
-const itemsFrom = (value) => [...new Set(listFrom(value))].slice(0, MAX_ITEMS);
-
-/**
- * อ่านสถานะจาก query — ค่าที่ไม่รู้จักตกไปที่ค่าเริ่มต้น เทียบกับรายการที่อนุญาตด้วย
- * includes() ไม่ใช่การมี property บน object ("constructor" ต้องไม่ผ่าน)
- *
- * `?contract=` เป็นตัวกรองสัญญาเดิมของหน้าภาพรวม — แปลงเป็น "เทียบตามสัญญา" ให้ลิงก์เก่ายังพาไปดูสัญญานั้น
- * `?view=` `?dir=` `?n=` ของมุมมองอันดับเดิมไม่มีความหมายแล้ว (อันดับอยู่ในไฟล์ Excel เท่านั้น
- * #115) ลิงก์เก่าที่มีค่าเหล่านี้จึงเปิดเป็นการเลือกรายการ และ URL ถูกล้างค่าเหล่านั้นออก
- */
-export function comparisonFromQuery(query = {}) {
-  const legacyContract = itemsFrom(query.contract);
-  const by = pick(query.by, DIMENSIONS, legacyContract.length ? "contract" : "overall");
-  const items = itemsFrom(query.items);
-  const scope = pick(query.scope, YEAR_SCOPES, "overall");
-  return {
-    by,
-    items: items.length ? items : !query.by ? legacyContract : [],
-    metric: pick(query.measure, ["cost", "pages"], "cost") === "pages" ? "rawPages" : "cost",
-    // เทียบข้ามปีงบ — ว่าง = ปีงบที่เลือกอยู่กับปีก่อนหน้า
-    years: [...new Set(String(Array.isArray(query.years) ? query.years[0] ?? "" : query.years ?? "")
-      .split(",").map((item) => item.trim()).filter((item) => /^\d{4}$/.test(item)))].sort().slice(-MAX_YEARS),
-    scope,
-    scopeItem: scope === "overall" ? "" : listFrom(query.scopeItem)[0] ?? "",
-  };
-}
-
-/** สถานะเป็น query — ค่าเริ่มต้นไม่ถูกเขียน ลิงก์ของมุมมองปกติจึงสั้นเหมือนเดิม */
-export function comparisonToQuery(state) {
-  const overall = state.by === "overall";
-  return {
-    by: overall ? undefined : state.by,
-    items: !overall && state.items.length ? state.items.join(",") : undefined,
-    measure: state.metric === "rawPages" ? "pages" : undefined,
-    years: state.by === "fiscalYear" && state.years?.length ? state.years.join(",") : undefined,
-    scope: state.by === "fiscalYear" && state.scope && state.scope !== "overall" ? state.scope : undefined,
-    scopeItem: state.by === "fiscalYear" && state.scope !== "overall" && state.scopeItem ? state.scopeItem : undefined,
-    view: undefined,
-    dir: undefined,
-    n: undefined,
-    contract: undefined,
-  };
 }

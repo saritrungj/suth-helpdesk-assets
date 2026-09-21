@@ -16,10 +16,6 @@
   "ค่าใช้จ่าย": [
     "color-contrast"
   ],
-  "เปรียบเทียบรายเดือน": [
-    "color-contrast",
-    "role-img-alt"
-  ],
   "รายงานสรุป": [
     "color-contrast"
   ],
@@ -51,9 +47,6 @@
     "color-contrast"
   ],
   "นำเข้าทรัพย์สิน": [
-    "color-contrast"
-  ],
-  "ค่าใช้จ่ายแยกแผนก": [
     "color-contrast"
   ]
 }

@@ -1,119 +1,253 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowUpRight, FileText, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
+import { ArrowUpRight, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
 import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useOverview } from '../api/queries';
-import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState } from '../store/fiscalYear';
+import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState, setActiveFiscalYear } from '../store/fiscalYear';
 import { t } from '../lib/locale';
-import { formatMonth, yearLabel } from '../lib/locale-format';
+import { yearLabel } from '../lib/locale-format';
 import { formatBahtValue, formatCount, formatNetPages } from '../lib/format';
 import { errorMessage } from '../lib/api-error';
 import { UiAlert, UiButton, UiPageHeader, UiStat } from '../ui';
-import DashboardFilter from './DashboardFilter.vue';
-import DashboardScopeFilter from './DashboardScopeFilter.vue';
+import DashboardFilters from './DashboardFilters.vue';
 import ExecutiveDetails from './ExecutiveDetails.vue';
-import ExportExcelButton from './ExportExcelButton.vue';
+import ExportMenu from './ExportMenu.vue';
 import PrintComparison from './PrintComparison.vue';
 import ComparisonTable from './ComparisonTable.vue';
-import { buildComparison, buildYearComparison, comparisonFromQuery, comparisonToQuery, defaultYearPair, dimensionLabel, fiscalPosition, fiscalYearsMonths, itemOptions, metricLabel, metricUnit, monthText, periodChange, periodLabel, summarize, yearComparisonOptions, yearRows } from './comparison';
-import { comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportFilename, monthlySheet, monthsSlug, priceStatusLine, qualitySheet, rankingSheet, saveWorkbook, standardNotes, summarySheet } from './comparison-export';
-import { dashboardScopeFromQuery, dashboardScopeToQuery, filterDashboardRows } from './dashboard-scope';
-import { dashboardCsv } from './dashboard-csv';
+import {
+  MAX_YEARS, averagePerDevice, buildComparison, buildYearComparison, dimensionLabel, fiscalPosition,
+  itemOptions, metricLabel, metricUnit, monthText, periodChange, periodLabel, summarize,
+  yearComparisonOptions, yearRows,
+} from './comparison';
+import {
+  comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportFilename, monthlySheet,
+  monthsSlug, priceStatusLine, qualitySheet, rankingSheet, saveWorkbook, standardNotes, summarySheet,
+} from './comparison-export';
+import {
+  SCOPE_KEYS, VIEW_QUERY_KEYS, filterRows, requestedMonths, selectedKeysFor, viewFromQuery, viewToQuery,
+} from './dashboard-view';
+import { dashboardCsv, downloadCsv } from './dashboard-csv';
 
 /**
  * ExecutiveDashboard — หน้าภาพรวมการพิมพ์
  *
- * โครงหน้าเรียงตามคำถาม: ตัวกรอง → ตัวเลขสำคัญ → พื้นที่เปรียบเทียบ → ตารางรายละเอียด
+ * โครงหน้าเรียงตามคำถามที่หัวหน้าหน่วยงานถามจริง
  *
- * อันดับมาก–น้อยไม่อยู่บนหน้าจอ แต่เป็นแผ่น "อันดับ" ในไฟล์ Excel ที่ส่งออก (#115)
+ *   ตัวกรอง          ดูข้อมูลชุดไหน (ปีงบ ช่วงเวลา ฝ่าย แผนก สัญญา อาคาร เครื่อง)
+ *   ตัวเลขสำคัญ       ชุดนั้นรวมแล้วเป็นเท่าไร
+ *   เปรียบเทียบ       ชุดนั้นแบ่งตามอะไรแล้วต่างกันอย่างไร
+ *   ตารางรายละเอียด   ทุกกลุ่มในชุดนั้น ค้นหาและเรียงได้
+ *   รายละเอียด        เจาะถึงรายเครื่องรายเดือนในลิ้นชัก ไม่เปลี่ยนหน้า
  *
- * ตัวเลือกหลักมีชุดเดียว (ช่วงเวลา → แยกข้อมูลตาม → รายการ → ข้อมูลที่แสดง) และกราฟ ตาราง
- * กับไฟล์ Excel อ่านจากแบบจำลองตัวเดียวกัน (comparison.js) — เดิมหน้านี้มีตัวเลือกตัวชี้วัด
- * สามชุด (กราฟรายเดือน, การ์ดอันดับ, รายการแผนก/สัญญา) ที่เลือกแยกกันได้ แล้วตัวเลขชุด
- * เดียวกันขึ้นซ้ำสามที่ (#103)
+ * **ทุกส่วนอ่านจากแถวชุดเดียวกัน** (`rows`) ที่ผ่านตัวกรองแล้ว การเลือก "เปรียบเทียบตาม"
+ * จึงเปลี่ยนแค่วิธีแบ่ง ไม่เปลี่ยนตัวเลขสำคัญ และไฟล์ที่ส่งออกตรงกับจอเสมอโดยไม่ต้อง
+ * มีกฎพิเศษ — เดิมมีตัวกรองสองชั้นที่ชื่อซ้ำกัน แล้วต้องเขียนกฎว่าชั้นไหนมีผลกับอะไร
  *
- * ตัวเลือกของพื้นที่เปรียบเทียบอยู่ใน URL เปิดรายละเอียดเครื่องแล้วกดย้อนกลับจึงได้มุมมองเดิม
+ * สถานะทั้งหมดอยู่ใน URL และมี **ผู้เขียน URL คนเดียว** (watch ด้านล่าง) — เดิมมีสี่จุด
+ * ที่เรียก router.replace พร้อมกัน แต่ละจุดอ่าน route.query ของตัวเอง ตัวที่เขียนทีหลัง
+ * จึงทับตัวกรองที่เพิ่งเลือกไปเงียบๆ
  */
 const route = useRoute();
 const router = useRouter();
 
-const filter = ref({ month: '', selected: [] });
-const dashboardScope = ref(dashboardScopeFromQuery(route.query));
-const state = ref(comparisonFromQuery(route.query));
+const view = ref(viewFromQuery(route.query));
 const detailOpen = ref(false);
 const detailScope = ref(null);
 const detailGroup = ref('department');
 const exportBusy = ref(false);
 const exportError = ref('');
 
-// สถานะ → URL และ URL → สถานะ (ย้อนกลับ/เดินหน้า หรือกดลิงก์ของหน้าเดิม) — ธงกันวน
-// ต้องทำงานแบบ sync ไม่งั้น watcher ของอีกฝั่งจะรันหลังธงถูกปลดไปแล้ว
-let syncingFromRoute = false;
-watch(state, (value) => {
-  if (syncingFromRoute) return;
-  router.replace({ query: { ...route.query, ...comparisonToQuery(value) } });
-}, { deep: true, flush: 'sync' });
-watch(() => route.query, (query) => {
-  const next = comparisonFromQuery(query);
-  if (JSON.stringify(next) !== JSON.stringify(state.value)) {
-    syncingFromRoute = true;
-    state.value = next;
-    syncingFromRoute = false;
-  }
-  normalizeComparisonQuery(query, next);
-  const nextScope = dashboardScopeFromQuery(query);
-  if (JSON.stringify(nextScope) !== JSON.stringify(dashboardScope.value)) dashboardScope.value = nextScope;
-});
-watch(dashboardScope, (value) => {
-  router.replace({ query: { ...route.query, ...dashboardScopeToQuery(value) } });
-}, { deep: true });
-const COMPARISON_QUERY_KEYS = ['by', 'items', 'measure', 'years', 'scope', 'scopeItem', 'view', 'dir', 'n', 'contract'];
-const queryText = (value) => String(Array.isArray(value) ? value[0] ?? '' : value ?? '');
-function normalizeComparisonQuery(query, value) {
-  const normalized = comparisonToQuery(value);
-  if (COMPARISON_QUERY_KEYS.some((key) => queryText(query[key]) !== queryText(normalized[key]))) {
-    router.replace({ query: { ...query, ...normalized } });
-  }
-}
-// ลิงก์เก่า ค่าที่ไม่รู้จัก และรายการเกินขีดจำกัด ถูกเขียนกลับให้ URL ตรงกับสิ่งที่หน้าใช้จริง
-normalizeComparisonQuery(route.query, state.value);
+/* --------------------------------------------------------------------------
+   สถานะ ↔ URL — เขียนที่เดียว อ่านที่เดียว
+   -------------------------------------------------------------------------- */
 
-const fyMonths = computed(() => (activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value) : []));
-const monthParam = computed(() => filter.value.month || fyMonths.value.join(',') || undefined);
+/** ชื่อพารามิเตอร์ของมุมมองเดิมที่ไม่มีความหมายแล้ว — ต้องถูกล้างออก ไม่ใช่ค้างใน URL */
+const LEGACY_QUERY_KEYS = ['items', 'scope', 'scopeItem', 'view', 'dir', 'n', 'type', 'groups', 'level', 'basis', 'ref', 'base', 'metric', 'tab', 'floor'];
+const OWNED = new Set([...VIEW_QUERY_KEYS, ...LEGACY_QUERY_KEYS]);
+/** ค่าที่ไม่ใช่ของหน้านี้ (เช่น ?fy= ของทั้งแอป) ต้องรอดจากการเขียนทับทุกครั้ง */
+const externalQuery = (query) => Object.fromEntries(Object.entries(query).filter(([key]) => !OWNED.has(key)));
+
+let applyingFromRoute = false;
+function writeQuery(value) {
+  router.replace({ query: { ...externalQuery(route.query), ...viewToQuery(value) } });
+}
+// flush 'sync' เพราะ watcher ของอีกฝั่งต้องไม่รันหลังธงถูกปลดไปแล้ว
+watch(view, (value) => {
+  if (applyingFromRoute) return;
+  writeQuery(value);
+}, { deep: true, flush: 'sync' });
+
+watch(() => route.query, (query) => {
+  const next = viewFromQuery(query);
+  if (JSON.stringify(next) !== JSON.stringify(view.value)) {
+    applyingFromRoute = true;
+    view.value = next;
+    applyingFromRoute = false;
+  }
+  canonicalize(query, next);
+});
+
+/** ลิงก์เก่า ค่าที่ไม่รู้จัก และค่าซ้ำ ถูกเขียนกลับให้ URL ตรงกับสิ่งที่หน้าใช้จริง */
+function canonicalize(query, value) {
+  const wanted = viewToQuery(value);
+  const drifted = VIEW_QUERY_KEYS.some((key) => String(query[key] ?? '') !== String(wanted[key] ?? ''))
+    || LEGACY_QUERY_KEYS.some((key) => query[key] !== undefined);
+  if (drifted) writeQuery(value);
+}
+canonicalize(route.query, view.value);
+
+/* --------------------------------------------------------------------------
+   ปีงบและช่วงเวลา
+   -------------------------------------------------------------------------- */
+
+/**
+ * ปีงบที่เลือกอยู่ — ไม่ได้ระบุ = ปีงบของทั้งแอป (แถบบนสุด)
+ *
+ * ปีที่ใหม่ที่สุดที่เลือกคือ "ปีงบหลัก" และต้องเป็นตัวเดียวกับที่แถบบนสุดแสดงเสมอ
+ * ไม่งั้นหน้าเดียวจะมีปีงบสองความหมายให้ผู้ใช้เดา
+ */
+const activeYear = computed(() => (activeFiscalYear.value ? String(activeFiscalYear.value.year) : ''));
+const selectedYears = computed(() => {
+  const years = view.value.years.length ? view.value.years : [activeYear.value].filter(Boolean);
+  return [...new Set(years)].sort();
+});
+const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, activeFiscalYear.value?.year));
+
+let reconcilingYears = false;
+async function chooseYears(years) {
+  let next = [...new Set(years.map(String))].sort().slice(-MAX_YEARS);
+  // ไม่เลือกปีไหนเลยไม่มีความหมาย — เก็บของเดิมไว้
+  if (!next.length) return;
+  // ปีงบหลักต้องมีอยู่จริงในระบบถึงจะสลับไปได้ ส่วนปีที่เอามาเทียบเป็นปีที่เคยนำเข้ายอด
+  // ย้อนหลังไว้แต่ยังไม่ได้ตั้งเป็นปีงบในระบบก็ได้ (ช่วงเดือนของปีนั้นคำนวณจากกฎ ต.ค.–ก.ย.)
+  const record = [...next].reverse()
+    .map((year) => fiscalYearState.list.find((item) => String(item.year) === year))
+    .find(Boolean);
+  if (!record) {
+    // ไม่มีปีไหนที่เลือกไว้เป็นปีงบในระบบเลย ปีงบหลักจึงสลับไปไม่ได้ — คงไว้ในชุด
+    // ไม่งั้นแถบบนสุดกับตัวกรองของหน้าจะเป็นคนละปี ซึ่งคือสิ่งที่งานนี้ตั้งใจกำจัด
+    if (!activeYear.value) return;
+    next = [...new Set([...next, activeYear.value])].sort().slice(-MAX_YEARS);
+  }
+
+  const nextView = { ...view.value, years: next.length > 1 ? next : [] };
+  if (record && record.id !== fiscalYearState.activeId) {
+    // ด่านของปีงบยับยั้งได้ (เช่นมีฟอร์มที่ยังไม่บันทึกค้างอยู่) — ถูกยับยั้งแล้วตัวกรองต้องไม่เปลี่ยนตาม
+    // เขียน fy + มุมมองเป็น navigation เดียว ไม่เปิดช่องให้ watcher อีกตัวหยิบ fy เก่ามาทับ
+    const query = { ...externalQuery(route.query), ...viewToQuery(nextView), fy: record.id };
+    if (!(await setActiveFiscalYear(record.id, { query }))) return;
+  }
+  // vue-router คืน NavigationFailure แบบ resolved promise ได้เมื่อ navigation ก่อนหน้าถูกแทนที่
+  // ยืนยัน URL หลัง state เปลี่ยนแล้วอีกครั้ง เพื่อไม่ให้แถบบนเป็นปีใหม่แต่ลิงก์ยังเก็บ fy เก่า
+  if (record && String(route.query.fy ?? '') !== String(record.id)) {
+    await router.replace({ query: { ...externalQuery(route.query), ...viewToQuery(nextView), fy: record.id } });
+  }
+  view.value = nextView;
+}
+
+/*
+ * URL, page memory และ Back/Forward ต้องผ่าน normalization เดียวกับการเลือกใน UI
+ * ไม่งั้น ?years= อาจชี้ปีหนึ่ง แต่แถบบน/PeriodPicker ยังใช้อีกปี แล้วล้างเดือนที่ถูกต้องทิ้ง
+ */
+watch(
+  [() => view.value.years.join(), () => fiscalYearState.list.map((item) => `${item.id}:${item.year}`).join()],
+  async () => {
+    if (!view.value.years.length || reconcilingYears) return;
+    reconcilingYears = true;
+    try { await chooseYears(view.value.years); }
+    finally { reconcilingYears = false; }
+  },
+  { immediate: true },
+);
+
+const primaryMonths = computed(() => (activeFiscalYearRange.value ? fiscalYearMonths(activeFiscalYearRange.value) : []));
+/*
+ * เดือนที่เคยมีข้อมูลจริงทุกปี — ใช้จำกัดตัวเลือกของ PeriodPicker เท่านั้น ไม่ใช่ตัวกรองของกราฟ
+ *
+ * ตัวเลือกยึดเดือนของ "ปีงบหลัก" เพราะช่องเลือกเดือนแสดงได้ทีละปีงบ เดือนที่มีข้อมูล
+ * เฉพาะปีที่เอามาเทียบ (ไม่ใช่ปีหลัก) จึงยังเลือกไม่ได้ — เป็นข้อจำกัดที่ยอมรับไว้
+ * แทนการทำช่องเลือกเดือนที่ต้องอธิบายว่าเดือนนี้มีข้อมูลของปีไหนบ้าง
+ */
+const { data: everyRow } = useMonthlyKpi();
+const monthOptions = computed(() => {
+  const months = new Set((everyRow.value ?? []).map((row) => row.month));
+  return primaryMonths.value.filter((month) => months.has(month));
+});
+
+/*
+ * เดือนที่เลือกไว้เป็นของปีงบหลัก — ปีงบเปลี่ยนเมื่อไร เดือนที่ค้างอยู่ใช้ต่อไม่ได้
+ * ล้างทิ้งแทนที่จะปล่อยให้ตัวเลขเป็นของช่วงที่ไม่มีใครเลือก
+ */
+const primaryYearPending = computed(() => {
+  const requested = view.value.years.at(-1);
+  if (!requested) return false;
+  if (!fiscalYearState.list.length) return true;
+  const record = fiscalYearState.list.find((item) => String(item.year) === requested);
+  return Boolean(record && record.id !== fiscalYearState.activeId);
+});
+
+watch([primaryMonths, () => view.value.months.join(), primaryYearPending], ([months, , pending]) => {
+  if (pending || !months.length || !view.value.months.length) return;
+  const inRange = view.value.months.filter((month) => months.includes(month));
+  if (inRange.length !== view.value.months.length) {
+    view.value = { ...view.value, months: inRange };
+    // ถ้าการแก้นี้เกิดกลาง route→view sync ผู้เขียน URL ถูกกันไว้ชั่วคราว
+    // เขียน canonical URL หลังธงถูกปลด เพื่อให้ลิงก์ไม่ค้างค่าที่หน้าไม่ได้ใช้จริง
+    if (applyingFromRoute) queueMicrotask(() => canonicalize(route.query, view.value));
+  }
+}, { immediate: true, flush: 'sync' });
+
+const requestMonths = computed(() => requestedMonths(view.value, selectedYears.value));
+const monthParam = computed(() => requestMonths.value.join(',') || undefined);
+/*
+ * ช่วงเวลาเป็นภาษาคน
+ *
+ * ปีงบเดียวเขียนเดือนพร้อมปีได้ตรงๆ แต่หลายปีงบเขียนแบบนั้นจะชี้ผิด เพราะเดือนที่เลือก
+ * หมายถึงตำแหน่งเดือนของทุกปีที่เลือก ไม่ใช่เดือนของปีหลักปีเดียว — จึงเขียนเป็นชื่อ
+ * เดือนล้วน แล้วให้ชื่อปีงบอยู่ในบรรทัดเดียวกันก่อนหน้า
+ */
+const periodText = computed(() => {
+  const months = view.value.months;
+  if (selectedYears.value.length > 1) {
+    return months.length
+      ? months.map((month) => monthText(fiscalPosition(month))).join(', ')
+      : t('ทุกเดือนของปีงบที่เลือก');
+  }
+  return months.length ? periodLabel(months) : t('ทั้งปีงบ ({0})', [periodLabel(primaryMonths.value)]);
+});
+const yearsText = computed(() => selectedYears.value.map((year) => t('ปีงบ {0}', [yearLabel(year)])).join(', '));
+
+/* --------------------------------------------------------------------------
+   ข้อมูล
+   -------------------------------------------------------------------------- */
 const report = useMonthlyKpi(computed(() => ({ month: monthParam.value })));
-const overview = useOverview(computed(() => ({ month: monthParam.value, fiscal_year_id: activeFiscalYear.value?.id })));
+/*
+ * ภาพรวมถูกใช้ที่นี่เพื่อเอา "เดือนของช่วงก่อนหน้า" อย่างเดียว ซึ่งมีความหมายกับปีงบหลัก
+ * เท่านั้น จึงขอด้วยเดือนของปีงบหลัก ไม่ใช่เดือนของทุกปีที่เลือก — ไม่งั้นเลือกสามปีแล้ว
+ * ยิงคำขอที่ไม่มีใครใช้ผลลัพธ์ และ cache ก้อนนี้จะไม่ถูกใช้ร่วมกับลิ้นชักแจ้งเตือนอีก
+ */
+const overviewMonths = computed(() => requestedMonths(view.value, [activeYear.value].filter(Boolean)).join(',') || undefined);
+const overview = useOverview(computed(() => ({ month: overviewMonths.value, fiscal_year_id: activeFiscalYear.value?.id })));
 const divisions = useDivisions();
 const departments = useDepartments();
 const contracts = useContracts();
 const buildings = useBuildings();
 
-/*
- * เทียบข้ามปีงบ (#115) — โหลดแถวของทุกปีที่เลือกแยกจากแถวของปีงบที่ดูอยู่ เพราะการ์ดตัวเลข
- * ด้านบนยังเป็นของปีงบที่เลือกที่แถบบนสุด ส่วนกราฟวางหลายปีซ้อนกันตามเดือนของปีงบ
- * ไม่ได้เลือกปีเอง = ปีงบที่ดูอยู่กับปีก่อนหน้า (ถ้ามีในระบบ)
- */
-const yearMode = computed(() => state.value.by === 'fiscalYear');
-const defaultYears = computed(() => defaultYearPair(activeFiscalYear.value?.year));
-const chosenYears = computed(() => (state.value.years.length ? state.value.years : defaultYears.value));
-const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, activeFiscalYear.value?.year));
-const yearReport = useMonthlyKpi(
-  computed(() => ({ month: fiscalYearsMonths(chosenYears.value).join(',') || undefined })),
-  { enabled: computed(() => yearMode.value && chosenYears.value.length > 0) },
-);
-const yearSource = computed(() => (yearMode.value && !yearReport.isPlaceholderData.value
-  ? filterDashboardRows(yearReport.data.value ?? [], dashboardScope.value) : []));
-
-const loading = computed(() => report.isPending.value || report.isPlaceholderData.value || overview.isPending.value || overview.isPlaceholderData.value
-  || (yearMode.value && (yearReport.isPending.value || yearReport.isPlaceholderData.value)));
-const failed = computed(() => report.isError.value || overview.isError.value || (yearMode.value && yearReport.isError.value));
+const loading = computed(() => report.isPending.value || report.isPlaceholderData.value
+  || overview.isPending.value || overview.isPlaceholderData.value);
+const failed = computed(() => report.isError.value || overview.isError.value);
 const ready = computed(() => !loading.value && !failed.value);
-// ห้ามแสดงข้อมูลของช่วงเดิมใต้ชื่อช่วงที่เพิ่งเลือก — ระหว่างโหลดจึงเป็นแถวว่างเสมอ
-const rawRows = computed(() => (loading.value || report.isError.value ? [] : (report.data.value || [])
-  .filter((row) => !monthParam.value || monthParam.value.split(',').includes(row.month))));
-const rows = computed(() => filterDashboardRows(rawRows.value, dashboardScope.value));
 
-const money = (value) => (value == null ? '—' : formatBahtValue(value));
-const average = (value, devices) => (devices > 0 && value != null ? value / devices : null);
+// ห้ามแสดงข้อมูลของช่วงเดิมใต้ชื่อช่วงที่เพิ่งเลือก — ระหว่างโหลดจึงเป็นแถวว่างเสมอ
+const wanted = computed(() => new Set(requestMonths.value));
+const rawRows = computed(() => {
+  if (loading.value || report.isError.value) return [];
+  const rows = report.data.value || [];
+  // ยังไม่รู้ปีงบ (ยังไม่มีใครตั้งไว้) = ไม่ได้ขอเดือนไหนเป็นพิเศษ จึงใช้ทุกแถวที่ API ส่งมา
+  // ไม่ใช่คัดทิ้งทั้งหมดจนหน้าว่างโดยไม่มีคำอธิบาย
+  return requestMonths.value.length ? rows.filter((row) => wanted.value.has(row.month)) : rows;
+});
+const rows = computed(() => filterRows(rawRows.value, view.value));
 
 const references = computed(() => ({
   divisions: divisions.data.value ?? [],
@@ -121,62 +255,72 @@ const references = computed(() => ({
   contracts: contracts.data.value ?? [],
   buildings: buildings.data.value ?? [],
 }));
-const scopeOptions = computed(() => ({
-  divisions: itemOptions('division', references.value, rawRows.value),
-  departments: itemOptions('department', references.value, rawRows.value),
-  contracts: itemOptions('contract', references.value, rawRows.value),
-  buildings: itemOptions('building', references.value, rawRows.value),
-  devices: itemOptions('device', references.value, rawRows.value),
-}));
-const options = computed(() => (yearMode.value ? [] : itemOptions(state.value.by, references.value, rows.value)));
-const yearScopeOptions = computed(() => (yearMode.value && state.value.scope !== 'overall'
-  ? itemOptions(state.value.scope, references.value, yearSource.value) : []));
-const yearScope = computed(() => (state.value.scope !== 'overall' && state.value.scopeItem
-  ? { dimension: state.value.scope, key: state.value.scopeItem } : null));
+/** ตัวเลือกของตัวกรองมาจากข้อมูลอ้างอิงทั้งหมด ไม่ใช่จากแถวที่กรองแล้ว — ไม่งั้นเลือกเพิ่มไม่ได้ */
+const scopeOptions = computed(() => Object.fromEntries(
+  [['divisions', 'division'], ['departments', 'department'], ['contracts', 'contract'], ['buildings', 'building'], ['devices', 'device']]
+    .map(([key, dimension]) => [key, itemOptions(dimension, references.value, rawRows.value)])
+));
+
+/* --------------------------------------------------------------------------
+   แบบจำลองที่กราฟ ตาราง และไฟล์ใช้ร่วมกัน
+   -------------------------------------------------------------------------- */
+const yearMode = computed(() => view.value.by === 'fiscalYear');
+
 const model = computed(() => (yearMode.value
   ? buildYearComparison({
-    rows: yearSource.value,
-    years: chosenYears.value,
-    scope: yearScope.value,
-    metric: state.value.metric,
-    // เลือกช่วงเดือนไว้ที่แถบบนสุด = เทียบเฉพาะเดือนเหล่านั้นของทุกปี
-    positions: filter.value.selected.map(fiscalPosition).filter(Boolean),
+    rows: rows.value,
+    years: selectedYears.value,
+    metric: view.value.metric,
+    positions: view.value.months.map(fiscalPosition).filter(Boolean),
   })
   : buildComparison({
     rows: rows.value,
-    dimension: state.value.by,
-    items: state.value.items,
-    metric: state.value.metric,
-    options: options.value,
-    autoPick: false,
+    dimension: view.value.by,
+    metric: view.value.metric,
+    options: scopeOptions.value[`${view.value.by}s`] ?? [],
+    include: selectedKeysFor(view.value, view.value.by),
   })));
-const completeTableModel = computed(() => {
-  if (yearMode.value || state.value.by === 'overall') return model.value;
-  return buildComparison({
-    rows: rows.value,
-    dimension: state.value.by,
-    items: options.value.map((option) => option.value),
-    metric: state.value.metric,
-    options: options.value,
-    itemLimit: null,
-  });
-});
-const yearScopeLabel = computed(() => (yearScope.value
-  ? yearScopeOptions.value.find((option) => option.value === yearScope.value.key)?.label ?? yearScope.value.key : ''));
 
-/*
- * การ์ดตัวเลขและช่วงก่อนหน้าอ่านจากตัวกรองขอบเขตด้านบนเท่านั้น รายการที่เลือกในกราฟ
- * มีหน้าที่เลือกเส้นมาเปรียบเทียบ ไม่เปลี่ยนยอดรวมของหน้าโดยเงียบ ๆ
+const noun = computed(() => dimensionLabel(view.value.by));
+const metricText = computed(() => `${metricLabel(model.value.metric, { incomplete: model.value.metric === 'cost' && model.value.scope.unpriced > 0 })} (${metricUnit(model.value.metric)})`);
+
+/**
+ * ตัวกรองที่ใช้อยู่ เขียนเป็นภาษาคน — ใช้ทั้งคำอธิบายบนหน้าและแผ่น "เงื่อนไขรายงาน"
+ *
+ * ต้นทางเดียวกันทั้งสองที่ ไม่งั้นไฟล์ที่ส่งออกจะอ้างขอบเขตคนละอย่างกับที่คนเห็นบนจอ
  */
+const FILTER_LABELS = { divisions: t('ฝ่าย'), departments: t('แผนก'), contracts: t('สัญญา'), buildings: t('อาคาร'), devices: t('เครื่อง') };
+const activeFilters = computed(() => SCOPE_KEYS.flatMap((key) => {
+  const values = view.value[key];
+  if (!values.length) return [];
+  const names = new Map((scopeOptions.value[key] ?? []).map((option) => [String(option.value), option.label]));
+  return [{ key, label: FILTER_LABELS[key], values, text: values.map((value) => names.get(String(value)) ?? value).join(', ') }];
+}));
+const scopeCaption = computed(() => {
+  const active = activeFilters.value;
+  if (!active.length) return t('ทุกหน่วยงาน');
+  const total = active.reduce((count, filter) => count + filter.values.length, 0);
+  // เขียนชื่อออกมาตรงๆ เมื่อยังสั้นพอ เพราะ "ตัวกรอง 2 รายการ" ไม่ได้บอกว่ากรองอะไรไว้
+  return total <= 3 ? active.map((filter) => `${filter.label}: ${filter.text}`).join(' · ') : t('ตัวกรอง {0} รายการ', [formatCount(total)]);
+});
+const scopeText = computed(() => [yearsText.value, periodText.value, scopeCaption.value, metricText.value].join(' · '));
+
+/* --------------------------------------------------------------------------
+   ตัวเลขสำคัญ — ขอบเขตเดียวกับกราฟ ตาราง และไฟล์ เพราะอ่านจาก rows ชุดเดียวกัน
+   -------------------------------------------------------------------------- */
+const money = (value) => (value == null ? '—' : formatBahtValue(value));
 const totals = computed(() => summarize(rows.value));
 const costTitle = computed(() => (totals.value.unpriced ? t('ค่าใช้จ่ายที่ยืนยันแล้ว') : t('ค่าใช้จ่ายสุทธิ')));
 
 /*
  * ช่วงก่อนหน้า: เดือนมาจาก API (ยาวเท่ากันและอยู่ในปีงบเดียวกัน) แต่ยอดคิดที่นี่จาก
- * แถวรายเครื่องรายเดือนของรายการชุดเดียวกัน ด้วยกฎเดียวกับช่วงที่ดู — เดิมใช้เปอร์เซ็นต์
- * ทั้งองค์กรจาก API ซึ่งนับรายการที่ยังไม่รู้ราคาเป็นศูนย์ด้วย
+ * แถวรายเครื่องรายเดือนด้วยตัวกรองชุดเดียวกับช่วงที่ดู
+ *
+ * เลือกหลายปีงบแล้วคำว่า "ช่วงก่อนหน้า" ไม่มีคำตอบเดียว — บอกตรงๆ ว่ายังไม่เทียบ
+ * ดีกว่าเทียบกับช่วงที่ผู้ใช้เดาไม่ออกว่าคือช่วงไหน
  */
-const previousMonths = computed(() => overview.data.value?.comparison?.previous_months ?? []);
+const singleYear = computed(() => selectedYears.value.length === 1);
+const previousMonths = computed(() => (singleYear.value ? overview.data.value?.comparison?.previous_months ?? [] : []));
 const previousReport = useMonthlyKpi(
   computed(() => ({ month: previousMonths.value.join(',') || undefined })),
   { enabled: computed(() => previousMonths.value.length > 0) },
@@ -185,15 +329,12 @@ const previousTotals = computed(() => {
   if (!previousMonths.value.length || loading.value) return null;
   if (previousReport.isPending.value || previousReport.isPlaceholderData.value || previousReport.isError.value) return null;
   const months = new Set(previousMonths.value);
-  const previousRows = filterDashboardRows(
-    (previousReport.data.value ?? []).filter((row) => months.has(row.month)),
-    dashboardScope.value,
-  );
-  return summarize(previousRows);
+  return summarize(filterRows((previousReport.data.value ?? []).filter((row) => months.has(row.month)), view.value));
 });
 const change = computed(() => (previousTotals.value ? periodChange(previousTotals.value, totals.value, 'cost') : null));
 const costHint = computed(() => {
   if (totals.value.unpriced) return t('ยังยืนยันราคาไม่ได้ {0} รายการ', [formatCount(totals.value.unpriced)]);
+  if (!singleYear.value) return t('เลือกปีงบเดียวจึงจะเทียบกับช่วงก่อนหน้าได้');
   if (!previousMonths.value.length) return t('ยังไม่มีข้อมูลช่วงเปรียบเทียบ');
   const previous = periodLabel(previousMonths.value);
   switch (change.value?.reason) {
@@ -203,139 +344,79 @@ const costHint = computed(() => {
   }
 });
 
-const periodText = computed(() => (filter.value.selected.length
-  ? periodLabel(filter.value.selected)
-  : t('ทั้งปีงบ ({0})', [periodLabel(fyMonths.value)])));
-const noun = computed(() => dimensionLabel(yearMode.value ? state.value.scope : state.value.by));
-const metricText = computed(() => `${metricLabel(model.value.metric, { incomplete: model.value.metric === 'cost' && model.value.scope.unpriced > 0 })} (${metricUnit(model.value.metric)})`);
-const activeScopeCount = computed(() => Object.values(dashboardScope.value).reduce((count, values) => count + values.length, 0));
-const scopeCaption = computed(() => (activeScopeCount.value
-  ? t('ตัวกรองขอบเขต {0} รายการ', [formatCount(activeScopeCount.value)])
-  : t('ทุกหน่วยงาน')));
-const itemsText = computed(() => {
-  if (yearMode.value) {
-    const years = model.value.entries.map((entry) => entry.displayLabel).join(', ');
-    return yearScope.value ? `${years} · ${noun.value}: ${yearScopeLabel.value}` : `${years} · ${t('ทั้งองค์กร')}`;
-  }
-  if (model.value.view === 'overall') return t('ทุกหน่วยงาน');
-  if (model.value.autoPicked) return t('{0}ที่ยอดสูงสุด {1} รายการ', [noun.value, formatCount(model.value.entries.length)]);
-  return model.value.entries.length ? `${noun.value}: ${model.value.entries.map((entry) => entry.displayLabel).join(', ')}` : t('ยังไม่ได้เลือก{0}', [noun.value]);
-});
-const yearText = computed(() => t('ปีงบ {0}', [yearLabel(activeFiscalYear.value?.year)]));
-const scopeText = computed(() => (yearMode.value ? [periodText.value, itemsText.value, metricText.value] : [yearText.value, periodText.value, itemsText.value, metricText.value]).join(' · '));
-
-// ระหว่างเปลี่ยนช่วง คงแบบจำลองพร้อมคำอธิบายเดิมไว้ด้วยกัน ไม่ติดหัวข้อใหม่บนยอดเก่า
-const settledTable = ref(null);
-watch([completeTableModel, periodText, ready], ([value, period, isReady]) => {
-  if (isReady) settledTable.value = { model: value, description: `${comparisonTitle(value)} · ${period}` };
-}, { immediate: true });
-const tableView = computed(() => loading.value && settledTable.value
-  ? settledTable.value : { model: model.value, description: `${comparisonTitle(model.value)} · ${periodText.value}` });
+// ระหว่างเปลี่ยนช่วง คงตัวเลขพร้อมคำอธิบายเดิมไว้ด้วยกัน ไม่ติดหัวข้อใหม่บนยอดเก่า
 const stats = computed(() => ({
   totals: totals.value, costTitle: costTitle.value, costHint: costHint.value,
-  caption: t('ตัวเลขของ {0} · {1}', [scopeCaption.value, periodText.value]), delta: change.value?.percent ?? null,
+  caption: t('ตัวเลขของ {0} · {1} · {2}', [scopeCaption.value, yearsText.value, periodText.value]),
+  delta: change.value?.percent ?? null,
 }));
 const settledStats = ref(null);
 watch([stats, ready], ([value, isReady]) => { if (isReady) settledStats.value = value; }, { immediate: true });
-const shownStats = computed(() => loading.value && settledStats.value ? settledStats.value : stats.value);
+const shownStats = computed(() => (loading.value && settledStats.value ? settledStats.value : stats.value));
 const statsReady = computed(() => ready.value || (loading.value && Boolean(settledStats.value)));
 
-/** เดือนล่าสุดที่มีข้อมูลของปีงบที่ดูอยู่ */
-const latestMonth = computed(() => rows.value.reduce((latest, row) => (row.month > latest ? row.month : latest), ''));
+const settledTable = ref(null);
+watch([model, periodText, ready], ([value, period, isReady]) => {
+  if (isReady) settledTable.value = { model: value, description: `${comparisonTitle(value)} · ${period}` };
+}, { immediate: true });
+const tableView = computed(() => (loading.value && settledTable.value
+  ? settledTable.value : { model: model.value, description: `${comparisonTitle(model.value)} · ${periodText.value}` }));
 
-/** แถวของทุกปีที่เทียบตามตัวกรองบนหน้า โดยคืนเดือนจริงให้แผงรายละเอียดและไฟล์ */
-const comparedYearRows = computed(() => {
-  if (!yearMode.value) return [];
-  const positions = filter.value.selected.map(fiscalPosition).filter(Boolean);
-  return yearRows(yearSource.value, chosenYears.value)
-    .filter((row) => !positions.length || positions.includes(row.month));
-});
-const exportRows = computed(() => (yearMode.value ? comparedYearRows.value : rows.value));
-const detailRows = computed(() => exportRows.value.map((row) => (
-  row.calendar_month ? { ...row, month: row.calendar_month } : row
-)));
+/* --------------------------------------------------------------------------
+   รายละเอียดรายเครื่อง — ลิ้นชักในหน้าเดิม ไม่เปลี่ยนเส้นทาง
+   -------------------------------------------------------------------------- */
+/** แถวที่ส่งออกและเจาะดู — โหมดปีงบใช้แถวที่ย้ายมาอยู่บนแกนเดือนของปีงบแล้ว */
+const exportRows = computed(() => (yearMode.value
+  ? yearRows(rows.value, selectedYears.value).filter((row) => model.value.months.includes(row.month))
+  : rows.value));
+const detailRows = computed(() => exportRows.value.map((row) => (row.calendar_month ? { ...row, month: row.calendar_month } : row)));
 
 watch(monthParam, () => { detailOpen.value = false; exportError.value = ''; });
 
-/* --------------------------------------------------------------------------
-   รายละเอียดรายเครื่อง
-   -------------------------------------------------------------------------- */
 function openDetails(group = 'department', entry = null) {
   if (!ready.value || !rows.value.length) return;
-  if (entry) {
-    const dimension = model.value.view === 'overall' ? 'month' : state.value.by;
-    detailScope.value = { dimension, key: entry.key, label: entry.displayLabel };
-    detailGroup.value = 'device';
-  } else {
-    detailScope.value = null;
-    detailGroup.value = yearMode.value ? 'fiscalYear' : group;
-  }
+  detailScope.value = entry
+    ? { dimension: model.value.view === 'overall' ? 'month' : view.value.by, key: entry.key, label: entry.displayLabel }
+    : null;
+  detailGroup.value = entry ? 'device' : (yearMode.value ? 'fiscalYear' : group);
   detailOpen.value = true;
 }
-function openTableDetails(entry) {
-  if (!entry) return;
-  detailScope.value = { dimension: state.value.by === 'overall' ? 'month' : state.value.by, key: entry.key, label: entry.displayLabel };
-  detailGroup.value = 'device';
-  detailOpen.value = true;
-}
-function reload() { report.refetch(); overview.refetch(); if (yearMode.value) yearReport.refetch(); }
-
-function runCsvExport() {
-  if (!ready.value || !rows.value.length) return;
-  const content = dashboardCsv(rows.value);
-  const blob = new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `dashboard-details-${monthsSlug(filter.value.selected.length ? filter.value.selected : fyMonths.value)}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
+function reload() { report.refetch(); overview.refetch(); }
 
 /* --------------------------------------------------------------------------
-   ส่งออก — ไฟล์เดียวสามแผ่น หรือข้อมูลดิบอย่างเดียว
+   ส่งออก — Excel เป็นรายงาน CSV เป็นข้อมูลดิบ ทั้งคู่ใช้ตัวกรองชุดเดียวกับจอ
    -------------------------------------------------------------------------- */
 const blockedReason = computed(() => {
   if (!ready.value) return t('รอข้อมูลโหลดเสร็จ');
-  return model.value.blocked === 'no-data' ? t('ยังไม่มียอดพิมพ์ในขอบเขตนี้') : '';
+  if (!exportRows.value.length) return t('ยังไม่มียอดพิมพ์ในขอบเขตที่เลือก');
+  return '';
 });
 
 function filenameFor(kind) {
-  const m = model.value;
   return exportFilename([
-    kind === 'raw' ? 'print-usage-data' : 'print-comparison',
-    yearMode.value ? `fy${m.years.join('_')}` : `fy${activeFiscalYear.value?.year ?? 'all'}`,
-    monthsSlug(filter.value.selected, fyMonths.value),
-    m.dimension,
-    kind === 'raw' ? null : m.metric === 'rawPages' ? 'pages' : 'cost',
+    kind === 'csv' ? 'print-usage-data' : 'print-usage-report',
+    `fy${selectedYears.value.join('_') || 'all'}`,
+    monthsSlug(view.value.months, primaryMonths.value),
+    view.value.by,
+    view.value.metric === 'rawPages' ? 'pages' : 'cost',
   ]);
 }
 
-function conditions(m, kind, includedRows) {
-  const detailScopeText = t('ทุกเครื่องตามตัวกรองบนหน้า');
+function conditions(m, includedRows) {
   const ranking = m.ranking && !m.ranking.blocked
     ? t('ทุก{0} {1} รายการ เรียงตาม{2}จากมากไปน้อย (แผ่น “อันดับ”)', [noun.value, formatCount(m.ranking.from), metricLabel(m.metric)])
     : m.ranking?.blocked === 'unpriced' ? t('ยังจัดอันดับค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ') : '';
-  const yearRows = yearMode.value ? [
-    [t('ปีงบที่เปรียบเทียบ'), m.entries.map((entry) => entry.displayLabel).join(', ')],
-    [t('เดือนของปีงบบนแกน'), m.months.map((month) => monthText(month)).join(', ') || t('ไม่มี')],
-    [t('ขอบเขต'), yearScope.value ? `${noun.value}: ${yearScopeLabel.value}` : t('ทั้งองค์กร')],
-  ] : [
-    [t('ปีงบประมาณ'), yearLabel(activeFiscalYear.value?.year)],
-    [t('เดือนที่มีข้อมูล'), periodLabel(m.months) || t('ไม่มี')],
-  ];
   return [
-    ...yearRows,
+    [t('ปีงบประมาณ'), yearsText.value],
     [t('ช่วงเวลา'), periodText.value],
-    [t('แยกข้อมูลตาม'), dimensionLabel(m.dimension)],
-    ...(m.view === 'select' && !yearMode.value ? [[t('รายการที่เปรียบเทียบ'), m.entries.map((entry) => entry.displayLabel).join(', ')]] : []),
-    ...(m.autoPicked ? [[t('วิธีเลือกรายการ'), t('ไม่ได้เลือกเอง — {0} รายการที่ยอดสูงสุดตามข้อมูลที่แสดง', [formatCount(m.entries.length)])]] : []),
-    ...(kind !== 'raw' && ranking ? [[t('อันดับ'), ranking]] : []),
-    ...(kind === 'raw' ? [] : [[t('ข้อมูลที่แสดง'), metricText.value]]),
-    ...(kind !== 'raw' && m.view === 'select' && m.months.length >= 2 ? [[t('ค่าในคอลัมน์รายเดือน'), metricText.value]] : []),
-    [t('ขอบเขตข้อมูลรายละเอียด'), detailScopeText],
+    ...(yearMode.value
+      ? [[t('เดือนของปีงบบนแกน'), m.months.map((month) => monthText(month)).join(', ') || t('ไม่มี')]]
+      : [[t('เดือนที่มีข้อมูล'), periodLabel(m.months) || t('ไม่มี')]]),
+    ...activeFilters.value.map((filter) => [filter.label, filter.text]),
+    [t('เปรียบเทียบตาม'), dimensionLabel(m.dimension)],
+    [t('ตัวเลขที่ดู'), metricText.value],
+    ...(m.hidden ? [[t('กลุ่มที่อยู่บนกราฟ'), t('{0} จาก {1} รายการที่ยอดสูงสุด — ตารางและแผ่นอื่นมีครบทุกรายการ', [formatCount(m.chartEntries.length), formatCount(m.entries.length)])]] : []),
+    ...(ranking ? [[t('อันดับ'), ranking]] : []),
     [t('จำนวนรายการยอดพิมพ์'), formatCount(includedRows.length)],
     [t('จำนวนเครื่องที่มีข้อมูล'), formatCount(summarize(includedRows).devices)],
     [t('สถานะราคา'), priceStatusLine(summarize(includedRows).unpriced)],
@@ -343,50 +424,63 @@ function conditions(m, kind, includedRows) {
   ];
 }
 
-async function runExport(kind) {
-  if (kind === 'report' ? blockedReason.value : !ready.value || !exportRows.value.length) return;
+async function runExcel() {
+  if (blockedReason.value) return;
   exportBusy.value = true;
   exportError.value = '';
-  // จับแบบจำลองชุดเดียวไว้ก่อน await — ถ้าผู้ใช้เปลี่ยนตัวเลือกระหว่างสร้างไฟล์ ไฟล์ยังเป็นชุดที่กด
+  // จับแบบจำลองชุดเดียวไว้ก่อน await — เปลี่ยนตัวเลือกระหว่างสร้างไฟล์แล้วไฟล์ยังเป็นชุดที่กด
   const m = model.value;
   const includedRows = exportRows.value;
-  const filename = filenameFor(kind);
-  const ranking = kind === 'report' ? rankingSheet(m) : null;
-  const sheets = kind === 'report'
-    ? [summarySheet(includedRows), monthlySheet(includedRows), comparisonSheet(m), ...(ranking ? [ranking] : []), detailSheet(includedRows), qualitySheet(includedRows), conditionsSheet(filename, conditions(m, kind, includedRows))]
-    : [detailSheet(includedRows), conditionsSheet(filename, conditions(m, kind, includedRows))];
-  try { await saveWorkbook(filename, sheets); }
-  catch (error) { exportError.value = errorMessage(error, t('ส่งออกไม่สำเร็จ')); }
+  const filename = filenameFor('excel');
+  const ranking = rankingSheet(m);
+  try {
+    await saveWorkbook(filename, [
+      summarySheet(includedRows),
+      monthlySheet(includedRows),
+      comparisonSheet(m),
+      ...(ranking ? [ranking] : []),
+      detailSheet(includedRows),
+      qualitySheet(includedRows),
+      conditionsSheet(filename, conditions(m, includedRows)),
+    ]);
+  } catch (error) { exportError.value = errorMessage(error, t('ส่งออกไม่สำเร็จ')); }
   finally { exportBusy.value = false; }
+}
+
+function runCsv() {
+  if (blockedReason.value) return;
+  exportError.value = '';
+  try { downloadCsv(`${filenameFor('csv')}.csv`, dashboardCsv(detailRows.value)); }
+  catch (error) { exportError.value = errorMessage(error, t('ส่งออกไม่สำเร็จ')); }
 }
 </script>
 
 <template>
   <div class="w-full min-w-0 max-w-[calc(100vw-2rem)] overflow-x-clip">
-    <UiPageHeader :title="t('ภาพรวมการพิมพ์')" :description="t('ดูข้อมูลปัจจุบันและย้อนหลัง เลือกขอบเขต แยกข้อมูล และส่งออกเพื่อใช้ตัดสินใจลดต้นทุน')">
+    <UiPageHeader :title="t('ภาพรวมการพิมพ์')" :description="t('เลือกขอบเขตครั้งเดียว แล้วดูตัวเลข เปรียบเทียบ เจาะรายละเอียด และส่งออกจากข้อมูลชุดเดียวกัน')">
       <template #actions>
+        <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value || overview.isFetching.value" @click="reload">
+          <RefreshCw :size="16" />
+        </UiButton>
         <UiButton variant="secondary" :disabled="!ready || !rows.length" @click="openDetails()">
           <template #icon><PanelRightOpen :size="16" /></template>{{ t('ดูรายละเอียด') }}
         </UiButton>
+        <!-- ส่งออกทั้งขอบเขตที่ตัวกรองเลือกไว้ ไม่ใช่เฉพาะสิ่งที่กราฟวาด จึงเป็นปุ่มของหน้า
+             ไม่ใช่ปุ่มของการ์ดกราฟ -->
+        <ExportMenu :disabled="Boolean(blockedReason)" :reason="blockedReason" :busy="exportBusy" @excel="runExcel" @csv="runCsv" />
       </template>
     </UiPageHeader>
 
-    <!-- ตัวกรอง: ช่วงเวลาเป็นขอบเขตของตัวเลขทั้งหน้า จึงอยู่บนสุดแถวเดียว -->
-    <div class="flex flex-wrap items-end gap-x-3 gap-y-2 mb-4" data-print="hide">
-      <DashboardFilter bare @filter="(next) => (filter = { ...next })" />
-      <p class="text-xs text-ink-mute ml-auto pb-2">{{ latestMonth ? t('ข้อมูลล่าสุด {0}', [formatMonth(latestMonth)]) : '' }}</p>
-      <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value || overview.isFetching.value || yearReport.isFetching.value" @click="reload"><RefreshCw :size="16" /></UiButton>
-    </div>
-
-    <DashboardScopeFilter v-model="dashboardScope" :options="scopeOptions" />
+    <DashboardFilters
+      :model-value="view" :options="scopeOptions" :year-options="yearOptions" :selected-years="selectedYears" :month-options="monthOptions"
+      @update:model-value="(next) => (view = next)" @update:years="chooseYears" />
 
     <UiAlert v-if="failed" tone="danger" class="mb-4">
-      {{ errorMessage(report.error.value || overview.error.value || yearReport.error.value, t('โหลดภาพรวมไม่สำเร็จ')) }}
+      {{ errorMessage(report.error.value || overview.error.value, t('โหลดภาพรวมไม่สำเร็จ')) }}
       <template #actions><UiButton variant="secondary" @click="reload">{{ t('ลองใหม่') }}</UiButton></template>
     </UiAlert>
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
-    <!-- ตัวเลขสำคัญอ่านจากตัวกรองขอบเขตด้านบน รายการที่เลือกด้านล่างใช้เลือกเส้นในกราฟ -->
     <p class="text-xs text-ink-mute mb-1.5">{{ shownStats.caption }}</p>
     <section class="card grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
       <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring rounded-l-lg" :disabled="!ready || !rows.length" :aria-label="t('ดูที่มาของค่าใช้จ่าย')" @click="openDetails('department')">
@@ -403,30 +497,23 @@ async function runExport(kind) {
       </button>
       <UiStat plain tone="ink" :label="t('เครื่องที่มียอดในช่วงนี้')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"
         :hint="statsReady ? `${t('{0} รายการยอดพิมพ์', [formatCount(shownStats.totals.readings)])}${shownStats.totals.unpriced ? ` · ${t('รอราคา {0}', [formatCount(shownStats.totals.unpriced)])}` : ''}` : ''" />
-      <UiStat plain tone="ink" :label="t('ยอดพิมพ์เฉลี่ยต่อเครื่อง')" :value="statsReady && shownStats.totals.devices ? formatCount(average(shownStats.totals.rawPages, shownStats.totals.devices)) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
-      <UiStat plain tone="ink" :label="t('ค่าใช้จ่ายเฉลี่ยต่อเครื่อง')" :value="statsReady ? money(average(shownStats.totals.cost, shownStats.totals.devices)) : '—'" :unit="t('บาท')" :loading="loading && !settledStats"
-        :hint="shownStats.totals.unpriced ? t('คำนวณจากรายการที่ยืนยันราคาแล้ว') : ''" />
+      <UiStat plain tone="ink" :label="t('ยอดพิมพ์เฉลี่ยต่อเครื่อง')" :value="statsReady && averagePerDevice(shownStats.totals, 'rawPages') != null ? formatCount(averagePerDevice(shownStats.totals, 'rawPages')) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
+      <UiStat plain tone="ink" :label="t('ค่าใช้จ่ายเฉลี่ยต่อเครื่อง')" :value="statsReady ? money(averagePerDevice(shownStats.totals, 'cost')) : '—'" :unit="t('บาท')" :loading="loading && !settledStats"
+        :hint="shownStats.totals.unpriced ? t('ยังคำนวณค่าเฉลี่ยครบไม่ได้ · รอราคา {0} รายการ', [formatCount(shownStats.totals.unpriced)]) : ''" />
     </section>
 
-    <PrintComparison v-model:state="state" :model="model" :options="options" :year-options="yearOptions" :scope-options="yearScopeOptions" :loading="loading" :failed="failed" :scope-text="scopeText"
-      @details="(entry) => openDetails('device', entry)">
-      <template #actions>
-        <ExportExcelButton :disabled="Boolean(blockedReason)" :raw-disabled="!ready || !exportRows.length" :busy="exportBusy" :reason="blockedReason"
-          @report="runExport('report')" @raw="runExport('raw')" />
-        <UiButton variant="secondary" :disabled="!ready || !rows.length" @click="runCsvExport">
-          <template #icon><FileText :size="16" /></template>{{ t('ส่งออก CSV') }}
-        </UiButton>
-      </template>
-    </PrintComparison>
+    <PrintComparison v-model:state="view" :model="model" :loading="loading" :failed="failed" :scope-text="scopeText"
+      @details="(entry) => openDetails('device', entry)" />
 
     <ComparisonTable class="mb-4" :model="tableView.model" :loading="loading" :description="tableView.description"
-      @details="openTableDetails" />
+      @details="(entry) => openDetails('device', entry)" />
 
     <!-- หมายเหตุขอบเขตของตัวเลขบนหน้านี้ ไม่ใช่ที่เก็บงานค้าง — งานค้างอยู่ในลิ้นชัก
          แจ้งเตือนที่เดียว ส่วนข้อจำกัดของตัวเลขแต่ละตัวติดอยู่กับตัวเลขนั้นเอง -->
     <footer class="text-xs text-ink-mute leading-relaxed">
       <p>{{ t('ข้อมูลเฉพาะเดือนที่บันทึกแล้ว') }} · {{ t('เดือนที่บันทึกเป็นศูนย์ยังแสดงในรายงาน') }} · {{ t('ยอดพิมพ์จริงคือจำนวนหน้าที่บันทึก ส่วนค่าใช้จ่ายคิดจากหน้าสุทธิหลังหัก 2%') }}</p>
     </footer>
-    <ExecutiveDetails v-model:open="detailOpen" :rows="detailRows" :scope="detailScope" :context="yearMode ? scopeText : `${yearText} · ${periodText}`" :initial-group="detailGroup" />
+
+    <ExecutiveDetails v-model:open="detailOpen" :rows="detailRows" :scope="detailScope" :context="`${yearsText} · ${periodText}`" :initial-group="detailGroup" />
   </div>
 </template>

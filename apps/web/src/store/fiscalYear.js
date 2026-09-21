@@ -1,6 +1,6 @@
 import { reactive, computed, watch } from "vue";
 import api from "../services/api";
-import router from "../router";
+import { appRouter } from "../lib/app-router";
 import { fiscalYearMonths } from "@suth/domain";
 
 // state ปีงบกลาง ที่ทุกหน้า/ทุก component subscribe ร่วมกัน
@@ -44,7 +44,7 @@ async function fetchFiscalYears() {
       fiscalYearState.list = res.data;
 
       // 1) ถ้า URL มี ?fy= อยู่แล้ว (เช่น refresh หน้า หรือ share link มา) ใช้ค่านั้นก่อน
-      const queryFy = Number(router.currentRoute.value.query.fy);
+      const queryFy = Number(appRouter()?.currentRoute.value.query.fy);
       const matched = fiscalYearState.list.find((f) => f.id === queryFy);
 
       if (matched) {
@@ -56,7 +56,7 @@ async function fetchFiscalYears() {
         // 2) ไม่งั้น default เป็นปีงบล่าสุด (ตัวสุดท้ายของ list) — เฉพาะตอนที่ค่าที่เลือกไว้เดิม
         // ใช้ไม่ได้แล้ว (ยังไม่เคยเลือก หรือปีงบที่เคยเลือกไว้ถูกลบไปแล้ว) ไม่งั้นจะไปทับปีงบที่
         // ผู้ใช้ตั้งใจเลือกไว้อยู่ทุกครั้งที่มีคน add/edit ปีงบใหม่จากหน้า Admin
-        applyFiscalYear(fiscalYearState.list[fiscalYearState.list.length - 1].id);
+        await applyFiscalYear(fiscalYearState.list[fiscalYearState.list.length - 1].id);
       }
 
       // ล็อกว่าโหลดสำเร็จแล้วก็ต่อเมื่อ "สำเร็จจริง" เท่านั้น — ถ้าพลาดจะไม่ล็อก เพื่อให้เรียกซ้ำได้ใหม่
@@ -124,18 +124,35 @@ async function guardsAllow(id) {
 }
 
 /**
+ * พารามิเตอร์ใน URL ที่หมดความหมายทันทีเมื่อปีงบหลักเปลี่ยน
+ *
+ * `years` คือชุดปีที่เอามาเทียบ (ปีใหม่ที่สุดในชุดคือปีงบหลัก) ส่วน `months` เก็บเป็นเดือน
+ * จริงของปีงบหลัก — ทั้งคู่จึงเป็นของ "ปีที่เพิ่งเลิกไป" เมื่อมีคนสลับปีงบจากแถบบน
+ *
+ * ปล่อยค้างไว้แปลว่าแถบบนกับ PeriodPicker บอกปีหนึ่ง แต่ตัวเลขบนหน้าเป็นของอีกชุดปี
+ * ซึ่งคือปีงบสองความหมายในหน้าเดียว หน้าที่เป็นเจ้าของชุดปี (หน้าภาพรวม) ส่ง query ของตัวเองเข้ามา
+ * ตอนเลือกหลายปี ชุดนั้นจึงไม่ถูกล้าง
+ */
+const YEAR_SCOPED_QUERY_KEYS = ["years", "months"];
+
+function withoutYearScoped(query) {
+  return Object.fromEntries(Object.entries(query).filter(([key]) => !YEAR_SCOPED_QUERY_KEYS.includes(key)));
+}
+
+/**
  * เปลี่ยนปีงบจริงๆ โดย **ไม่ผ่านด่าน**
  *
  * ใช้เฉพาะตอนเลือกปีงบเริ่มต้นหลังโหลดรายการเสร็จ ซึ่งยังไม่มีหน้าไหนมีของกรอกค้าง
  * และเป็นจังหวะที่ห้ามถูกยับยั้ง ไม่งั้นแอปจะค้างโดยไม่มีปีงบ active เลย
  */
-function applyFiscalYear(id) {
+async function applyFiscalYear(id, query = null) {
   fiscalYearState.activeId = id;
 
   // sync ลง query param ?fy= ทุกครั้งที่เปลี่ยนปีงบ (replace ไม่ push เพื่อไม่ให้ history รก)
-  router.replace({
-    query: { ...router.currentRoute.value.query, fy: id },
-  });
+  // ยังไม่มี router = ถูกเรียกนอกแอป (เทส) — ปีงบใน state ถูกต้องแล้ว แค่ไม่มี URL ให้ sync
+  const router = appRouter();
+  if (!router) return;
+  await router.replace({ query: { ...(query ?? router.currentRoute.value.query), fy: id } });
 }
 
 /**
@@ -143,27 +160,38 @@ function applyFiscalYear(id) {
  *
  * @returns {Promise<boolean>} false = ถูกด่านยับยั้ง ปีงบยังเป็นค่าเดิม
  */
-export async function setActiveFiscalYear(id) {
+export async function setActiveFiscalYear(id, options = {}) {
   // เลือกปีเดิมซ้ำไม่ใช่การเปลี่ยน จึงไม่ต้องถามด่าน แต่ยัง sync URL เหมือนเดิม
   // เผื่อกรณีที่ activeId ถูกตั้งจากที่อื่นโดยที่ ?fy= ยังไม่มีในลิงก์
   if (id === fiscalYearState.activeId) {
-    applyFiscalYear(id);
+    await applyFiscalYear(id, options.query);
     return true;
   }
 
   if (!(await guardsAllow(id))) return false;
 
-  applyFiscalYear(id);
+  // ปีงบหลักเปลี่ยนจริง — ล้างพารามิเตอร์ที่เป็นของปีเก่า เว้นแต่ผู้เรียกส่ง query ของตัวเองมา
+  // การเลือกปีงบตั้งต้นหลังโหลดรายการ (applyFiscalYear โดยตรง) ไม่ใช่การสลับปี จึงต้องเก็บเดือน
+  // ที่มากับลิงก์ไว้ครบ — ลิงก์ที่แชร์กันมาเคยเปิดแล้วกลายเป็นทั้งปีงบมาแล้วด้วยเหตุนี้
+  const router = appRouter();
+  await applyFiscalYear(id, options.query ?? (router ? withoutYearScoped(router.currentRoute.value.query) : null));
   return true;
 }
 
-// ถ้า query เปลี่ยนจากทางอื่น (เช่น กด back/forward, หรือ paste link ที่มี ?fy=) ให้ sync state ตาม
-//
-// ต้องเรียกจาก main.js หลังจากที่ router ถูกสร้างเสร็จแล้ว ห้ามตั้ง watch ตอน module evaluate
-// เพราะไฟล์นี้กับ router/index.js import กันเป็นวง (router -> Dashboard.vue -> ไฟล์นี้ -> router)
-// getter ของ watch จะทำงานทันทีที่สร้าง ถ้าตอนนั้น router/index.js ยังประกาศ const router ไม่เสร็จ
-// จะได้ ReferenceError: Cannot access 'router' before initialization แล้วแอปไม่ mount ทั้งหน้า
+/**
+ * ถ้า query เปลี่ยนจากทางอื่น (เช่น กด back/forward หรือเปิดลิงก์ที่มี ?fy=) ให้ sync state ตาม
+ *
+ * เรียกจาก main.js หลัง `router.isReady()` เพราะ watch ตัวนี้ต้องเริ่มทำงานหลังการนำทาง
+ * ครั้งแรกจบแล้ว ไม่งั้นมันจะเห็น ?fy= ของลิงก์ตั้งต้นเป็น "การเปลี่ยนปีงบ" แล้วไปถามด่าน
+ * ตั้งแต่ยังไม่มีใครแตะอะไร
+ *
+ * (เดิมเหตุผลของการเลื่อนคือกันวง import ที่ทำให้ได้ ReferenceError แล้วแอปไม่ mount ทั้งหน้า
+ * ตอนนี้วงนั้นถูกตัดไปแล้วด้วย lib/app-router.js เหลือแค่เหตุผลเรื่องลำดับด้านบน)
+ */
 export function startFiscalYearRouterSync() {
+  const router = appRouter();
+  if (!router) return;
+
   // ธงกันวน: ตอนที่ด่านยับยั้งแล้วเราเขียน ?fy= กลับเป็นค่าเดิม watch ตัวนี้จะยิงอีกรอบ
   // ถ้าไม่กันไว้ มันจะเห็นว่า fy ไม่ตรง activeId แล้ววนถามด่านซ้ำไม่จบ
   let reverting = false;
