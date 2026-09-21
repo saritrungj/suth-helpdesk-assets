@@ -36,11 +36,8 @@ async function openBillingPeriod(conn, deviceId) {
 function sameArrangement(period, { contractId, priceOverride }) {
   if (!period) return false;
 
-  const samePrice =
-    (period.price_override === null || period.price_override === undefined
-      ? null
-      : String(period.price_override)) ===
-    (priceOverride === null || priceOverride === undefined ? null : String(priceOverride));
+  const normalizePrice = (value) => (value === null || value === undefined ? null : Number(value));
+  const samePrice = normalizePrice(period.price_override) === normalizePrice(priceOverride);
 
   return (period.contract_id ?? null) === (contractId ?? null) && samePrice;
 }
@@ -125,89 +122,4 @@ async function recordContractHistory(conn, deviceId, arrangement, effectiveFrom,
   );
 }
 
-/**
- * เปิดช่วงการคิดเงินให้เครื่องทุกเครื่องที่ผูกกับสัญญาฉบับนี้ ครอบคลุมช่วงของสัญญา
- *
- * เรียกตอนผู้ดูแลกดยืนยันช่วงที่สัญญามีผล — เป็นการบันทึกสิ่งที่เพิ่งถูกรับรองว่า
- * "สัญญาฉบับนี้ครอบคลุมช่วงนี้ และเครื่องกลุ่มนี้อยู่ในสัญญาฉบับนี้"
- *
- * ถ้าช่วงที่ครอบวันเริ่มเป็นสัญญาและราคาเดียวกัน ให้ขยายวันสิ้นสุดตามการยืนยัน
- * รอบล่าสุด (ไม่หด); ถ้าเป็นคนละสัญญาหรือคนละราคาให้ข้ามเพื่อไม่ทับประวัติที่ผู้ดูแล
- * ตั้งใจบันทึกไว้เอง
- *
- * @returns {Promise<number>} จำนวนเครื่องที่ถูกสร้างหรือปรับช่วงให้
- */
-async function openPeriodsForContract(conn, contractId, { from, to }) {
-  const [devices] = await conn.query(
-    `SELECT
-       d.id,
-       d.price_override,
-       h.id AS history_id,
-       h.contract_id AS history_contract_id,
-       h.price_override AS history_price_override,
-       h.effective_to AS history_effective_to,
-       -- ช่วงถัดไปนับจากวันเริ่มสัญญา ช่วงที่เริ่มหลังช่วงนี้แต่จบก่อนวันเริ่มสัญญา
-       -- ไม่เกี่ยว ถ้านับด้วยจะตัดช่วงนี้ให้จบก่อนสัญญาเริ่ม
-       (SELECT MIN(h3.effective_from)
-          FROM device_contract_history h3
-         WHERE h3.device_id = d.id
-           AND h3.effective_from > ?) AS next_effective_from
-     FROM devices d
-     LEFT JOIN device_contract_history h ON h.id = (
-         SELECT h2.id FROM device_contract_history h2
-         WHERE h2.device_id = d.id
-           AND h2.effective_from <= ?
-           AND (h2.effective_to IS NULL OR h2.effective_to >= ?)
-         ORDER BY h2.effective_from DESC, h2.id DESC
-         LIMIT 1
-       )
-     WHERE d.contract_id = ?`,
-    [from, from, from, contractId]
-  );
-
-  let changed = 0;
-  for (const device of devices) {
-    if (device.history_id) {
-      const history = {
-        contract_id: device.history_contract_id,
-        price_override: device.history_price_override,
-      };
-
-      // ยืนยันซ้ำหลังเลื่อนวันสิ้นสุดออกไปต้องขยายช่วงเดิมด้วย ไม่ใช่อัปเดตเฉพาะ
-      // contracts แล้วปล่อยประวัติเครื่องค้างที่วันเก่า (#96)
-      // ช่วงที่ยังเปิดอยู่คือ arrangement ปัจจุบัน ไม่ต้องขยาย และห้ามปิด — ราคาถูก
-      // จำกัดด้วยช่วงของสัญญาใน v_monthly_kpi อยู่แล้ว
-      if (
-        sameArrangement(history, { contractId, priceOverride: device.price_override })
-        && device.history_effective_to != null
-      ) {
-        // ห้ามขยายทะลุช่วงถัดไปแล้วทำให้สัญญาเก่า "ฟื้น" หลังช่วงถัดไปสิ้นสุด
-        // ช่วงซ้อนที่เดือนรอยต่อยังเลือกช่วงเริ่มล่าสุดตาม ADR-0019 เหมือนเดิม
-        const effectiveTo = device.next_effective_from && device.next_effective_from < to
-          ? device.next_effective_from
-          : to;
-        // ขยายเท่านั้น ไม่หด — ราคาของสัญญาถูกจำกัดด้วยช่วงของสัญญาอยู่แล้ว แต่ราคา
-        // เฉพาะเครื่องไม่ขึ้นกับช่วงนั้น การหดจึงทำให้เดือนที่คิดเงินถูกแล้วหายราคา
-        if (device.history_effective_to >= effectiveTo) continue;
-        await conn.query(
-          "UPDATE device_contract_history SET effective_to = ? WHERE id = ?",
-          [effectiveTo, device.history_id]
-        );
-        changed += 1;
-      }
-      continue;
-    }
-
-    await conn.query(
-      `INSERT INTO device_contract_history
-         (device_id, contract_id, price_override, effective_from, effective_to, note)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [device.id, contractId, device.price_override ?? null, from, to, "ยืนยันช่วงที่สัญญามีผล"]
-    );
-    changed += 1;
-  }
-
-  return changed;
-}
-
-module.exports = { openBillingPeriod, recordContractHistory, openPeriodsForContract, today };
+module.exports = { openBillingPeriod, recordContractHistory, today };

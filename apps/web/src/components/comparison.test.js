@@ -3,7 +3,6 @@ import {
   MAX_ITEMS,
   buildComparison,
   chartState,
-  chartUnpriced,
   buildYearComparison,
   fiscalPosition,
   fiscalYearsMonths,
@@ -57,13 +56,10 @@ describe("ส่วนต่างสูตรเดียวของหน้�
     expect(difference(summaryOf(0, 0), summaryOf(0, 0), "cost")).toEqual({ diff: 0, ratio: null, reason: "zero-base" });
   });
 
-  test("ไม่มีข้อมูลฝั่งใดฝั่งหนึ่ง หรือราคายังไม่ครบ ไม่สร้างส่วนต่าง", () => {
+  test("ไม่มีข้อมูลฝั่งใดฝั่งหนึ่งไม่สร้างส่วนต่าง", () => {
     const missing = { readings: 0 };
     expect(difference(missing, summaryOf(1, 1), "rawPages").reason).toBe("no-base-data");
     expect(difference(summaryOf(1, 1), missing, "rawPages").reason).toBe("no-data");
-    expect(difference(summaryOf(1, 1, { unpriced: 1 }), summaryOf(2, 2), "cost")).toMatchObject({ diff: null, ratio: null, reason: "unpriced" });
-    // ยอดพิมพ์ยังเทียบได้แม้ราคาไม่ครบ เพราะไม่ขึ้นกับราคา
-    expect(difference(summaryOf(1, 1, { unpriced: 1 }), summaryOf(2, 2), "rawPages").diff).toBe(1);
   });
 });
 
@@ -85,11 +81,6 @@ describe("อันดับมาก–น้อย — มีเฉพาะ�
     expect(rankEntries(many, { metric: "rawPages" }).map((item) => item.label)).toEqual(many.map((item) => item.label));
   });
 
-  test("ไม่สรุปอันดับค่าใช้จ่ายเมื่อมีราคาไม่ครบในขอบเขต แต่ยอดพิมพ์ยังจัดอันดับได้", () => {
-    const withUnpriced = [...groups, entry("u", "รอราคา", { rawPages: 20, unpriced: 1 })];
-    expect(rankEntries(withUnpriced, { metric: "cost" })).toBeNull();
-    expect(rankEntries(withUnpriced, { metric: "rawPages" })[0].key).toBe("c");
-  });
 });
 
 describe("แบบจำลองของพื้นที่เปรียบเทียบบนหน้าภาพรวม", () => {
@@ -97,16 +88,16 @@ describe("แบบจำลองของพื้นที่เปรีย�
     row({ device_id: 1, month: "2025-10", pages_printed: 1000, net_pages: 980, total_cost: "490.00" }),
     row({ device_id: 1, month: "2025-11", pages_printed: 500, net_pages: 490, total_cost: "245.00" }),
     row({ device_id: 2, month: "2025-10", division_id: 2, division_name: "ฝ่าย B", department_id: 20, department_name: "แผนก B1", pages_printed: 0, net_pages: 0, total_cost: "0.00", billing_contract_id: 8, billing_contract_no: "CT-008" }),
-    row({ device_id: 3, month: "2025-11", division_id: 2, division_name: "ฝ่าย B", department_id: 21, department_name: "แผนก B2", pages_printed: 40, net_pages: 39.2, total_cost: null, billing_contract_id: null, billing_contract_no: null }),
+    row({ device_id: 3, month: "2025-11", division_id: 2, division_name: "ฝ่าย B", department_id: 21, department_name: "แผนก B2", pages_printed: 40, net_pages: 39.2, total_cost: "19.60", billing_contract_id: null, billing_contract_no: null }),
   ];
 
-  test("ภาพรวมเป็นรายเดือน ค่าใช้จ่ายเป็นแท่งตั้ง ยอดพิมพ์เป็นเส้น และเดือนที่ราคาไม่ครบมีสถานะที่ป้าย", () => {
+  test("ภาพรวมเป็นรายเดือน ค่าใช้จ่ายเป็นแท่งตั้ง และยอดพิมพ์เป็นเส้น", () => {
     const model = buildComparison({ rows, dimension: "overall", metric: "cost" });
     expect(model.entries.map((item) => item.key)).toEqual(["2025-10", "2025-11"]);
     const chart = comparisonChart(model);
     expect(chart).toMatchObject({ kind: "bar", horizontal: false });
-    expect(chart.series[0].data).toEqual([490, 245]);
-    expect(chart.labels[1]).toMatch(/รอราคา 1/);
+    expect(chart.series[0].data).toEqual([490, 264.6]);
+    expect(chart.labels[1]).toBe("พ.ย. 2568");
     expect(comparisonChart(buildComparison({ rows, dimension: "overall", metric: "rawPages" })).kind).toBe("line");
   });
 
@@ -136,21 +127,20 @@ describe("แบบจำลองของพื้นที่เปรีย�
 
   test("หลายสัญญาใช้สัญญาที่คิดเงินของเดือนนั้น และยอดที่ไม่มีสัญญาอยู่ในกลุ่มไม่ผูกสัญญา", () => {
     const model = buildComparison({ rows, dimension: "contract", metric: "cost" });
-    // ราคายังไม่ครบ จัดอันดับด้วยยอดเงินไม่ได้ — เรียงด้วยยอดพิมพ์แทน ไม่ปล่อยให้ลำดับสุ่ม
-    expect(model.entries.map((item) => [item.key, item.summary.cost, item.summary.unpriced])).toEqual([["7", 735, 0], ["unassigned", null, 1], ["8", 0, 0]]);
+    expect(model.entries.map((item) => [item.key, item.summary.cost])).toEqual([["7", 735], ["unassigned", 19.6], ["8", 0]]);
     expect(model.entries.find((item) => item.key === "unassigned").label).toBe("ไม่ผูกสัญญา");
   });
 
-  test("อันดับสำหรับไฟล์: ทุกกลุ่มของมิติ และค่าใช้จ่ายที่ราคาไม่ครบไม่ถูกจัดอันดับ", () => {
+  test("อันดับสำหรับไฟล์มีทุกกลุ่มของมิติ", () => {
     const pages = buildComparison({ rows, dimension: "department", metric: "rawPages" });
     expect(pages.ranking.entries.map((item) => [item.key, item.rank])).toEqual([["10", 1], ["21", 2], ["20", 3]]);
     expect(pages.ranking).toMatchObject({ from: 3, blocked: null });
     const cost = buildComparison({ rows, dimension: "department", metric: "cost" });
-    expect(cost.ranking).toMatchObject({ blocked: "unpriced", entries: [] });
+    expect(cost.ranking).toMatchObject({ blocked: null, from: 3 });
     expect(buildComparison({ rows, dimension: "overall" }).ranking).toBeNull();
   });
 
-  test("ค่าใช้จ่ายที่ราคายังไม่ครบยังเรียงลำดับได้ด้วยยอดพิมพ์ ไม่ปล่อยให้ลำดับสุ่ม", () => {
+  test("ค่าใช้จ่ายเรียงจากมากไปน้อย", () => {
     const byCost = buildComparison({ rows, dimension: "department", metric: "cost" });
     expect(byCost.entries.map((item) => item.key)).toEqual(["10", "21", "20"]);
   });
@@ -257,10 +247,8 @@ describe("ตัวเลขสำคัญ รายละเอียด แ�
     row({ device_id: 3, month: "2025-10", division_id: 3, division_name: "ฝ่าย C", pages_printed: 9000, net_pages: 8820, total_cost: "4410.00" }),
   ];
 
-  test("ราคาช่วงใดช่วงหนึ่งไม่ครบ ไม่คิดเปอร์เซ็นต์ค่าใช้จ่าย และฐานศูนย์ไม่มีเปอร์เซ็นต์", () => {
+  test("ฐานศูนย์และช่วงไม่มีข้อมูลไม่มีเปอร์เซ็นต์", () => {
     const priced = summarize(rows);
-    const unpricedBefore = summarize([...previous, row({ device_id: 9, month: "2025-10", total_cost: null })]);
-    expect(periodChange(unpricedBefore, priced, "cost")).toEqual({ percent: null, reason: "unpriced" });
     expect(periodChange(summarize([row({ pages_printed: 0, net_pages: 0, total_cost: "0.00" })]), priced, "rawPages")).toEqual({ percent: null, reason: "zero-base" });
     expect(periodChange(summarize([]), priced, "cost")).toEqual({ percent: null, reason: "no-base-data" });
   });
@@ -288,26 +276,17 @@ describe("สถานะของพื้นที่กราฟ", () => {
     pages_printed: pages, net_pages: pages, total_cost: cost,
   });
 
-  test("กลุ่มที่ได้ขึ้นกราฟยังไม่มีราคา แต่กลุ่มที่ตกจากกราฟมี = บอกว่าราคายังไม่ครบ ไม่ใช่ไม่มียอดพิมพ์", () => {
-    // แปดกลุ่มแรกยอดสูงกว่าแต่ยังไม่มีราคา — กราฟวาดได้แค่ MAX_ITEMS (8) กลุ่มแรก
+  test("กราฟค่าใช้จ่ายพร้อมเมื่อทุกรายการมีราคา", () => {
     const rows = [
-      ...Array.from({ length: MAX_ITEMS }, (_, index) => division(index + 1, 1000 - index, null)),
+      ...Array.from({ length: MAX_ITEMS }, (_, index) => division(index + 1, 1000 - index, `${100 - index}.00`)),
       division(MAX_ITEMS + 1, 10, "5.00"),
     ];
     const model = buildComparison({ rows, dimension: "division", metric: "cost" });
 
     expect(model.chartEntries).toHaveLength(MAX_ITEMS);
     expect(model.hidden).toBe(1);
-    expect(model.scope.unpriced).toBe(MAX_ITEMS);
     expect(model.scope.readings).toBe(MAX_ITEMS + 1);
-    expect(chartState(model)).toBe("unpriced-chart");
-    expect(chartUnpriced(model)).toBe(MAX_ITEMS);
-  });
-
-  test("ทั้งขอบเขตยังไม่มีราคา = unpriced ส่วนยอดพิมพ์จริงของชุดเดียวกันวาดได้", () => {
-    const rows = [division(1, 100, null), division(2, 50, null)];
-    expect(chartState(buildComparison({ rows, dimension: "division", metric: "cost" }))).toBe("unpriced");
-    expect(chartState(buildComparison({ rows, dimension: "division", metric: "rawPages" }))).toBe("ready");
+    expect(chartState(model)).toBe("ready");
   });
 
   test("ไม่มีแถวเลย = no-data ส่วนราคาครบ = ready", () => {

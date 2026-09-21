@@ -153,15 +153,30 @@ const optionalId = z
   .optional()
   .transform((value) => value ?? null);
 
-/** จำนวนเงินต่อหน่วย เช่น ราคาต่อหน้า — ห้ามติดลบ และจำกัดเพดานกันพิมพ์ผิด */
+/**
+ * ราคาต่อหน้า — ห้ามติดลบ ทศนิยมไม่เกินสี่ตำแหน่ง และจำกัดเพดานกันพิมพ์ผิด
+ *
+ * ราคาจริงมีสามตำแหน่ง (0.365) และคอลัมน์ราคาเก็บสี่ตำแหน่ง (ADR-0022) ค่าที่ละเอียด
+ * กว่านั้นต้องถูกปฏิเสธ ไม่ใช่ปล่อยให้ฐานข้อมูลปัดทิ้งเงียบๆ แล้วคิดเงินด้วยราคาที่
+ * ผู้ใช้ไม่ได้กรอก
+ */
+const MONEY_PATTERN = /^\d+(\.\d{1,4})?$/;
+const priceNumber = z.coerce
+  .string()
+  .trim()
+  .regex(MONEY_PATTERN, "ราคาต่อหน้าต้องเป็นตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 4 ตำแหน่ง")
+  .transform(Number)
+  .refine((value) => value <= 1000, "ราคาต่อหน้าสูงผิดปกติ");
+
+/** number → string ก่อนตรวจ เพื่อให้ตรวจจำนวนทศนิยมจากค่าที่ผู้ใช้กรอกจริง */
+const priceInput = (value) => (typeof value === "number" ? String(value) : value);
+
+/** ราคาที่ต้องกรอก เช่นราคาในรายการราคาของสัญญา */
+const requiredPrice = z.preprocess(priceInput, priceNumber);
+
+/** ราคาที่เว้นว่างได้ เช่นราคาพิเศษเฉพาะเครื่อง */
 const optionalMoney = z
-  .preprocess(
-    blankToNull,
-    z.union([
-      z.null(),
-      z.coerce.number().nonnegative("ราคาต้องไม่ติดลบ").max(1_000_000, "ราคาสูงผิดปกติ"),
-    ])
-  )
+  .preprocess((value) => priceInput(blankToNull(value)), priceNumber.nullable())
   .optional()
   .transform((value) => value ?? null);
 
@@ -248,6 +263,7 @@ module.exports = {
   optionalText,
   optionalId,
   optionalMoney,
+  requiredPrice,
   monthString,
   monthListQuery,
   booleanQuery,

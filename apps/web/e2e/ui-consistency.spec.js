@@ -11,15 +11,15 @@ for (const theme of ["light", "dark"]) {
         contract_id: 3, contract_no: "CURRENT", billing_contract_id: 1, billing_contract_no: "OLD-A" },
       { device_id: 1, month: "2026-09", pages_printed: 200, net_pages: 196, total_cost: 98,
         contract_id: 3, contract_no: "CURRENT", billing_contract_id: 2, billing_contract_no: "NEW-B" },
-      { device_id: 2, month: "2026-09", pages_printed: 50, net_pages: 49, total_cost: null,
-        contract_id: 3, contract_no: "CURRENT", billing_contract_id: 3, billing_contract_no: "UNPRICED-C" },
+      { device_id: 2, month: "2026-09", pages_printed: 50, net_pages: 49, total_cost: 24.5,
+        contract_id: 3, contract_no: "CURRENT", billing_contract_id: 3, billing_contract_no: "THIRD-C" },
     ] }));
     // ตัวเลือกของตัวกรองสัญญามาจากข้อมูลอ้างอิง ส่วนตัวเลขในตารางมาจากสัญญาที่คิดเงิน
     // ของเดือนนั้น — ตั้งให้เลขสัญญาตรงกันทั้งสองทาง เหมือนของจริง
     await page.route(/\/api\/contracts$/, (route) => route.fulfill({ json: [
       { id: 1, contract_no: "OLD-A", fiscal_year: 2568 },
       { id: 2, contract_no: "NEW-B", fiscal_year: 2569 },
-      { id: 3, contract_no: "UNPRICED-C", fiscal_year: 2569 },
+      { id: 3, contract_no: "THIRD-C", fiscal_year: 2569 },
     ] }));
     await page.goto("/dashboard?by=contract&measure=pages");
     await expect(page.locator("html")).toHaveAttribute("data-mode", theme);
@@ -35,12 +35,12 @@ for (const theme of ["light", "dark"]) {
     await filters.getByRole("button", { name: /^ตัวกรองเพิ่มเติม/ }).click();
     await filters.getByRole("button", { name: /^สัญญา / }).click();
     await page.getByRole("option", { name: "OLD-A" }).first().click();
-    await page.getByRole("option", { name: "UNPRICED-C" }).first().click();
+    await page.getByRole("option", { name: "THIRD-C" }).first().click();
     await page.keyboard.press("Escape");
     await expect(table.getByRole("row", { name: /NEW-B/ })).toHaveCount(0);
     expect(await color()).toBe(original);
     await page.getByRole("radio", { name: "ค่าใช้จ่าย", exact: true }).click();
-    await expect(table.getByRole("row", { name: /UNPRICED-C/ })).toContainText("ยังยืนยันราคาไม่ได้");
+    await expect(table.getByRole("row", { name: /THIRD-C/ })).toContainText("24.50");
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}.png`), fullPage: true });
     await page.setViewportSize({ width: 320, height: 740 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(321);
@@ -63,14 +63,13 @@ test("comparison rejects inherited object properties as metric query values", as
 });
 
 /**
- * หน้าที่เหลือของงานนี้ (รายละเอียดเครื่อง, ยืนยันช่วงสัญญา, อันดับรายเครื่อง) ต้องอ่านได้
+ * หน้าที่เหลือของงานนี้ (รายละเอียดเครื่องและอันดับรายเครื่อง) ต้องอ่านได้
  * ทั้งโหมดมืดและบนจอ 320px — หัวข้อ ป้ายสถานะ และคอลัมน์ที่เพิ่มเข้ามาในงานนี้อยู่บนหน้าเหล่านี้
  * ทั้งหมด และไม่มีเทสอื่นเปิดดูมันในสองสภาพนี้เลย
  */
 const NARROW = { width: 320, height: 740 };
 const KEY_PAGES = [
   { name: "asset-detail", url: "/assets/1", heading: "SUTH-001" },
-  { name: "contract-price-review", url: "/admin/contract-prices", heading: "ยืนยันช่วงที่สัญญามีผล" },
   { name: "device-ranking", url: "/dashboard?by=device", heading: "ภาพรวมการพิมพ์" },
 ];
 
@@ -78,12 +77,6 @@ for (const target of KEY_PAGES) {
   test(`${target.name} reads in dark mode and at 320px`, async ({ page }, testInfo) => {
     await prototypeFixture(page, "admin");
     await page.addInitScript(() => localStorage.setItem("suth-ui-mode", "dark"));
-    await page.route("**/api/contracts/price-review**", (route) => route.fulfill({ json: { contracts: [
-      { id: 1, contract_no: "CT-001/2569", fiscal_year: 2569, price_per_page: 0.4275, device_count: 3,
-        effective_from: "2025-10-01", effective_to: null, price_confirmed: true, unpriced_readings: 0,
-        outside_term_readings: 2, price_verified_at: "2026-09-17" },
-    ] } }));
-
     await page.goto(target.url);
     await expect(page.locator("#main-content h1")).toHaveText(target.heading);
     await page.screenshot({ path: testInfo.outputPath(`${target.name}-dark.png`), fullPage: true });

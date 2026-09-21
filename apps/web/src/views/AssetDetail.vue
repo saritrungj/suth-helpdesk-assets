@@ -1,6 +1,6 @@
 <script setup>
 import { yearLabel } from "../lib/locale-format";
-import { formatMonth } from "../lib/locale-format";
+import { formatDate, formatMonth } from "../lib/locale-format";
 
 import { t } from "../lib/locale";
 
@@ -189,12 +189,8 @@ const effectivePrice = computed(() => {
 
 const totalPages = computed(() => usage.value.reduce((sum, row) => sum + Number(row.pages || 0), 0));
 
-/** ค่าใช้จ่ายโดยประมาณของเครื่องนี้ — "โดยประมาณ" เพราะยังไม่ได้หักส่วนลดตามสัญญา */
-const estimatedCost = computed(() => {
-  const price = effectivePrice.value?.value;
-  if (price == null) return null;
-  return totalPages.value * price;
-});
+// ไม่คำนวณค่าใช้จ่ายของเครื่องที่นี่ — เงินคิดใน v_monthly_kpi ที่เดียว (ADR-0022)
+// เดิมหน้านี้คูณหน้าดิบด้วยราคาปัจจุบันเอง ซึ่งไม่หัก 2% และไม่ใช้ราคาของเดือนนั้น
 
 /*
  * เทียบกับปีงบก่อน (#115) — สองแท่งต่อเดือนของปีงบ (ต.ค.→ก.ย.) เดือนที่ปีใดยังไม่มียอดเป็น
@@ -309,8 +305,6 @@ const usageSeries = computed(() => (comparingYears.value
                 {{ formatCount(totalPages) }}
                 <span class="text-xs text-ink-mute font-normal"> {{ t("หน้า") }} </span>
               </p>
-              <p v-if="estimatedCost != null" class="text-2xs text-ink-mute">
-                ≈ {{ formatBahtValue(estimatedCost) }} {{ t("บาท (ก่อนหักส่วนลด)") }} </p>
             </div>
           </template>
 
@@ -374,7 +368,11 @@ const usageSeries = computed(() => (comparingYears.value
               <dd class="text-ink-soft">
                 <template v-if="device.contract_no">
                   {{ device.contract_no }}
-                  <span v-if="device.fiscal_year" class="text-xs text-ink-mute"> {{ t("· ปีงบ") }} {{ yearLabel(device.fiscal_year) }}
+                  <span v-if="device.contract_effective_from" class="text-xs text-ink-mute">
+                    · {{ formatDate(device.contract_effective_from) }} – {{ formatDate(device.contract_effective_to) }}
+                  </span>
+                  <span v-if="device.meter_category" class="block text-xs text-ink-mute">
+                    {{ t("หมวดมิเตอร์") }} {{ device.meter_category }}{{ Number(device.has_color_meter) ? t(" · มีมิเตอร์สี") : "" }}
                   </span>
                 </template>
                 <span v-else class="text-warn-ink"> {{ t("ยังไม่ผูกสัญญา") }} </span>

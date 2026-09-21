@@ -97,16 +97,14 @@ const NEW_DEVICES = [
  * ค่าเริ่มต้นสร้างข้อมูลที่สมบูรณ์ เพราะนั่นคือสิ่งที่ต้องเห็นเวลาตรวจหน้าจอทั่วไป:
  * ความครบถ้วนเป็นตัวเลขจริง อันดับค่าใช้จ่ายและเปอร์เซ็นต์เพิ่ม-ลดแสดงได้ครบ
  *
- * แต่ข้อมูลที่เขียวหมดทุกช่องก็ทดสอบอีกครึ่งหนึ่งของระบบไม่ได้เลย — การ์ดเตือนสามใบ
- * ในลิ้นชัก หน้าตรวจยืนยันการติดตั้ง และเส้นทาง "ยังยืนยันราคาไม่ได้" จะไม่มีวันถูก
- * วาดออกมา --with-problems จึงสร้างสามสถานะนั้นให้ ตรงกับการ์ดสามใบพอดี
+ * แต่ข้อมูลที่เขียวหมดทุกช่องก็ทดสอบอีกครึ่งหนึ่งของระบบไม่ได้เลย — การ์ดเตือนในลิ้นชัก
+ * และหน้าตรวจยืนยันการติดตั้งจะไม่มีวันถูกวาดออกมา --with-problems จึงสร้างสถานะเหล่านั้นให้
  *
  * ⚠️ เครื่องที่ยังไม่ตรวจยืนยันแม้เครื่องเดียวทำให้ "ความครบถ้วน" ทั้งปีสรุปไม่ได้
  * (ADR-0018) ตัวเลขความครบถ้วนบนแดชบอร์ดจะเป็น "รอยืนยันข้อมูล" ทันที ซึ่งถูกต้อง
  * ตามกฎ แต่ทำให้หน้าจอดูไม่เต็ม — นี่คือเหตุผลที่มันไม่ใช่ค่าเริ่มต้น
  */
 const WITH_PROBLEMS = process.argv.includes("--with-problems");
-const KEEP_UNPRICED = WITH_PROBLEMS ? ["SN44558"] : [];      // สัญญาปีงบเก่า → "ยังยืนยันราคาไม่ได้" (#81)
 const KEEP_UNREVIEWED = WITH_PROBLEMS ? ["PRN-IT-003"] : []; // ยังไม่ตรวจการติดตั้ง → "มีงานค้าง"
 const KEEP_IDLE = WITH_PROBLEMS ? ["PRN-ADM-003"] : [];      // ไม่มียอดทั้งปีงบ → "น่าตรวจสอบ"
 
@@ -160,30 +158,23 @@ async function main() {
   const [admin] = await db.query("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1");
   const adminId = admin[0]?.id ?? null;
 
-  // ---------- 1. สัญญา: ช่วงที่มีผล + การยืนยันราคา (ADR-0019) ----------
-  //
-  // ไม่มีช่วงที่มีผล = หาราคาของเดือนไหนไม่ได้เลย ทุกยอดจึงขึ้นว่า "ยังยืนยันราคาไม่ได้"
-  // ตั้งช่วงให้เท่ากับปีงบของสัญญา ซึ่งเป็นค่าตั้งต้นที่หน้าเว็บเสนอให้ผู้ดูแลกดยืนยันอยู่แล้ว
-  for (const fy of fiscalYears) {
-    await count("สัญญาที่ตั้งช่วงมีผล", `
-      UPDATE contracts SET effective_from = ?, effective_to = ?,
-        price_source = COALESCE(price_source, ?),
-        price_verified_by = COALESCE(price_verified_by, ?),
-        price_verified_at = COALESCE(price_verified_at, NOW())
-      WHERE fiscal_year_id = ? AND effective_from IS NULL
-    `, [firstDay(fy.start_month), lastDay(fy.end_month), `ข้อมูลตัวอย่าง ปีงบ ${fy.year}`, adminId, fy.id]);
-  }
-
-  // ---------- 2. เครื่องใหม่ ----------
+  // ---------- 1. เครื่องใหม่ ----------
   const brands = await lookup(db, "brand");
   const buildings = await lookup(db, "building");
   const floors = await lookup(db, "floor", "building_id");
   const divisions = await lookup(db, "division");
   const departments = await lookup(db, "department", "division_id");
-  const [contractRows] = await db.query("SELECT id, contract_no, fiscal_year_id FROM contracts WHERE fiscal_year_id IS NOT NULL");
+  const [contractRows] = await db.query(`
+    SELECT id, contract_no,
+           DATE_FORMAT(effective_from, '%Y-%m') effective_from_month,
+           DATE_FORMAT(effective_to, '%Y-%m') effective_to_month
+    FROM contracts ORDER BY effective_from, id
+  `);
 
   const activeFy = fiscalYears.find((fy) => fy.year === "2569") ?? fiscalYears.at(-1);
-  const contractsOfActiveFy = contractRows.filter((c) => c.fiscal_year_id === activeFy.id);
+  const contractsOfActiveFy = contractRows.filter((c) =>
+    c.effective_from_month <= activeFy.end_month && c.effective_to_month >= activeFy.start_month);
+  if (!contractsOfActiveFy.length) throw new Error(`ไม่พบสัญญาที่ครอบคลุมปีงบ ${activeFy.year}`);
 
   for (const [index, [serial, brand, model, building, floor, division, department, location]] of NEW_DEVICES.entries()) {
     const buildingId = buildings.get(building);
@@ -198,6 +189,11 @@ async function main() {
       contractsOfActiveFy[index % contractsOfActiveFy.length].id,
     ]);
   }
+
+  await count("มิเตอร์หลักที่เพิ่ม", `
+    INSERT IGNORE INTO device_meter (device_id, category_id)
+    SELECT d.id, mc.id FROM devices d CROSS JOIN meter_category mc WHERE mc.code = 'bw'
+  `);
 
   // ---------- 3. สถานะการติดตั้งของเครื่องเดิม (ADR-0018) ----------
   //
@@ -226,7 +222,7 @@ async function main() {
     `, [device.id, firstDay(historyStart), endsAt, adminId]);
   }
 
-  // ---------- 4.5 เครื่องที่ยังผูกสัญญาของปีงบเก่า ----------
+  // ---------- 4.5 เครื่องที่สัญญาปัจจุบันไม่ครอบคลุมปีงบ active ----------
   //
   // ต้องมาก่อนการสร้างประวัติสัญญา ไม่งั้นประวัติจะถูกสร้างจากสัญญาเก่าที่ยังค้างอยู่
   // แล้วยอดตามประวัติ (แดชบอร์ด) กับยอดตามสัญญาปัจจุบัน (หน้าค่าใช้จ่าย) จะไม่ตรงกัน
@@ -236,12 +232,11 @@ async function main() {
   // ปัจจุบัน แล้วไปกองอยู่ในกล่องเตือน "เครื่องที่พิมพ์ในปีงบนี้ แต่สัญญาอยู่คนละปีงบ"
   // ทำให้ยอดบนแดชบอร์ดกับยอดหน้าค่าใช้จ่ายไม่ตรงกัน — นี่คืองานที่ #81 บอกให้ทำ
   //
-  // ข้อมูลตัวอย่างย้ายให้ ยกเว้นเครื่องใน KEEP_UNPRICED ที่จงใจปล่อยค้างไว้
   const [stale] = await db.query(`
     SELECT d.id, d.serial_number FROM devices d
     JOIN contracts c ON c.id = d.contract_id
-    WHERE c.fiscal_year_id <> ? AND d.serial_number NOT IN (?)
-  `, [activeFy.id, KEEP_UNPRICED.length ? KEEP_UNPRICED : [""]]);
+    WHERE DATE_FORMAT(c.effective_from, '%Y-%m') > ? OR DATE_FORMAT(c.effective_to, '%Y-%m') < ?
+  `, [activeFy.end_month, activeFy.start_month]);
 
   for (const [index, device] of stale.entries()) {
     await count("เครื่องที่ย้ายมาสัญญาปีงบปัจจุบัน", "UPDATE devices SET contract_id = ? WHERE id = ?", [
@@ -259,7 +254,8 @@ async function main() {
   const activeContractIds = new Set(contractsOfActiveFy.map((c) => c.id));
   for (const [index, device] of deviceContracts.entries()) {
     for (const fy of fiscalYears) {
-      const contract = contractRows.find((c) => c.fiscal_year_id === fy.id);
+      const contract = contractRows.find((c) =>
+        c.effective_from_month <= fy.end_month && c.effective_to_month >= fy.start_month);
       if (!contract) continue;
       const [[existing]] = await db.query(
         "SELECT COUNT(*) n FROM device_contract_history WHERE device_id = ? AND effective_from = ?",
@@ -272,12 +268,11 @@ async function main() {
        * เครื่องหลายเครื่องในฐานยังผูก contract_id ของปีงบเก่าอยู่ ถ้าลอกค่านั้นมาเป็น
        * ประวัติของปีงบปัจจุบัน ราคาจะหาไม่เจอทั้งปี เพราะช่วงที่สัญญาเก่ามีผลจบไป
        * ตั้งแต่ปีที่แล้ว (ดูกฎใน v_monthly_kpi) — นั่นคืออาการของ #81 พอดี
-       * ข้อมูลตัวอย่างจึงย้ายให้ ยกเว้นเครื่องใน KEEP_UNPRICED ที่จงใจปล่อยค้างไว้
-       * ให้การ์ด "ยังยืนยันราคาไม่ได้" มีของจริงให้แสดง
+       * ข้อมูลตัวอย่างจึงย้ายให้ตามสัญญาที่ครอบคลุมปีงบนั้น
        */
       let contractId = contract.id;
       if (fy.id === activeFy.id) {
-        contractId = activeContractIds.has(device.contract_id) || KEEP_UNPRICED.includes(device.serial_number)
+        contractId = activeContractIds.has(device.contract_id)
           ? device.contract_id
           : contractsOfActiveFy[index % contractsOfActiveFy.length].id;
       }
@@ -288,7 +283,7 @@ async function main() {
         device.id, contractId,
         // ราคาเฉพาะเครื่องชนะราคาสัญญาเสมอ (ดู v_monthly_kpi) เครื่องที่จงใจให้หาราคา
         // ไม่ได้จึงต้องไม่มีราคาเฉพาะเครื่องติดมาด้วย ไม่งั้นมันจะมีราคาทันที
-        fy.id === activeFy.id && !KEEP_UNPRICED.includes(device.serial_number) ? device.price_override : null,
+        fy.id === activeFy.id ? device.price_override : null,
         firstDay(fy.start_month), lastDay(fy.end_month),
       ]);
     }
@@ -322,8 +317,12 @@ async function main() {
     for (const month of monthsBetween(from, to > closed ? closed : to)) {
       const pages = Math.min(MAX_PAGES_PER_MONTH, Math.max(0, Math.round(base * (0.65 + random() * 0.7))));
       await count("ยอดพิมพ์ที่เพิ่ม", `
-        INSERT IGNORE INTO print_transactions (device_id, month, pages) VALUES (?, ?, ?)
-      `, [device.id, month, pages]);
+        INSERT IGNORE INTO print_transactions (device_id, meter_id, month, pages)
+        SELECT ?, dm.id, ?, ? FROM device_meter dm
+        JOIN meter_category mc ON mc.id = dm.category_id
+        WHERE dm.device_id = ? AND mc.is_color = 0
+        ORDER BY mc.sort_order, dm.id LIMIT 1
+      `, [device.id, month, pages, device.id]);
     }
   }
 
@@ -335,7 +334,7 @@ async function main() {
            (SELECT COUNT(*) FROM print_transactions) readings,
            (SELECT COUNT(*) FROM device_service_period) periods,
            (SELECT COUNT(*) FROM device_contract_history) contract_history,
-           (SELECT COUNT(*) FROM contracts WHERE price_verified_at IS NOT NULL) verified_contracts
+           (SELECT COUNT(*) FROM contracts) contracts
   `);
   console.log("\nรวมในฐานตอนนี้:", JSON.stringify(totals));
   await db.end();

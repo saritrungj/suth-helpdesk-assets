@@ -1,7 +1,7 @@
 import { fiscalYearOfMonth } from "@suth/domain";
 import { t } from "../lib/locale";
 import { FORMATS, createWorkbook, downloadWorkbook, monthCell, reportStamp } from "../lib/export-xlsx";
-import { averagePerDevice, dimensionLabel, metricLabel, metricUnit, monthText, statusLabel, summarize } from "./comparison";
+import { averagePerDevice, dimensionLabel, metricLabel, metricUnit, monthText, summarize } from "./comparison";
 
 /**
  * comparison-export.js — ไฟล์ Excel ของการเปรียบเทียบ ใช้ร่วมกันสองหน้า
@@ -40,11 +40,10 @@ export function summarySheet(rows) {
   return sheetOf(t("สรุป"), [
     { header: t("ยอดพิมพ์จริง (หน้า)"), format: FORMATS.count, value: (item) => item.rawPages },
     { header: t("สุทธิหลังหัก 2% (หน้า)"), format: FORMATS.pages, value: (item) => item.netPages },
-    { header: t("ค่าใช้จ่ายที่ยืนยันแล้ว (บาท)"), format: FORMATS.baht, value: (item) => item.cost },
+    { header: t("ค่าใช้จ่าย (บาท)"), format: FORMATS.baht, value: (item) => item.cost },
     { header: t("เครื่องที่มีข้อมูล (เครื่อง)"), format: FORMATS.count, value: (item) => item.devices },
     { header: t("หน้าต่อเครื่อง"), format: FORMATS.pages, value: (item) => item.pagesPerDevice },
     { header: t("บาทต่อเครื่อง"), format: FORMATS.baht, value: (item) => item.costPerDevice },
-    { header: t("รายการรอยืนยันราคา"), format: FORMATS.count, value: (item) => item.unpriced },
   ], [record]);
 }
 
@@ -57,30 +56,13 @@ export function monthlySheet(rows) {
   ], records);
 }
 
-export function qualitySheet(rows) {
-  const priced = (rows ?? []).filter((row) => row.total_cost != null);
-  const unpriced = (rows ?? []).filter((row) => row.total_cost == null);
-  const records = [
-    { label: t("ยืนยันราคาแล้ว"), summary: summarize(priced) },
-    { label: t("ยังยืนยันราคาไม่ได้"), summary: summarize(unpriced) },
-  ];
-  return sheetOf(t("คุณภาพข้อมูล"), [
-    { header: t("สถานะราคา"), value: (item) => item.label },
-    { header: t("จำนวนรายการ"), format: FORMATS.count, value: (item) => item.summary.readings },
-    { header: t("ยอดพิมพ์จริง (หน้า)"), format: FORMATS.count, value: (item) => item.summary.rawPages },
-    { header: t("จำนวนเครื่อง"), format: FORMATS.count, value: (item) => item.summary.devices },
-  ], records);
-}
-
 /** คอลัมน์ยอดของหนึ่งรายการ — ไม่มีข้อมูลเป็นเซลล์ว่าง ไม่ใช่ศูนย์ */
 function measureColumns(summaryOf, suffix = "") {
   return [
     { header: `${t("ยอดพิมพ์จริง (หน้า)")}${suffix}`, format: FORMATS.count, value: (record) => countOrNull(summaryOf(record), "rawPages") },
     { header: `${t("สุทธิหลังหัก 2% (หน้า)")}${suffix}`, format: FORMATS.pages, value: (record) => countOrNull(summaryOf(record), "netPages") },
-    { header: `${t("ค่าใช้จ่ายที่ยืนยันแล้ว (บาท)")}${suffix}`, format: FORMATS.baht, value: (record) => summaryOf(record)?.cost ?? null },
+    { header: `${t("ค่าใช้จ่าย (บาท)")}${suffix}`, format: FORMATS.baht, value: (record) => summaryOf(record)?.cost ?? null },
     { header: `${t("เครื่องที่มีข้อมูล (เครื่อง)")}${suffix}`, format: FORMATS.count, value: (record) => summaryOf(record)?.devices ?? 0 },
-    { header: `${t("รายการรอยืนยันราคา")}${suffix}`, format: FORMATS.count, value: (record) => summaryOf(record)?.unpriced ?? 0 },
-    { header: `${t("สถานะข้อมูล")}${suffix}`, value: (record) => statusLabel(summaryOf(record)) },
   ];
 }
 
@@ -95,8 +77,7 @@ function labelColumns(dimension) {
 
 /** ชื่อกราฟ/การ์ดของพื้นที่เปรียบเทียบ — ใช้ทั้งบนจอและในไฟล์ */
 export function comparisonTitle(model) {
-  const incomplete = model.metric === "cost" && model.scope.unpriced > 0;
-  const metric = metricLabel(model.metric, { incomplete });
+  const metric = metricLabel(model.metric);
   const dimension = dimensionLabel(model.dimension);
   if (model.view === "overall") return t("{0}รายเดือน", [metric]);
   return model.months.length >= 2
@@ -109,7 +90,7 @@ export function comparisonSheet(model) {
   const name = t("เปรียบเทียบ");
   const title = comparisonTitle(model);
   const valueFormat = model.metric === "cost" ? FORMATS.baht : FORMATS.count;
-  const valueTitle = `${metricLabel(model.metric, { incomplete: model.metric === "cost" && model.scope.unpriced > 0 })} (${metricUnit(model.metric)})`;
+  const valueTitle = `${metricLabel(model.metric)} (${metricUnit(model.metric)})`;
   // ตารางในแผ่นมีครบทุกกลุ่ม แต่กราฟวาดเท่าที่อ่านออก — กลุ่มเรียงมาก→น้อยแล้ว
   // แถวบนสุดจึงเป็นชุดเดียวกับที่กราฟบนจอแสดง
   const charted = (model.chartEntries ?? model.entries).length;
@@ -196,8 +177,6 @@ function rankingCharts(count, { labelColumn, valueColumn, valueFormat, valueTitl
  *
  * อันดับอยู่ในไฟล์เท่านั้น บนหน้าจอไม่มีมุมมองอันดับ ตารางจึงมีครบทุกรายการ (ไม่ต้องเลือก
  * 5 หรือ 10 ตอนส่งออก) และมีกราฟสองใบ: 10 อันดับแรกและ 10 อันดับท้าย ใช้เท่าที่มีเมื่อไม่ครบสิบ
- * รายการ ค่าใช้จ่ายที่ราคายังไม่ครบไม่ถูกจัดอันดับ (Q30) — แผ่นบอกเหตุผลแทนตาราง
- *
  * @param {object} model แบบจำลองจาก buildComparison ที่ไม่ใช่ภาพรวม
  * @returns {object|null} null เมื่อไม่มีอะไรให้จัดอันดับ (ภาพรวมรายเดือน)
  */
@@ -208,9 +187,7 @@ export function rankingSheet(model) {
   const dimension = dimensionLabel(model.dimension);
   const metric = metricLabel(model.metric);
   if (ranking.blocked) {
-    const reason = ranking.blocked === "unpriced"
-      ? t("ยังจัดอันดับ{0}ตามค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ {1} รายการ — อันดับจากยอดเงินบางส่วนจะชี้ผิดรายการ ส่งออกด้วยตัวชี้วัดยอดพิมพ์จริงเพื่อดูอันดับ", [dimension, model.scope.unpriced])
-      : t("ยังไม่มียอดพิมพ์ในช่วงที่เลือก");
+    const reason = t("ยังไม่มียอดพิมพ์ในช่วงที่เลือก");
     return { name, header: [t("หมายเหตุ")], rows: [[reason]], columns: [{ width: 90 }], filter: false };
   }
   const valueFormat = model.metric === "cost" ? FORMATS.baht : FORMATS.count;
@@ -236,8 +213,7 @@ const DETAIL_COLUMNS = () => [
   { header: t("ยอดพิมพ์จริง (หน้า)"), format: FORMATS.count, value: (row) => Number(row.pages_printed || 0) },
   { header: t("สุทธิหลังหัก 2% (หน้า)"), format: FORMATS.pages, value: (row) => Math.round(Number(row.net_pages || 0) * 100) / 100 },
   { header: t("ราคาต่อหน้า (บาท)"), format: FORMATS.price, value: (row) => (row.price_per_page == null ? null : Number(row.price_per_page)) },
-  { header: t("ค่าใช้จ่ายที่ยืนยันแล้ว (บาท)"), format: FORMATS.baht, value: (row) => (row.total_cost == null ? null : Number(row.total_cost)) },
-  { header: t("สถานะราคา"), value: (row) => (row.total_cost == null ? t("ยังยืนยันราคาไม่ได้") : t("ยืนยันราคาแล้ว")) },
+  { header: t("ค่าใช้จ่าย (บาท)"), format: FORMATS.baht, value: (row) => (row.total_cost == null ? null : Number(row.total_cost)) },
 ];
 
 /** แผ่น "ข้อมูลรายละเอียด" — หนึ่งแถวต่อเครื่องต่อเดือน เรียงตามเดือน หน่วยงาน และ Serial */
@@ -259,13 +235,6 @@ export function conditionsSheet(filename, pairs) {
     columns: [{ width: 28 }, { width: 90 }],
     filter: false,
   };
-}
-
-/** บรรทัดสถานะราคาของไฟล์ — ไฟล์เดินทางต่อได้เองโดยไม่มีหน้าจอกำกับ (Q27) */
-export function priceStatusLine(unpriced) {
-  return Number(unpriced) > 0
-    ? t("ยังยืนยันราคาไม่ได้ {0} รายการ — ยอดเงินในไฟล์นี้เป็นเฉพาะส่วนที่ยืนยันราคาแล้ว และยังไม่จัดอันดับหรือคิดส่วนต่างค่าใช้จ่าย", [Number(unpriced)])
-    : t("ยืนยันราคาครบทุกรายการ");
 }
 
 /** นิยามและข้อควรระวังที่ทุกไฟล์เปรียบเทียบมีเหมือนกัน */

@@ -13,10 +13,8 @@ import { MONTH_NAMES, formatMonth, yearLabel } from "../lib/locale-format";
  *
  *   - **ไม่มีข้อมูล ≠ ศูนย์** กลุ่มที่ไม่มีรายการยอดพิมพ์เลยได้ค่า null ส่วนกลุ่มที่บันทึก
  *     0 หน้าไว้จริงได้ 0 และยังอยู่ในอันดับต่ำสุด
- *   - **ยอดเงินรวมเป็นสตางค์** ผ่าน `sumCostSatang` ของ domain ซึ่งนับรายการที่ยังไม่รู้
- *     ราคาแยกไว้เสมอ ไม่บวกเป็นศูนย์เงียบๆ (Q27)
- *   - **ราคาไม่ครบ = ยังไม่สรุป** ยอดเงินที่ยืนยันแล้วแสดงได้พร้อมสถานะ แต่ไม่จัดอันดับ
- *     ค่าใช้จ่ายและไม่คิดส่วนต่างค่าใช้จ่าย (Q30)
+ *   - **ยอดเงินรวมเป็นสตางค์** ผ่าน `sumCostSatang` ของ domain โดยทุกยอดที่บันทึกได้
+ *     ต้องมีราคาแล้วตั้งแต่ขาเข้า (ADR-0021)
  *   - **ฐานเป็นศูนย์ไม่มีเปอร์เซ็นต์** ส่วนต่างจริงยังแสดงได้ แต่ "เพิ่มขึ้นกี่ %" จากศูนย์
  *     ไม่มีความหมาย
  *   - **"ยอดพิมพ์" คือยอดพิมพ์จริง (จำนวนหน้าดิบ)** ส่วนหน้าสุทธิหลังหัก 2% เป็นฐานคิดเงิน
@@ -69,9 +67,8 @@ function emptyLabel(dimension) {
 }
 
 /** ชื่อตัวชี้วัดแบบเต็มที่ใช้ทั้งหัวกราฟ หัวตาราง และไฟล์ */
-export function metricLabel(metric, { incomplete = false } = {}) {
-  if (metric === "rawPages") return t("ยอดพิมพ์จริง");
-  return incomplete ? t("ค่าใช้จ่ายที่ยืนยันแล้ว") : t("ค่าใช้จ่ายสุทธิ");
+export function metricLabel(metric) {
+  return metric === "rawPages" ? t("ยอดพิมพ์จริง") : t("ค่าใช้จ่ายสุทธิ");
 }
 
 export function metricUnit(metric) {
@@ -113,12 +110,10 @@ export function summarize(rows = []) {
 /**
  * ค่าเฉลี่ยต่อเครื่องของ summary เดียวกัน
  *
- * ค่าใช้จ่ายห้ามใช้ยอดที่ยืนยันแล้วเพียงบางส่วนหารด้วยเครื่องทั้งหมด (ADR-0019 Q29)
- * ส่วนยอดพิมพ์ไม่มีสถานะราคา จึงคำนวณได้ตามปกติแม้ราคาไม่ครบ
+ * ทุกยอดที่บันทึกมีราคาเสมอ เพราะทางเขียนปฏิเสธยอดที่หาราคาไม่ได้ (ADR-0021)
  */
 export function averagePerDevice(summary, field) {
   if (!summary?.devices) return null;
-  if (field === "cost" && summary.unpriced > 0) return null;
   const value = summary[field];
   return value === null || value === undefined ? null : value / summary.devices;
 }
@@ -135,19 +130,7 @@ function sortValue(summary, metric) {
 }
 
 export function dataStatus(summary) {
-  if (!summary?.readings) return "no-data";
-  if (!summary.unpriced) return "complete";
-  return summary.unpriced === summary.readings ? "unpriced" : "partial";
-}
-
-/** สถานะข้อมูลเป็นข้อความ — ใช้ทั้งหน้าจอและคอลัมน์สถานะในไฟล์ */
-export function statusLabel(summary) {
-  switch (dataStatus(summary)) {
-    case "no-data": return t("ไม่มีข้อมูล");
-    case "complete": return t("ยืนยันราคาครบ");
-    case "unpriced": return t("ยังยืนยันราคาไม่ได้ {0} รายการ", [summary.unpriced]);
-    default: return t("รอยืนยันราคา {0} รายการ", [summary.unpriced]);
-  }
+  return summary?.readings ? "complete" : "no-data";
 }
 
 /**
@@ -161,7 +144,6 @@ export function statusLabel(summary) {
 export function difference(base, value, metric) {
   if (!base?.readings) return { diff: null, ratio: null, reason: "no-base-data" };
   if (!value?.readings) return { diff: null, ratio: null, reason: "no-data" };
-  if (metric === "cost" && (base.unpriced || value.unpriced)) return { diff: null, ratio: null, reason: "unpriced" };
   const from = sortValue(base, metric);
   const delta = sortValue(value, metric) - from;
   return {
@@ -272,13 +254,11 @@ function entryFor(key, dimension, groupRowsList, options, months) {
  * จัดอันดับมาก–น้อยของทุกรายการ — อันดับอยู่ในไฟล์ Excel เท่านั้น ไม่มีบนหน้าจอ (#115)
  *
  * คืนทุกรายการที่มีข้อมูลเรียงจากมากไปน้อย อันดับต้นและท้ายจึงอยู่ในรายการเดียวกัน
- * กลุ่มที่ไม่มีรายการเลยไม่ถูกจัดอันดับ (ไม่สร้างศูนย์ให้) และเมื่อกลุ่มใดในขอบเขตยัง
- * ยืนยันราคาไม่ครบ อันดับค่าใช้จ่ายคืน null — ให้ไฟล์บอกเหตุผลแทน (Q30)
+ * กลุ่มที่ไม่มีรายการเลยไม่ถูกจัดอันดับ (ไม่สร้างศูนย์ให้)
  * ค่าที่เท่ากันเรียงด้วยชื่อ เพื่อให้ผลเดิมทุกครั้งที่ส่งออก
  */
 export function rankEntries(entries, { metric }) {
   const recorded = (entries ?? []).filter((entry) => entry.summary.readings > 0);
-  if (metric === "cost" && recorded.some((entry) => entry.summary.unpriced > 0)) return null;
   return recorded
     .slice()
     .sort((a, b) => sortValue(b.summary, metric) - sortValue(a.summary, metric)
@@ -327,14 +307,13 @@ export function buildComparison({ rows = [], dimension = "overall", metric = "co
   const all = disambiguate(keys.map((key) => entryFor(key, dimension, groups.get(key), options, months)), dimension);
   const ranked = rankEntries(all, { metric });
   const ranking = {
-    entries: ranked ?? [],
+    entries: ranked,
     from: all.filter((entry) => entry.summary.readings > 0).length,
-    blocked: !rows.length ? "no-data" : ranked === null ? "unpriced" : null,
+    blocked: !rows.length ? "no-data" : null,
   };
 
-  // เรียงมาก→น้อยตามตัวชี้วัดที่ดูอยู่ ถ้าเงินยังจัดอันดับไม่ได้เพราะราคาไม่ครบ ใช้ยอดพิมพ์
-  // จัดลำดับแทน แล้วต่อท้ายด้วยกลุ่มที่ยังไม่มียอดเลย เรียงตามชื่อให้ผลคงที่ทุกครั้ง
-  const order = ranked ?? rankEntries(all, { metric: "rawPages" }) ?? [];
+  // เรียงมาก→น้อยตามตัวชี้วัดที่ดูอยู่ แล้วต่อท้ายด้วยกลุ่มที่ยังไม่มียอดเลย
+  const order = ranked;
   const seen = new Set(order.map((entry) => entry.key));
   const rest = all.filter((entry) => !seen.has(entry.key)).sort((x, y) => String(x.label).localeCompare(String(y.label), "th"));
   const entries = [...order.map(({ rank: _rank, ...entry }) => entry), ...rest];
@@ -350,7 +329,7 @@ export function buildComparison({ rows = [], dimension = "overall", metric = "co
   };
 }
 
-/** เปลี่ยนแปลงจากช่วงก่อนหน้าเป็นเปอร์เซ็นต์ — กฎเดียวกับ difference() (ราคาไม่ครบ ฐานศูนย์ ไม่มีข้อมูล) */
+/** เปลี่ยนแปลงจากช่วงก่อนหน้าเป็นเปอร์เซ็นต์ — กฎเดียวกับ difference() */
 export function periodChange(previous, current, metric) {
   const result = difference(previous, current, metric);
   return { percent: result.ratio === null ? null : result.ratio * 100, reason: result.reason };
@@ -360,7 +339,6 @@ export function periodChange(previous, current, metric) {
 function chartLabel(entry, metric) {
   const status = dataStatus(entry.summary);
   if (status === "no-data") return `${entry.displayLabel} · ${t("ไม่มีข้อมูล")}`;
-  if (metric === "cost" && entry.summary.unpriced) return `${entry.displayLabel} · ${t("รอราคา {0}", [entry.summary.unpriced])}`;
   return entry.displayLabel;
 }
 
@@ -376,8 +354,7 @@ function chartLabel(entry, metric) {
 export function comparisonChart(model) {
   const { metric, months } = model;
   const entries = model.chartEntries ?? model.entries;
-  const incomplete = metric === "cost" && model.scope.unpriced > 0;
-  const seriesLabel = metricLabel(metric, { incomplete });
+  const seriesLabel = metricLabel(metric);
   if (model.view === "overall") {
     return {
       kind: metric === "cost" ? "bar" : "line",
@@ -414,28 +391,13 @@ export function comparisonChart(model) {
  *
  *   "ready"          วาดได้ มีอย่างน้อยหนึ่งจุดที่เป็นตัวเลข
  *   "no-data"        ไม่มียอดพิมพ์ในขอบเขตที่เลือก
- *   "unpriced"       ทั้งขอบเขตยังยืนยันราคาไม่ได้ จึงไม่มียอดเงินให้วาด
- *   "unpriced-chart" มีกลุ่มที่ราคาครบอยู่ แต่ **กลุ่มที่ได้ขึ้นกราฟ** ยังไม่ครบ
- *
- * กรณีสุดท้ายเกิดจริงเมื่อกลุ่มยอดสูงสุดตามจำนวนที่กราฟวาดได้ยังรอราคา ส่วนกลุ่มที่ 9
- * ขึ้นไปราคาครบแล้ว — เดิมหน้าจอบอกว่า "ยังไม่มียอดพิมพ์" ซึ่งไม่จริง ยอดพิมพ์มีครบ
- * ขาดแค่ราคา คนอ่านจึงไปไล่หาข้อมูลที่ไม่ได้หาย
  */
 export function chartState(model) {
   if (model.blocked) return model.blocked;
   const drawable = comparisonChart(model).series.some((item) => item.data.some((value) => value !== null));
   if (drawable) return "ready";
 
-  const entries = model.chartEntries ?? model.entries ?? [];
-  const charted = entries.some((entry) => (entry.summary?.readings ?? 0) > 0);
-  if (model.metric !== "cost" || !charted) return "no-data";
-  return model.scope.readings > 0 && model.scope.unpriced === model.scope.readings ? "unpriced" : "unpriced-chart";
-}
-
-/** จำนวนรายการที่ยังยืนยันราคาไม่ได้ เฉพาะกลุ่มที่ได้ขึ้นกราฟ */
-export function chartUnpriced(model) {
-  return (model.chartEntries ?? model.entries ?? [])
-    .reduce((sum, entry) => sum + (entry.summary?.unpriced ?? 0), 0);
+  return "no-data";
 }
 
 /* --------------------------------------------------------------------------

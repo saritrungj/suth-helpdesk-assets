@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { t } from "../lib/locale";
 import { formatBahtValue, formatCompact, formatCount } from "../lib/format";
 import { UiCard, UiChart, UiEmpty, UiField, UiFilterBar, UiSegmented, UiSkeleton } from "../ui";
-import { chartState, chartUnpriced, comparisonChart, deviceSpread, dimensionLabel, stableSlots } from "./comparison";
+import { chartState, comparisonChart, deviceSpread, dimensionLabel, stableSlots } from "./comparison";
 import { comparisonTitle } from "./comparison-export";
 
 /**
@@ -79,15 +79,9 @@ const formatValue = (value) => (isCost.value ? formatBahtValue(value) : formatCo
 const unit = computed(() => (isCost.value ? t("บาท") : t("หน้า")));
 const spread = computed(() => (displayModel.value.view === "overall"
   ? null : deviceSpread((displayModel.value.chartEntries ?? []).map((entry) => entry.summary))));
-const unpriced = computed(() => (isCost.value ? displayModel.value.scope.unpriced : 0));
 const hidden = computed(() => displayModel.value.hidden ?? 0);
-/*
- * กราฟวาดจาก `chartEntries` เท่านั้น สถานะของพื้นที่กราฟจึงมาจาก chartState() ที่เดียว
- * ไม่ใช่การเดาจากตัวเลขรวมของทั้งขอบเขต — ดูเหตุผลของ "unpriced-chart" ใน comparison.js
- */
 const status = computed(() => chartState(displayModel.value));
 const hasChart = computed(() => status.value === "ready");
-const unpricedShown = computed(() => formatCount(status.value === "unpriced" ? unpriced.value : chartUnpriced(displayModel.value)));
 
 function select({ index }) {
   if (props.loading || isLine.value) return;
@@ -112,11 +106,6 @@ function select({ index }) {
     <UiCard :title="title" :description="displayCaption" :aria-busy="loading">
       <UiSkeleton v-if="loading && !hasChart" height="18rem" />
       <UiEmpty v-else-if="failed" :title="t('โหลดข้อมูลไม่สำเร็จ')" compact />
-      <UiEmpty v-else-if="status === 'unpriced' || status === 'unpriced-chart'" compact
-        :title="t('ยังยืนยันราคาไม่ได้ {0} รายการ', [unpricedShown])"
-        :description="status === 'unpriced'
-          ? t('มีข้อมูลยอดพิมพ์แล้ว แต่ยังวาดค่าใช้จ่ายไม่ได้ · เลือกยอดพิมพ์จริงเพื่อดูข้อมูลชุดนี้')
-          : t('กลุ่มที่ได้ขึ้นกราฟยังไม่มีราคาครบ จึงวาดค่าใช้จ่ายไม่ได้ · เลือกยอดพิมพ์จริง หรือดูยอดเงินของกลุ่มที่ราคาครบแล้วในตารางด้านล่าง')" />
       <UiEmpty v-else-if="!hasChart" compact
         :title="t('ยังไม่มียอดพิมพ์ในขอบเขตที่เลือก')"
         :description="t('เปลี่ยนช่วงเวลาหรือเอาตัวกรองบางตัวออก แล้วลองใหม่')" />
@@ -125,10 +114,9 @@ function select({ index }) {
         :format-value="formatValue" :format-axis="formatCompact" :unit="unit" :category-label="chart.categoryLabel"
         :selectable="!isLine" :loading="loading" @select="select" />
 
-      <ul v-if="!loading && !failed && !displayModel.blocked && (hidden || unpriced || spread)"
+      <ul v-if="!loading && !failed && !displayModel.blocked && (hidden || spread)"
         class="mt-3 flex flex-col gap-1 text-sm text-ink-soft list-none">
         <li v-if="hidden">{{ t("กราฟแสดง {0} {1}แรกที่ยอดสูงสุด เพราะมีสีที่แยกกันออกเท่านี้ · อีก {2} รายการอยู่ครบในตารางด้านล่างและในไฟล์ที่ส่งออก", [formatCount(displayModel.chartEntries.length), noun, formatCount(hidden)]) }}</li>
-        <li v-if="unpriced">{{ t("ยังยืนยันราคาไม่ได้ {0} รายการ · ยอดเงินเป็นเฉพาะส่วนที่ยืนยันแล้ว ชื่อที่มีป้าย “รอราคา” ยังไม่ครบ", [formatCount(unpriced)]) }}</li>
         <li v-if="spread">{{ t("จำนวนเครื่องที่มีข้อมูลต่างกัน ({0}–{1} เครื่อง) ยอดรวมจึงต่างกันได้ตามจำนวนเครื่อง ไม่ได้แปลว่าแต่ละเครื่องใช้งานต่างกัน", [formatCount(spread.min), formatCount(spread.max)]) }}</li>
       </ul>
 

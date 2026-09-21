@@ -28,6 +28,7 @@ const { validate, monthString, blankToNull } = require("../shared/validate");
 const { notFound } = require("../shared/http-error");
 const cache = require("../shared/cache");
 const { readCoverageScope } = require("../shared/coverage-scope");
+const { primaryMeterId, assertReadingsPriced } = require("../devices/meters");
 const {
   MAX_PAGES_PER_MONTH,
   fiscalYearMonths,
@@ -119,27 +120,53 @@ async function fiscalYearRange(id) {
  * อย่างเดียว ส่วนเส้นทาง bulk ธรรมดาแค่ข้ามไปเฉยๆ ผลคือลบค่าที่กรอกผิดออกจากหน้า
  * "กรอกทั้งเดือน" แล้วค่าเก่ายังค้างอยู่ในฐานข้อมูล และตัวนับความคืบหน้าไม่ลดลงตาม
  *
- * @returns {"saved"|"cleared"|"skipped"}
+ * ช่องบนหน้าจอคือมิเตอร์ขาวดำของเครื่อง (devices/meters.js) — มิเตอร์สีเข้าทาง
+ * ไฟล์ของผู้ให้เช่าเท่านั้น การล้างช่องจึงลบเฉพาะยอดของมิเตอร์นั้น
+ *
+ * @returns {Promise<{ outcome: "saved"|"cleared"|"skipped", meterId: number }>}
  */
 async function writeReading(conn, deviceId, month, pages) {
+  const meterId = await primaryMeterId(conn, deviceId);
+
   if (pages === null) {
-    const [result] = await conn.query("DELETE FROM print_transactions WHERE device_id = ? AND month = ?", [
-      deviceId,
+    const [result] = await conn.query("DELETE FROM print_transactions WHERE meter_id = ? AND month = ?", [
+      meterId,
       month,
     ]);
-    return result.affectedRows > 0 ? "cleared" : "skipped";
+    return { outcome: result.affectedRows > 0 ? "cleared" : "skipped", meterId };
   }
 
-  // ON DUPLICATE KEY UPDATE พึ่ง UNIQUE KEY (device_id, month) ใน schema.sql
+  // ON DUPLICATE KEY UPDATE พึ่ง UNIQUE KEY (meter_id, month) ใน schema.sql
   // ถ้าคีย์นั้นหายไป การกดบันทึกซ้ำเดือนเดิมจะเพิ่มแถวใหม่ทุกครั้งและยอดจะถูกนับซ้ำ
+  // เลขมิเตอร์ต้นงวด/สิ้นงวดถูกล้าง เพราะยอดที่กรอกมือไม่ได้มาจากสองค่านั้นแล้ว
   await conn.query(
-    `INSERT INTO print_transactions (device_id, month, pages)
-     VALUES (?, ?, ?)
-     ON DUPLICATE KEY UPDATE pages = VALUES(pages)`,
-    [deviceId, month, pages]
+    `INSERT INTO print_transactions (device_id, meter_id, month, pages)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE pages = VALUES(pages), meter_start = NULL, meter_end = NULL`,
+    [deviceId, meterId, month, pages]
   );
 
-  return "saved";
+  return { outcome: "saved", meterId };
+}
+
+/**
+ * บันทึกหลายช่องใน transaction เดียว แล้วตรวจว่าทุกยอดที่บันทึกหาราคาได้
+ * ถ้าหาไม่ได้แม้รายการเดียว ทั้งชุดถูกย้อน (ADR-0021)
+ *
+ * @param {Array<{ deviceId: number, month: string, pages: number|null }>} items
+ */
+async function writeReadings(conn, items) {
+  const counts = { saved: 0, cleared: 0, skipped: 0 };
+  const saved = [];
+
+  for (const item of items) {
+    const { outcome, meterId } = await writeReading(conn, item.deviceId, item.month, item.pages);
+    counts[outcome] += 1;
+    if (outcome === "saved") saved.push({ meterId, month: item.month });
+  }
+
+  await assertReadingsPriced(conn, saved);
+  return counts;
 }
 
 // ============================================================
@@ -298,14 +325,20 @@ router.get(
          totals.latest_month,
          latest.pages AS latest_pages
        FROM (
-         SELECT device_id, COUNT(*) AS filled, SUM(pages) AS total_pages, MAX(month) AS latest_month
+         SELECT device_id, COUNT(DISTINCT month) AS filled, SUM(pages) AS total_pages, MAX(month) AS latest_month
          FROM print_transactions
          WHERE month BETWEEN ? AND ?
          GROUP BY device_id
        ) totals
-       JOIN print_transactions latest
+       -- ยอดล่าสุดรวมทุกมิเตอร์ของเครื่อง ให้ตรงกับ total_pages ข้างบน
+       JOIN (
+         SELECT device_id, month, SUM(pages) AS pages
+         FROM print_transactions
+         WHERE month BETWEEN ? AND ?
+         GROUP BY device_id, month
+       ) latest
          ON latest.device_id = totals.device_id AND latest.month = totals.latest_month`,
-      [range.start_month, range.end_month]
+      [range.start_month, range.end_month, range.start_month, range.end_month]
     );
 
     cache.operationalData(res);
@@ -326,8 +359,14 @@ router.get(
   asyncHandler(async (req, res) => {
     const range = await fiscalYearRange(req.query.fiscal_year_id);
 
+    // หน้าต่างกรอกทั้งปีแก้ได้เฉพาะมิเตอร์หลัก จึงคืนเฉพาะยอดของมิเตอร์นั้น
     const [rows] = await db.query(
-      "SELECT month, pages FROM print_transactions WHERE device_id = ? AND month BETWEEN ? AND ? ORDER BY month",
+      `SELECT pt.month, pt.pages
+       FROM print_transactions pt
+       JOIN device_meter dm ON dm.id = pt.meter_id
+       JOIN meter_category mc ON mc.id = dm.category_id
+       WHERE pt.device_id = ? AND mc.is_color = 0 AND pt.month BETWEEN ? AND ?
+       ORDER BY pt.month`,
       [req.params.deviceId, range.start_month, range.end_month]
     );
 
@@ -352,7 +391,10 @@ router.post(
   asyncHandler(async (req, res) => {
     const { device_id, month, pages } = req.body;
 
-    const outcome = await db.withTransaction((conn) => writeReading(conn, device_id, month, pages));
+    const { saved, cleared } = await db.withTransaction((conn) =>
+      writeReadings(conn, [{ deviceId: device_id, month, pages }])
+    );
+    const outcome = saved ? "saved" : cleared ? "cleared" : "skipped";
 
     res.json({
       message: outcome === "cleared" ? "ลบยอดพิมพ์ของเดือนนี้แล้ว" : "บันทึกยอดพิมพ์สำเร็จ",
@@ -385,15 +427,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const { month, items } = req.body;
 
-    const result = await db.withTransaction(async (conn) => {
-      const counts = { saved: 0, cleared: 0, skipped: 0 };
-
-      for (const item of items) {
-        counts[await writeReading(conn, item.device_id, month, item.pages)] += 1;
-      }
-
-      return counts;
-    });
+    const result = await db.withTransaction((conn) =>
+      writeReadings(
+        conn,
+        items.map((item) => ({ deviceId: item.device_id, month, pages: item.pages }))
+      )
+    );
 
     res.json({ message: describe(result), ...result });
   })
@@ -421,15 +460,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const { device_id, items } = req.body;
 
-    const result = await db.withTransaction(async (conn) => {
-      const counts = { saved: 0, cleared: 0, skipped: 0 };
-
-      for (const item of items) {
-        counts[await writeReading(conn, device_id, item.month, item.pages)] += 1;
-      }
-
-      return counts;
-    });
+    const result = await db.withTransaction((conn) =>
+      writeReadings(
+        conn,
+        items.map((item) => ({ deviceId: device_id, month: item.month, pages: item.pages }))
+      )
+    );
 
     res.json({ message: describe(result), ...result });
   })

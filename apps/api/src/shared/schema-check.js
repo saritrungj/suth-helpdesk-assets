@@ -46,7 +46,8 @@ const db = require("./db");
  *                index?: [string, string], viewMentions?: [string, string] }>}
  */
 const REQUIREMENTS = [
-  { migration: "migration_unique_print_transactions.sql", index: ["print_transactions", "uq_device_month"] },
+  // uq_device_month ของ migration_unique_print_transactions.sql ถูกแทนด้วย uq_meter_month
+  // ใน migration_billing_lines_and_meters.sql จึงตรวจคีย์ใหม่แทน (ท้ายรายการ)
   { migration: "migration_add_fiscal_year_range.sql", column: ["fiscal_year", "start_month"] },
   { migration: "migration_add_fiscal_year_range.sql", column: ["fiscal_year", "end_month"] },
   { migration: "migration_add_device_location.sql", column: ["devices", "location"] },
@@ -58,7 +59,6 @@ const REQUIREMENTS = [
 
   { migration: "migration_add_effective_pricing.sql", column: ["contracts", "effective_from"] },
   { migration: "migration_add_effective_pricing.sql", column: ["contracts", "effective_to"] },
-  { migration: "migration_add_effective_pricing.sql", column: ["contracts", "price_verified_at"] },
   { migration: "migration_add_effective_pricing.sql", table: "device_contract_history" },
 
   // view ที่ยังไม่ถูกเขียนทับเป็นกรณีที่อันตรายกว่าตารางที่หายไป เพราะมันไม่พัง —
@@ -66,6 +66,18 @@ const REQUIREMENTS = [
   // ก็แสดงเงินผิดอย่างเงียบสนิท เกิดได้จริงเมื่อ migration ล้มกลางไฟล์ (ตาราง
   // สร้างเสร็จแล้วแต่ CREATE OR REPLACE VIEW ยังไม่ทำงาน)
   { migration: "migration_add_effective_pricing.sql", viewMentions: ["v_monthly_kpi", "device_contract_history"] },
+
+  // ADR-0021/0022/0023 — รายการราคา มิเตอร์ อายุสัญญา ค่าเช่า/VAT
+  { migration: "migration_billing_lines_and_meters.sql", table: "meter_category" },
+  { migration: "migration_billing_lines_and_meters.sql", table: "contract_price_line" },
+  { migration: "migration_billing_lines_and_meters.sql", table: "device_meter" },
+  { migration: "migration_billing_lines_and_meters.sql", column: ["print_transactions", "meter_id"] },
+  { migration: "migration_billing_lines_and_meters.sql", column: ["print_transactions", "meter_start"] },
+  { migration: "migration_billing_lines_and_meters.sql", column: ["contracts", "monthly_rental"] },
+  { migration: "migration_billing_lines_and_meters.sql", index: ["print_transactions", "uq_meter_month"] },
+  // view ที่ยังคิดราคาเดียวต่อสัญญาและปัดทีละแถว ให้ตัวเลขผิดโดยไม่พัง จึงต้องตรวจเนื้อ view
+  { migration: "migration_billing_lines_and_meters.sql", viewMentions: ["v_monthly_kpi", "contract_price_line"] },
+  { migration: "migration_billing_lines_and_meters.sql", viewMentions: ["v_contract_invoice", "monthly_rental"] },
 ];
 
 /**

@@ -63,7 +63,7 @@ const STATES = [
     },
   },
   // พื้นที่เปรียบเทียบของหน้าภาพรวมและหน้าเปรียบเทียบฝ่าย/แผนก (#103) — ใช้ fixture ที่มีทั้ง
-  // ยอดศูนย์ ข้อมูลขาด และราคาไม่ครบ ป้ายสถานะและคำเตือนทุกแบบจึงอยู่บนจอตอนตรวจ
+  // ยอดศูนย์และข้อมูลขาด เพื่อให้สถานะข้อมูลสำคัญอยู่บนจอตอนตรวจ
   {
     name: "ภาพรวม: เลือกฝ่ายมาเทียบ",
     async setup(page) {
@@ -74,11 +74,11 @@ const STATES = [
     },
   },
   {
-    name: "ภาพรวม: ค่าใช้จ่ายที่ราคายังไม่ครบ",
+    name: "ภาพรวม: ค่าใช้จ่ายสุทธิ",
     async setup(page) {
       await comparisonFixture(page);
       await page.goto("/dashboard?by=department");
-      await expect(page.getByRole("region", { name: "พื้นที่เปรียบเทียบ" })).toContainText("ยังยืนยันราคาไม่ได้");
+      await expect(page.getByRole("region", { name: "พื้นที่เปรียบเทียบ" })).toContainText("ค่าใช้จ่ายสุทธิรายเดือน");
     },
   },
 ];

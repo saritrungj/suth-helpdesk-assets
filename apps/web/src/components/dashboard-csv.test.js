@@ -15,11 +15,11 @@ describe("CSV รายละเอียดของหน้าภาพรว
     expect(csv).not.toContain("CT-CURRENT");
   });
 
-  test("ราคาที่ยังยืนยันไม่ได้เป็นเซลล์ว่างคู่กับสถานะ ไม่ใช่ศูนย์บาท", () => {
+  test("ไฟล์ไม่มีคอลัมน์สถานะราคา และคงเซลล์ว่างเมื่อข้อมูลผิดปกติ", () => {
     const row = cells(dashboardCsv([reading({ total_cost: null })]), 1);
-    expect(row.at(-2)).toBe("");
-    expect(row.at(-1)).toBe("ยังยืนยันราคาไม่ได้");
-    expect(cells(dashboardCsv([reading()]), 1).at(-1)).toBe("ยืนยันราคาแล้ว");
+    expect(row.at(-1)).toBe("");
+    expect(cells(dashboardCsv([reading()]), 0).at(-1)).toBe("ค่าใช้จ่าย (บาท)");
+    expect(cells(dashboardCsv([reading()]), 1).at(-1)).toBe("49.00");
   });
 
   test("มีปีงบประมาณกำกับทุกแถว — ไฟล์ที่เทียบหลายปีงบต้องแยกออกว่าแถวไหนเป็นปีไหน", () => {
