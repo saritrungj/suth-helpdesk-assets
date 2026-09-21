@@ -1,8 +1,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowUpRight, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
-import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useOverview } from '../api/queries';
+import { PanelRightOpen, RefreshCw } from 'lucide-vue-next';
+import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi } from '../api/queries';
 import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState, setActiveFiscalYear } from '../store/fiscalYear';
 import { t } from '../lib/locale';
 import { yearLabel } from '../lib/locale-format';
@@ -15,13 +15,13 @@ import ExportMenu from './ExportMenu.vue';
 import PrintComparison from './PrintComparison.vue';
 import ComparisonTable from './ComparisonTable.vue';
 import {
-  MAX_YEARS, averagePerDevice, buildComparison, buildYearComparison, dimensionLabel, fiscalPosition,
-  itemOptions, metricLabel, metricUnit, monthText, periodChange, periodLabel, summarize,
+  MAX_YEARS, buildComparison, buildYearComparison, dimensionLabel, fiscalPosition,
+  itemOptions, metricLabel, metricUnit, monthText, periodLabel, summarize,
   yearComparisonOptions, yearRows,
 } from './comparison';
 import {
   comparisonSheet, comparisonTitle, conditionsSheet, detailSheet, exportFilename, monthlySheet,
-  monthsSlug, priceStatusLine, qualitySheet, rankingSheet, saveWorkbook, standardNotes, summarySheet,
+  monthsSlug, rankingSheet, saveWorkbook, standardNotes, summarySheet,
 } from './comparison-export';
 import {
   SCOPE_KEYS, VIEW_QUERY_KEYS, filterRows, requestedMonths, selectedKeysFor, viewFromQuery, viewToQuery,
@@ -221,21 +221,13 @@ const yearsText = computed(() => selectedYears.value.map((year) => t('ปีง�
    ข้อมูล
    -------------------------------------------------------------------------- */
 const report = useMonthlyKpi(computed(() => ({ month: monthParam.value })));
-/*
- * ภาพรวมถูกใช้ที่นี่เพื่อเอา "เดือนของช่วงก่อนหน้า" อย่างเดียว ซึ่งมีความหมายกับปีงบหลัก
- * เท่านั้น จึงขอด้วยเดือนของปีงบหลัก ไม่ใช่เดือนของทุกปีที่เลือก — ไม่งั้นเลือกสามปีแล้ว
- * ยิงคำขอที่ไม่มีใครใช้ผลลัพธ์ และ cache ก้อนนี้จะไม่ถูกใช้ร่วมกับลิ้นชักแจ้งเตือนอีก
- */
-const overviewMonths = computed(() => requestedMonths(view.value, [activeYear.value].filter(Boolean)).join(',') || undefined);
-const overview = useOverview(computed(() => ({ month: overviewMonths.value, fiscal_year_id: activeFiscalYear.value?.id })));
 const divisions = useDivisions();
 const departments = useDepartments();
 const contracts = useContracts();
 const buildings = useBuildings();
 
-const loading = computed(() => report.isPending.value || report.isPlaceholderData.value
-  || overview.isPending.value || overview.isPlaceholderData.value);
-const failed = computed(() => report.isError.value || overview.isError.value);
+const loading = computed(() => report.isPending.value || report.isPlaceholderData.value);
+const failed = computed(() => report.isError.value);
 const ready = computed(() => !loading.value && !failed.value);
 
 // ห้ามแสดงข้อมูลของช่วงเดิมใต้ชื่อช่วงที่เพิ่งเลือก — ระหว่างโหลดจึงเป็นแถวว่างเสมอ
@@ -282,7 +274,7 @@ const model = computed(() => (yearMode.value
   })));
 
 const noun = computed(() => dimensionLabel(view.value.by));
-const metricText = computed(() => `${metricLabel(model.value.metric, { incomplete: model.value.metric === 'cost' && model.value.scope.unpriced > 0 })} (${metricUnit(model.value.metric)})`);
+const metricText = computed(() => `${metricLabel(model.value.metric)} (${metricUnit(model.value.metric)})`);
 
 /**
  * ตัวกรองที่ใช้อยู่ เขียนเป็นภาษาคน — ใช้ทั้งคำอธิบายบนหน้าและแผ่น "เงื่อนไขรายงาน"
@@ -310,45 +302,10 @@ const scopeText = computed(() => [yearsText.value, periodText.value, scopeCaptio
    -------------------------------------------------------------------------- */
 const money = (value) => (value == null ? '—' : formatBahtValue(value));
 const totals = computed(() => summarize(rows.value));
-const costTitle = computed(() => (totals.value.unpriced ? t('ค่าใช้จ่ายที่ยืนยันแล้ว') : t('ค่าใช้จ่ายสุทธิ')));
-
-/*
- * ช่วงก่อนหน้า: เดือนมาจาก API (ยาวเท่ากันและอยู่ในปีงบเดียวกัน) แต่ยอดคิดที่นี่จาก
- * แถวรายเครื่องรายเดือนด้วยตัวกรองชุดเดียวกับช่วงที่ดู
- *
- * เลือกหลายปีงบแล้วคำว่า "ช่วงก่อนหน้า" ไม่มีคำตอบเดียว — บอกตรงๆ ว่ายังไม่เทียบ
- * ดีกว่าเทียบกับช่วงที่ผู้ใช้เดาไม่ออกว่าคือช่วงไหน
- */
-const singleYear = computed(() => selectedYears.value.length === 1);
-const previousMonths = computed(() => (singleYear.value ? overview.data.value?.comparison?.previous_months ?? [] : []));
-const previousReport = useMonthlyKpi(
-  computed(() => ({ month: previousMonths.value.join(',') || undefined })),
-  { enabled: computed(() => previousMonths.value.length > 0) },
-);
-const previousTotals = computed(() => {
-  if (!previousMonths.value.length || loading.value) return null;
-  if (previousReport.isPending.value || previousReport.isPlaceholderData.value || previousReport.isError.value) return null;
-  const months = new Set(previousMonths.value);
-  return summarize(filterRows((previousReport.data.value ?? []).filter((row) => months.has(row.month)), view.value));
-});
-const change = computed(() => (previousTotals.value ? periodChange(previousTotals.value, totals.value, 'cost') : null));
-const costHint = computed(() => {
-  if (totals.value.unpriced) return t('ยังยืนยันราคาไม่ได้ {0} รายการ', [formatCount(totals.value.unpriced)]);
-  if (!singleYear.value) return t('เลือกปีงบเดียวจึงจะเทียบกับช่วงก่อนหน้าได้');
-  if (!previousMonths.value.length) return t('ยังไม่มีข้อมูลช่วงเปรียบเทียบ');
-  const previous = periodLabel(previousMonths.value);
-  switch (change.value?.reason) {
-    case 'unpriced': return t('{0} ยังยืนยันราคาไม่ครบ จึงยังไม่เทียบ', [previous]);
-    case 'no-base-data': return t('{0} ไม่มียอดของขอบเขตนี้ จึงยังไม่เทียบ', [previous]);
-    default: return t('เทียบกับ {0}', [previous]);
-  }
-});
-
 // ระหว่างเปลี่ยนช่วง คงตัวเลขพร้อมคำอธิบายเดิมไว้ด้วยกัน ไม่ติดหัวข้อใหม่บนยอดเก่า
 const stats = computed(() => ({
-  totals: totals.value, costTitle: costTitle.value, costHint: costHint.value,
+  totals: totals.value,
   caption: t('ตัวเลขของ {0} · {1} · {2}', [scopeCaption.value, yearsText.value, periodText.value]),
-  delta: change.value?.percent ?? null,
 }));
 const settledStats = ref(null);
 watch([stats, ready], ([value, isReady]) => { if (isReady) settledStats.value = value; }, { immediate: true });
@@ -381,7 +338,7 @@ function openDetails(group = 'department', entry = null) {
   detailGroup.value = entry ? 'device' : (yearMode.value ? 'fiscalYear' : group);
   detailOpen.value = true;
 }
-function reload() { report.refetch(); overview.refetch(); }
+function reload() { report.refetch(); }
 
 /* --------------------------------------------------------------------------
    ส่งออก — Excel เป็นรายงาน CSV เป็นข้อมูลดิบ ทั้งคู่ใช้ตัวกรองชุดเดียวกับจอ
@@ -405,7 +362,7 @@ function filenameFor(kind) {
 function conditions(m, includedRows) {
   const ranking = m.ranking && !m.ranking.blocked
     ? t('ทุก{0} {1} รายการ เรียงตาม{2}จากมากไปน้อย (แผ่น “อันดับ”)', [noun.value, formatCount(m.ranking.from), metricLabel(m.metric)])
-    : m.ranking?.blocked === 'unpriced' ? t('ยังจัดอันดับค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ') : '';
+    : '';
   return [
     [t('ปีงบประมาณ'), yearsText.value],
     [t('ช่วงเวลา'), periodText.value],
@@ -419,7 +376,6 @@ function conditions(m, includedRows) {
     ...(ranking ? [[t('อันดับ'), ranking]] : []),
     [t('จำนวนรายการยอดพิมพ์'), formatCount(includedRows.length)],
     [t('จำนวนเครื่องที่มีข้อมูล'), formatCount(summarize(includedRows).devices)],
-    [t('สถานะราคา'), priceStatusLine(summarize(includedRows).unpriced)],
     ...standardNotes(),
   ];
 }
@@ -440,7 +396,6 @@ async function runExcel() {
       comparisonSheet(m),
       ...(ranking ? [ranking] : []),
       detailSheet(includedRows),
-      qualitySheet(includedRows),
       conditionsSheet(filename, conditions(m, includedRows)),
     ]);
   } catch (error) { exportError.value = errorMessage(error, t('ส่งออกไม่สำเร็จ')); }
@@ -459,7 +414,7 @@ function runCsv() {
   <div class="w-full min-w-0 max-w-[calc(100vw-2rem)] overflow-x-clip">
     <UiPageHeader :title="t('ภาพรวมการพิมพ์')" :description="t('เลือกขอบเขตครั้งเดียว แล้วดูตัวเลข เปรียบเทียบ เจาะรายละเอียด และส่งออกจากข้อมูลชุดเดียวกัน')">
       <template #actions>
-        <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value || overview.isFetching.value" @click="reload">
+        <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value" @click="reload">
           <RefreshCw :size="16" />
         </UiButton>
         <UiButton variant="secondary" :disabled="!ready || !rows.length" @click="openDetails()">
@@ -476,30 +431,17 @@ function runCsv() {
       @update:model-value="(next) => (view = next)" @update:years="chooseYears" />
 
     <UiAlert v-if="failed" tone="danger" class="mb-4">
-      {{ errorMessage(report.error.value || overview.error.value, t('โหลดภาพรวมไม่สำเร็จ')) }}
+      {{ errorMessage(report.error.value, t('โหลดภาพรวมไม่สำเร็จ')) }}
       <template #actions><UiButton variant="secondary" @click="reload">{{ t('ลองใหม่') }}</UiButton></template>
     </UiAlert>
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
     <p class="text-xs text-ink-mute mb-1.5">{{ shownStats.caption }}</p>
-    <section class="card grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
-      <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring rounded-l-lg" :disabled="!ready || !rows.length" :aria-label="t('ดูที่มาของค่าใช้จ่าย')" @click="openDetails('department')">
-        <UiStat plain :label="shownStats.costTitle" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats" :delta="statsReady ? shownStats.delta : null" delta-inverse
-          :hint="shownStats.costHint">
-          <template #icon><ArrowUpRight :size="16" class="text-brand-ink" /></template>
-        </UiStat>
-      </button>
-      <button class="text-left min-w-0 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand-ring" :disabled="!ready || !rows.length" :aria-label="t('วิเคราะห์รายเครื่อง')" @click="openDetails('device')">
-        <UiStat plain tone="ink" :label="t('ยอดพิมพ์จริง')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
-          :hint="statsReady ? t('สุทธิหลังหัก 2% {0} หน้า', [formatNetPages(shownStats.totals.netPages)]) : ''">
-          <template #icon><ArrowUpRight :size="16" class="text-brand-ink" /></template>
-        </UiStat>
-      </button>
-      <UiStat plain tone="ink" :label="t('เครื่องที่มียอดในช่วงนี้')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"
-        :hint="statsReady ? `${t('{0} รายการยอดพิมพ์', [formatCount(shownStats.totals.readings)])}${shownStats.totals.unpriced ? ` · ${t('รอราคา {0}', [formatCount(shownStats.totals.unpriced)])}` : ''}` : ''" />
-      <UiStat plain tone="ink" :label="t('ยอดพิมพ์เฉลี่ยต่อเครื่อง')" :value="statsReady && averagePerDevice(shownStats.totals, 'rawPages') != null ? formatCount(averagePerDevice(shownStats.totals, 'rawPages')) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
-      <UiStat plain tone="ink" :label="t('ค่าใช้จ่ายเฉลี่ยต่อเครื่อง')" :value="statsReady ? money(averagePerDevice(shownStats.totals, 'cost')) : '—'" :unit="t('บาท')" :loading="loading && !settledStats"
-        :hint="shownStats.totals.unpriced ? t('ยังคำนวณค่าเฉลี่ยครบไม่ได้ · รอราคา {0} รายการ', [formatCount(shownStats.totals.unpriced)]) : ''" />
+    <section class="card grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
+      <UiStat plain tone="ink" :label="t('ยอดพิมพ์จริง')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
+      <UiStat plain tone="ink" :label="t('ส่วนลด 2%')" :value="statsReady ? formatNetPages(shownStats.totals.rawPages - shownStats.totals.netPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
+      <UiStat plain tone="ink" :label="t('ยอดพิมพ์สุทธิ')" :value="statsReady ? formatNetPages(shownStats.totals.netPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
+      <UiStat plain :label="t('ค่าใช้จ่าย')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats" />
     </section>
 
     <PrintComparison v-model:state="view" :model="model" :loading="loading" :failed="failed" :scope-text="scopeText"
@@ -507,12 +449,6 @@ function runCsv() {
 
     <ComparisonTable class="mb-4" :model="tableView.model" :loading="loading" :description="tableView.description"
       @details="(entry) => openDetails('device', entry)" />
-
-    <!-- หมายเหตุขอบเขตของตัวเลขบนหน้านี้ ไม่ใช่ที่เก็บงานค้าง — งานค้างอยู่ในลิ้นชัก
-         แจ้งเตือนที่เดียว ส่วนข้อจำกัดของตัวเลขแต่ละตัวติดอยู่กับตัวเลขนั้นเอง -->
-    <footer class="text-xs text-ink-mute leading-relaxed">
-      <p>{{ t('ข้อมูลเฉพาะเดือนที่บันทึกแล้ว') }} · {{ t('เดือนที่บันทึกเป็นศูนย์ยังแสดงในรายงาน') }} · {{ t('ยอดพิมพ์จริงคือจำนวนหน้าที่บันทึก ส่วนค่าใช้จ่ายคิดจากหน้าสุทธิหลังหัก 2%') }}</p>
-    </footer>
 
     <ExecutiveDetails v-model:open="detailOpen" :rows="detailRows" :scope="detailScope" :context="`${yearsText} · ${periodText}`" :initial-group="detailGroup" />
   </div>

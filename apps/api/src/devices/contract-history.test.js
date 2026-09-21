@@ -7,7 +7,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { openPeriodsForContract, recordContractHistory } = require("./contract-history");
+const { recordContractHistory } = require("./contract-history");
 
 const squash = (sql) => String(sql).replace(/\s+/g, " ").trim();
 
@@ -25,7 +25,6 @@ function fakeConnection(selectRows) {
   };
 }
 
-const TERM = { from: "2025-10-01", to: "2026-09-30" };
 
 function deviceWithHistory(history) {
   return {
@@ -39,87 +38,6 @@ function deviceWithHistory(history) {
     ...history,
   };
 }
-
-test("confirming an extended contract term updates the matching device history", async () => {
-  const conn = fakeConnection([deviceWithHistory()]);
-
-  const changed = await openPeriodsForContract(conn, 3, TERM);
-
-  assert.equal(changed, 1);
-  assert.deepEqual(conn.writes(), [
-    { sql: "UPDATE device_contract_history SET effective_to = ? WHERE id = ?", params: ["2026-09-30", 12] },
-  ]);
-});
-
-test("the next period is looked up from the contract start, not from the old period's start", async () => {
-  const conn = fakeConnection([]);
-
-  await openPeriodsForContract(conn, 3, TERM);
-
-  assert.match(conn.calls[0].sql, /h3\.effective_from > \?\) AS next_effective_from/);
-  assert.deepEqual(conn.calls[0].params, ["2025-10-01", "2025-10-01", "2025-10-01", 3]);
-});
-
-test("confirming a contract does not overwrite another contract's history", async () => {
-  const conn = fakeConnection([deviceWithHistory({ history_contract_id: 99 })]);
-
-  assert.equal(await openPeriodsForContract(conn, 3, TERM), 0);
-  assert.deepEqual(conn.writes(), []);
-});
-
-test("confirming a contract does not overwrite a device-specific price", async () => {
-  const conn = fakeConnection([deviceWithHistory({ price_override: "0.30", history_price_override: "0.25" })]);
-
-  assert.equal(await openPeriodsForContract(conn, 3, TERM), 0);
-  assert.deepEqual(conn.writes(), []);
-});
-
-test("extending a contract stops at the next history period", async () => {
-  const conn = fakeConnection([
-    deviceWithHistory({ history_effective_to: "2025-12-31", next_effective_from: "2026-01-01" }),
-  ]);
-
-  assert.equal(await openPeriodsForContract(conn, 3, TERM), 1);
-  assert.deepEqual(conn.writes()[0].params, ["2026-01-01", 12]);
-});
-
-test("confirming a shorter or equal term never cuts a device period", async () => {
-  // ราคาของสัญญาถูกจำกัดด้วยช่วงของสัญญาใน view อยู่แล้ว การหดช่วงของเครื่องจึงไม่ช่วย
-  // อะไร แต่ทำให้เครื่องที่มีราคาเฉพาะเครื่องเสียราคาของเดือนหลังวันสิ้นสุดไป — เกิดจริง
-  // เมื่อกดยืนยัน CT-001/2569 ซ้ำด้วยวันเดิม ยอด ก.พ.–ส.ค. ของสองเครื่องหายราคา (#96)
-  const conn = fakeConnection([
-    deviceWithHistory({ price_override: "0.40", history_price_override: "0.40", history_effective_to: "2026-09-30" }),
-  ]);
-
-  assert.equal(await openPeriodsForContract(conn, 3, { from: "2025-10-01", to: "2026-01-15" }), 0);
-  assert.deepEqual(conn.writes(), []);
-});
-
-test("confirming the same term twice changes nothing", async () => {
-  const conn = fakeConnection([deviceWithHistory({ history_effective_to: "2026-09-30" })]);
-
-  assert.equal(await openPeriodsForContract(conn, 3, TERM), 0);
-  assert.deepEqual(conn.writes(), []);
-});
-
-test("confirming a contract leaves a device's open billing period open", async () => {
-  // ช่วงที่เปิดอยู่คือ arrangement ปัจจุบันของเครื่อง ราคาถูกจำกัดด้วยช่วงของสัญญาใน
-  // view อยู่แล้ว ถ้าปิดมันที่วันสิ้นสุดสัญญา การบันทึกเครื่องครั้งถัดไปจะหาช่วงเปิด
-  // ไม่เจอแล้วสร้างแถวประวัติซ้ำ
-  const conn = fakeConnection([deviceWithHistory({ history_effective_to: null })]);
-
-  assert.equal(await openPeriodsForContract(conn, 3, TERM), 0);
-  assert.deepEqual(conn.writes(), []);
-});
-
-test("confirming a contract creates history when the device has none", async () => {
-  const conn = fakeConnection([
-    deviceWithHistory({ price_override: "0.25", history_id: null, history_contract_id: null, history_effective_to: null }),
-  ]);
-
-  assert.equal(await openPeriodsForContract(conn, 3, TERM), 1);
-  assert.deepEqual(conn.writes()[0].params, [7, 3, "0.25", "2025-10-01", "2026-09-30", "ยืนยันช่วงที่สัญญามีผล"]);
-});
 
 const openPeriod = (period) => [{ id: 12, contract_id: 3, price_override: null, effective_from: "2026-09-16", ...period }];
 
@@ -157,6 +75,14 @@ test("saving the same arrangement with a later or equal date changes nothing", a
   const conn = fakeConnection(openPeriod());
 
   await recordContractHistory(conn, 7, { contractId: 3, priceOverride: null }, "2026-09-16");
+
+  assert.deepEqual(conn.writes(), []);
+});
+
+test("equivalent decimal price overrides do not create duplicate periods", async () => {
+  const conn = fakeConnection(openPeriod({ price_override: "0.4000" }));
+
+  await recordContractHistory(conn, 7, { contractId: 3, priceOverride: 0.4 }, "2026-09-16");
 
   assert.deepEqual(conn.writes(), []);
 });

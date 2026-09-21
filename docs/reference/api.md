@@ -18,7 +18,7 @@ prefix และความรับผิดชอบ — รายละเ�
 |---|---|---|
 | `/api/auth` | Login และออก JWT | `src/auth/` |
 | `/api/devices` | ทะเบียนอุปกรณ์ การย้าย ประวัติ และการตรวจยืนยันการติดตั้ง | `src/devices/` |
-| `/api/contracts` | สัญญาและราคาต่อหน้า | `src/contracts/` |
+| `/api/contracts` | อายุสัญญา รายการราคาต่อหมวด ค่าเช่าคงที่ VAT และ preview ผลกระทบก่อนแก้ | `src/contracts/` |
 | `/api/print-transactions` | ยอดพิมพ์และสรุปตามปีงบ | `src/print-usage/` |
 | `/api/dashboard` | KPI รายงาน และการเปรียบเทียบ | `src/dashboard/` |
 | `/api/expense` | ค่าใช้จ่ายตามปีงบ และอุปกรณ์ที่ไม่มีสัญญา | `src/expense/` |
@@ -71,7 +71,7 @@ Master Data ใช้ prefix แยกกันแต่อยู่ในโฟ
 
 รายงานที่คืนยอดรายเดือน (`monthly-kpi`, `compare`, `summary-by-building`, `expense`, `highlights` และ `overview`) ใช้อาคาร ชั้น ตำแหน่ง ฝ่าย และแผนกจาก `device_location_history` ที่มีผลในเดือนนั้น หากช่วงประวัติซ้อนกันจะเลือกช่วงตาม [ADR-0014](../decisions/0014-resolve-overlapping-location-history.md) เพื่อไม่ให้ยอดหนึ่งรายการถูกบวกซ้ำ `monthly-kpi` ส่ง `location_history_id` ของช่วงที่ถูกเลือกมาด้วย (`null` = ไม่มีช่วงครอบคลุม จึงใช้ที่ตั้งปัจจุบันของเครื่อง) ให้หน้ารายงานวางยอดไว้ในแถวเดียวกับที่ API จัด
 
-`monthly-kpi` คืน `building_id` / `building_name`, `floor_id` / `floor_name`, `division_id` / `division_name` และ `department_id` / `department_name` จากประวัติหน่วยงานที่มีผลในเดือนนั้น พร้อม `billing_contract_id` / `billing_contract_no` จากช่วงการคิดเงินที่มีผลในเดือนนั้นสำหรับการเปรียบเทียบย้อนหลัง ตาม [ADR-0019](../decisions/0019-effective-pricing-history.md) หากไม่มีช่วงหรือช่วงนั้นไม่ผูกสัญญาจะเป็น `null` ส่วน `brand_id` เป็นยี่ห้อปัจจุบันของเครื่อง และ `contract_id` / `contract_no` และ query `contract_id` เดิมยังหมายถึงสัญญาปัจจุบันของเครื่อง
+`monthly-kpi` คืนข้อมูลหน่วยงานจากประวัติที่มีผลในเดือนนั้น พร้อม `meter_id`, `meter_category`, `is_color`, เลขมิเตอร์ต้น/สิ้นงวด และ `billing_contract_id` / `billing_contract_no` จากช่วงการคิดเงินที่มีผล ตาม [ADR-0019](../decisions/0019-effective-pricing-history.md) และ [ADR-0023](../decisions/0023-contract-term-price-lines-and-meters.md) ทางเขียนปฏิเสธยอดที่ไม่มีสัญญาในอายุหรือไม่มีรายการราคาของหมวดนั้น
 
 ### ตัวส่วนของความครบถ้วนคิดจากช่วงความรับผิดชอบรายเดือน
 

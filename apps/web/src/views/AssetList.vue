@@ -3,6 +3,7 @@ import { useReferenceQuery } from "../composables/use-reference-query";
 import { usePageState } from "../composables/use-page-state";
 import { useReferenceFilters } from "../composables/use-reference-filters";
 import { yearLabel } from "../lib/locale-format";
+import { fiscalYearOfMonth } from "@suth/domain";
 import { t } from "../lib/locale";
 import { errorMessage } from "../lib/api-error";
 
@@ -193,7 +194,7 @@ const filteredAssets = computed(() =>
       (!filters.value.floor || String(a.floor_id) === filters.value.floor) &&
       (!filters.value.division || String(a.division_id) === filters.value.division) &&
       (!filters.value.department || String(a.department_id) === filters.value.department) &&
-      (!filters.value.fiscalYear || String(a.fiscal_year) === filters.value.fiscalYear) &&
+      (!filters.value.fiscalYear || contractCoversFiscalYear(a, filters.value.fiscalYear)) &&
       (!filters.value.status || a.status === filters.value.status) &&
       (!filters.value.contract ||
         (filters.value.contract === "__unassigned__" ? !a.contract_id : String(a.contract_id) === filters.value.contract))
@@ -257,6 +258,27 @@ onMounted(() => {
     else if (moveId) openMove(moveId);
   }
 });
+
+/**
+ * สัญญาของเครื่องครอบปีงบที่เลือกหรือไม่ — สัญญามีอายุของตัวเองและคร่อมได้หลายปีงบ
+ * (ADR-0023) จึงเทียบช่วงอายุสัญญากับช่วงเดือนของปีงบ ไม่ใช่เทียบเลขปีงบที่ผูกไว้
+ */
+function contractCoversFiscalYear(asset, year) {
+  const fy = fiscalYears.value.find((f) => String(f.year) === String(year));
+  if (!fy || !asset.contract_effective_from) return false;
+  return (
+    asset.contract_effective_from.slice(0, 7) <= fy.end_month &&
+    asset.contract_effective_to.slice(0, 7) >= fy.start_month
+  );
+}
+
+/** ปีงบที่อายุสัญญาคร่อม เช่น "2569–2572" */
+function contractFiscalYears(asset) {
+  const from = fiscalYearOfMonth(String(asset.contract_effective_from ?? "").slice(0, 7));
+  const to = fiscalYearOfMonth(String(asset.contract_effective_to ?? "").slice(0, 7));
+  if (!from || !to) return "";
+  return from === to ? yearLabel(from) : `${yearLabel(from)}–${yearLabel(to)}`;
+}
 
 /** ราคาที่ใช้จริง — ราคาพิเศษเฉพาะเครื่องมีศักดิ์สูงกว่าราคาตามสัญญา */
 function effectivePrice(asset) {
@@ -573,7 +595,7 @@ onMounted(async () => {
 
       <template #cell-contract_no="{ row }">
         <span>{{ row.contract_no || "—" }}</span>
-        <span v-if="row.fiscal_year" class="block text-xs text-ink-soft numeral"> {{ t("ปีงบ") }} {{ yearLabel(row.fiscal_year) }}
+        <span v-if="row.contract_effective_from" class="block text-xs text-ink-soft numeral"> {{ t("ปีงบ") }} {{ contractFiscalYears(row) }}
         </span>
       </template>
 

@@ -32,6 +32,7 @@ const cache = require("../shared/cache");
 const { DEVICE_STATUSES, INSTALLATION_STATUSES, MAX_LENGTH } = require("@suth/domain");
 const servicePeriod = require("./service-period");
 const { recordContractHistory } = require("./contract-history");
+const { setDeviceMeters, assertDeviceReadingsPriced, unpricedDeviceReadingKeys } = require("./meters");
 
 // ============================================================
 // Schema ของข้อมูลขาเข้า
@@ -48,6 +49,9 @@ const deviceBody = z.object({
   department_id: optionalId,
   contract_id: optionalId,
   price_override: optionalMoney,
+  // หมวดของมิเตอร์หลัก และเครื่องมีมิเตอร์สีหรือไม่ (ADR-0023) — ไม่ส่ง = ไม่แตะ
+  meter_category_id: optionalId,
+  has_color_meter: booleanQuery.optional(),
   status: z.enum(DEVICE_STATUSES).default("active"),
 
   // ⚠️ ไม่มี .default() โดยตั้งใจ — ADR-0018 ข้อ Q18 บังคับว่าผู้กรอกต้องเลือก
@@ -174,8 +178,20 @@ const DEVICE_SELECT = `
     divi.name AS division_name,
     dept.name AS department_name,
     c.contract_no,
-    c.price_per_page,
-    fy.year AS fiscal_year
+    DATE_FORMAT(c.effective_from, '%Y-%m-%d') AS contract_effective_from,
+    DATE_FORMAT(c.effective_to, '%Y-%m-%d') AS contract_effective_to,
+    pm.category_id AS meter_category_id,
+    pmc.name AS meter_category,
+    -- ราคาของมิเตอร์หลักตามสัญญาปัจจุบัน ใช้แสดงในทะเบียนเท่านั้น ยอดเงินจริงคิดจาก
+    -- สัญญาที่คิดเงินในแต่ละเดือนใน v_monthly_kpi
+    COALESCE(d.price_override, (
+      SELECT l.price_per_page FROM contract_price_line l
+      WHERE l.contract_id = d.contract_id AND l.category_id = pm.category_id
+    )) AS price_per_page,
+    EXISTS (
+      SELECT 1 FROM device_meter cm JOIN meter_category cmc ON cmc.id = cm.category_id
+      WHERE cm.device_id = d.id AND cmc.is_color = 1
+    ) AS has_color_meter
   FROM devices d
   LEFT JOIN brand br ON d.brand_id = br.id
   LEFT JOIN building b ON d.building_id = b.id
@@ -183,7 +199,12 @@ const DEVICE_SELECT = `
   LEFT JOIN division divi ON d.division_id = divi.id
   LEFT JOIN department dept ON d.department_id = dept.id
   LEFT JOIN contracts c ON d.contract_id = c.id
-  LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
+  LEFT JOIN device_meter pm ON pm.id = (
+    SELECT m.id FROM device_meter m JOIN meter_category mc ON mc.id = m.category_id
+    WHERE m.device_id = d.id AND mc.is_color = 0
+    ORDER BY mc.sort_order, m.id LIMIT 1
+  )
+  LEFT JOIN meter_category pmc ON pmc.id = pm.category_id
 `;
 
 /**
@@ -451,15 +472,19 @@ exports.create = async (req, res) => {
       userId: req.user?.id ?? null,
     });
 
-    // เปิดช่วงการคิดเงินช่วงแรก ไม่งั้นยอดของเครื่องนี้จะไม่มีราคาจนกว่าจะมีคน
-    // แก้สัญญาครั้งแรก — ยอดพิมพ์จริงจะขึ้นว่า "ยังยืนยันราคาไม่ได้" ทั้งที่เพิ่ง
-    // กรอกสัญญาไปเมื่อครู่ (ADR-0019)
+    // เปิดช่วงการคิดเงินช่วงแรก ไม่งั้นยอดของเครื่องนี้จะหาราคาไม่ได้และถูกปฏิเสธ
+    // ทั้งที่เพิ่งกรอกสัญญาไปเมื่อครู่ (ADR-0019, ADR-0021)
     await recordContractHistory(
       conn,
       result.insertId,
       { contractId: data.contract_id ?? null, priceOverride: data.price_override ?? null },
       data.billing_from || data.installed_on || servicePeriod.today()
     );
+
+    await setDeviceMeters(conn, result.insertId, {
+      primaryCategoryId: data.meter_category_id,
+      hasColorMeter: data.has_color_meter ?? false,
+    });
 
     return result.insertId;
   });
@@ -471,10 +496,20 @@ exports.create = async (req, res) => {
 // PUT /api/devices/:id — แก้ไขทรัพย์สินทั่วไป (ไม่แตะที่ตั้ง/สังกัด)
 // ============================================================
 exports.update = async (req, res) => {
-  const { serial_number, brand_id, model, contract_id, price_override, status, billing_from } =
-    req.body;
+  const {
+    serial_number,
+    brand_id,
+    model,
+    contract_id,
+    price_override,
+    status,
+    billing_from,
+    meter_category_id,
+    has_color_meter,
+  } = req.body;
 
   await db.withTransaction(async (conn) => {
+    const alreadyUnpriced = await unpricedDeviceReadingKeys(conn, Number(req.params.id));
     const [result] = await conn.query(
       `UPDATE devices
        SET serial_number = ?, brand_id = ?, model = ?, contract_id = ?, price_override = ?, status = ?
@@ -508,6 +543,12 @@ exports.update = async (req, res) => {
       { contractId: contract_id ?? null, priceOverride: price_override ?? null },
       billing_from || servicePeriod.today()
     );
+
+    await setDeviceMeters(conn, Number(req.params.id), {
+      primaryCategoryId: meter_category_id,
+      hasColorMeter: has_color_meter,
+    });
+    await assertDeviceReadingsPriced(conn, Number(req.params.id), alreadyUnpriced);
   });
 
   res.json({ message: "บันทึกการแก้ไขเรียบร้อยแล้ว" });

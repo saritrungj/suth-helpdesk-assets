@@ -98,7 +98,7 @@ for (const density of ["compact", "default", "relaxed"]) {
     await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
     const save = page.getByRole("button", { name: "บันทึก 1 รายการ", exact: true });
     await expect(save).toBeVisible();
-    await expect.poll(() => save.evaluate((el) => document.fullscreenElement.contains(el))).toBe(true);
+    await expect.poll(() => save.evaluate((el) => document.fullscreenElement?.contains(el) ?? false)).toBe(true);
     await expect(page.getByText(/ช่วงเวลา: .*2569/)).toBeVisible();
     await expect(page.locator(":fullscreen")).not.toContainText("month: 2026-");
     await expect(input).toHaveValue("250");
@@ -217,11 +217,11 @@ test("expense failures do not claim zero totals or empty data", async ({ page })
   state.failExpense = true;
   await page.goto("/expense");
   await expect(page.getByText("โหลดข้อมูลค่าใช้จ่ายไม่สำเร็จ", { exact: true })).toBeVisible();
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).not.toBeVisible();
   await expect(page.getByText("ยังไม่มีสัญญาในปีงบนี้", { exact: true })).not.toBeVisible();
   state.failExpense = false;
   await page.getByRole("button", { name: "ลองใหม่", exact: true }).click();
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).toBeVisible();
   await expect(page.getByText("360.00", { exact: true }).first()).toBeVisible();
 });
 
@@ -249,7 +249,7 @@ test("expense side data that fails to load is reported instead of silently disap
   state.failUnassigned = true;
   state.failMonths = true;
   await page.goto("/expense");
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).toBeVisible();
   const unassigned = page.getByRole("status").filter({ hasText: "โหลดรายการเครื่องที่ยังไม่ผูกสัญญาไม่สำเร็จ" });
   const months = page.getByRole("status").filter({ hasText: "โหลดรายการเดือนที่มีข้อมูลไม่สำเร็จ" });
   await expect(unassigned).toBeVisible();
@@ -282,22 +282,19 @@ test("expense Excel export carries the search context and the on-screen amounts"
   const [header, ...rows] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
   expect(header).toContain("ค่าใช้จ่ายสุทธิ (หัก 2%)");
   expect(rows).toHaveLength(1);
-  expect([rows[0][0], rows[0][1], rows[0][4], rows[0][7], rows[0][8]]).toEqual(["SUTH-2569", 0.45, "SUTH-001", 1000, 360]);
+  expect(rows[0]).toEqual(["SUTH-2569", "0.45", "ราคาตามสัญญา", "SUTH-001", "SUTH Printer", "Office 400", 1000, 360]);
 });
 
 test("expense price, discount and unit copy is translated while the amounts stay the same", async ({ page }) => {
   await prototypeFixture(page);
   await page.addInitScript(() => localStorage.setItem("suth-language", "en"));
   await page.goto("/expense");
-  // ป้ายยอดรวมใช้คำตามพจนานุกรมโดเมน (CONTEXT.md) แล้ว — "ค่าใช้จ่ายสุทธิ"
-  // และจะเปลี่ยนเป็น "ค่าใช้จ่ายที่ยืนยันแล้ว" เมื่อมีรายการที่ยังยืนยันราคาไม่ได้
-  await expect(page.getByText("Net cost", { exact: true })).toBeVisible();
-  // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือแค่ส่วนลด (รอบที่ 3 ของ #51)
-  // ยอดรวมของหน้านี้เป็นยอดของสัญญาที่ขึ้นทะเบียนกับปีงบนี้เท่านั้น ป้ายจึงต้องบอก
-  // ขอบเขตของตัวเองด้วย ไม่งั้นไปชนกับป้ายชื่อเดียวกันบนแดชบอร์ดที่คิดคนละขอบเขต
+  await expect(page.getByText("Net print charge", { exact: true })).toBeVisible();
+  // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือคำอธิบายส่วนลด
   await expect(page.getByText(/After 2% deduction/)).toBeVisible();
-  await expect(page.getByText(/Contracts registered to this fiscal year only/)).toBeVisible();
-  await expect(page.getByText(/0\.45\s+THB\/page/)).toBeVisible();
+  // ราคาต่อหน้าอยู่ในแถวเครื่อง ไม่ได้อยู่ที่หัวสัญญา จึงต้องกางสัญญาก่อน
+  await page.getByRole("button", { name: "Expand all", exact: true }).click();
+  await expect(page.getByText(/Effective price\s+0\.45\s+THB\/page/)).toBeVisible();
   await expect(page.getByText("360.00", { exact: true }).first()).toBeVisible();
 });
 
@@ -309,7 +306,7 @@ test("expense price, discount and unit copy is translated while the amounts stay
 test("ค่าใช้จ่ายที่พิมพ์ออกกระดาษยังมีปีงบกำกับยอดรวม", async ({ page }) => {
   await prototypeFixture(page);
   await page.goto("/expense");
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).toBeVisible();
   const year = page.getByText("ปีงบ 2569", { exact: true });
   await expect(year).toBeHidden();
   await page.emulateMedia({ media: "print" });

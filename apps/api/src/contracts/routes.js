@@ -1,15 +1,15 @@
 // apps/api/src/contracts/routes.js
 //
-// สัญญาเช่าเครื่องพิมพ์ และราคาต่อหน้าที่ผูกกับสัญญา
+// สัญญาเช่าเครื่อง อายุสัญญา และรายการราคา (ADR-0021, ADR-0023)
 //
-// ราคาต่อหน้าในไฟล์นี้คือตัวเลขที่ทำให้ทั้งระบบมีความหมาย — ทุกยอดเงินในทุกหน้า
-// คำนวณจาก `จำนวนหน้าสุทธิ × ราคาต่อหน้า` โดยราคาที่ใช้จริงคือ
-// `COALESCE(device.price_override, contract.price_per_page, 0)` (ดู schema.sql
-// และ packages/domain/money.cjs) การกรอกราคาผิดหนึ่งตัวจึงทำให้รายงานทั้งปีเพี้ยน
+// ราคาในไฟล์นี้คือตัวเลขที่ทำให้ทั้งระบบมีความหมาย — ทุกยอดเงินคำนวณจาก
+// `หน้าสุทธิ × ราคาของรายการราคา` ใน v_monthly_kpi และราคามีผลทันทีที่บันทึก
+// ตลอดอายุสัญญา ไม่มีขั้นยืนยันแยก การกรอกราคาผิดหนึ่งตัวจึงทำให้รายงานทั้งปีเพี้ยน
+// ทางกันคือ "ดูผลกระทบก่อนบันทึก": PUT ที่มี preview: true จะคำนวณยอดก่อน/หลังจาก
+// view จริงใน transaction แล้วย้อนกลับ ผู้ใช้จึงเห็นตัวเลขเดียวกับที่รายงานจะแสดง
 //
-// สิ่งที่เพิ่ม: คำตอบของ GET บอกด้วยว่าสัญญานี้มีเครื่องผูกอยู่กี่เครื่อง เพื่อให้
-// หน้าจัดการสัญญาเตือนได้ก่อนกดลบ ว่าการลบจะกระทบเครื่องกี่เครื่อง — เดิมผู้ใช้
-// กดลบแล้วเจอข้อความ error ของ MySQL ดิบๆ โดยไม่รู้ล่วงหน้าว่าจะลบไม่ได้
+// การแก้ที่ทำให้ยอดที่มีอยู่หาราคาไม่ได้ (ตัดอายุสัญญาจนยอดหลุดช่วง หรือลบรายการ
+// ราคาที่มิเตอร์ใช้อยู่) ถูกปฏิเสธ เพราะหน้าภาพรวมต้องไม่มีสถานะ "รอราคา"
 
 const express = require("express");
 const { z } = require("zod");
@@ -23,159 +23,181 @@ const {
   validate,
   idParam,
   requiredText,
-  optionalId,
-  optionalMoney,
-  optionalText,
+  requiredPrice,
   dateString,
+  booleanQuery,
 } = require("../shared/validate");
 const { notFound, badRequest } = require("../shared/http-error");
 const cache = require("../shared/cache");
-const { openPeriodsForContract } = require("../devices/contract-history");
-const { effectiveContractJoin, effectiveContractId } = require("../shared/effective-contract-sql");
-const { fiscalYearDateRange } = require("@suth/domain");
 
 router.use(requireAuth);
 
-const contractBody = z.object({
-  contract_no: requiredText("เลขที่สัญญา", 100),
-  fiscal_year_id: optionalId,
-  price_per_page: optionalMoney,
+/** ค่าเช่าคงที่ต่อเดือน — จำนวนเงินจริง ทศนิยมไม่เกินสองตำแหน่ง */
+const optionalBaht = z
+  .preprocess((value) => (value === "" || value === undefined ? null : value), z.union([
+    z.null(),
+    z.coerce.string().trim()
+      .regex(/^\d+(\.\d{1,2})?$/, "ค่าเช่าต้องเป็นจำนวนเงินไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง")
+      // คอลัมน์เป็น DECIMAL(12,2) — เกินนี้ฐานข้อมูลปฏิเสธเป็น 500 แทนที่จะบอกผู้ใช้
+      .refine((value) => Number(value) < 1e10, "ค่าเช่าสูงเกินกว่าที่ระบบเก็บได้"),
+  ]))
+  .transform((value) => (value === null ? null : Number(value)));
+
+/** อัตรา VAT เป็นเปอร์เซ็นต์ เช่น 7 */
+const optionalVatRate = z
+  .preprocess((value) => (value === "" || value === undefined ? null : value), z.union([
+    z.null(),
+    z.coerce.number().min(0, "อัตรา VAT ต้องไม่ติดลบ").max(100, "อัตรา VAT ต้องไม่เกิน 100"),
+  ]));
+
+const MAX_TERM_YEARS = 10;
+
+const priceLine = z.object({
+  category_id: z.coerce.number({ error: "กรุณาเลือกหมวด" }).int().positive("กรุณาเลือกหมวด"),
+  price_per_page: requiredPrice,
 });
 
-/**
- * ยืนยันช่วงที่สัญญาและราคามีผลจริง (ADR-0019 Q26)
- *
- * ไม่มีค่าตั้งต้นฝั่งเซิร์ฟเวอร์ — ฝั่งเว็บเป็นคนเสนอช่วงของปีงบให้ผู้ใช้เห็นก่อน
- * แล้วผู้ใช้กดยืนยันหรือแก้ ระบบจึงไม่เคยบันทึกช่วงที่ไม่มีใครอ่าน
- */
-const termBody = z.object({
-  effective_from: dateString,
-  effective_to: dateString,
-  price_source: optionalText(255),
-});
+const contractBody = z
+  .object({
+    contract_no: requiredText("เลขที่สัญญา", 100),
+    effective_from: dateString,
+    effective_to: dateString,
+    price_lines: z.array(priceLine).min(1, "สัญญาต้องมีรายการราคาอย่างน้อยหนึ่งรายการ").max(20),
+    monthly_rental: optionalBaht,
+    vat_rate: optionalVatRate,
+    preview: booleanQuery.optional(),
+  })
+  .refine((body) => body.effective_to >= body.effective_from, {
+    message: "วันสิ้นสุดสัญญาต้องไม่มาก่อนวันเริ่ม",
+    path: ["effective_to"],
+  })
+  // v_contract_invoice กางค่าเช่าทีละเดือนตลอดอายุสัญญา ปี พ.ศ. ที่พิมพ์ปนมา (2571 แทน 2028)
+  // จะทำให้สัญญายาวหลายพันเดือนจนหน้าค่าใช้จ่ายของทุกคนล่ม — จึงรับเฉพาะปี ค.ศ. และไม่เกิน 10 ปี
+  .refine((body) => [body.effective_from, body.effective_to].every((date) => date >= "2000-01-01" && date <= "2100-12-31"), {
+    message: "วันที่ของสัญญาต้องเป็นปี ค.ศ. 2000–2100",
+    path: ["effective_to"],
+  })
+  .refine((body) => body.effective_to < `${Number(body.effective_from.slice(0, 4)) + MAX_TERM_YEARS}${body.effective_from.slice(4)}`, {
+    message: `อายุสัญญาต้องไม่เกิน ${MAX_TERM_YEARS} ปี`,
+    path: ["effective_to"],
+  })
+  .refine(
+    (body) => new Set(body.price_lines.map((line) => line.category_id)).size === body.price_lines.length,
+    { message: "หมวดเดียวกันมีได้ราคาเดียวต่อสัญญา", path: ["price_lines"] }
+  );
 
 /**
- * คอลัมน์ที่ทุก endpoint ของสัญญาส่งออกเหมือนกัน
+ * สัญญาพร้อมรายการราคา
  *
- * device_count นับด้วย subquery ไม่ใช่ LEFT JOIN + GROUP BY เพราะ join กับตาราง
- * devices แล้วรวมกลุ่มจะทำให้ต้องใส่ทุกคอลัมน์ของ contracts ลงใน GROUP BY และ
- * ผลลัพธ์จะผิดทันทีถ้าวันหลังมีการ join ตารางอื่นเพิ่ม — subquery อ่านง่ายกว่าและ
- * ไม่มีทางนับเกิน
+ * วันที่จัดรูปเป็น "YYYY-MM-DD" ใน SQL เพราะ mysql2 แปลง DATE เป็น Date ตามเขตเวลา
+ * ของเครื่อง แล้ว JSON ส่งออกเป็น UTC — 1 ต.ค. จะกลายเป็น 30 ก.ย. ในเบราว์เซอร์
  */
-const CONTRACT_COLUMNS = `
-  c.id,
-  c.contract_no,
-  c.price_per_page,
-  c.fiscal_year_id,
-  c.effective_from,
-  c.effective_to,
-  c.price_source,
-  c.price_verified_at,
-  fy.year AS fiscal_year,
-  fy.start_month AS fiscal_start_month,
-  fy.end_month AS fiscal_end_month,
-  (SELECT COUNT(*) FROM devices d WHERE d.contract_id = c.id) AS device_count
-`;
+async function loadContracts(conn, id = null) {
+  const [contracts] = await conn.query(
+    `SELECT c.id, c.contract_no,
+            DATE_FORMAT(c.effective_from, '%Y-%m-%d') AS effective_from,
+            DATE_FORMAT(c.effective_to, '%Y-%m-%d') AS effective_to,
+            c.monthly_rental, c.vat_rate,
+            (SELECT COUNT(*) FROM devices d WHERE d.contract_id = c.id) AS device_count
+     FROM contracts c
+     ${id ? "WHERE c.id = ?" : ""}
+     ORDER BY c.effective_from DESC, c.contract_no`,
+    id ? [id] : []
+  );
+  if (!contracts.length) return [];
 
-/**
- * เติมสถานะการยืนยันและช่วงที่ "เสนอ" ให้ผู้ใช้เห็นก่อนกดรับรอง
- *
- * ช่วงที่เสนอมาจากปีงบของสัญญา ซึ่งเอกสารสัญญาระบุไว้อยู่แล้ว — เป็นการช่วยกรอก
- * ไม่ใช่การยืนยันแทน ตราบใดที่ผู้ดูแลยังไม่กด ค่าใช้จ่ายของสัญญานี้ยังขึ้นว่า
- * "ยังยืนยันราคาไม่ได้" (ADR-0019 Q26, Q27)
- */
-function withPriceStatus(row) {
-  const proposed = fiscalYearDateRange({
-    startMonth: row.fiscal_start_month,
-    endMonth: row.fiscal_end_month,
-  });
+  const [lines] = await conn.query(
+    `SELECT l.contract_id, l.category_id, mc.code AS category_code, mc.name AS category_name,
+            mc.is_color, l.price_per_page
+     FROM contract_price_line l
+     JOIN meter_category mc ON mc.id = l.category_id
+     WHERE l.contract_id IN (?)
+     ORDER BY mc.sort_order`,
+    [contracts.map((c) => c.id)]
+  );
 
-  return {
-    ...row,
-    price_confirmed: Boolean(row.price_verified_at && row.effective_from),
-    proposed_effective_from: row.effective_from ?? proposed?.from ?? null,
-    proposed_effective_to: row.effective_to ?? proposed?.to ?? null,
-  };
+  return contracts.map((contract) => ({
+    ...contract,
+    price_lines: lines
+      .filter((line) => line.contract_id === contract.id)
+      .map(({ contract_id, ...line }) => ({ ...line, is_color: Boolean(line.is_color) })),
+  }));
+}
+
+/** ยอดเงินรายเดือนและจำนวนยอดที่หาราคาไม่ได้ ของยอดที่สัญญานี้คิดเงิน */
+async function billingSnapshot(conn, contractId) {
+  const [rows] = await conn.query(
+    `SELECT v.month, SUM(v.total_cost) AS cost, SUM(v.total_cost IS NULL) AS unpriced
+     FROM v_monthly_kpi v
+     WHERE v.billing_contract_id = ?
+     GROUP BY v.month
+     ORDER BY v.month`,
+    [contractId]
+  );
+  return rows.map((row) => ({
+    month: row.month,
+    cost: row.cost === null ? null : String(row.cost),
+    unpriced: Number(row.unpriced),
+  }));
+}
+
+async function writeContract(conn, contractId, body) {
+  const { contract_no, effective_from, effective_to, price_lines, monthly_rental, vat_rate } = body;
+
+  let id = contractId;
+  if (id) {
+    const [result] = await conn.query(
+      `UPDATE contracts
+       SET contract_no = ?, effective_from = ?, effective_to = ?, monthly_rental = ?, vat_rate = ?
+       WHERE id = ?`,
+      [contract_no, effective_from, effective_to, monthly_rental, vat_rate, id]
+    );
+    if (!result.affectedRows) throw notFound("ไม่พบสัญญาที่ต้องการแก้ไข");
+    await conn.query("DELETE FROM contract_price_line WHERE contract_id = ?", [id]);
+  } else {
+    const [result] = await conn.query(
+      `INSERT INTO contracts (contract_no, effective_from, effective_to, monthly_rental, vat_rate)
+       VALUES (?, ?, ?, ?, ?)`,
+      [contract_no, effective_from, effective_to, monthly_rental, vat_rate]
+    );
+    id = result.insertId;
+  }
+
+  await conn.query(
+    "INSERT INTO contract_price_line (contract_id, category_id, price_per_page) VALUES ?",
+    [price_lines.map((line) => [id, line.category_id, line.price_per_page])]
+  );
+  return id;
+}
+
+/** ส่งสัญญาณให้ withTransaction ย้อนกลับ โดยพาผลลัพธ์ของ preview ออกมาด้วย */
+class PreviewRollback extends Error {
+  constructor(result) {
+    super("preview");
+    this.result = result;
+  }
 }
 
 // GET /api/contracts
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const [rows] = await db.query(`
-      SELECT ${CONTRACT_COLUMNS}
-      FROM contracts c
-      LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
-      ORDER BY fy.year DESC, c.contract_no
-    `);
-
+    const contracts = await loadContracts(db);
     cache.referenceData(res);
-    res.json(rows.map(withPriceStatus));
+    res.json(contracts);
   })
 );
 
-// ============================================================
-// GET /api/contracts/price-review — สัญญาที่ยังไม่ได้ยืนยันหรือมีช่วงให้ตรวจ
-// ============================================================
-//
-// รายการงานของผู้ดูแลตาม ADR-0019 — ตราบใดที่ยังไม่ยืนยัน ยอดพิมพ์ของเครื่องใน
-// สัญญานั้นจะไม่มีราคา และรายงานจะบอกว่า "ยังยืนยันราคาไม่ได้" แทนการคิดเป็น 0 บาท
-// สัญญาที่ยืนยันแล้วแต่มียอดในปีงบอยู่นอกช่วงก็อยู่ในรายการ โดยแยกจำนวนให้ผู้ใช้
-// ตัดสินจากเอกสารว่าจะขยายช่วงหรือควรผูกเครื่องกับสัญญาฉบับอื่น
-//
-// ⚠️ ต้องประกาศก่อน "/:id" ไม่งั้น Express จะจับคำว่า price-review เป็นค่าของ :id
+// GET /api/contracts/meter-categories — หมวดมิเตอร์ที่ใช้ตั้งราคาได้
+// ⚠️ ต้องประกาศก่อน "/:id" ไม่งั้น Express จะจับเป็นค่าของ :id
 router.get(
-  "/price-review",
-  requireAdmin,
+  "/meter-categories",
   asyncHandler(async (req, res) => {
-    const [rows] = await db.query(`
-      WITH unpriced AS (
-        SELECT
-          v.month,
-          ${effectiveContractId({ historyAlias: "dch", deviceAlias: "d" })} AS contract_id
-        FROM v_monthly_kpi v
-        JOIN devices d ON d.id = v.device_id
-        ${effectiveContractJoin({ deviceIdExpression: "v.device_id", monthExpression: "v.month", historyAlias: "dch" })}
-        WHERE v.total_cost IS NULL
-      ),
-      -- นับเฉพาะยอดในปีงบของสัญญา ยอดจากปีงบอื่นห้ามตามสัญญาปัจจุบันมา (#96)
-      -- แดชบอร์ดแยกยอดกลุ่มนั้นไปอีกงาน (dashboard/overview.js) จึงต้องใช้กติกาเดียวกัน
-      review_counts AS (
-        SELECT
-          u.contract_id,
-          COUNT(*) AS fiscal_year_readings,
-          -- สัญญาที่ยังไม่ยืนยันยังไม่มีช่วงให้เทียบ ทุกยอดในปีงบจึงนับว่ารอยืนยัน
-          COUNT(CASE
-            WHEN c.price_verified_at IS NOT NULL
-             AND c.effective_from IS NOT NULL
-             AND (u.month < DATE_FORMAT(c.effective_from, '%Y-%m')
-                  OR (c.effective_to IS NOT NULL
-                      AND u.month > DATE_FORMAT(c.effective_to, '%Y-%m')))
-            THEN 1
-          END) AS outside_term_readings
-        FROM unpriced u
-        JOIN contracts c ON c.id = u.contract_id
-        LEFT JOIN fiscal_year fy ON fy.id = c.fiscal_year_id
-        WHERE (fy.start_month IS NULL OR u.month >= fy.start_month)
-          AND (fy.end_month IS NULL OR u.month <= fy.end_month)
-        GROUP BY u.contract_id
-      )
-      SELECT ${CONTRACT_COLUMNS},
-        COALESCE(rc.fiscal_year_readings - rc.outside_term_readings, 0) AS unpriced_readings,
-        COALESCE(rc.outside_term_readings, 0) AS outside_term_readings
-      FROM contracts c
-      LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
-      LEFT JOIN review_counts rc ON rc.contract_id = c.id
-      WHERE c.price_verified_at IS NULL
-         OR c.effective_from IS NULL
-         -- เครื่องที่เพิ่มหลังยืนยัน หรือยอดในปีงบที่อยู่นอกช่วงสัญญา ต้องกลับมา
-         -- ให้ผู้ดูแลตรวจช่วงหรือย้ายเครื่องไปสัญญาที่ครอบคลุมเดือนนั้น
-         OR rc.contract_id IS NOT NULL
-      ORDER BY fy.year DESC, c.contract_no
-    `);
-
-    cache.operationalData(res);
-    res.json({ pending: rows.length, contracts: rows.map(withPriceStatus) });
+    const [rows] = await db.query(
+      "SELECT id, code, name, is_color FROM meter_category ORDER BY sort_order, id"
+    );
+    cache.referenceData(res);
+    res.json(rows.map((row) => ({ ...row, is_color: Boolean(row.is_color) })));
   })
 );
 
@@ -184,76 +206,10 @@ router.get(
   "/:id",
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {
-    const [rows] = await db.query(
-      `
-      SELECT ${CONTRACT_COLUMNS}
-      FROM contracts c
-      LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
-      WHERE c.id = ?
-    `,
-      [req.params.id]
-    );
-
-    if (!rows.length) throw notFound("ไม่พบสัญญาที่ต้องการ");
-
+    const [contract] = await loadContracts(db, req.params.id);
+    if (!contract) throw notFound("ไม่พบสัญญาที่ต้องการ");
     cache.referenceData(res);
-    res.json(withPriceStatus(rows[0]));
-  })
-);
-
-// ============================================================
-// PUT /api/contracts/:id/term — ยืนยันช่วงที่สัญญาและราคามีผล
-// ============================================================
-//
-// แยกจาก PUT /:id เพราะเป็นการ "รับรองข้อเท็จจริงจากเอกสาร" ไม่ใช่การแก้ค่าในฟอร์ม
-// และมีผลข้างเคียงที่ต้องตั้งใจ: เปิดช่วงการคิดเงินให้เครื่องในสัญญานี้ที่ยังไม่มี
-// และปรับวันสิ้นสุดของช่วงเดิมที่ปิดแล้วตามช่วงที่เพิ่งยืนยัน ยอดเงินย้อนหลังของ
-// เครื่องเหล่านั้นจึงกลับมาคำนวณได้
-//
-// devices_linked คงชื่อเดิมไว้เพราะหน้าเว็บอ่านอยู่ ค่าคือจำนวนเครื่องที่ช่วง
-// การคิดเงินถูกสร้างหรือปรับในรอบนี้
-router.put(
-  "/:id/term",
-  requireAdmin,
-  validate({ params: idParam, body: termBody }),
-  asyncHandler(async (req, res) => {
-    const { effective_from, effective_to, price_source } = req.body;
-
-    if (effective_to < effective_from) {
-      throw badRequest("วันสิ้นสุดต้องไม่มาก่อนวันเริ่ม", { code: "invalid_term" });
-    }
-
-    const devicesUpdated = await db.withTransaction(async (conn) => {
-      const [[contract]] = await conn.query(
-        "SELECT id, price_per_page FROM contracts WHERE id = ?",
-        [req.params.id]
-      );
-      if (!contract) throw notFound("ไม่พบสัญญาที่ต้องการยืนยัน");
-
-      // ยืนยันช่วงของสัญญาที่ยังไม่มีราคา = ยืนยันว่า "ราคาคือไม่มี" ซึ่งไม่ใช่
-      // ข้อเท็จจริงที่เอกสารสัญญาระบุได้ ปฏิเสธไปดีกว่าปล่อยให้ยืนยันแล้วยอดเงิน
-      // ของเครื่องกลุ่มนี้กลายเป็นศูนย์โดยดูเหมือนผ่านการตรวจแล้ว
-      if (contract.price_per_page === null || contract.price_per_page === undefined) {
-        throw badRequest("กรอกราคาต่อหน้าของสัญญาก่อนจึงจะยืนยันช่วงที่มีผลได้", {
-          code: "price_required",
-        });
-      }
-
-      await conn.query(
-        `UPDATE contracts
-         SET effective_from = ?, effective_to = ?, price_source = ?,
-             price_verified_by = ?, price_verified_at = CURRENT_TIMESTAMP
-         WHERE id = ?`,
-        [effective_from, effective_to, price_source, req.user?.id ?? null, req.params.id]
-      );
-
-      return openPeriodsForContract(conn, Number(req.params.id), {
-        from: effective_from,
-        to: effective_to,
-      });
-    });
-
-    res.json({ message: "ยืนยันช่วงที่สัญญามีผลแล้ว", devices_linked: devicesUpdated });
+    res.json(contract);
   })
 );
 
@@ -263,65 +219,63 @@ router.post(
   requireAdmin,
   validate({ body: contractBody }),
   asyncHandler(async (req, res) => {
-    const { contract_no, fiscal_year_id, price_per_page } = req.body;
-
-    const [result] = await db.query(
-      "INSERT INTO contracts (contract_no, fiscal_year_id, price_per_page) VALUES (?, ?, ?)",
-      [contract_no, fiscal_year_id, price_per_page]
-    );
-
-    res.status(201).json({ id: result.insertId, contract_no, fiscal_year_id, price_per_page });
+    const id = await db.withTransaction((conn) => writeContract(conn, null, req.body));
+    const [contract] = await loadContracts(db, id);
+    res.status(201).json(contract);
   })
 );
 
-// PUT /api/contracts/:id
+// ============================================================
+// PUT /api/contracts/:id — แก้สัญญา หรือดูผลกระทบก่อนบันทึก (preview: true)
+// ============================================================
+//
+// ผลกระทบคำนวณจาก view ตัวจริงหลังเขียนใน transaction เดียวกัน แล้วย้อนกลับถ้าเป็น
+// preview — ตัวเลขที่ผู้ใช้เห็นก่อนกดจึงเป็นตัวเลขเดียวกับที่รายงานจะแสดงหลังกด
+// ไม่ใช่ค่าประมาณที่คำนวณซ้ำอีกที่
 router.put(
   "/:id",
   requireAdmin,
   validate({ params: idParam, body: contractBody }),
   asyncHandler(async (req, res) => {
-    const { contract_no, fiscal_year_id, price_per_page } = req.body;
+    const id = Number(req.params.id);
 
-    const priceChanged = await db.withTransaction(async (conn) => {
-      const [[current]] = await conn.query("SELECT price_per_page FROM contracts WHERE id = ?", [
-        req.params.id,
-      ]);
-      if (!current) throw notFound("ไม่พบสัญญาที่ต้องการแก้ไข");
+    try {
+      const result = await db.withTransaction(async (conn) => {
+        const before = await billingSnapshot(conn, id);
+        await writeContract(conn, id, req.body);
+        const after = await billingSnapshot(conn, id);
 
-      // เทียบเป็นข้อความเพราะ mysql2 คืน DECIMAL เป็น string ส่วนฟอร์มส่ง number มา
-      const changed =
-        String(current.price_per_page ?? "") !== String(price_per_page ?? "");
+        const unpricedIn = (rows, month) => rows.find((row) => row.month === month)?.unpriced ?? 0;
+        const newlyUnpriced = after.filter((row) => row.unpriced > unpricedIn(before, row.month));
+        if (newlyUnpriced.length) {
+          throw badRequest(
+            "บันทึกไม่ได้ เพราะยอดที่บันทึกแล้วบางเดือนจะหาราคาไม่ได้ — ตรวจอายุสัญญาและรายการราคาอีกครั้ง",
+            {
+              code: "would_unprice_readings",
+              errors: newlyUnpriced.map((row) => ({ month: row.month, unpriced: row.unpriced })),
+            }
+          );
+        }
 
-      await conn.query(
-        "UPDATE contracts SET contract_no = ?, fiscal_year_id = ?, price_per_page = ? WHERE id = ?",
-        [contract_no, fiscal_year_id, price_per_page, req.params.id]
-      );
+        const costIn = (rows, month) => rows.find((row) => row.month === month)?.cost ?? null;
+        const months = [...new Set([...before, ...after].map((row) => row.month))].sort();
+        const impact = months
+          .map((month) => ({ month, before: costIn(before, month), after: costIn(after, month) }))
+          .filter((row) => row.before !== row.after);
 
-      // เปลี่ยนราคา = สิ่งที่เคยถูกรับรองไว้ไม่ใช่ราคานี้อีกต่อไป ต้องให้คนยืนยันใหม่
-      // พร้อมเอกสาร ไม่งั้นราคาใหม่จะถูกใช้ย้อนหลังทันทีโดยยังติดป้ายว่า "ยืนยันแล้ว"
-      // ซึ่งเป็นสิ่งที่ ADR-0019 ห้ามไว้ตรงๆ
-      //
-      // เก็บช่วงวันที่ไว้ให้ ผู้ดูแลจะได้ไม่ต้องพิมพ์ใหม่ตอนกดยืนยันรอบสอง
-      if (changed) {
-        await conn.query(
-          "UPDATE contracts SET price_verified_by = NULL, price_verified_at = NULL WHERE id = ?",
-          [req.params.id]
-        );
+        if (req.body.preview) throw new PreviewRollback({ impact });
+        return { impact };
+      });
+
+      const [contract] = await loadContracts(db, id);
+      res.json({ ...contract, impact: result.impact, message: "บันทึกสัญญาเรียบร้อยแล้ว" });
+    } catch (err) {
+      if (err instanceof PreviewRollback) {
+        res.json({ preview: true, impact: err.result.impact });
+        return;
       }
-
-      return changed;
-    });
-
-    res.json({
-      id: req.params.id,
-      contract_no,
-      fiscal_year_id,
-      price_per_page,
-      price_confirmation_reset: priceChanged,
-      message: priceChanged
-        ? "บันทึกแล้ว — ราคาเปลี่ยน จึงต้องยืนยันช่วงที่มีผลใหม่อีกครั้ง"
-        : "บันทึกการแก้ไขเรียบร้อยแล้ว",
-    });
+      throw err;
+    }
   })
 );
 

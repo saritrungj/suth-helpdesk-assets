@@ -21,8 +21,9 @@ They record why each rule exists; your findings must cite them.
 | Months | Stored only as CE `"YYYY-MM"`; input accepts BE and CE in several shapes (`2568-10`, `10/2568`…). | 0002 |
 | Display | Thai shows BE; English shows CE with the BE fiscal year alongside. Stored data unchanged. | 0013 |
 | Deduction | Net pages = raw × 0.98, applied to every past fiscal year; net pages are **not** rounded before pricing. | 0017 |
-| Money | Integer satang (`packages/domain/money.cjs`); round half-up to satang per device per month, then sum. SQL keeps `ROUND(..., 2)` per row. | 0017 |
-| Pricing | Each month uses the price effective in that month (`contracts.effective_from/to`, `device_contract_history`). An unknown price shows "ยังยืนยันราคาไม่ได้" with a count — never silently `0`, never averaged. | 0019 |
+| Money | Integer satang (`packages/domain/money.cjs`). Round half-up once per invoice line — `ROUND(price × Σ net pages, 2)` per (period, contract, price line, price) — then split the cents across meters by largest remainder (ties by meter id), so any sub-total adds back to the invoice exactly. Prices are `DECIMAL(10,4)`. | 0022 |
+| Pricing | Each meter-month uses the contract billing it that month (`device_contract_history`), the price line of the meter's category, and only if the month is inside the contract term. A price applies on save — no confirmation state. A reading or edit that would leave a month without a price is refused at ingress; an unresolvable price is never silently `0`, never averaged. Price edits show their impact before saving. | 0019, 0021 |
+| Contracts & meters | A contract has its own term (not one fiscal year), one or more price lines, optional fixed rental + VAT (VAT rounded once per contract per period). Readings are unique per `(meter, month)`; a period counts as the month it ends in. | 0023 |
 | Location | One effective location-history row per device per month; fall back to the device's current location only when no history exists. Past months stay with the old department. | 0014 |
 | Status | `installation_status` is separate from device status; `NULL` means "not checked", not "not installed". Coverage has a third state `indeterminate`. | 0018 |
 

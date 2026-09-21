@@ -64,7 +64,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
     const filter = page.getByLabel(/^ช่วงเวลา/);
     const kpi = kpiOf(page);
-    const chart = page.getByRole("heading", { name: "ค่าใช้จ่ายที่ยืนยันแล้วรายเดือน", exact: true });
+    const chart = page.getByRole("heading", { name: "ค่าใช้จ่ายสุทธิรายเดือน", exact: true });
     const table = page.getByRole("heading", { name: "ตารางรายละเอียด", exact: true });
     await expect(table).toBeVisible();
     const tops = await Promise.all([filter, kpi, chart, table].map(async (item) => (await item.boundingBox()).y));
@@ -82,14 +82,11 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(page.getByText("เปรียบเทียบตาม", { exact: true })).toBeVisible();
 
     await expect(kpi).toContainText("5,970");
-    await expect(kpi).toContainText("สุทธิหลังหัก 2% 5,850.6 หน้า");
-    await expect(kpi).toContainText("2,588.67");
-    const averageCost = kpi.locator(":scope > div").filter({ hasText: "ค่าใช้จ่ายเฉลี่ยต่อเครื่อง" });
-    await expect(averageCost).toContainText("—");
-    await expect(averageCost).toContainText("ยังคำนวณค่าเฉลี่ยครบไม่ได้ · รอราคา 1 รายการ");
-    const december = detailTable(page).getByRole("row", { name: /ธ\.ค\. 2568.*รอยืนยันราคา 1 รายการ/ });
-    await expect(december).toBeVisible();
-    await expect(december.getByRole("cell").nth(6)).toHaveText("—");
+    await expect(kpi).toContainText("119.4");
+    await expect(kpi).toContainText("5,850.6");
+    await expect(kpi).toContainText("2,632.77");
+    await expect(kpi.locator(":scope > div")).toHaveCount(4);
+    await expect(kpi).not.toContainText("รอราคา");
   });
 
   test("เปรียบเทียบตามฝ่าย: ตารางมีทุกฝ่ายในขอบเขต และตัวเลขสำคัญไม่เปลี่ยนตามการแบ่ง", async ({ page }) => {
@@ -104,7 +101,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(kpiOf(page)).toContainText("5,970");
 
     const table = detailTable(page);
-    await expect(table.getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550\s+4,459\s+1,962\.45/ })).toBeVisible();
+    await expect(table.getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550\s+4,459\s+2,006\.55/ })).toBeVisible();
     await expect(table.getByRole("row", { name: /ฝ่ายบริหารทั่วไป\s+1,420\s+1,391\.6\s+626\.22/ })).toBeVisible();
     // ฝ่ายที่บันทึกศูนย์จริงยังอยู่ในตาราง ไม่ถูกตัดทิ้งเพราะยอดน้อย
     await expect(table.getByRole("row", { name: /ฝ่ายเภสัชกรรม\s+0/ })).toBeVisible();
@@ -132,11 +129,11 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
     const file = await download(page, async () => (await exportAs(page, "Excel")).click());
     expect(file.name).toBe("print-usage-report-fy2569-full-year-division-pages.xlsx");
-    expect(file.workbook.SheetNames).toEqual(["สรุป", "รายเดือน", "เปรียบเทียบ", "อันดับ", "ข้อมูลรายละเอียด", "คุณภาพข้อมูล", "เงื่อนไขรายงาน"]);
+    expect(file.workbook.SheetNames).toEqual(["สรุป", "รายเดือน", "เปรียบเทียบ", "อันดับ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
     const [header, nursing, admin] = file.rows("เปรียบเทียบ");
-    expect(header.slice(0, 7)).toEqual(["ฝ่าย", "ยอดพิมพ์จริง (หน้า)", "สุทธิหลังหัก 2% (หน้า)", "ค่าใช้จ่ายที่ยืนยันแล้ว (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)", "รายการรอยืนยันราคา", "สถานะข้อมูล"]);
-    expect(nursing).toEqual(["ฝ่ายการพยาบาล", 4550, 4459, 1962.45, 3, 1, "รอยืนยันราคา 1 รายการ", 1500, 1600, 1450]);
-    expect(admin).toEqual(["ฝ่ายบริหารทั่วไป", 1420, 1391.6, 626.22, 2, 0, "ยืนยันราคาครบ", 300, 550, 570]);
+    expect(header.slice(0, 5)).toEqual(["ฝ่าย", "ยอดพิมพ์จริง (หน้า)", "สุทธิหลังหัก 2% (หน้า)", "ค่าใช้จ่าย (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)"]);
+    expect(nursing).toEqual(["ฝ่ายการพยาบาล", 4550, 4459, 2006.55, 3, 1500, 1600, 1450]);
+    expect(admin).toEqual(["ฝ่ายบริหารทั่วไป", 1420, 1391.6, 626.22, 2, 300, 550, 570]);
     expect(file.chart()).toContain("<c:lineChart>");
     expect(file.chart().match(/<c:ser>/g)).toHaveLength(2);
     expect(file.sheetXml(1)).toContain('state="frozen"');
@@ -151,7 +148,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     expect(conditions["ฝ่าย"]).toBe("ฝ่ายการพยาบาล, ฝ่ายบริหารทั่วไป");
     expect(conditions["เปรียบเทียบตาม"]).toBe("ฝ่าย");
     expect(conditions["ตัวเลขที่ดู"]).toBe("ยอดพิมพ์จริง (หน้า)");
-    expect(conditions["สถานะราคา"]).toMatch(/ยังยืนยันราคาไม่ได้ 1 รายการ/);
+    expect(conditions["สถานะราคา"]).toBeUndefined();
     expect(conditions["สร้างเมื่อ (Asia/Bangkok)"]).toBeTruthy();
   });
 
@@ -168,7 +165,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     // ชุดข้อมูลหลักมีอาคารเดียว การกรองจึงไม่ตัดอะไรออกเลย — ย้ายเครื่อง 5 ไปอีกอาคารเฉพาะเทสนี้
     {
       label: "อาคาร", option: /^อาคารผู้ป่วยนอก/, url: /building=1/, group: "ฝ่ายการพยาบาล",
-      pages: "5,520", net: "5,409.6", cost: "2,390.22", readings: 13,
+      pages: "5,520", net: "5,409.6", cost: "2,434.32", readings: 13,
       rows: COMPARISON_ROWS.map((row) => (row.device_id === 5 ? { ...row, building_id: 2, building_name: "อาคารเภสัชกรรม" } : row)),
     },
     { label: "เครื่อง", option: /^0300-SN/, url: /device=3/, group: "ฝ่ายบริหารทั่วไป", pages: "970", net: "950.6", cost: "427.77", readings: 3 },
@@ -183,7 +180,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
       const kpi = kpiOf(page);
       await expect(kpi).toContainText(parity.pages);
-      await expect(kpi).toContainText(`สุทธิหลังหัก 2% ${parity.net} หน้า`);
+      await expect(kpi).toContainText(`ยอดพิมพ์สุทธิ${parity.net}หน้า`);
       await expect(kpi).toContainText(parity.cost);
 
       // ตารางรายละเอียดอ่านจากแถวชุดเดียวกับตัวเลขสำคัญ — กลุ่มที่มียอดสูงสุดต้องมีอยู่จริง
@@ -205,15 +202,12 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(table.getByRole("row", { name: /งานการเงิน\s+ฝ่ายบริหารทั่วไป\s+1,420/ })).toBeVisible();
 
     await page.goto("/dashboard?by=contract");
-    await expect(table.getByRole("row", { name: /CT-001\/2569\s+4,450.*1,962\.45/ })).toBeVisible();
+    await expect(table.getByRole("row", { name: /CT-001\/2569\s+4,550.*2,006\.55/ })).toBeVisible();
     await expect(table.getByRole("row", { name: /CT-002\/2569\s+1,420.*626\.22/ })).toBeVisible();
-    // ยอดที่เดือนนั้นไม่มีสัญญาคิดเงินอยู่ในกลุ่ม "ไม่ผูกสัญญา" ไม่ถูกนับเป็นศูนย์บาท
-    await expect(table.getByRole("row", { name: /ไม่ผูกสัญญา\s+100\s+98\s+—.*ยังยืนยันราคาไม่ได้ 1 รายการ/ })).toBeVisible();
-
     const file = await download(page, async () => (await exportAs(page, "Excel")).click());
     const rows = file.rows("เปรียบเทียบ");
-    expect(rows.slice(1).map((line) => [line[0], line[3]])).toEqual([["CT-001/2569", 1962.45], ["CT-002/2569", 626.22], ["ไม่ผูกสัญญา", null]]);
-    expect(new Set(file.rows("ข้อมูลรายละเอียด").slice(1).map((line) => line[7]))).toEqual(new Set(["CT-001/2569", "CT-002/2569", "ไม่ผูกสัญญา"]));
+    expect(rows.slice(1).map((line) => [line[0], line[3]])).toEqual([["CT-001/2569", 2006.55], ["CT-002/2569", 626.22]]);
+    expect(new Set(file.rows("ข้อมูลรายละเอียด").slice(1).map((line) => line[7]))).toEqual(new Set(["CT-001/2569", "CT-002/2569"]));
   });
 
   test("อันดับอยู่ในไฟล์ Excel เท่านั้น และหน้าจอไม่เลือกรายการยอดสูงสุดแทนผู้ใช้", async ({ page }) => {
@@ -232,8 +226,10 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(table.getByRole("row")).toHaveCount(5);
     await expect(table.getByRole("row").nth(1)).toContainText(/งานผู้ป่วยนอก.*3,200/);
 
-    const blocked = await download(page, async () => (await exportAs(page, "Excel")).click());
-    expect(blocked.rows("อันดับ")[1][0]).toMatch(/ยังจัดอันดับแผนกตามค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ 1 รายการ/);
+    const costFile = await download(page, async () => (await exportAs(page, "Excel")).click());
+    expect(costFile.rows("อันดับ").slice(1).map((line) => line.slice(0, 3))).toEqual([
+      [1, "งานผู้ป่วยนอก", "ฝ่ายการพยาบาล"], [2, "งานการเงิน", "ฝ่ายบริหารทั่วไป"], [3, "งานผู้ป่วยใน", "ฝ่ายการพยาบาล"], [4, "งานคลังยา", "ฝ่ายเภสัชกรรม"],
+    ]);
 
     await card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true }).click();
     const file = await download(page, async () => (await exportAs(page, "Excel")).click());
@@ -276,10 +272,6 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     const request = state.requests.find((item) => item.months.length === 24);
     expect(request.months[0]).toBe("2024-10");
     expect(request.months.at(-1)).toBe("2026-09");
-    // เลือกหลายปีงบแล้วคำว่า "ช่วงก่อนหน้า" ไม่มีคำตอบเดียว — บอกตรงๆ แทนการเทียบมั่ว
-    // (ดูช่วงที่ราคาครบ เพราะสถานะราคาสำคัญกว่าและถูกบอกก่อนเสมอ)
-    await page.goto("/dashboard?fy=1&years=2568,2569&months=2025-10,2025-11&by=fiscalYear");
-    await expect(kpiOf(page)).toContainText("เลือกปีงบเดียวจึงจะเทียบกับช่วงก่อนหน้าได้");
   });
 
   test("เลือกปีงบจากช่องตัวกรองได้มากสุดสามปี และปีที่เกินถูกแทนด้วยปีใหม่กว่า", async ({ page }) => {
@@ -323,32 +315,6 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(page).not.toHaveURL(/years=/);
     await expect(kpiOf(page)).toContainText("3,950");
     await expect(comparisonCard(page)).not.toContainText("เพิ่มปีงบ");
-  });
-
-  test("กลุ่มบนกราฟยังไม่มีราคา แต่กลุ่มที่ตกจากกราฟมี — บอกว่าติดที่ราคา ไม่ใช่ไม่มียอดพิมพ์", async ({ page }) => {
-    // แปดเครื่องแรกยอดสูงกว่าแต่ยังไม่มีราคา — กราฟค่าใช้จ่ายวาดได้แค่ 8 กลุ่มแรก จึงว่างทั้งใบ
-    const template = COMPARISON_ROWS[0];
-    const rows = Array.from({ length: 9 }, (_, index) => ({
-      ...template,
-      device_id: 200 + index,
-      serial_number: `U${String(index + 1).padStart(2, "0")}-SN`,
-      pages_printed: index < 8 ? 1000 - index : 10,
-      net_pages: index < 8 ? ((1000 - index) * 0.98).toFixed(2) : "9.80",
-      price_per_page: index < 8 ? null : "0.4500",
-      total_cost: index < 8 ? null : "4.41",
-    }));
-    await comparisonFixture(page, { rows });
-    await page.goto("/dashboard?by=device");
-
-    const card = comparisonCard(page);
-    await expect(card).toContainText("กลุ่มที่ได้ขึ้นกราฟยังไม่มีราคาครบ");
-    await expect(card).not.toContainText("ยังไม่มียอดพิมพ์ในขอบเขตที่เลือก");
-    // ยอดเงินของกลุ่มที่ราคาครบยังอ่านได้จากตารางด้านล่าง
-    await expect(detailTable(page).getByRole("row", { name: /U09-SN/ })).toContainText("4.41");
-
-    // เปลี่ยนไปดูยอดพิมพ์จริง กราฟกลับมาวาดได้ทันที
-    await card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true }).click();
-    await expect(card.locator("canvas")).toBeVisible();
   });
 
   test("ตารางรายละเอียดที่มีเกินหนึ่งหน้า: ค้นหา เรียง และแบ่งหน้าทำงานกับกลุ่มทั้งหมด", async ({ page }) => {
@@ -421,17 +387,6 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     expect(latest.months.at(-1)).toBe("2026-09");
   });
 
-  test("มีรายการยอดพิมพ์แต่ราคายังไม่ยืนยันทั้งหมด ต้องไม่บอกว่าไม่มีข้อมูล", async ({ page }) => {
-    await comparisonFixture(page, { rows: [{
-      ...COMPARISON_ROWS.find((row) => row.total_cost == null),
-      month: "2025-12",
-    }] });
-    await page.goto("/dashboard?fy=1&months=2025-12");
-    const card = comparisonCard(page);
-    await expect(card).toContainText("ยังยืนยันราคาไม่ได้ 1 รายการ");
-    await expect(card).not.toContainText("ยังไม่มียอดพิมพ์ในขอบเขตที่เลือก");
-  });
-
   test("เปลี่ยนตัวเลือกแล้วอยู่หน้าเดิม ไม่โหลดใหม่ และไม่ดึงจอขึ้นบนสุด", async ({ page }) => {
     await comparisonFixture(page);
     await page.goto("/dashboard?by=department");
@@ -482,20 +437,6 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(card.getByRole("radio", { name: "ฝ่าย", exact: true })).toBeChecked();
     await expect(card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true })).toBeChecked();
     await expect(detailTable(page).getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550/ })).toBeVisible();
-  });
-
-  test("ช่วงก่อนหน้าเทียบด้วยตัวกรองชุดเดียวกัน ไม่ใช่ยอดทั้งองค์กร", async ({ page }) => {
-    const state = await comparisonFixture(page);
-    state.overviewComparison = { previous_months: ["2025-10"] };
-    await page.goto("/dashboard?months=2025-11&division=2");
-    const kpi = kpiOf(page);
-    // ฝ่ายบริหารทั่วไป พ.ย. 242.55 บาท เทียบ ต.ค. 132.30 บาท = +83.3%
-    // (ถ้าเอายอดทั้งองค์กรมาเทียบจะได้ +19.4% ซึ่งไม่ใช่ของฝ่ายนี้)
-    await expect(kpi).toContainText("242.55");
-    await expect(kpi).toContainText("+83.3%");
-    await expect(kpi).toContainText("เทียบกับ ต.ค. 2568");
-    const asked = state.requests.filter((request) => request.path.endsWith("/monthly-kpi")).map((request) => request.months.join(","));
-    expect(asked).toContain("2025-10");
   });
 
   test("ลิงก์เก่าของหน้าที่ถูกยุบรวม พาไปหน้าที่ทำหน้าที่แทนจริงในเบราว์เซอร์", async ({ page }) => {

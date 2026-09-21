@@ -4,13 +4,13 @@ import { ArrowUpRight } from "lucide-vue-next";
 import { t } from "../lib/locale";
 import { formatBahtValue, formatCount, formatNetPages } from "../lib/format";
 import { UiButton, UiCard, UiDataTable } from "../ui";
-import { averagePerDevice, dataStatus, dimensionLabel, statusLabel } from "./comparison";
+import { averagePerDevice, dimensionLabel } from "./comparison";
 
 /**
  * ComparisonTable — ตารางรายละเอียดใต้พื้นที่เปรียบเทียบของหน้าภาพรวม
  *
  * แถวเดียวกับที่กราฟวาด (เดือน / รายการที่เทียบ) แต่แสดงครบทุกตัวเลข —
- * ยอดพิมพ์จริง หน้าสุทธิหลังหัก 2% ค่าใช้จ่ายที่ยืนยันแล้ว จำนวนเครื่อง และสถานะ —
+ * ยอดพิมพ์จริง หน้าสุทธิหลังหัก 2% ค่าใช้จ่าย จำนวนเครื่อง และค่าเฉลี่ย —
  * แล้วเปิดรายละเอียดรายเครื่องของแถวนั้นได้ แทนรายการ "ค่าใช้จ่ายตามแผนก/สัญญา" เดิม
  * ที่แสดงตัวเลขชุดเดียวกันซ้ำอีกรอบ
  */
@@ -24,7 +24,6 @@ const emit = defineEmits(["details"]);
 const emptyText = computed(() => t("ไม่มีข้อมูลในช่วงที่เลือก"));
 const money = (value) => (value === null || value === undefined ? "—" : formatBahtValue(value));
 const noData = (summary) => !summary?.readings;
-const costComplete = computed(() => !props.model.scope.unpriced);
 
 const columns = computed(() => {
   const list = [];
@@ -33,11 +32,10 @@ const columns = computed(() => {
     { key: "rawPages", label: t("ยอดพิมพ์จริง (หน้า)"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.rawPages) },
     { key: "netPages", label: t("สุทธิหลังหัก 2% (หน้า)"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.netPages) },
     // ยอดเงินที่ยังไม่ครบห้ามถูกเรียงเป็นอันดับ (Q30) — ปิดการเรียงคอลัมน์นี้จนราคาครบ
-    { key: "cost", label: t("ค่าใช้จ่ายที่ยืนยันแล้ว (บาท)"), align: "right", value: (row) => row.summary.cost, sortable: costComplete.value },
+    { key: "cost", label: t("ค่าใช้จ่าย (บาท)"), align: "right", value: (row) => row.summary.cost },
     { key: "devices", label: t("เครื่องที่มีข้อมูล"), align: "right", value: (row) => row.summary.devices },
     { key: "pagesPerDevice", label: t("หน้าต่อเครื่อง"), align: "right", value: (row) => averagePerDevice(row.summary, "rawPages") },
-    { key: "costPerDevice", label: t("บาทต่อเครื่อง"), align: "right", value: (row) => averagePerDevice(row.summary, "cost"), sortable: costComplete.value },
-    { key: "status", label: t("สถานะข้อมูล"), value: (row) => statusLabel(row.summary), sortable: false },
+    { key: "costPerDevice", label: t("บาทต่อเครื่อง"), align: "right", value: (row) => averagePerDevice(row.summary, "cost") },
   );
   return list;
 });
@@ -67,14 +65,10 @@ const columns = computed(() => {
       <template #cell-netPages="{ row }">{{ noData(row.summary) ? "—" : formatNetPages(row.summary.netPages) }}</template>
       <template #cell-cost="{ row }">
         {{ money(row.summary.cost) }}
-        <span v-if="row.summary.unpriced && row.summary.cost !== null" class="block text-2xs text-warn-ink">{{ t("เฉพาะที่ยืนยันแล้ว") }}</span>
       </template>
       <template #cell-devices="{ row }">{{ formatCount(row.summary.devices) }}</template>
       <template #cell-pagesPerDevice="{ row }">{{ averagePerDevice(row.summary, "rawPages") == null ? "—" : formatCount(averagePerDevice(row.summary, "rawPages")) }}</template>
       <template #cell-costPerDevice="{ row }">{{ money(averagePerDevice(row.summary, "cost")) }}</template>
-      <template #cell-status="{ row }">
-        <span :class="dataStatus(row.summary) === 'complete' ? 'text-ink-mute' : 'text-warn-ink'">{{ statusLabel(row.summary) }}</span>
-      </template>
       <template #actions="{ row }">
         <UiButton size="sm" variant="ghost" :disabled="loading || noData(row.summary)" :aria-label="t('ดูรายละเอียดของ {0}', [row.displayLabel])" @click="emit('details', row)">
           {{ t("ดูรายละเอียด") }}<template #trailing><ArrowUpRight :size="14" /></template>

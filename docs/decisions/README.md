@@ -38,7 +38,10 @@
 | [0014](0014-resolve-overlapping-location-history.md) | เลือกประวัติตำแหน่งที่มีผลเพียงช่วงเดียวต่อเดือน | Accepted |
 | [0015](0015-brand-assets-in-repository.md) | เก็บ brand asset ของเจ้าของระบบไว้ใน repository | Accepted |
 | [0016](0016-isolated-qa-database-and-bootstrap-harness.md) | ฐาน QA แยก และ harness ที่ต่อ MySQL ตรงเฉพาะ bootstrap | Accepted |
-| [0017](0017-two-percent-page-deduction.md) | หักจำนวนหน้าพิมพ์ 2% และใช้กับยอดย้อนหลังทุกปีงบ | Accepted — QA migrated; production pending |
+| [0017](0017-two-percent-page-deduction.md) | หักจำนวนหน้าพิมพ์ 2% และใช้กับยอดย้อนหลังทุกปีงบ | Accepted — ข้อการปัดเงิน superseded by ADR-0022 |
 | [0018](0018-separate-installation-status.md) | แยกสถานะการติดตั้งจากสถานะการใช้งานของเครื่อง | Accepted — implemented; ยังไม่ได้รันกับฐานข้อมูลจริง |
-| [0019](0019-effective-pricing-history.md) | ใช้ราคาตามช่วงที่มีผลจริงในการคำนวณย้อนหลัง | Accepted — implemented; ยังไม่ได้รันกับฐานข้อมูลจริง |
+| [0019](0019-effective-pricing-history.md) | ใช้ราคาตามช่วงที่มีผลจริงในการคำนวณย้อนหลัง | Accepted — ขั้นยืนยันราคา superseded by ADR-0021; ราคาเดียวต่อสัญญา superseded by ADR-0023 |
 | [0020](0020-single-scope-dashboard.md) | หน้าภาพรวมมีตัวกรองชั้นเดียว และเป็นหน้าวิเคราะห์หน้าเดียว | Accepted |
+| [0021](0021-contract-price-applies-on-save.md) | ราคาในสัญญาใช้คิดเงินทันทีที่บันทึก ไม่มีขั้นยืนยันราคา | Accepted |
+| [0022](0022-round-at-invoice-line-and-allocate.md) | ปัดเงินที่ระดับรายการราคาต่องวดให้ตรงใบแจ้งหนี้ แล้วกระจายเศษสตางค์ | Accepted |
+| [0023](0023-contract-term-price-lines-and-meters.md) | สัญญามีอายุของตัวเองและรายการราคา ยอดพิมพ์บันทึกรายมิเตอร์ต่องวด | Accepted |

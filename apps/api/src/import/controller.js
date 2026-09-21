@@ -5,8 +5,15 @@ const db = require("../shared/db");
 const asyncHandler = require("../shared/async-handler");
 const { badRequest, conflict } = require("../shared/http-error");
 const { recordLocationHistory } = require("../devices/controller");
+const { recordContractHistory, today } = require("../devices/contract-history");
+const { setDeviceMeters, assertReadingsPriced } = require("../devices/meters");
 const { MAX_PAGES_PER_MONTH, normalizeMonth } = require("@suth/domain");
+
+/** เพดานไฟล์ยอดพิมพ์ต่อการนำเข้าหนึ่งครั้ง — ไฟล์รายงวดจริงมีไม่กี่สิบแผ่น แผ่นละไม่กี่ร้อยแถว */
+const MAX_IMPORT_SHEETS = 60;
+const MAX_IMPORT_ROWS = 50000;
 const { rowFieldProblems } = require("./row-rules");
+const { parseVendorWorkbook, comparableContractNo } = require("./vendor-meter");
 
 // ============================================================
 // ตัวช่วยที่ทั้งสอง handler ใช้ร่วมกัน
@@ -39,17 +46,19 @@ function removeUploadedFile(file) {
  * เวลาคน "Save as" จากระบบอื่น) จึงผ่านด่านนั้นมาแล้วไประเบิดตอน XLSX.readFile
  * ผู้ใช้เห็น "เกิดข้อผิดพลาดในระบบ" ซึ่งบอกไม่ได้ว่าต้องไปแก้อะไร
  */
-function readFirstSheet(filePath) {
-  let workbook;
+function readWorkbook(filePath) {
   try {
-    workbook = XLSX.readFile(filePath);
+    return XLSX.readFile(filePath);
   } catch (err) {
     throw badRequest("ไฟล์นี้เปิดเป็นตารางไม่ได้", {
       code: "unreadable_file",
       detail: "ไฟล์อาจเสียหาย หรือเป็นไฟล์ชนิดอื่นที่ถูกเปลี่ยนนามสกุลมาเป็น .xlsx/.csv — ลองเปิดด้วย Excel แล้วบันทึกใหม่",
     });
   }
+}
 
+function readFirstSheet(filePath) {
+  const workbook = readWorkbook(filePath);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!sheet) {
     throw badRequest("ไม่พบแผ่นงานในไฟล์", {
@@ -129,7 +138,10 @@ exports.importDevices = asyncHandler(async (req, res) => {
         const [floor] = await db.query("SELECT id, building_id, name FROM floor");
         const [division] = await db.query("SELECT id, name FROM division");
         const [department] = await db.query("SELECT id, division_id, name FROM department");
-        const [contract] = await db.query("SELECT id, contract_no FROM contracts");
+        const [contract] = await db.query(
+            "SELECT id, contract_no, DATE_FORMAT(effective_from, '%Y-%m-%d') AS effective_from FROM contracts"
+        );
+        const [meterCategory] = await db.query("SELECT id, code, name FROM meter_category WHERE is_color = 0");
 
 
         const brandMap = {};
@@ -147,6 +159,14 @@ exports.importDevices = asyncHandler(async (req, res) => {
         division.forEach((d) => { divisionMap[String(d.name).trim()] = d.id; });
         department.forEach((d) => { departmentMap[`${d.division_id}::${String(d.name).trim()}`] = d.id; });
         contract.forEach((c) => { contractMap[String(c.contract_no).trim()] = c.id; });
+        const contractStart = new Map(contract.map((c) => [c.id, c.effective_from]));
+        // หมวดมิเตอร์หลัก รับได้ทั้งชื่อไทยและรหัส (ADR-0023)
+        // Map ไม่ใช่ {} เพราะชื่อในไฟล์อย่าง "constructor" ต้องไม่เจอ property ที่ติดมากับ prototype
+        const categoryMap = new Map();
+        meterCategory.forEach((m) => {
+            categoryMap.set(String(m.name).trim(), m.id);
+            categoryMap.set(String(m.code).trim(), m.id);
+        });
 
 
         const insertData = [];
@@ -202,6 +222,7 @@ exports.importDevices = asyncHandler(async (req, res) => {
                 row.price_override ?? row["Price Override"] ?? row.ราคาพิเศษเฉพาะเครื่อง ?? ""
             ).trim();
             const location = String(row.location || row.Location || row.ตำแหน่ง || "").trim();
+            const categoryName = String(row.meter_category || row["Meter Category"] || row.หมวดมิเตอร์ || "").trim();
 
 
             // สถานะ — ถ้าไม่กรอกมา/พิมพ์ค่าที่ไม่รู้จัก ให้ default เป็น "active" เหมือนฟอร์มเพิ่มทีละรายการ
@@ -271,6 +292,12 @@ exports.importDevices = asyncHandler(async (req, res) => {
                 if (!contract_id) reasons.push(`ไม่พบเลขที่สัญญา "${contractNo}" ในระบบ`);
             }
 
+            let meter_category_id = null;
+            if (categoryName) {
+                meter_category_id = categoryMap.get(categoryName) ?? null;
+                if (!meter_category_id) reasons.push(`ไม่พบหมวดมิเตอร์ "${categoryName}" ในระบบ`);
+            }
+
             let price_override = null;
             if (priceOverrideRaw !== "") {
                 const parsedPrice = Number(priceOverrideRaw);
@@ -312,6 +339,7 @@ exports.importDevices = asyncHandler(async (req, res) => {
                 contract_id,
                 price_override,
                 status,
+                meter_category_id,
             });
 
         }
@@ -367,6 +395,17 @@ exports.importDevices = asyncHandler(async (req, res) => {
                     division_id: d.division_id,
                     department_id: d.department_id,
                 });
+
+                // ช่วงการคิดเงินแรก — ไม่มีช่วงนี้ ยอดของเครื่องจะหาราคาไม่ได้ทั้งที่ไฟล์ระบุ
+                // สัญญาไว้ ราคาของสัญญามีผลตลอดอายุสัญญา (ADR-0021) จึงเริ่มที่วันเริ่มสัญญา
+                await recordContractHistory(
+                    conn,
+                    result.insertId,
+                    { contractId: d.contract_id, priceOverride: d.price_override },
+                    contractStart.get(d.contract_id) || today()
+                );
+
+                await setDeviceMeters(conn, result.insertId, { primaryCategoryId: d.meter_category_id });
             }
 
             });
@@ -401,137 +440,369 @@ exports.importDevices = asyncHandler(async (req, res) => {
 
 
 // ============================================================
-// นำเข้ายอดพิมพ์รายเดือน (มิเตอร์) จากไฟล์ Excel ต้นฉบับที่ฝ่ายชีทส่งมา
-// ตัวอย่างรูปแบบไฟล์จริงอยู่ที่ docs/meter-import-source.xlsx
-// เข้าตาราง print_transactions โดยจับคู่เครื่องด้วยเลข SN.
+// นำเข้ายอดพิมพ์ (มิเตอร์)
 //
-// หัวตารางในไฟล์จริงอยู่ "แถวที่ 2" (แถวที่ 1 เป็นแค่หัวข้อรวม/merge cell)
-// จึงอ่านเป็น array ของแถวดิบก่อน (header: 1) แล้วค่อยหาแถวหัวตารางเองจาก
-// เซลล์ที่ขึ้นต้นด้วย "SN" แทนที่จะ hardcode เลขแถว เผื่อไฟล์ในอนาคตขยับแถว
+// รับสองรูปแบบ ตรวจรูปแบบเองจากหัวตาราง
+//
+//   1. รายงานมิเตอร์รายงวดของผู้ให้เช่า (ADR-0023) — หลายแผ่น แผ่นละงวด มีเลขมิเตอร์
+//      ต้นงวด/สิ้นงวดและราคาต่อหน้า ดู import/vendor-meter.js
+//   2. เทมเพลตเดิม — แผ่นเดียว คอลัมน์ "meter M/YY" เป็นยอดรายเดือนของมิเตอร์หลัก
+//      ตัวอย่างที่ docs/meter-import-source.xlsx
+//
+// ## ตรวจด้วยการเขียนจริงแล้วย้อนกลับ
+//
+// ขั้นตรวจไฟล์ (preview) เขียนยอดลงฐานใน transaction แล้วอ่านผลจาก v_monthly_kpi
+// ก่อนย้อนกลับ กฎราคาจึงอยู่ใน view ที่เดียว และตัวเลขที่ผู้ใช้เห็นในหน้าตรวจคือ
+// ตัวเลขเดียวกับที่รายงานจะแสดงหลังกดยืนยัน สิ่งที่ตรวจ
+//
+//   - ทุกยอดต้องหาราคาได้ (ADR-0021)
+//   - ราคาในแถวของไฟล์ต้องเท่าราคาในระบบ — จับหมวดมิเตอร์ผิดหรือราคาสัญญาผิดได้
+//   - เลขที่สัญญาในหัวแผ่นต้องเป็นสัญญาที่คิดเงินเครื่องนั้นในงวดนั้น
+//
+// ยอดตามใบแจ้งหนี้รายหมวดของทุกงวดในไฟล์ถูกส่งกลับไปให้เทียบกับใบของผู้ให้เช่า
 // ============================================================
+
+/** มิเตอร์ทั้งหมด จัดตามเครื่อง — { primary, color } */
+async function loadMeters(conn) {
+  const [devices] = await conn.query("SELECT id, serial_number FROM devices");
+  const [meters] = await conn.query(
+    `SELECT dm.id, dm.device_id, mc.is_color
+     FROM device_meter dm
+     JOIN meter_category mc ON mc.id = dm.category_id
+     ORDER BY mc.sort_order, dm.id`
+  );
+
+  const byDevice = new Map();
+  for (const meter of meters) {
+    const entry = byDevice.get(meter.device_id) ?? { primary: null, color: null };
+    if (meter.is_color) entry.color ??= meter.id;
+    else entry.primary ??= meter.id;
+    byDevice.set(meter.device_id, entry);
+  }
+
+  const bySerial = new Map();
+  for (const device of devices) {
+    bySerial.set(String(device.serial_number).trim().toUpperCase(), {
+      deviceId: device.id,
+      ...(byDevice.get(device.id) ?? { primary: null, color: null }),
+    });
+  }
+  return bySerial;
+}
+
+/** รายงานของผู้ให้เช่า → ยอดรายมิเตอร์ */
+function mapVendorReadings(vendor, meters) {
+  const candidates = [];
+  const errors = [...vendor.errors];
+  const seen = new Set();
+
+  for (const reading of vendor.readings) {
+    const where = {
+      sheet: reading.sheet,
+      row: reading.row,
+      serial_number: reading.serial_number,
+      month: reading.month,
+    };
+    const device = meters.get(reading.serial_number.toUpperCase());
+    if (!device) {
+      errors.push({ ...where, reason: `ไม่พบเครื่อง SN "${reading.serial_number}" ในทะเบียน — ลงทะเบียนเครื่องก่อน` });
+      continue;
+    }
+
+    const meterId = reading.meter === "color" ? device.color : device.primary;
+    if (!meterId) {
+      errors.push({
+        ...where,
+        reason:
+          reading.meter === "color"
+            ? "ไฟล์มีแถวมิเตอร์สีของเครื่องนี้ แต่ในทะเบียนเครื่องนี้ไม่มีมิเตอร์สี"
+            : "เครื่องนี้ยังไม่มีมิเตอร์ในทะเบียน",
+      });
+      continue;
+    }
+
+    const key = `${meterId}|${reading.month}`;
+    if (seen.has(key)) {
+      errors.push({ ...where, reason: "มิเตอร์และงวดนี้ซ้ำกันในไฟล์" });
+      continue;
+    }
+    seen.add(key);
+
+    candidates.push({
+      device_id: device.deviceId,
+      meter_id: meterId,
+      meter: reading.meter,
+      serial_number: reading.serial_number,
+      month: reading.month,
+      pages: reading.pages,
+      meter_start: reading.meter_start,
+      meter_end: reading.meter_end,
+      file_price: reading.file_price,
+      contract_no: reading.contract_no,
+      sheet: reading.sheet,
+      row: reading.row,
+    });
+  }
+
+  return { candidates, errors, months: [...new Set(vendor.sheets.map((s) => s.month))].sort() };
+}
+
+/** เทมเพลตเดิม (meter M/YY) → ยอดของมิเตอร์หลัก */
+function mapTemplateReadings(raw, meters) {
+  const headerRowIndex = raw.findIndex((row) =>
+    row.some((cell) => /^sn\.?$/i.test(String(cell || "").trim()))
+  );
+  if (headerRowIndex === -1) {
+    throw badRequest("ไม่พบแถวหัวตารางในไฟล์", {
+      code: "header_row_not_found",
+      detail:
+        "หาคอลัมน์ \"SN.\" หรือหัวตาราง \"Meter Start/Meter End\" ไม่เจอ ไฟล์นี้อาจไม่ใช่รูปแบบที่รองรับ — ดูตัวอย่างที่ docs/reference/import-format.md",
+    });
+  }
+
+  const headerRow = raw[headerRowIndex];
+  const snColIndex = headerRow.findIndex((cell) => /^sn\.?$/i.test(String(cell || "").trim()));
+
+  // เก็บ "index คอลัมน์ -> เดือนจริง (YYYY-MM)" เฉพาะคอลัมน์ meter M/YY เท่านั้น
+  // (ไม่ยุ่งกับคอลัมน์ "พิมพ์ประจำเดือน"/"พิมพ์สะสม" ที่ซ้ำ/เป็นยอดคำนวณ ไม่ใช่ค่าดิบ)
+  const meterColumns = [];
+  headerRow.forEach((cell, idx) => {
+    const month = parseMeterMonthHeader(cell);
+    if (month) meterColumns.push({ idx, month });
+  });
+  if (!meterColumns.length) {
+    throw badRequest("ไม่พบคอลัมน์มิเตอร์รายเดือนในไฟล์", {
+      code: "meter_columns_not_found",
+      detail: "หัวคอลัมน์ต้องอยู่ในรูป \"meter M/YY\" เช่น \"meter 9/67\" หรือเป็นรายงานมิเตอร์ของผู้ให้เช่า",
+    });
+  }
+
+  const candidates = [];
+  const errors = [];
+  const seenKeys = new Set();
+
+  for (let r = headerRowIndex + 1; r < raw.length; r++) {
+    const row = raw[r];
+    if (!row || !row.length) continue;
+
+    const sn = String(row[snColIndex] || "").trim();
+    if (!sn) continue;
+
+    const device = meters.get(sn.toUpperCase());
+    if (!device || !device.primary) {
+      errors.push({ row: r + 1, serial_number: sn, reason: `ไม่พบเครื่อง SN "${sn}" ในระบบ` });
+      continue;
+    }
+
+    for (const { idx, month } of meterColumns) {
+      const cellValue = row[idx];
+
+      // ช่องว่าง = ไม่เปลี่ยนข้อมูลเดิม ส่วน 0 = ยืนยันว่าเดือนนั้นเป็นศูนย์
+      if (cellValue === "" || cellValue === null || cellValue === undefined) continue;
+
+      const pages = Number(cellValue);
+      if (!Number.isFinite(pages) || pages < 0 || !Number.isInteger(pages) || pages > MAX_PAGES_PER_MONTH) {
+        errors.push({
+          row: r + 1,
+          serial_number: sn,
+          month,
+          reason: `ยอดพิมพ์ต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง ${MAX_PAGES_PER_MONTH.toLocaleString("th-TH")} (พบ "${cellValue}")`,
+        });
+        continue;
+      }
+
+      const key = `${device.primary}|${month}`;
+      if (seenKeys.has(key)) {
+        errors.push({ row: r + 1, serial_number: sn, month, reason: "Serial และเดือนนี้ซ้ำกันในไฟล์" });
+        continue;
+      }
+      seenKeys.add(key);
+      candidates.push({
+        device_id: device.deviceId,
+        meter_id: device.primary,
+        meter: "primary",
+        serial_number: sn,
+        month,
+        pages,
+        meter_start: null,
+        meter_end: null,
+        file_price: null,
+        contract_no: null,
+        row: r + 1,
+      });
+    }
+  }
+
+  return { candidates, errors, months: [...new Set(meterColumns.map((m) => m.month))].sort() };
+}
+
+async function writeCandidates(conn, rows) {
+  if (!rows.length) return;
+  await conn.query(
+    `INSERT INTO print_transactions (device_id, meter_id, month, meter_start, meter_end, pages)
+     VALUES ?
+     ON DUPLICATE KEY UPDATE
+       pages = VALUES(pages), meter_start = VALUES(meter_start), meter_end = VALUES(meter_end)`,
+    [rows.map((row) => [row.device_id, row.meter_id, row.month, row.meter_start, row.meter_end, row.pages])]
+  );
+}
+
+/**
+ * ตรวจยอดที่เพิ่งเขียน (ใน transaction เดียวกัน) กับราคาและสัญญาในระบบ
+ * แล้วสรุปยอดตามใบแจ้งหนี้ของทุกงวดในไฟล์
+ */
+async function checkWrittenReadings(conn, candidates, months) {
+  const errors = [];
+  const warnings = [];
+
+  try {
+    await assertReadingsPriced(conn, candidates.map((row) => ({ meterId: row.meter_id, month: row.month })));
+  } catch (err) {
+    if (err?.code !== "unpriced_reading") throw err;
+    errors.push(...(err.errors ?? []));
+  }
+
+  if (!candidates.length) return { errors, warnings, invoice: [] };
+
+  const [priced] = await conn.query(
+    `SELECT v.meter_id, v.month, v.price_per_page, c.contract_no
+     FROM v_monthly_kpi v
+     LEFT JOIN contracts c ON c.id = v.billing_contract_id
+     WHERE v.month IN (?) AND v.meter_id IN (?)`,
+    [months, [...new Set(candidates.map((row) => row.meter_id))]]
+  );
+  const systemBy = new Map(priced.map((row) => [`${row.meter_id}|${row.month}`, row]));
+
+  for (const row of candidates) {
+    const system = systemBy.get(`${row.meter_id}|${row.month}`);
+    if (!system || system.price_per_page === null) continue; // รายงานไว้แล้วข้างบน
+    const where = { sheet: row.sheet, row: row.row, serial_number: row.serial_number, month: row.month };
+
+    if (row.file_price !== null && Math.abs(Number(system.price_per_page) - row.file_price) > 0.00001) {
+      errors.push({
+        ...where,
+        reason: `ราคาในไฟล์ ${row.file_price} ไม่ตรงกับราคาในระบบ ${Number(system.price_per_page)} — ตรวจหมวดมิเตอร์ของเครื่องหรือราคาในสัญญา`,
+      });
+    }
+    if (row.contract_no && comparableContractNo(row.contract_no) !== comparableContractNo(system.contract_no)) {
+      errors.push({
+        ...where,
+        reason: `ไฟล์เป็นของสัญญา ${row.contract_no} แต่ในระบบเครื่องนี้คิดเงินใต้สัญญา ${system.contract_no ?? "(ไม่มี)"}`,
+      });
+    }
+  }
+
+  // เลขต้นงวดควรเท่าเลขสิ้นงวดของงวดก่อนของมิเตอร์เดียวกัน — ไม่เท่าแปลว่ามียอดหาย
+  // หรือซ้ำระหว่างงวด เตือนแต่ไม่ปฏิเสธ เพราะผู้ให้เช่าเป็นคนออกเลขทั้งสองค่า
+  const [gaps] = await conn.query(
+    `SELECT pt.meter_id, pt.month, pt.meter_start, prev.meter_end AS previous_end, prev.month AS previous_month
+     FROM print_transactions pt
+     JOIN print_transactions prev ON prev.meter_id = pt.meter_id AND prev.month = (
+       SELECT MAX(p2.month) FROM print_transactions p2 WHERE p2.meter_id = pt.meter_id AND p2.month < pt.month
+     )
+     WHERE pt.month IN (?) AND pt.meter_id IN (?)
+       AND pt.meter_start IS NOT NULL AND prev.meter_end IS NOT NULL
+       AND pt.meter_start <> prev.meter_end`,
+    [months, [...new Set(candidates.map((row) => row.meter_id))]]
+  );
+  const candidateBy = new Map(candidates.map((row) => [`${row.meter_id}|${row.month}`, row]));
+  for (const gap of gaps) {
+    const row = candidateBy.get(`${gap.meter_id}|${gap.month}`);
+    if (!row) continue;
+    warnings.push({
+      sheet: row.sheet,
+      row: row.row,
+      serial_number: row.serial_number,
+      month: row.month,
+      reason: `เลขต้นงวด ${gap.meter_start} ไม่เท่าเลขสิ้นงวด ${gap.previous_end} ของงวด ${gap.previous_month}`,
+    });
+  }
+
+  const [invoice] = await conn.query(
+    `SELECT v.month, c.contract_no, v.meter_category AS category, v.price_per_page,
+            SUM(v.pages_printed) AS pages, SUM(v.net_pages) AS net_pages, SUM(v.total_cost) AS line_total
+     FROM v_monthly_kpi v
+     LEFT JOIN contracts c ON c.id = v.billing_contract_id
+     WHERE v.month IN (?) AND v.billing_contract_id IN (
+       SELECT DISTINCT v2.billing_contract_id FROM v_monthly_kpi v2
+       WHERE v2.month IN (?) AND v2.meter_id IN (?)
+     )
+     GROUP BY v.month, c.contract_no, v.meter_category_id, v.meter_category, v.price_per_page
+     ORDER BY v.month, c.contract_no, v.meter_category_id`,
+    [months, months, [...new Set(candidates.map((row) => row.meter_id))]]
+  );
+
+  return {
+    errors,
+    warnings,
+    invoice: invoice.map((line) => ({
+      month: line.month,
+      contract_no: line.contract_no,
+      category: line.category,
+      price_per_page: line.price_per_page === null ? null : String(line.price_per_page),
+      pages: Number(line.pages),
+      net_pages: String(line.net_pages),
+      line_total: line.line_total === null ? null : String(line.line_total),
+    })),
+  };
+}
+
+/** ส่งสัญญาณให้ withTransaction ย้อนกลับ พร้อมผลตรวจของขั้น preview */
+class PreviewRollback extends Error {
+  constructor(result) {
+    super("preview");
+    this.result = result;
+  }
+}
+
 exports.importPrintTransactions = asyncHandler(async (req, res) => {
-
     try {
-
         // routes.js ดักกรณีไม่แนบไฟล์ไว้แล้ว ที่นี่กันไว้อีกชั้นเผื่อมีคนต่อ handler
         // นี้เข้า route ใหม่โดยลืม handleUpload
         if (!req.file) throw badRequest("กรุณาเลือกไฟล์ที่ต้องการนำเข้า", { code: "no_file" });
 
-        const sheet = readFirstSheet(req.file.path);
-
-        const raw = XLSX.utils.sheet_to_json(sheet, {
-            header: 1,
-            defval: "",
-            raw: true,
-        });
-
-        // หาแถวหัวตาราง: แถวแรกที่มีเซลล์ขึ้นต้นด้วย "SN" (ไม่สนตัวพิมพ์เล็ก/ใหญ่ หรือมีจุดต่อท้าย)
-        const headerRowIndex = raw.findIndex((row) =>
-            row.some((cell) => /^sn\.?$/i.test(String(cell || "").trim()))
-        );
-
-        if (headerRowIndex === -1) {
-            throw badRequest("ไม่พบแถวหัวตารางในไฟล์", {
-                code: "header_row_not_found",
-                detail: "หาคอลัมน์ \"SN.\" ไม่เจอ ไฟล์นี้อาจไม่ใช่รูปแบบที่รองรับ — ดูตัวอย่างที่ docs/reference/import-format.md",
+        const workbook = readWorkbook(req.file.path);
+        // ไฟล์ 5MB ที่บีบอัดได้ดีกางออกเป็นแถวได้มหาศาล — นับจากขอบเขตของแผ่นก่อนแปลง
+        // ทุกแถวเป็น object และก่อนยิงคำสั่งเขียนก้อนเดียว (ไฟล์จริงมีไม่กี่แผ่น แผ่นละไม่กี่ร้อยแถว)
+        const declaredRows = workbook.SheetNames.reduce((sum, name) => {
+            const ref = workbook.Sheets[name]?.["!ref"];
+            return sum + (ref ? XLSX.utils.decode_range(ref).e.r + 1 : 0);
+        }, 0);
+        if (workbook.SheetNames.length > MAX_IMPORT_SHEETS || declaredRows > MAX_IMPORT_ROWS) {
+            throw badRequest("ไฟล์ใหญ่เกินกว่าที่นำเข้าได้ในครั้งเดียว", {
+                code: "import_too_large",
+                detail: `นำเข้าได้ไม่เกิน ${MAX_IMPORT_SHEETS} แผ่น และรวมไม่เกิน ${MAX_IMPORT_ROWS.toLocaleString("th-TH")} แถวต่อไฟล์ — แยกไฟล์เป็นหลายครั้ง`,
             });
         }
-
-        const headerRow = raw[headerRowIndex];
-
-        const snColIndex = headerRow.findIndex((cell) =>
-            /^sn\.?$/i.test(String(cell || "").trim())
-        );
-
-        // เก็บ "index คอลัมน์ -> เดือนจริง (YYYY-MM)" เฉพาะคอลัมน์ meter M/YY เท่านั้น
-        // (ไม่ยุ่งกับคอลัมน์ "พิมพ์ประจำเดือน"/"พิมพ์สะสม" ที่ซ้ำ/เป็นยอดคำนวณ ไม่ใช่ค่าดิบ)
-        const meterColumns = [];
-        headerRow.forEach((cell, idx) => {
-            const month = parseMeterMonthHeader(cell);
-            if (month) meterColumns.push({ idx, month });
-        });
-
-        if (!meterColumns.length) {
-            throw badRequest("ไม่พบคอลัมน์มิเตอร์รายเดือนในไฟล์", {
-                code: "meter_columns_not_found",
-                detail: "หัวคอลัมน์ต้องอยู่ในรูป \"meter M/YY\" เช่น \"meter 9/67\"",
-            });
+        const sheets = workbook.SheetNames.map((name) => ({
+            name,
+            rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "", raw: true }),
+        }));
+        if (!sheets.length) {
+            throw badRequest("ไม่พบแผ่นงานในไฟล์", { code: "no_sheet", detail: "ไฟล์นี้ไม่มีแผ่นงานที่อ่านข้อมูลได้" });
         }
 
-        // โหลดเครื่องทั้งหมดมา map SN -> device_id (trim กันช่องว่างเกินจากไฟล์ Excel)
-        const [devices] = await db.query("SELECT id, serial_number FROM devices");
-        const deviceMap = {};
-        devices.forEach((d) => {
-            deviceMap[String(d.serial_number).trim().toUpperCase()] = d.id;
-        });
-
-        const candidates = []; // { device_id, serial_number, month, pages }
-        const errors = [];
-        const seenKeys = new Set();
-
-        for (let r = headerRowIndex + 1; r < raw.length; r++) {
-            const row = raw[r];
-            if (!row || !row.length) continue;
-
-            const sn = String(row[snColIndex] || "").trim();
-            if (!sn) continue; // แถวว่าง
-
-            const device_id = deviceMap[sn.toUpperCase()];
-            if (!device_id) {
-                errors.push({ row: r + 1, serial_number: sn, reason: `ไม่พบเครื่อง SN "${sn}" ในระบบ` });
-                continue;
-            }
-
-            for (const { idx, month } of meterColumns) {
-                const cellValue = row[idx];
-
-                // ช่องว่าง = ไม่เปลี่ยนข้อมูลเดิม ส่วน 0 = ยืนยันว่าเดือนนั้นเป็นศูนย์
-                if (cellValue === "" || cellValue === null || cellValue === undefined) continue;
-
-                const pages = Number(cellValue);
-                if (!Number.isFinite(pages) || pages < 0 || !Number.isInteger(pages) || pages > MAX_PAGES_PER_MONTH) {
-                    errors.push({
-                        row: r + 1,
-                        serial_number: sn,
-                        month,
-                        reason: `ยอดพิมพ์ต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง ${MAX_PAGES_PER_MONTH.toLocaleString("th-TH")} (พบ "${cellValue}")`,
-                    });
-                    continue;
-                }
-
-                const key = `${device_id}|${month}`;
-                if (seenKeys.has(key)) {
-                    errors.push({
-                        row: r + 1,
-                        serial_number: sn,
-                        month,
-                        reason: "Serial และเดือนนี้ซ้ำกันในไฟล์",
-                    });
-                    continue;
-                }
-                seenKeys.add(key);
-                candidates.push({ device_id, serial_number: sn, month, pages });
-            }
-        }
+        const meters = await loadMeters(db);
+        const vendor = parseVendorWorkbook(sheets);
+        const format = vendor ? "vendor" : "template";
+        const { candidates, errors, months } = vendor
+            ? mapVendorReadings(vendor, meters)
+            : mapTemplateReadings(sheets[0].rows, meters);
 
         const existingMap = new Map();
         if (candidates.length) {
-            const deviceIds = [...new Set(candidates.map((row) => row.device_id))];
-            const months = [...new Set(candidates.map((row) => row.month))];
             const [existing] = await db.query(
-                "SELECT device_id, month, pages FROM print_transactions WHERE device_id IN (?) AND month IN (?)",
-                [deviceIds, months]
+                "SELECT meter_id, month, pages FROM print_transactions WHERE meter_id IN (?) AND month IN (?)",
+                [[...new Set(candidates.map((row) => row.meter_id))], months]
             );
-            for (const row of existing) {
-                existingMap.set(`${row.device_id}|${row.month}`, Number(row.pages));
-            }
+            for (const row of existing) existingMap.set(`${row.meter_id}|${row.month}`, Number(row.pages));
         }
 
         const newRows = [];
         const overwriteRows = [];
         const unchangedRows = [];
         for (const row of candidates) {
-            const key = `${row.device_id}|${row.month}`;
+            const key = `${row.meter_id}|${row.month}`;
             if (!existingMap.has(key)) newRows.push(row);
             else if (existingMap.get(key) === row.pages) unchangedRows.push(row);
             else overwriteRows.push({ ...row, previous_pages: existingMap.get(key) });
@@ -545,65 +816,83 @@ exports.importPrintTransactions = asyncHandler(async (req, res) => {
             .createHash("sha256")
             .update(fileDigest)
             .update(JSON.stringify(candidates.map((row) => ({
-                device_id: row.device_id,
+                meter_id: row.meter_id,
                 month: row.month,
                 pages: row.pages,
-                previous_pages: existingMap.has(`${row.device_id}|${row.month}`)
-                    ? existingMap.get(`${row.device_id}|${row.month}`)
+                meter_start: row.meter_start,
+                meter_end: row.meter_end,
+                previous_pages: existingMap.has(`${row.meter_id}|${row.month}`)
+                    ? existingMap.get(`${row.meter_id}|${row.month}`)
                     : null,
             }))))
             .digest("hex");
         const mode = String(req.body?.mode || "preview");
-
-        if (mode === "preview") {
-            return res.json({
-                valid: errors.length === 0,
-                preview_token: errors.length ? null : previewToken,
-                months_found: [...new Set(meterColumns.map((m) => m.month))].sort(),
-                new_rows: newRows,
-                overwrite_rows: overwriteRows,
-                unchanged_rows: unchangedRows,
-                errors,
-            });
-        }
-
-        if (mode !== "commit") {
+        if (mode !== "preview" && mode !== "commit") {
             throw badRequest("โหมดการนำเข้าไม่ถูกต้อง", { code: "invalid_import_mode" });
         }
-        if (errors.length) {
-            throw badRequest("ไฟล์ยังมีข้อมูลที่ต้องแก้ จึงยังบันทึกไม่ได้", {
-                code: "import_validation_failed",
-                errors,
-            });
-        }
-        if (!req.body?.preview_token || req.body.preview_token !== previewToken) {
-            throw badRequest("กรุณาตรวจไฟล์ล่าสุดก่อนยืนยันบันทึก", { code: "preview_required" });
+        if (mode === "commit") {
+            if (errors.length) {
+                throw badRequest("ไฟล์ยังมีข้อมูลที่ต้องแก้ จึงยังบันทึกไม่ได้", {
+                    code: "import_validation_failed",
+                    errors,
+                });
+            }
+            if (!req.body?.preview_token || req.body.preview_token !== previewToken) {
+                throw badRequest("กรุณาตรวจไฟล์ล่าสุดก่อนยืนยันบันทึก", { code: "preview_required" });
+            }
         }
 
         const rowsToWrite = [...newRows, ...overwriteRows];
-        if (rowsToWrite.length > 0) {
-            await db.withTransaction((conn) => conn.query(
-                `
-                INSERT INTO print_transactions (device_id, month, pages)
-                VALUES ?
-                ON DUPLICATE KEY UPDATE pages = VALUES(pages)
-                `,
-                [rowsToWrite.map((row) => [row.device_id, row.month, row.pages])]
-            ));
+        let checked;
+        try {
+            checked = await db.withTransaction(async (conn) => {
+                await writeCandidates(conn, rowsToWrite);
+                const result = await checkWrittenReadings(conn, candidates, months);
+                if (mode === "preview") throw new PreviewRollback(result);
+                if (result.errors.length) {
+                    throw badRequest("ไฟล์ยังมีข้อมูลที่ต้องแก้ จึงยังบันทึกไม่ได้", {
+                        code: "import_validation_failed",
+                        errors: result.errors,
+                    });
+                }
+                return result;
+            });
+        } catch (err) {
+            if (!(err instanceof PreviewRollback)) throw err;
+            checked = err.result;
+        }
+
+        const allErrors = [...errors, ...checked.errors];
+        const summary = {
+            format,
+            months_found: months,
+            sheets: vendor ? vendor.sheets : undefined,
+            invoice: checked.invoice,
+            warnings: checked.warnings,
+        };
+
+        if (mode === "preview") {
+            return res.json({
+                ...summary,
+                valid: allErrors.length === 0,
+                preview_token: allErrors.length ? null : previewToken,
+                new_rows: newRows,
+                overwrite_rows: overwriteRows,
+                unchanged_rows: unchangedRows,
+                errors: allErrors,
+            });
         }
 
         return res.json({
-            message: "Import ยอดพิมพ์รายเดือนสำเร็จ",
-            months_found: [...new Set(meterColumns.map((m) => m.month))].sort(),
+            ...summary,
+            message: "Import ยอดพิมพ์สำเร็จ",
             rows_upserted: rowsToWrite.length,
             unchanged: unchangedRows.length,
         });
-
     } catch (err) {
         // โยนต่อให้ handler กลาง — ดูเหตุผลที่ importDevices
         throw asImportError(err);
     } finally {
         removeUploadedFile(req.file);
     }
-
 });
