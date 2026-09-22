@@ -90,6 +90,40 @@ const MAX_PAGES_PER_MONTH = 1_000_000;
 /** จำนวนรายการสูงสุดต่อหน้าที่ API ยอมให้ขอ (ตามแนวทาง REST ของ Zalando) */
 const MAX_PAGE_SIZE = 200;
 
+/** อักขระล่องหน (Zero-width / format characters) ที่มักใช้หลบเลี่ยงการตรวจสตริง */
+const ZERO_WIDTH_CHARS = "\u200B\u200C\u200D\uFEFF";
+
+/**
+ * อักขระที่โปรแกรมตาราง (เช่น Microsoft Excel) ถือว่าเป็นจุดเริ่มของสูตร (CWE-1236)
+ *
+ * ค่าที่ขึ้นต้นด้วยตัวอักษรเหล่านี้อาจถูกรันเป็นโค้ดเมื่อดาวน์โหลดเป็นไฟล์ CSV/XLSX
+ * แล้วเปิดในเครื่องของผู้ดูแลระบบ (#134)
+ */
+const FORMULA_STARTERS = ["=", "+", "-", "@", "\t", "\r", "\n", "|", "＝", "＋", "－", "＠"];
+
+/**
+ * Regex ตรวจจับว่าข้อความขึ้นต้นด้วยตัวเริ่มสูตรหรือไม่
+ * สร้างจาก FORMULA_STARTERS และ ZERO_WIDTH_CHARS โดยตรงเพื่อไม่ให้นิยามซ้ำ (ADR-0004)
+ * Escape เฉพาะอักขระพิเศษใน character class ([...]) คือ \ ^ ] -
+ */
+const escapedStarters = FORMULA_STARTERS.map((c) => c.replace(/[\\^\]-]/g, "\\$&")).join("");
+const FORMULA_STARTER_REGEX = new RegExp(
+  `^[\\s${ZERO_WIDTH_CHARS}]*[${escapedStarters}]`
+);
+
+/**
+ * ตรวจว่าข้อความขึ้นต้นด้วยอักขระสูตรคำนวณหรือไม่ คืนอักขระตัวเริ่มสูตรที่พบ หรือ null ถ้าปลอดภัย
+ *
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function formulaStarter(value) {
+  const raw = String(value ?? "");
+  const match = raw.match(FORMULA_STARTER_REGEX);
+  if (!match) return null;
+  return match[0].slice(-1);
+}
+
 module.exports = {
   USER_ROLES,
   USER_ROLE_LABELS,
@@ -102,4 +136,8 @@ module.exports = {
   MAX_LENGTH,
   MAX_PAGES_PER_MONTH,
   MAX_PAGE_SIZE,
+  ZERO_WIDTH_CHARS,
+  FORMULA_STARTERS,
+  FORMULA_STARTER_REGEX,
+  formulaStarter,
 };

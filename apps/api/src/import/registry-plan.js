@@ -17,7 +17,7 @@
 //   - เครื่องที่มีสัญญาต้องรู้หมวดมิเตอร์ ไม่งั้นยอดพิมพ์ของเดือนแรกหาราคาไม่ได้ (ADR-0021)
 //   - สถานะการติดตั้งยืนยันย้อนหลังได้เฉพาะเมื่อไฟล์ระบุวันติดตั้ง (ADR-0018 Q21)
 
-const { MAX_LENGTH, monthIndex } = require("@suth/domain");
+const { MAX_LENGTH, monthIndex, formulaStarter, ZERO_WIDTH_CHARS } = require("@suth/domain");
 const { normalizeName, nameKey, createNameResolver } = require("../master-data/names");
 const { comparableContractNo } = require("./vendor-meter");
 
@@ -69,6 +69,7 @@ function serialIndex(serials) {
     byKey.get(key).push(serial);
   };
   for (const serial of serials) {
+    if (!serial) continue;
     add(`p:${plainSerial(serial)}`, serial);
     add(`l:${lookAlikeSerial(serial)}`, serial);
     add(`x:${serial.toUpperCase()}`, serial);
@@ -88,6 +89,42 @@ function serialIndex(serials) {
 
 function tooLong(value, limit) {
   return limit && String(value ?? "").length > limit;
+}
+
+/** ชุดอักขระขีดกลางทุกรูปแบบ (Hyphen/Dash) และช่องว่าง */
+const DASH_AND_SPACE_PATTERN = "-–—\\s";
+
+/** ตรวจว่าซีเรียลเป็นขีดกลางล้วน ช่องว่าง หรืออักขระล่องหน (Zero-width) ล้วนหรือไม่ */
+const DASH_OR_EMPTY_SERIAL_REGEX = new RegExp(`^[${DASH_AND_SPACE_PATTERN}${ZERO_WIDTH_CHARS}]+$`);
+
+/**
+ * รูปแบบข้อความตัวแทน "ไม่มีข้อมูล" ในภาษาไทย เช่น -, --, --- หรือ -ไม่มี-
+ * ซึ่งไม่ใช่สูตรคำนวณและปลอดภัยที่จะใช้ในฟิลด์เสริมอย่างชื่อรุ่นหรือตำแหน่ง
+ *
+ * ⚠️ ต้อง anchor ทั้งหัวและท้าย (^...$) เสมอเพื่อป้องกัน payload ซ่อนท้าย เช่น "-ไม่มี=1+1"
+ */
+const THAI_PLACEHOLDER_REGEX = new RegExp(
+  `^[${DASH_AND_SPACE_PATTERN}]+$|^-\\s*(ไม่มี|ไม่ระบุ|ว่าง)\\s*[-–—]?$`
+);
+
+/**
+ * ตรวจสอบตัวเริ่มสูตรโดยคำนึงถึง placeholder สำหรับฟิลด์เสริม
+ *
+ * @param {unknown} value
+ * @param {{ allowPlaceholder?: boolean }} [options]
+ * @returns {string|null}
+ */
+function checkFormulaStarter(value, { allowPlaceholder = false } = {}) {
+  const raw = String(value ?? "");
+  if (allowPlaceholder && THAI_PLACEHOLDER_REGEX.test(raw.trim())) {
+    return null;
+  }
+  return formulaStarter(raw);
+}
+
+/** ข้อความปฏิเสธแถวที่ขึ้นต้นด้วยอักขระสูตรคำนวณ */
+function formulaProblem(fieldLabel, starter) {
+  return `${fieldLabel}ขึ้นต้นด้วยอักขระสูตรคำนวณ ("${starter}") ซึ่งไม่อนุญาตเพื่อความปลอดภัย`;
 }
 
 /** อ่านค่าจาก object ที่มาจากภายนอก — ชื่ออย่าง "constructor" ต้องไม่ไปเจอของใน prototype */
@@ -290,7 +327,27 @@ function planRegistryImport(input) {
   for (const row of rows) {
     const reasons = [];
     const notes = [];
-    const existing = deviceBySerial.get(row.serial_number.toUpperCase());
+    const serial = String(row.serial_number ?? "").trim();
+    const existing = serial ? deviceBySerial.get(serial.toUpperCase()) : undefined;
+
+    if (!serial || DASH_OR_EMPTY_SERIAL_REGEX.test(serial)) {
+      reasons.push("ไม่มีเลขซีเรียล");
+    } else {
+      const serialStarter = checkFormulaStarter(serial);
+      if (serialStarter) {
+        reasons.push(formulaProblem("เลขซีเรียล", serialStarter));
+      }
+    }
+
+    const modelStarter = checkFormulaStarter(row.model, { allowPlaceholder: true });
+    if (modelStarter) {
+      reasons.push(formulaProblem("ชื่อรุ่น", modelStarter));
+    }
+
+    const locationStarter = checkFormulaStarter(row.location, { allowPlaceholder: true });
+    if (locationStarter) {
+      reasons.push(formulaProblem("ตำแหน่ง", locationStarter));
+    }
 
     // ฐานเดิมไม่ strict — ค่าที่ยาวเกินเคยถูกตัดทิ้งเงียบๆ แล้วตอบว่านำเข้าสำเร็จ (#85)
     // บอกความยาวจริงกับเพดาน คนแก้ไฟล์จะรู้ว่าต้องตัดเท่าไร

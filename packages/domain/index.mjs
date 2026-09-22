@@ -56,6 +56,10 @@ export const {
   MAX_LENGTH,
   MAX_PAGES_PER_MONTH,
   MAX_PAGE_SIZE,
+  ZERO_WIDTH_CHARS,
+  FORMULA_STARTERS,
+  FORMULA_STARTER_REGEX,
+  formulaStarter,
 } = domain;
 
 export default domain;

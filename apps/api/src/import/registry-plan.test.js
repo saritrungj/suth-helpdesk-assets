@@ -298,3 +298,72 @@ test("ชื่อชั้นที่ยาวเกินคอลัมน�
   assert.equal(result.rows[0].action, "skip");
   assert.match(result.rows[0].reasons[0], /ชื่อชั้นยาว 51/);
 });
+
+/*
+ * เทสชุดนี้คุ้มกันช่องโหว่ Formula Injection (CWE-1236) ตาม Issue #134
+ * ป้องกันการใส่สูตรคำนวณที่ขึ้นต้นด้วย =, +, -, @, \t, \r, \n, | ในช่องที่ผู้ใช้กรอก
+ * ซึ่งอาจถูกรันเป็นโค้ดเมื่อดาวน์โหลดข้อมูลออกไปเปิดด้วยโปรแกรมตาราง (Excel)
+ */
+
+test("ปฏิเสธเลขซีเรียลที่ขึ้นต้นด้วยอักขระสูตรคำนวณ (=, +, -, @) แม้มีช่องว่างหรือ \\t, \\r นำหน้า เพื่อป้องกัน Formula Injection (#134)", () => {
+  for (const sn of ["=cmd|' /C calc'!A0", "@SUM(1,1)", "+12345", "-12345", "\t+12345", "\r=cmd"]) {
+    const result = plan([row({ serial_number: sn })], { decisions: allCreate });
+    assert.equal(result.rows[0].action, "skip");
+    assert.match(result.rows[0].reasons[0], /เลขซีเรียลขึ้นต้นด้วยอักขระสูตรคำนวณ/);
+  }
+});
+
+test("ปฏิเสธชื่อรุ่นและตำแหน่งที่ขึ้นต้นด้วยอักขระสูตรคำนวณ (#134)", () => {
+  const result = plan([row({ serial_number: "PRN-001", model: "=1+1", location: "@LOCATION" })], { decisions: allCreate });
+  assert.equal(result.rows[0].action, "skip");
+  assert.ok(result.rows[0].reasons.some((r) => /ชื่อรุ่นขึ้นต้นด้วยอักขระสูตรคำนวณ/.test(r)));
+  assert.ok(result.rows[0].reasons.some((r) => /ตำแหน่งขึ้นต้นด้วยอักขระสูตรคำนวณ/.test(r)));
+});
+
+test("เครื่องหมาย - ตัวเดียวหรือข้อความตัวแทนในตำแหน่งหรือชื่อรุ่นไม่ถือว่าเป็นสูตร (#134)", () => {
+  for (const placeholder of ["-", "--", "---", "-ไม่มี-", "-ไม่ระบุ-", "- ว่าง -"]) {
+    const result = plan([row({ serial_number: "PRN-001", model: placeholder, location: placeholder })], { decisions: allCreate });
+    assert.ok(!result.rows[0].reasons.some((r) => /ขึ้นต้นด้วยอักขระสูตรคำนวณ/.test(r)));
+  }
+});
+
+test("ข้อความตัวแทนที่มีสูตรซ่อนอยู่ข้างหลังต้องถูกปฏิเสธ ไม่ให้หลุดรอด (#134)", () => {
+  const r1 = plan([row({ serial_number: "PRN-001", model: "-ว่าง+cmd|x!A0" })], { decisions: allCreate });
+  assert.equal(r1.rows[0].action, "skip");
+  assert.match(r1.rows[0].reasons[0], /ชื่อรุ่นขึ้นต้นด้วยอักขระสูตรคำนวณ/);
+
+  const r2 = plan([row({ serial_number: "PRN-001", location: "- ไม่มี=1+1" })], { decisions: allCreate });
+  assert.equal(r2.rows[0].action, "skip");
+  assert.match(r2.rows[0].reasons[0], /ตำแหน่งขึ้นต้นด้วยอักขระสูตรคำนวณ/);
+
+  const r3 = plan([row({ serial_number: "PRN-001", model: "-ไม่มี-123" })], { decisions: allCreate });
+  assert.equal(r3.rows[0].action, "skip");
+  assert.match(r3.rows[0].reasons[0], /ชื่อรุ่นขึ้นต้นด้วยอักขระสูตรคำนวณ/);
+});
+
+test("เลขซีเรียลที่เป็นขีดกลางล้วน (-, --, ---) หรือ zero-width ล้วน ต้องรายงานว่า 'ไม่มีเลขซีเรียล' (#134)", () => {
+  for (const sn of ["-", "--", "---", " - ", "\u200B", "\u200B\u200C"]) {
+    const result = plan([row({ serial_number: sn })], { decisions: allCreate });
+    assert.equal(result.rows[0].action, "skip");
+    assert.ok(result.rows[0].reasons.includes("ไม่มีเลขซีเรียล"));
+  }
+});
+
+test("ดักจับการหลบเลี่ยงด้วย Zero-width space, ช่องว่างนำหน้า, หรือตัวอักษรแบบ Full-width (#134)", () => {
+  for (const sn of ["\u200B=cmd|' /C calc'!A0", "  @SUM(1,1)", "＝1+1", "|cmd"]) {
+    const result = plan([row({ serial_number: sn })], { decisions: allCreate });
+    assert.equal(result.rows[0].action, "skip");
+    assert.match(result.rows[0].reasons[0], /เลขซีเรียลขึ้นต้นด้วยอักขระสูตรคำนวณ/);
+  }
+});
+
+test("เลขซีเรียลปกติที่มีขีดกลางข้างใน (เช่น PRN-OPD-001) ต้องผ่านได้ปกติ", () => {
+  const result = plan([row({ serial_number: "PRN-OPD-001", model: "LaserJet-Pro", location: "ห้องตรวจ-1" })], {
+    decisions: {
+      ...allCreate,
+      models: { ...allCreate.models, "oki|laserjet-pro": { meter_category_id: 2 } },
+    },
+  });
+  assert.equal(result.rows[0].action, "create");
+  assert.equal(result.rows[0].reasons.length, 0);
+});
