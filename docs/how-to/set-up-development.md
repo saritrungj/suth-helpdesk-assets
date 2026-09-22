@@ -38,7 +38,14 @@ mysql -u root -p your_database < database/schema.sql
 
 `database/schema.sql` รวมโครงสร้างล่าสุดไว้แล้ว **ห้ามรัน migration เพิ่มบนฐานข้อมูลที่เพิ่งสร้างจาก schema นี้** เพราะจะเกิด duplicate column, table, key หรือ constraint ถ้าเป็นฐานข้อมูลเดิมที่มีข้อมูลอยู่แล้ว ให้ไปที่ [รัน migration](run-migrations.md) แทน
 
-Schema มีบัญชี prototype แบบ bcrypt hash แต่ไม่เก็บรหัสผ่านจริงใน repository ให้สร้างหรือเปลี่ยนบัญชีสำหรับเครื่องของคุณเองก่อนใช้งาน
+Schema สร้างบัญชี `admin` ที่ล็อกไว้ (ล็อกอินไม่ได้) และไม่มี hash ของรหัสใดอยู่ใน repository ฐานบน Docker ตั้งรหัสด้วย `npm run db:bootstrap` ส่วน MySQL ที่ติดตั้งเองให้สร้าง hash บนเครื่องของคุณแล้วใส่ลงฐาน:
+
+```powershell
+$env:NEW_ADMIN_PASSWORD = Read-Host "รหัส admin อย่างน้อย 12 ตัวอักษร" -MaskInput
+node -e "console.log(require('bcrypt').hashSync(process.env.NEW_ADMIN_PASSWORD, 10))"
+Remove-Item Env:NEW_ADMIN_PASSWORD
+mysql -u root -p your_database -e "UPDATE users SET password = '<hash ที่ได้>' WHERE username = 'admin'"
+```
 
 ## 4. ใส่ข้อมูลจำลอง (ไม่บังคับ)
 

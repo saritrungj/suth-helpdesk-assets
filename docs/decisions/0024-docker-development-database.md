@@ -20,7 +20,7 @@
   - บัญชีแอป — `SELECT/INSERT/UPDATE/DELETE` และ `SHOW VIEW` (ตัวตรวจ schema ตอนบูตอ่านนิยาม view) ไม่มีสิทธิ์สร้างหรือแก้ตาราง
   - บัญชีอ่านอย่างเดียว — `SELECT` และ `SHOW VIEW` สำหรับ phpMyAdmin / DBeaver ดูได้ว่าข้อมูลเข้าหรือยัง แต่แก้ไม่ได้
 - phpMyAdmin ยอมให้เข้าเฉพาะบัญชีอ่านอย่างเดียว (`AllowRoot = false` + `AllowDeny`) — root และบัญชีแอปถูกปฏิเสธแม้รหัสถูก งานดูแลฐานที่ต้องใช้ root ทำผ่าน `docker exec`
-- `npm run db:bootstrap` ต่อฐานตรงเพื่อตั้งรหัส `admin` และลบบัญชี prototype `user1` เท่านั้น ทำงานเฉพาะฐานที่ยังเป็นบัญชี prototype ล้วน — ขอบเขตเดียวกับข้อ 3 ของ ADR-0016
+- `npm run db:bootstrap` ต่อฐานตรงเพื่อตั้งรหัส `admin` และลบบัญชี prototype `user1` เท่านั้น ทำงานเฉพาะฐานที่ยังเป็นบัญชี prototype ล้วน — ขอบเขตเดียวกับข้อ 3 ของ ADR-0016 (ตั้งแต่ #138 `schema.sql` สร้างเฉพาะ `admin` ที่ล็อกไว้ไม่มี hash สคริปต์รู้จักทั้งสองรุ่น)
 - รหัสผ่านทั้งหมดอยู่ใน `database/docker/compose.env` ซึ่งอยู่ใน `.gitignore`
 - ย้ายข้อมูลข้ามเครื่องด้วย `npm run db:dump` / `db:restore` (ไฟล์ `mysqldump` ธรรมดา) ไม่ย้าย Docker volume ตรงๆ เพราะไฟล์ SQL อ่านได้ ตรวจได้ และ restore สำรองของเดิมก่อนเสมอ
 - ไฟล์จริงของหน่วยงาน (Excel ต้นฉบับ plan ข้อมูลหลัก ไฟล์สำรอง) เก็บนอก repo เช่น `D:\suth-data\` เพราะ repo เป็น public — `.gitignore` กันไฟล์ Excel/CSV ทุกไฟล์ใต้ `docs/`

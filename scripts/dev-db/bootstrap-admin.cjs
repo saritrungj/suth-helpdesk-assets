@@ -2,14 +2,14 @@
 //
 //   npm run db:bootstrap
 //
-// schema.sql ใส่บัญชี prototype ที่ไม่มีใครรู้รหัส (admin, user1) ฐานใหม่จึงล็อกอินไม่ได้
+// schema.sql สร้างบัญชี admin ที่ล็อกไว้ (รหัส "!" ล็อกอินไม่ได้) ฐานใหม่จึงยังไม่มีใครเข้าได้
 // และระบบไม่มี endpoint ตั้งรหัสให้บัญชีที่ยังล็อกอินไม่ได้ — ซึ่งไม่ควรมี สคริปต์นี้จึงต่อ
 // ฐานตรงเพื่อแตะ "บัญชี" อย่างเดียว ในขอบเขตเดียวกับ ADR-0016 และ ADR-0024
 //
 //   1. ยืนยันว่าชี้ฐานบน Docker ของ compose.env — พอร์ตและชื่อฐานต้องตรง ไม่ใช่ XAMPP 3306
 //   2. ยืนยันว่าบัญชีแอป (SUTH_APP_USER) ต่อได้ — entrypoint ไม่หยุดเมื่อสคริปต์สร้างบัญชีล้ม
-//   3. ทำเฉพาะฐานที่ยังเป็นบัญชี prototype ล้วน ถ้ามีบัญชีอื่นหรือรหัสถูกเปลี่ยนแล้ว = ปฏิเสธ
-//   4. ตั้งรหัส admin จาก SUTH_ADMIN_PASSWORD และลบ user1 (รหัส prototype ที่ไม่มีใครรู้)
+//   3. ทำเฉพาะฐานที่ยังไม่เคยตั้งบัญชี ถ้ามีบัญชีอื่นหรือรหัสถูกเปลี่ยนแล้ว = ปฏิเสธ
+//   4. ตั้งรหัส admin จาก SUTH_ADMIN_PASSWORD และลบ user1 ถ้ามี (บัญชีของ schema รุ่นก่อน #138)
 //
 // ข้อมูลธุรกิจทุกชิ้นลงผ่าน HTTP API เท่านั้น — ดู scripts/master-data/load-master-data.cjs
 
@@ -21,11 +21,28 @@ const bcrypt = require("bcrypt");
 const ROOT = path.join(__dirname, "..", "..");
 const ENV_FILE = path.join(ROOT, "database", "docker", "compose.env");
 
-// hash ของบัญชี prototype ใน schema.sql — ใช้เป็น sentinel ว่าฐานยังไม่เคยถูกตั้งค่า
-const PROTOTYPE = {
-  admin: "$2b$10$yRofvUyNetzokkLKJAcqw.qRPIFUEdvi7eoqTkeSM4IQRKhZ7WsyC",
-  user1: "$2b$10$5RJWHc6Ky55Rxuyjyc/o5Op0z.o9RpKC/g5KPHK/tjPpKNBNh4yEu",
-};
+/**
+ * บัญชีที่ schema.sql สร้างไว้ — ใช้เป็น sentinel ว่าฐานยังไม่เคยถูกตั้งค่า
+ *
+ * รู้จักสองรุ่น: ฐานที่สร้างหลัง #138 มี admin ที่ล็อกไว้บัญชีเดียว ส่วนฐานที่สร้างก่อนหน้า
+ * (volume เดิมที่ยังไม่เคย bootstrap) มีบัญชีตัวอย่างสองบัญชีที่มี hash อยู่ใน repo สาธารณะ
+ * ซึ่งต้องถูกแทนด้วยสคริปต์นี้เช่นกัน
+ */
+const UNTOUCHED_ACCOUNTS = [
+  { admin: "!" },
+  {
+    admin: "$2b$10$yRofvUyNetzokkLKJAcqw.qRPIFUEdvi7eoqTkeSM4IQRKhZ7WsyC",
+    user1: "$2b$10$5RJWHc6Ky55Rxuyjyc/o5Op0z.o9RpKC/g5KPHK/tjPpKNBNh4yEu",
+  },
+];
+
+/** บัญชีในฐานตรงกับชุดที่ schema.sql สร้างไว้ชุดใดชุดหนึ่งทุกประการหรือไม่ */
+function isUntouched(users) {
+  return UNTOUCHED_ACCOUNTS.some((accounts) =>
+    users.length === Object.keys(accounts).length &&
+    users.every((user) => Object.hasOwn(accounts, user.username) && accounts[user.username] === user.password)
+  );
+}
 
 function fail(message) {
   console.error(`\n✖ ${message}`);
@@ -77,16 +94,14 @@ async function main() {
     if (identity.db !== database) fail(`ต่อได้ฐาน ${identity.db} ไม่ใช่ ${database}`);
     console.log(`ฐาน ${identity.db} บน 127.0.0.1:${port} (${identity.version})`);
 
-    // 3. sentinel — บัญชีต้องเป็น prototype ล้วน
+    // 3. sentinel — บัญชีต้องเป็นชุดที่ schema.sql สร้างไว้ ยังไม่มีใครแตะ
     const [users] = await root.query("SELECT username, password FROM users ORDER BY username");
-    const untouched =
-      users.length === 2 && users.every((user) => PROTOTYPE[user.username] === user.password);
-    if (!untouched) {
+    if (!isUntouched(users)) {
       const names = users.map((user) => user.username).join(", ");
       fail(`ฐานนี้ถูกตั้งบัญชีไปแล้ว (${names}) — ไม่แตะซ้ำ ถ้าจะเริ่มใหม่ใช้ npm run db:reset -- --confirm`);
     }
 
-    // 4. ตั้งรหัส admin และลบบัญชี prototype ที่ไม่มีใครรู้รหัส
+    // 4. ตั้งรหัส admin และลบบัญชีตัวอย่างของ schema รุ่นก่อน (ถ้ามี)
     const hash = await bcrypt.hash(adminPassword, 10);
     await root.beginTransaction();
     await root.query("UPDATE users SET password = ? WHERE username = 'admin'", [hash]);
@@ -96,7 +111,7 @@ async function main() {
     await root.end();
   }
 
-  console.log("ตั้งรหัส admin แล้ว (รหัสอยู่ใน compose.env) และลบบัญชี prototype user1");
+  console.log("ตั้งรหัส admin แล้ว (รหัสอยู่ใน compose.env)");
   console.log("\nให้ API ต่อฐานนี้ ตั้งใน apps/api/.env:");
   console.log(`  DB_HOST=127.0.0.1\n  DB_PORT=${port}\n  DB_NAME=${database}`);
   console.log(`  DB_USER=${env.SUTH_APP_USER || "suth_app"}\n  DB_PASSWORD=<SUTH_APP_PASSWORD ใน compose.env>`);
