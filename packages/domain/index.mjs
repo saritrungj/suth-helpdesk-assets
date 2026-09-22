@@ -20,6 +20,8 @@ export const {
   CE_YEAR_MAX,
   isBuddhistYear,
   normalizeMonth,
+  dateFromParts,
+  parseDayFirstDate,
   currentMonth,
   recentMonths,
   toBuddhistMonth,
