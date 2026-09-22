@@ -17,7 +17,14 @@
     "test": "npm run test --workspaces --if-present",
     "verify": "npm test && npm run build && npm run test:e2e:fixture --workspace @suth/web",
     "verify:db": "node scripts/verify-db.cjs",
-    "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}\""
+    "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}\"",
+    "db:up": "docker compose --env-file database/docker/compose.env up -d --wait",
+    "db:down": "docker compose --env-file database/docker/compose.env down",
+    "db:reset": "node scripts/dev-db/backup.cjs reset",
+    "db:logs": "docker compose --env-file database/docker/compose.env logs -f db",
+    "db:bootstrap": "node scripts/dev-db/bootstrap-admin.cjs",
+    "db:dump": "node scripts/dev-db/backup.cjs dump",
+    "db:restore": "node scripts/dev-db/backup.cjs restore"
   },
   "engines": {
     "node": ">=20"

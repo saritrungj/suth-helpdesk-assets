@@ -45,3 +45,5 @@
 | [0021](0021-contract-price-applies-on-save.md) | ราคาในสัญญาใช้คิดเงินทันทีที่บันทึก ไม่มีขั้นยืนยันราคา | Accepted |
 | [0022](0022-round-at-invoice-line-and-allocate.md) | ปัดเงินที่ระดับรายการราคาต่องวดให้ตรงใบแจ้งหนี้ แล้วกระจายเศษสตางค์ | Accepted |
 | [0023](0023-contract-term-price-lines-and-meters.md) | สัญญามีอายุของตัวเองและรายการราคา ยอดพิมพ์บันทึกรายมิเตอร์ต่องวด | Accepted |
+| [0024](0024-docker-development-database.md) | ฐานข้อมูลบน Docker Compose ด้วย MySQL 8.4 LTS ฐานเดียวที่เป็นข้อมูลจริง | Accepted |
+| [0025](0025-master-data-aliases.md) | ชื่อเรียกอื่นของยี่ห้อ อาคาร และฝ่าย | Accepted |

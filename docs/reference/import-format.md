@@ -45,7 +45,7 @@ serial_number, brand, model, building, floor, division, department, contract_no,
 
 `POST /api/print-transactions/import`
 
-ไฟล์ต้นฉบับจากฝ่ายชีท ตัวอย่างรูปแบบจริงอยู่ที่ `docs/meter-import-source.xlsx`
+ไฟล์ต้นฉบับจากฝ่ายชีท — ไฟล์จริงเก็บนอก repo (เช่น `D:suth-dataaw`) เพราะ repo เป็น public และไฟล์มีข้อมูลของหน่วยงาน
 
 | หัวข้อ | รายละเอียด |
 |---|---|

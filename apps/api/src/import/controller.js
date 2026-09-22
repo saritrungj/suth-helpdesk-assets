@@ -447,7 +447,7 @@ exports.importDevices = asyncHandler(async (req, res) => {
 //   1. รายงานมิเตอร์รายงวดของผู้ให้เช่า (ADR-0023) — หลายแผ่น แผ่นละงวด มีเลขมิเตอร์
 //      ต้นงวด/สิ้นงวดและราคาต่อหน้า ดู import/vendor-meter.js
 //   2. เทมเพลตเดิม — แผ่นเดียว คอลัมน์ "meter M/YY" เป็นยอดรายเดือนของมิเตอร์หลัก
-//      ตัวอย่างที่ docs/meter-import-source.xlsx
+//      ไฟล์จริงเก็บนอก repo (repo เป็น public) — หัวตารางดูที่ docs/reference/import-format.md
 //
 // ## ตรวจด้วยการเขียนจริงแล้วย้อนกลับ
 //

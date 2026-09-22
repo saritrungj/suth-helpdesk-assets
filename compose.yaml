@@ -1,0 +1,65 @@
+# compose.yaml — ฐานข้อมูลของระบบบน Docker: MySQL 8.4 LTS + phpMyAdmin (ADR-0024)
+#
+#   npm run db:up        เปิดฐานและ phpMyAdmin (ครั้งแรกสร้างฐานจาก database/schema.sql)
+#   npm run db:down      ปิด โดยเก็บข้อมูลไว้ใน volume
+#
+# ค่าทั้งหมดอ่านจาก database/docker/compose.env (อยู่ใน .gitignore) — คัดลอกจาก
+# compose.env.example แล้วตั้งรหัสผ่านเอง วิธีใช้เต็มอยู่ที่ docs/how-to/run-docker-database.md
+#
+# ทุกพอร์ตผูก 127.0.0.1 เท่านั้น เครื่องนี้ต่อเครือข่ายโรงพยาบาล ถ้าผูก 0.0.0.0
+# ใครในวงเดียวกันก็เปิด phpMyAdmin หรือต่อฐานได้
+
+name: suth
+
+services:
+  db:
+    image: ${SUTH_DB_IMAGE:-mysql:8.4}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SUTH_DB_ROOT_PASSWORD:?ตั้ง SUTH_DB_ROOT_PASSWORD ใน database/docker/compose.env}
+      MYSQL_DATABASE: ${SUTH_DB_NAME:-hospital_it_asset}
+      SUTH_APP_USER: ${SUTH_APP_USER:-suth_app}
+      SUTH_APP_PASSWORD: ${SUTH_APP_PASSWORD:?ตั้ง SUTH_APP_PASSWORD ใน database/docker/compose.env}
+      SUTH_READONLY_USER: ${SUTH_READONLY_USER:-suth_readonly}
+      SUTH_READONLY_PASSWORD: ${SUTH_READONLY_PASSWORD:?ตั้ง SUTH_READONLY_PASSWORD ใน database/docker/compose.env}
+    # ชื่อภาษาไทยต้องเก็บเป็น utf8mb4 และเรียงแบบเดียวกับฐานเดิม (utf8mb4_unicode_ci)
+    # ตั้งชัดไว้ ไม่พึ่งค่าเริ่มต้นของ image ซึ่งบางรุ่นยังเป็น latin1 (ข้อความไทยกลายเป็น "????")
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "127.0.0.1:${SUTH_DB_PORT:-3307}:3306"
+    volumes:
+      # volume ตั้งชื่อตาม engine — ข้อมูลของ MariaDB รุ่นก่อน (db-data) เปิดด้วย MySQL ไม่ได้
+      # ย้ายข้อมูลข้าม engine ด้วยการลงใหม่จากไฟล์ต้นฉบับ (docs/how-to/run-docker-database.md)
+      - mysql-data:/var/lib/mysql
+      # ไฟล์ในโฟลเดอร์นี้รันตามลำดับชื่อ เฉพาะตอนที่ volume ยังว่าง (สร้างฐานครั้งแรก)
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+      - ./database/docker/initdb/20-app-users.sh:/docker-entrypoint-initdb.d/20-app-users.sh:ro
+    healthcheck:
+      # ping ผ่าน TCP — ระหว่างสร้างฐานครั้งแรก image เปิด server ชั่วคราวที่ปิด network ไว้
+      # จึงไม่ healthy จนกว่า schema และบัญชีจะสร้างเสร็จและ server ตัวจริงเปิด
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  phpmyadmin:
+    image: ${SUTH_PMA_IMAGE:-phpmyadmin:5.2}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PMA_HOST: db
+      # ไม่ใส่ PMA_USER — หน้าเข้าสู่ระบบถามทุกครั้ง และ config.user.inc.php ยอมเฉพาะบัญชี
+      # อ่านอย่างเดียว การแก้ข้อมูลต้องผ่านแอป (AGENTS.md "ห้ามเปิดทางเข้าที่สอง")
+      SUTH_READONLY_USER: ${SUTH_READONLY_USER:-suth_readonly}
+    volumes:
+      - ./database/docker/phpmyadmin/config.user.inc.php:/etc/phpmyadmin/config.user.inc.php:ro
+    ports:
+      - "127.0.0.1:${SUTH_PMA_PORT:-8080}:80"
+
+volumes:
+  mysql-data:

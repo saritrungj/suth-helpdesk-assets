@@ -25,6 +25,7 @@
 อ่านตอนมีงานอยู่ตรงหน้า ทำตามทีละขั้นจนจบ
 
 - [ตั้งระบบสำหรับพัฒนา](how-to/set-up-development.md)
+- [เปิดฐานพัฒนาบน Docker และดูข้อมูลด้วย phpMyAdmin](how-to/run-docker-database.md)
 - [รัน migration กับฐานข้อมูลเดิม](how-to/run-migrations.md)
 - [นำเข้าไฟล์ Excel/CSV](how-to/import-files.md)
 - [ตรวจยอดและติดตามงานจากรายงาน](how-to/use-report-workflow.md)

@@ -5,7 +5,7 @@
 ## สิ่งที่ต้องมีก่อน
 
 - Node.js 20 ขึ้นไป และ npm
-- MySQL หรือ MariaDB
+- Docker Desktop แล้วใช้ [ฐานข้อมูลบน Docker](run-docker-database.md) (MySQL 8.4) แทนข้อ 3–4 ซึ่งสร้างฐาน บัญชี และ phpMyAdmin ให้ในคำสั่งเดียว — หรือ MySQL 8.4 ที่ติดตั้งเอง
 - สิทธิ์สร้างฐานข้อมูลใหม่
 
 ## 1. ติดตั้ง dependency

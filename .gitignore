@@ -61,5 +61,12 @@ docs/reference/review-*.md
 .playwright-cli/
 
 # ใบแจ้งหนี้จริงของผู้ให้เช่า — ข้อมูลจริงของโรงพยาบาล ใช้ทดสอบบนเครื่องเท่านั้น (ADR-0023)
-docs/6-Meter*.xlsx
-docs/MeterReport_*.xls
+# ไฟล์ Excel/CSV ใน docs/ คือไฟล์จริงของหน่วยงานเสมอ — repo เป็น public เก็บนอก repo (D:suth-dataaw)
+docs/**/*.xls
+docs/**/*.xlsx
+docs/**/*.xlsm
+docs/**/*.csv
+
+# ฐานพัฒนาบน Docker — รหัสผ่านของเครื่องนี้ (ADR-0024)
+database/docker/compose.env
+

@@ -28,6 +28,14 @@ prefix และความรับผิดชอบ — รายละเ�
 
 Master Data ใช้ prefix แยกกันแต่อยู่ในโฟลเดอร์เดียว (`src/master-data/`) — `/api/brands`, `/api/buildings`, `/api/floors`, `/api/divisions`, `/api/departments` และ `/api/fiscal-years`
 
+ยี่ห้อ อาคาร และฝ่ายมีชื่อเรียกอื่น ([ADR-0025](../decisions/0025-master-data-aliases.md)) — ชื่อหนึ่งชี้ได้รายการเดียว ชนกันตอบ 409 พร้อม `code` `alias_is_name` / `alias_taken` / `name_is_alias`
+
+| Endpoint | ทำอะไร |
+|---|---|
+| `GET /api/{brands,buildings,divisions}/aliases` | ชื่อเรียกอื่นทั้งหมด `{ id, target_id, alias }` |
+| `POST /api/{brands,buildings,divisions}/:id/aliases` | เพิ่มชื่อเรียกอื่นให้รายการ `:id` — body `{ alias }` (admin) |
+| `DELETE /api/{brands,buildings,divisions}/aliases/:id` | ลบชื่อเรียกอื่นด้วย id ของชื่อเรียกอื่น (admin) |
+
 ## เส้นทางที่ตอบคำถามหลายข้อในคำขอเดียว
 
 สองเส้นนี้ต่างจากเส้นอื่นตรงที่ไม่ได้สะท้อนตารางใดตารางหนึ่ง แต่ประกอบคำตอบให้ตรงกับ

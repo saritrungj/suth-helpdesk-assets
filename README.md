@@ -26,7 +26,7 @@
 
 - Backend: Node.js (CommonJS), Express และ MySQL — ข้อผิดพลาดตามมาตรฐาน Problem Details (RFC 9457) และตรวจข้อมูลขาเข้าด้วย zod ทุกเส้นทาง (ดู [ADR-0010](docs/decisions/0010-problem-details-and-api-conventions.md))
 - Frontend: Vue 3, Vite, Tailwind CSS v4, TanStack Query และ Chart.js — หน้าตาทั้งระบบผ่าน design system กลาง (token + Reka UI + lucide-vue-next) ดู [ADR-0008](docs/decisions/0008-design-system-tokens-and-ui-kit.md) และ [ADR-0009](docs/decisions/0009-tanstack-query-as-the-data-layer.md)
-- Database: MySQL schema, ordered migrations และข้อมูลจำลอง
+- Database: MySQL 8.4 บน Docker ([ฐานข้อมูลบน Docker](docs/how-to/run-docker-database.md)) — schema, ordered migrations ส่วนข้อมูลจำลองมีเฉพาะในชุดทดสอบที่สร้างฐานชั่วคราว
 
 ## โครงสร้าง repository
 

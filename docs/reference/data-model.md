@@ -6,6 +6,7 @@
 |---|---|---|
 | ผู้ใช้ | `users` | บัญชี รหัสผ่านแบบ bcrypt hash และ role |
 | Master Data | `brand`, `building`, `floor`, `division`, `department` | ข้อมูลอ้างอิงของอุปกรณ์และรายงาน |
+| Master Data | `brand_alias`, `building_alias`, `division_alias` | ชื่อที่ไฟล์ต่างชุดใช้เรียกรายการเดียวกัน ([ADR-0025](../decisions/0025-master-data-aliases.md)) |
 | ปีงบและสัญญา | `fiscal_year`, `contracts`, `contract_price_line` | ช่วงปีงบ อายุสัญญา และราคาต่อหมวดมิเตอร์ |
 | ทรัพย์สิน | `devices` | ข้อมูลประจำเครื่อง ตำแหน่งปัจจุบัน สัญญา และสถานะ |
 | ประวัติ | `device_location_history` | ช่วงเวลาที่เครื่องอยู่แต่ละสถานที่และหน่วยงาน |
@@ -35,6 +36,7 @@
 | `device_service_period` | `CHECK chk_device_service_period_order` | ช่วงที่สิ้นสุดก่อนเริ่ม ซึ่งจะทำให้เดือนนั้นหายจากตัวส่วนเงียบๆ |
 | `device_contract_history` | `CHECK chk_device_contract_history_order` | ช่วงการคิดเงินที่สิ้นสุดก่อนเริ่ม |
 | `contracts` | `CHECK chk_contracts_effective_order` | ช่วงที่สัญญามีผลซึ่งสิ้นสุดก่อนเริ่ม |
+| `*_alias` | `UNIQUE KEY (alias)` | ชื่อเรียกอื่นเดียวชี้สองรายการ — การห้ามชนชื่อหลักอยู่ใน API เพราะคนละตาราง |
 
 ## รูปแบบค่าที่ต้องรู้
 

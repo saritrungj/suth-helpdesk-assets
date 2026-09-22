@@ -2,6 +2,11 @@
 -- Hospital IT Asset Management Database Schema
 -- ==============================================================================
 
+-- ข้อความไทยในไฟล์นี้เป็น UTF-8 — บอก server ตรงๆ ไม่พึ่ง charset ของ client ที่โหลดไฟล์
+-- client ของ image MySQL และ mysql บน Windows ใช้ latin1/cp874 เป็นค่าเริ่มต้น ถ้าไม่มีบรรทัดนี้
+-- ชื่อไทยจะถูกเข้ารหัสซ้อนลงฐานโดยไม่ error (พบจริงตอนย้ายฐานบน Docker ไป MySQL 8.4, #130)
+SET NAMES utf8mb4;
+
 -- ------------------------------------------------------------------------------
 -- 1. Master Data (Lookup Tables)
 -- ------------------------------------------------------------------------------
@@ -68,6 +73,35 @@ CREATE TABLE department (
     status ENUM('active','inactive') DEFAULT 'active',
     FOREIGN KEY (division_id) REFERENCES division(id)
 );
+
+-- ชื่อเรียกอื่นของข้อมูลหลัก (ADR-0025) — ชื่อที่ไฟล์ต่างชุดใช้เรียกยี่ห้อ อาคาร หรือฝ่าย
+-- ตัวเดียวกัน ชื่อหนึ่งชี้ได้รายการเดียว การห้ามชนชื่อหลักอยู่ใน API (master-data/routes.js)
+CREATE TABLE brand_alias (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    brand_id INT NOT NULL,
+    alias VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_brand_alias (alias),
+    CONSTRAINT fk_brand_alias_brand FOREIGN KEY (brand_id) REFERENCES brand(id) ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE building_alias (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    building_id INT NOT NULL,
+    alias VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_building_alias (alias),
+    CONSTRAINT fk_building_alias_building FOREIGN KEY (building_id) REFERENCES building(id) ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE division_alias (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    division_id INT NOT NULL,
+    alias VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_division_alias (alias),
+    CONSTRAINT fk_division_alias_division FOREIGN KEY (division_id) REFERENCES division(id) ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------------------------
 -- 2. Main Tables
