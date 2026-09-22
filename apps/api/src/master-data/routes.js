@@ -27,9 +27,11 @@ const asyncHandler = require("../shared/async-handler");
 const requireAuth = require("../auth/require-auth");
 const requireAdmin = require("../auth/require-admin");
 const { validate, idParam, requiredText, optionalId } = require("../shared/validate");
-const { notFound, badRequest, conflict } = require("../shared/http-error");
+const { MAX_LENGTH } = require("@suth/domain");
+const { notFound, badRequest } = require("../shared/http-error");
 const cache = require("../shared/cache");
-const { normalizeName, nameKey } = require("./names");
+const { normalizeName } = require("./names");
+const lookupWrites = require("./lookup-writes");
 
 // ต้องล็อกอินก่อนถึงจะเรียกข้อมูลอ้างอิงได้
 router.use(requireAuth);
@@ -54,7 +56,7 @@ const byName = (a, b) => thaiCollator.compare(a.name ?? "", b.name ?? "");
  * @param {string} config.label ชื่อภาษาไทยที่ใช้ในข้อความ error
  * @param {string} [config.parentField] คอลัมน์ที่ชี้ไปตารางแม่ เช่น "building_id"
  * @param {boolean} [config.parentRequired] ตารางแม่บังคับต้องเลือกหรือไม่
- * @param {{ table: string, column: string }} [config.alias] ตารางชื่อเรียกอื่น (ADR-0025)
+ * @param {{ kind: string, table: string, column: string }} [config.alias] ตารางชื่อเรียกอื่น (ADR-0025)
  * @param {number} [config.maxLength] ความยาวคอลัมน์ name ใน schema.sql — ฐานแบบ strict
  *   ตอบ error แทนการตัดทิ้งเงียบ ถ้าตรวจยาวกว่าคอลัมน์ ผู้ใช้จะเห็น 500 แทน 400
  */
@@ -78,23 +80,8 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
       : {}),
   });
 
-  const aliasColumns = alias && `id, \`${alias.column}\` AS target_id, alias`;
-  const loadAliases = async () => (await db.query(`SELECT ${aliasColumns} FROM \`${alias.table}\``))[0];
-
-  /**
-   * ชื่อหลักห้ามชนชื่อเรียกอื่น — ไม่งั้นชื่อเดียวชี้ได้สองรายการ แล้วตัวนำเข้าต้องเดาเอง
-   * เทียบด้วย nameKey (ไม่สนตัวพิมพ์เล็กใหญ่ และรวม "ำ" สองรูป) ซึ่ง UNIQUE ของฐานจับไม่ครบ
-   */
-  async function assertNotAlias(name) {
-    if (!alias) return;
-    const clash = (await loadAliases()).find((row) => nameKey(row.alias) === nameKey(name));
-    if (clash) {
-      throw conflict(`ชื่อนี้เป็นชื่อเรียกอื่นของ${label}อีกรายการอยู่แล้ว`, {
-        code: "name_is_alias",
-        detail: `ลบชื่อเรียกอื่น "${clash.alias}" ออกก่อน หรือใช้ชื่ออื่น`,
-      });
-    }
-  }
+  // กฎของชื่อหลักและชื่อเรียกอื่นอยู่ที่ lookup-writes.js ที่เดียว — ตัวนำเข้าทะเบียนใช้ชุดเดียวกัน
+  const assertNotAlias = (name) => (alias ? lookupWrites.assertNotAlias(db, alias.kind, name) : undefined);
 
   // ---------- ชื่อเรียกอื่น (ADR-0025) ----------
   //
@@ -106,7 +93,7 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
     router.get(
       `${path}/aliases`,
       asyncHandler(async (req, res) => {
-        const rows = await loadAliases();
+        const rows = await lookupWrites.loadAliases(db, alias.kind);
         cache.referenceData(res);
         res.json(rows.sort((a, b) => thaiCollator.compare(a.alias, b.alias)));
       })
@@ -117,40 +104,8 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
       requireAdmin,
       validate({ params: idParam, body: aliasBody }),
       asyncHandler(async (req, res) => {
-        const text = normalizeName(req.body.alias);
-        const [names] = await db.query(`SELECT id, name FROM \`${table}\``);
-        if (!names.some((row) => row.id === req.params.id)) throw notFound(`ไม่พบ${label}ที่ต้องการ`);
-
-        const sameName = names.find((row) => nameKey(row.name) === nameKey(text));
-        if (sameName) {
-          throw conflict(`ชื่อนี้เป็นชื่อหลักของ${label}อยู่แล้ว`, {
-            code: "alias_is_name",
-            detail: `"${sameName.name}" จับคู่ได้อยู่แล้วโดยไม่ต้องเพิ่มชื่อเรียกอื่น`,
-          });
-        }
-
-        const taken = (await loadAliases()).find((row) => nameKey(row.alias) === nameKey(text));
-        if (taken) {
-          const owner = names.find((row) => row.id === taken.target_id);
-          throw conflict("ชื่อเรียกอื่นนี้มีอยู่แล้ว", {
-            code: "alias_taken",
-            detail: `"${taken.alias}" ชี้ไปที่${label} "${owner?.name ?? taken.target_id}"`,
-          });
-        }
-
-        // ด่านข้างบนคือตัวกันหลัก UNIQUE ของ alias เป็นแค่ชั้นสำรองของคำขอที่มาพร้อมกัน
-        // (collation ของฐานกับ nameKey เทียบไม่เหมือนกันทุกกรณี) — ชนแล้วตอบรหัสเดียวกับด่านข้างบน
-        let result;
-        try {
-          [result] = await db.query(
-            `INSERT INTO \`${alias.table}\` (\`${alias.column}\`, alias) VALUES (?, ?)`,
-            [req.params.id, text]
-          );
-        } catch (err) {
-          if (err.code !== "ER_DUP_ENTRY") throw err;
-          throw conflict("ชื่อเรียกอื่นนี้มีอยู่แล้ว", { code: "alias_taken", detail: `"${text}" มีอยู่ในระบบแล้ว` });
-        }
-        res.status(201).json({ id: result.insertId, target_id: req.params.id, alias: text });
+        const created = await lookupWrites.addAlias(db, alias.kind, req.params.id, req.body.alias);
+        res.status(201).json({ id: created.id, target_id: req.params.id, alias: created.alias });
       })
     );
 
@@ -245,13 +200,13 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
 
 // ชื่อเรียกอื่นมีเฉพาะสามตารางที่ชื่อไม่ซ้ำทั้งระบบ — ชื่อชั้นและแผนกซ้ำกันได้คนละอาคาร/ฝ่าย
 // ชื่อเรียกอื่นของสองตารางนั้นจึงต้องผูกตารางแม่ด้วย ยังไม่ทำจนกว่าจะเจอกรณีจริง (ADR-0025)
-registerLookup({ table: "brand", path: "/brands", label: "ยี่ห้อ", maxLength: 100, alias: { table: "brand_alias", column: "brand_id" } });
-registerLookup({ table: "building", path: "/buildings", label: "อาคาร", alias: { table: "building_alias", column: "building_id" } });
-registerLookup({ table: "division", path: "/divisions", label: "ฝ่าย", alias: { table: "division_alias", column: "division_id" } });
+registerLookup({ table: "brand", path: "/brands", label: "ยี่ห้อ", maxLength: MAX_LENGTH.brand_name, alias: { kind: "brand", table: "brand_alias", column: "brand_id" } });
+registerLookup({ table: "building", path: "/buildings", label: "อาคาร", alias: { kind: "building", table: "building_alias", column: "building_id" } });
+registerLookup({ table: "division", path: "/divisions", label: "ฝ่าย", alias: { kind: "division", table: "division_alias", column: "division_id" } });
 
 // floor และ department ผูกกับตารางแม่ — ถ้าไม่บันทึก building_id / division_id
 // ไปด้วย ชั้นจะลอยไม่สังกัดอาคารไหน และตัวกรองแบบลูกโซ่ในหน้าเว็บจะกรองไม่ได้
-registerLookup({ table: "floor", path: "/floors", label: "ชั้น", maxLength: 50, parentField: "building_id" });
+registerLookup({ table: "floor", path: "/floors", label: "ชั้น", maxLength: MAX_LENGTH.floor_name, parentField: "building_id" });
 registerLookup({ table: "department", path: "/departments", label: "แผนก", parentField: "division_id" });
 
 // ============================================================
