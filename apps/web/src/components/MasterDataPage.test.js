@@ -23,7 +23,7 @@ vi.mock("../services/api", () => ({
 }));
 vi.mock("../store/confirmDialog", () => ({ askConfirm: vi.fn(async () => true) }));
 vi.mock("../store/toast", () => ({ toastError: vi.fn(), toastSuccess: vi.fn() }));
-vi.mock("../api/invalidate", () => ({ invalidateAfterWrite: vi.fn(async () => {}), changeKindForEndpoint: () => null }));
+vi.mock("../api/invalidate", () => ({ invalidateAfterWrite: vi.fn(async () => {}), changeKindForEndpoint: (ep) => ep.replace(/^\//, "") }));
 vi.mock("@tanstack/vue-query", () => ({ useQueryClient: () => ({}) }));
 
 const { mount, flushPromises } = await import("@vue/test-utils");
@@ -139,5 +139,29 @@ describe("การดึงข้อมูลและ revalidation ข้า�
     get.mockClear();
     await wrapper.vm.load();
     expect(get).toHaveBeenCalledWith("/floors", undefined);
+  });
+
+  test("ลบรายการแล้วสั่ง invalidate แคชก่อนโหลดรายการใหม่ เพื่อให้ได้ revalidation mark", async () => {
+    const { invalidateAfterWrite } = await import("../api/invalidate");
+    const callOrder = [];
+    vi.mocked(invalidateAfterWrite).mockImplementation(async () => {
+      callOrder.push("invalidate");
+      markForRevalidation(["/floors"]);
+    });
+    get.mockImplementation(async (path, config) => {
+      if (path === "/floors") {
+        callOrder.push(config?.headers?.["Cache-Control"] === "no-cache" ? "get-nocache" : "get");
+        return { data: FLOORS };
+      }
+      return { data: BUILDINGS };
+    });
+
+    const wrapper = await mountFloors();
+    callOrder.length = 0;
+
+    await wrapper.vm.remove(FLOORS[0]);
+
+    expect(del).toHaveBeenCalledWith("/floors/1");
+    expect(callOrder).toEqual(["invalidate", "get-nocache"]);
   });
 });

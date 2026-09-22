@@ -134,10 +134,10 @@ test("DELETE /fiscal-years/:id ส่ง Location: /api/fiscal-years และ C
   assert.equal(res.headers.get("cache-control"), "no-store");
 });
 
-test("POST และ PUT /fiscal-years ส่ง Location: /api/fiscal-years และ Cache-Control: no-store (#136)", async () => {
+test("POST และ PUT /fiscal-years ส่ง Location และ Cache-Control: no-store (#136)", async () => {
   const postRes = await call("POST", "/fiscal-years", { year: "2568" });
   assert.equal(postRes.status, 201);
-  assert.equal(postRes.headers.get("location"), "/api/fiscal-years");
+  assert.equal(postRes.headers.get("location"), "/api/fiscal-years/99");
   assert.equal(postRes.headers.get("cache-control"), "no-store");
 
   const putRes = await call("PUT", "/fiscal-years/1", { year: "2569" });
@@ -146,7 +146,12 @@ test("POST และ PUT /fiscal-years ส่ง Location: /api/fiscal-years แ
   assert.equal(putRes.headers.get("cache-control"), "no-store");
 });
 
-test("DELETE และ PUT ใน registerLookup ส่ง Location ชี้ collection และ Cache-Control: no-store (#136)", async () => {
+test("POST, PUT และ DELETE ใน registerLookup ส่ง Location และ Cache-Control: no-store (#136)", async () => {
+  const postRes = await call("POST", "/buildings", { name: "อาคารใหม่" });
+  assert.equal(postRes.status, 201);
+  assert.equal(postRes.headers.get("location"), "/api/buildings/99");
+  assert.equal(postRes.headers.get("cache-control"), "no-store");
+
   const delRes = await call("DELETE", "/buildings/1");
   assert.equal(delRes.status, 200);
   assert.equal(delRes.headers.get("location"), "/api/buildings");

@@ -222,7 +222,7 @@ router.post(
     const id = await db.withTransaction((conn) => writeContract(conn, null, req.body));
     const [contract] = await loadContracts(db, id);
     cache.noStore(res);
-    res.set("Location", req.baseUrl);
+    res.set("Location", `${req.baseUrl}/${id}`);
     res.status(201).json(contract);
   })
 );
@@ -275,6 +275,7 @@ router.put(
       res.json({ ...contract, impact: result.impact, message: "บันทึกสัญญาเรียบร้อยแล้ว" });
     } catch (err) {
       if (err instanceof PreviewRollback) {
+        cache.noStore(res);
         res.json({ preview: true, impact: err.result.impact });
         return;
       }

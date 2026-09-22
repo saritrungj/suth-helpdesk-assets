@@ -87,8 +87,13 @@ export async function loadFiscalYears() {
 // เพื่อให้ตัวเลือกปีงบบนแถบบน (และทุกหน้าที่ subscribe fiscalYearState) เห็นข้อมูลล่าสุดทันที
 // โดยไม่ต้อง refresh หน้าเว็บเอง
 export async function refreshFiscalYears() {
-  if (loadingPromise) return loadingPromise;
   markForRevalidation(["/fiscal-years"]);
+  if (loadingPromise) {
+    try {
+      await loadingPromise;
+    } catch {}
+    return fetchFiscalYears();
+  }
   return fetchFiscalYears();
 }
 

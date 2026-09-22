@@ -227,4 +227,25 @@ describe("refreshFiscalYears", () => {
       headers: { "Cache-Control": "no-cache" },
     });
   });
+
+  test("หากมี loadFiscalYears กำลังโหลดค้างอยู่ refreshFiscalYears จะรอให้จบก่อนแล้วโหลดใหม่พร้อม no-cache", async () => {
+    resetFiscalYearState();
+    let resolveFirst;
+    get.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }));
+    get.mockResolvedValueOnce({
+      data: [{ id: 2, year: "2568", start_month: "2567-10", end_month: "2568-09" }],
+    });
+
+    const firstPromise = loadFiscalYears();
+    const refreshPromise = refreshFiscalYears();
+
+    resolveFirst({ data: [{ id: 1, year: "2567", start_month: "2566-10", end_month: "2567-09" }] });
+    await firstPromise;
+    await refreshPromise;
+
+    expect(get).toHaveBeenNthCalledWith(1, "/fiscal-years", undefined);
+    expect(get).toHaveBeenNthCalledWith(2, "/fiscal-years", {
+      headers: { "Cache-Control": "no-cache" },
+    });
+  });
 });

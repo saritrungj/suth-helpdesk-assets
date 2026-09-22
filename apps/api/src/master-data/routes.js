@@ -165,7 +165,7 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
       );
 
       cache.noStore(res);
-      res.set("Location", `${req.baseUrl}${path}`);
+      res.set("Location", `${req.baseUrl}${path}/${result.insertId}`);
       res.status(201).json({ id: result.insertId, ...req.body });
     })
   );
@@ -270,7 +270,7 @@ router.post(
     );
 
     cache.noStore(res);
-    res.set("Location", `${req.baseUrl}/fiscal-years`);
+    res.set("Location", `${req.baseUrl}/fiscal-years/${result.insertId}`);
     res.status(201).json({ id: result.insertId, year, start_month: startMonth, end_month: endMonth });
   })
 );
