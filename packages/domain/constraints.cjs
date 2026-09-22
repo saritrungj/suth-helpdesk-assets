@@ -71,6 +71,9 @@ const MAX_LENGTH = {
   location: 255,
   contract_no: 100,
   name: 255,
+  // ชื่อยี่ห้อและชื่อชั้นแคบกว่าชื่ออื่น (brand.name VARCHAR(100), floor.name VARCHAR(50))
+  brand_name: 100,
+  floor_name: 50,
   fiscal_year: 10,
 };
 

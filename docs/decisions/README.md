@@ -47,3 +47,4 @@
 | [0023](0023-contract-term-price-lines-and-meters.md) | สัญญามีอายุของตัวเองและรายการราคา ยอดพิมพ์บันทึกรายมิเตอร์ต่องวด | Accepted |
 | [0024](0024-docker-development-database.md) | ฐานข้อมูลบน Docker Compose ด้วย MySQL 8.4 LTS ฐานเดียวที่เป็นข้อมูลจริง | Accepted |
 | [0025](0025-master-data-aliases.md) | ชื่อเรียกอื่นของยี่ห้อ อาคาร และฝ่าย | Accepted |
+| [0026](0026-raw-registry-import.md) | นำเข้าทะเบียนเครื่องจากไฟล์ดิบ: ตรวจก่อน ให้คนตัดสินชื่อ และเติมเฉพาะช่องที่ว่าง | Accepted |

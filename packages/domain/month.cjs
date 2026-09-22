@@ -166,6 +166,38 @@ function recentMonths(current, count = 3) {
   });
 }
 
+/**
+ * วันที่จากส่วน ปี เดือน วัน → "YYYY-MM-DD" ค.ศ. หรือ null
+ *
+ * ปี พ.ศ./ค.ศ. แยกด้วยเส้นเดียวกับ normalizeMonth (ADR-0002) และรับเฉพาะวันที่มีจริง —
+ * "31/02" หรือปี "0025" คืน null ไม่ปัดเป็นวันอื่นเงียบๆ
+ * @param {number} year
+ * @param {number} month
+ * @param {number} day
+ * @returns {string | null}
+ */
+function dateFromParts(year, month, day) {
+  if (![year, month, day].every(Number.isInteger)) return null;
+  const ce = isBuddhistYear(year) ? year - BE_OFFSET : year;
+  if (ce < CE_YEAR_MIN || ce > CE_YEAR_MAX) return null;
+  const date = new Date(Date.UTC(ce, month - 1, day));
+  if (date.getUTCFullYear() !== ce || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * วันที่ที่คนไทยพิมพ์ "วัน/เดือน/ปี 4 หลัก" (ค.ศ. หรือ พ.ศ.) → "YYYY-MM-DD" หรือ null
+ *
+ * ไม่รับปี 2 หลักและไม่รับ เดือน/วัน แบบสหรัฐ — "10/1/25" กำกวม เดาผิดคือวันที่ผิดหลายเดือน
+ * @param {unknown} text
+ * @returns {string | null}
+ */
+function parseDayFirstDate(text) {
+  const match = String(text ?? "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  return dateFromParts(Number(match[3]), Number(match[2]), Number(match[1]));
+}
+
 /** Numeric position of a canonical Gregorian YYYY-MM month for adjacency checks. */
 function monthIndex(month) {
   const [year, value] = String(month).split("-").map(Number);
@@ -174,6 +206,8 @@ function monthIndex(month) {
 
 module.exports = {
   monthIndex,
+  dateFromParts,
+  parseDayFirstDate,
   BE_OFFSET,
   BE_YEAR_THRESHOLD,
   currentMonth,

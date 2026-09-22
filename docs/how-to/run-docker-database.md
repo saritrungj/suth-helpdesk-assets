@@ -48,7 +48,7 @@ DB_PASSWORD=<ค่า SUTH_APP_PASSWORD ใน compose.env>
 
 ข้อมูลทุกชิ้นลงผ่าน API เหมือนที่หน้าเว็บทำ
 
-ไฟล์จริงทั้งหมด (Excel ต้นฉบับ plan ไฟล์สำรอง) เก็บนอก repo เพราะ repo เป็น public — ตัวอย่างข้างล่างใช้ `D:suth-data`
+ไฟล์จริงทั้งหมด (Excel ต้นฉบับ plan ไฟล์สำรอง) เก็บนอก repo เพราะ repo เป็น public — ตัวอย่างข้างล่างใช้ `D:\suth-data\`
 
 ข้อมูลหลักและชื่อเรียกอื่น ([ADR-0025](../decisions/0025-master-data-aliases.md)) — เขียน plan ตาม [`scripts/master-data/plan.example.json`](../../scripts/master-data/plan.example.json) แล้วตรวจว่าครอบทุกชื่อในไฟล์ดิบ:
 

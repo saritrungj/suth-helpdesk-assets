@@ -4,16 +4,19 @@ const XLSX = require("xlsx");
 const db = require("../shared/db");
 const asyncHandler = require("../shared/async-handler");
 const { badRequest, conflict } = require("../shared/http-error");
-const { recordLocationHistory } = require("../devices/controller");
-const { recordContractHistory, today } = require("../devices/contract-history");
-const { setDeviceMeters, assertReadingsPriced } = require("../devices/meters");
+const { z } = require("zod");
+const { today } = require("../devices/contract-history");
+const { assertReadingsPriced } = require("../devices/meters");
 const { MAX_PAGES_PER_MONTH, normalizeMonth } = require("@suth/domain");
 
 /** เพดานไฟล์ยอดพิมพ์ต่อการนำเข้าหนึ่งครั้ง — ไฟล์รายงวดจริงมีไม่กี่สิบแผ่น แผ่นละไม่กี่ร้อยแถว */
 const MAX_IMPORT_SHEETS = 60;
 const MAX_IMPORT_ROWS = 50000;
-const { rowFieldProblems } = require("./row-rules");
+const MAX_IMPORT_COLUMNS = 200;
 const { parseVendorWorkbook, comparableContractNo } = require("./vendor-meter");
+const { parseRegistryWorkbook } = require("./registry-sheet");
+const { planRegistryImport, serialIndex } = require("./registry-plan");
+const { loadRegistryContext, applyRegistryPlan } = require("./registry-import");
 
 // ============================================================
 // ตัวช่วยที่ทั้งสอง handler ใช้ร่วมกัน
@@ -46,28 +49,21 @@ function removeUploadedFile(file) {
  * เวลาคน "Save as" จากระบบอื่น) จึงผ่านด่านนั้นมาแล้วไประเบิดตอน XLSX.readFile
  * ผู้ใช้เห็น "เกิดข้อผิดพลาดในระบบ" ซึ่งบอกไม่ได้ว่าต้องไปแก้อะไร
  */
-function readWorkbook(filePath) {
+function readWorkbook(filePath, options) {
   try {
-    return XLSX.readFile(filePath);
+    // CSV อ่านเป็นข้อความ UTF-8 เอง — SheetJS อ่าน CSV ที่ไม่มี BOM เป็น latin1 แล้วหัวคอลัมน์ไทย
+    // อย่าง "สถานะ" กลายเป็นตัวอ่านไม่ออก ตัด BOM ออกถ้ามี
+    if (options?.csv) {
+      const text = fs.readFileSync(filePath, "utf8").replace(/^﻿/, "");
+      return XLSX.read(text, { type: "string", raw: true });
+    }
+    return XLSX.readFile(filePath, options);
   } catch (err) {
     throw badRequest("ไฟล์นี้เปิดเป็นตารางไม่ได้", {
       code: "unreadable_file",
       detail: "ไฟล์อาจเสียหาย หรือเป็นไฟล์ชนิดอื่นที่ถูกเปลี่ยนนามสกุลมาเป็น .xlsx/.csv — ลองเปิดด้วย Excel แล้วบันทึกใหม่",
     });
   }
-}
-
-function readFirstSheet(filePath) {
-  const workbook = readWorkbook(filePath);
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  if (!sheet) {
-    throw badRequest("ไม่พบแผ่นงานในไฟล์", {
-      code: "no_sheet",
-      detail: "ไฟล์นี้ไม่มีแผ่นงานที่อ่านข้อมูลได้",
-    });
-  }
-
-  return sheet;
 }
 
 /**
@@ -114,328 +110,174 @@ function parseMeterMonthHeader(header) {
   return normalizeMonth(`${beYearFull}-${month}`);
 }
 
+// ============================================================
+// นำเข้าทะเบียนเครื่อง (#132)
+//
+// รับเทมเพลตของระบบ รายงานสถานะเครื่องของผู้ให้เช่า (หลายแผ่น หัวรายงานก่อนหัวตาราง)
+// และรายงานมิเตอร์รายงวด ดู import/registry-sheet.js
+//
+// ## ตรวจก่อน แล้วค่อยบันทึก
+//
+//   mode=preview  อ่านไฟล์ วางแผน แล้วตอบว่าจะสร้าง/เติม/ข้ามอะไร และยังต้องตัดสินอะไร
+//   mode=commit   วางแผนใหม่จากไฟล์เดิม + decisions แล้วบันทึกทั้งก้อนใน transaction เดียว
+//
+// ไม่มี token ระหว่างสองขั้นเหมือนหน้ายอดมิเตอร์ เพราะ commit วางแผนใหม่จากข้อมูลปัจจุบัน
+// ทุกครั้ง แผนที่ไม่ครบ (ชื่อที่ยังไม่ตัดสิน สัญญาที่ไม่มี) ถูกปฏิเสธก่อนเขียน
+//
+// decisions (JSON ในช่อง form) = สิ่งที่ผู้ดูแลเลือกในหน้าตรวจ ดู registry-plan.js
+// ============================================================
+
+const nameDecision = z.union([
+  z.object({ action: z.literal("create"), as: z.string().max(255).optional() }),
+  z.object({ action: z.literal("alias"), target_id: z.coerce.number().int().positive() }),
+  z.object({ action: z.literal("alias"), target_new: z.string().min(1).max(255) }),
+]);
+
+const decisionSchema = z.object({
+  names: z.object({
+    brand: z.record(z.string().max(255), nameDecision).optional(),
+    building: z.record(z.string().max(255), nameDecision).optional(),
+    division: z.record(z.string().max(255), nameDecision).optional(),
+  }).optional(),
+  models: z.record(
+    z.string().max(600),
+    z.object({
+      meter_category_id: z.coerce.number().int().positive(),
+      has_color_meter: z.boolean().optional(),
+    })
+  ).optional(),
+});
+
+function parseDecisions(raw) {
+  if (!raw) return {};
+  let value;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw badRequest("ข้อมูลการตัดสินใจไม่ใช่ JSON", { code: "invalid_decisions" });
+  }
+  const parsed = decisionSchema.safeParse(value);
+  if (!parsed.success) throw badRequest("ข้อมูลการตัดสินใจไม่ถูกต้อง", { code: "invalid_decisions" });
+  return parsed.data;
+}
+
+/**
+ * แผ่นทั้งหมดของไฟล์ ทั้งค่าที่จัดรูปแล้ว (ทะเบียน) และค่าดิบ (รายงานมิเตอร์) — กันไฟล์ใหญ่ผิดปกติก่อน
+ *
+ * CSV อ่านเป็นข้อความตรงๆ (raw) — ไม่งั้น SheetJS แปลง "1/10/2567" เป็นวันที่แบบ เดือน/วัน
+ * ของสหรัฐ ได้ 10 ม.ค. แทน 1 ต.ค. โดยไม่มีอะไรเตือน วันที่จึงผ่าน parseDayFirstDate แทน
+ */
+function readAllSheets(filePath, originalName = "") {
+  const isCsv = /\.csv$/i.test(originalName);
+  const workbook = readWorkbook(filePath, isCsv ? { csv: true } : undefined);
+  const declaredRows = workbook.SheetNames.reduce((sum, name) => {
+    const ref = workbook.Sheets[name]["!ref"];
+    return sum + (ref ? XLSX.utils.decode_range(ref).e.r + 1 : 0);
+  }, 0);
+  // ไฟล์เล็กที่ประกาศขอบเขตกว้างผิดปกติ (A1:XFD49999) กางเป็นเซลล์ว่างได้หลายร้อยล้านช่อง
+  // ไฟล์ทะเบียนจริงกว้างไม่ถึง 50 คอลัมน์
+  const widest = Math.max(0, ...workbook.SheetNames.map((name) => {
+    const ref = workbook.Sheets[name]["!ref"];
+    return ref ? XLSX.utils.decode_range(ref).e.c + 1 : 0;
+  }));
+  if (workbook.SheetNames.length > MAX_IMPORT_SHEETS || declaredRows > MAX_IMPORT_ROWS || widest > MAX_IMPORT_COLUMNS) {
+    throw badRequest("ไฟล์ใหญ่เกินกว่าที่นำเข้าได้ในครั้งเดียว", {
+      code: "import_too_large",
+      detail: `รับได้ไม่เกิน ${MAX_IMPORT_SHEETS} แผ่น ${MAX_IMPORT_ROWS.toLocaleString("th-TH")} แถวรวม และ ${MAX_IMPORT_COLUMNS} คอลัมน์ต่อแผ่น`,
+    });
+  }
+  return workbook.SheetNames.map((name) => ({
+    name,
+    rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "", raw: false }),
+    rawRows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "", raw: true }),
+  }));
+}
+
+/** คำตอบของทั้งสองโหมด — ไม่ส่งค่าภายใน (ref ของรายการใหม่) ออกไป */
+function describeRegistryPlan(parsed, plan, context) {
+  return {
+    valid: plan.valid,
+    blocking: plan.blocking,
+    sheets: parsed.sheets,
+    errors: parsed.errors,
+    warnings: [...parsed.warnings, ...plan.warnings],
+    summary: plan.summary,
+    unresolved: plan.unresolved,
+    models: plan.models,
+    contracts: plan.contracts,
+    new_floors: plan.new_floors.map(({ name, rows }) => ({ name, rows })),
+    new_departments: plan.new_departments.map(({ name, rows }) => ({ name, rows })),
+    rows: plan.rows.map((row) => ({
+      sheet: row.sheet,
+      row: row.row,
+      serial_number: row.serial_number,
+      action: row.action,
+      reasons: row.reasons,
+      notes: row.notes,
+      waiting: row.waiting,
+      fill: row.fill,
+      installation: row.installation,
+      ...row.display,
+    })),
+    // ตัวเลือกของหน้าตรวจ: "เป็นชื่อเรียกอื่นของ…" และหมวดมิเตอร์ของรุ่น
+    choices: {
+      brand: context.master.brand.names,
+      building: context.master.building.names,
+      division: context.master.division.names,
+      meter_categories: context.categories.filter((c) => !c.is_color).map(({ id, code, name }) => ({ id, code, name })),
+    },
+  };
+}
+
 exports.importDevices = asyncHandler(async (req, res) => {
-
     try {
-
-        // routes.js ดักกรณีไม่แนบไฟล์ไว้แล้ว ที่นี่กันไว้อีกชั้นเผื่อมีคนต่อ handler
-        // นี้เข้า route ใหม่โดยลืม handleUpload
+        // routes.js ดักกรณีไม่แนบไฟล์ไว้แล้ว ที่นี่กันไว้อีกชั้นเผื่อมีคนต่อ handler นี้เข้า route ใหม่
         if (!req.file) throw badRequest("กรุณาเลือกไฟล์ที่ต้องการนำเข้า", { code: "no_file" });
 
+        const mode = String(req.body?.mode || "preview");
+        if (mode !== "preview" && mode !== "commit") {
+            throw badRequest("โหมดการนำเข้าไม่ถูกต้อง", { code: "invalid_import_mode" });
+        }
+        const decisions = parseDecisions(req.body?.decisions);
 
-        // อ่าน Excel
-        const sheet = readFirstSheet(req.file.path);
+        const parsed = parseRegistryWorkbook(readAllSheets(req.file.path, req.file.originalname));
+        if (!parsed) {
+            throw badRequest("ไม่พบตารางทะเบียนเครื่องในไฟล์", {
+                code: "registry_not_found",
+                detail: "ต้องมีคอลัมน์เลขซีเรียล (เช่น Serial No., SN., serial_number) และคอลัมน์รุ่นหรืออาคาร ในแถวหัวตารางภายใน 15 แถวแรก",
+            });
+        }
 
-        const rows = XLSX.utils.sheet_to_json(sheet, {
-            defval: ""
-        });
+        const planWith = (context) => planRegistryImport({ rows: parsed.rows, ...context, decisions, today: today() });
 
+        if (mode === "preview") {
+            const context = await loadRegistryContext(db);
+            return res.json({ mode, ...describeRegistryPlan(parsed, planWith(context), context) });
+        }
 
-        // โหลด Master Data — ต้องครบทุกฟิลด์ที่ฟอร์ม "เพิ่มทรัพย์สิน" (เพิ่มทีละรายการ) รองรับ
-        // (brand/building เดิม + floor/division/department/contract ที่เทมเพลตสัญญาไว้แต่ import เดิมไม่เคยอ่าน)
-        const [brand] = await db.query("SELECT id, name FROM brand");
-        const [building] = await db.query("SELECT id, name FROM building");
-        const [floor] = await db.query("SELECT id, building_id, name FROM floor");
-        const [division] = await db.query("SELECT id, name FROM division");
-        const [department] = await db.query("SELECT id, division_id, name FROM department");
-        const [contract] = await db.query(
-            "SELECT id, contract_no, DATE_FORMAT(effective_from, '%Y-%m-%d') AS effective_from FROM contracts"
-        );
-        const [meterCategory] = await db.query("SELECT id, code, name FROM meter_category WHERE is_color = 0");
-
-
-        const brandMap = {};
-        const buildingMap = {};
-        // ชื่อชั้น/แผนก ไม่ unique ทั้งระบบ (ซ้ำกันได้คนละอาคาร/คนละฝ่าย) ต้อง scope คีย์ด้วย
-        // building_id / division_id เหมือนที่ AssetForm.vue กรอง floor ตาม building ที่เลือกไว้
-        const floorMap = {};
-        const divisionMap = {};
-        const departmentMap = {};
-        const contractMap = {};
-
-        brand.forEach((b) => { brandMap[String(b.name).trim()] = b.id; });
-        building.forEach((b) => { buildingMap[String(b.name).trim()] = b.id; });
-        floor.forEach((f) => { floorMap[`${f.building_id}::${String(f.name).trim()}`] = f.id; });
-        division.forEach((d) => { divisionMap[String(d.name).trim()] = d.id; });
-        department.forEach((d) => { departmentMap[`${d.division_id}::${String(d.name).trim()}`] = d.id; });
-        contract.forEach((c) => { contractMap[String(c.contract_no).trim()] = c.id; });
-        const contractStart = new Map(contract.map((c) => [c.id, c.effective_from]));
-        // หมวดมิเตอร์หลัก รับได้ทั้งชื่อไทยและรหัส (ADR-0023)
-        // Map ไม่ใช่ {} เพราะชื่อในไฟล์อย่าง "constructor" ต้องไม่เจอ property ที่ติดมากับ prototype
-        const categoryMap = new Map();
-        meterCategory.forEach((m) => {
-            categoryMap.set(String(m.name).trim(), m.id);
-            categoryMap.set(String(m.code).trim(), m.id);
-        });
-
-
-        const insertData = [];
-        const skipped = []; // แถวที่ import ไม่ได้ พร้อมเหตุผล ให้ frontend แสดงให้ผู้ใช้แก้ไขได้
-
-        // ซีเรียลที่เจอไปแล้วในไฟล์เดียวกัน — ต้องรายงานเป็นเหตุผลรายแถว ไม่ใช่ปล่อยให้
-        // ไปชน UNIQUE KEY ตอน INSERT แล้วทั้งไฟล์ล้มด้วยข้อความที่ชี้ไปผิดแถว
-        const seenSerials = new Set();
-
-
-        for (const row of rows) {
-
-
-            const serial_number = String(
-                row.serial_number ||
-                row.Serial_Number ||
-                row["Serial Number"] ||
-                row.SN ||
-                row.sn ||
-                ""
-            ).trim();
-
-
-            const brand = String(
-                row.brand ||
-                row.Brand ||
-                row.ยี่ห้อ ||
-                ""
-            ).trim();
-
-
-            const model = String(
-                row.model ||
-                row.Model ||
-                row.รุ่น ||
-                ""
-            ).trim();
-
-
-            const building = String(
-                row.building ||
-                row.Building ||
-                row.อาคาร ||
-                ""
-            ).trim();
-
-            // ฟิลด์เพิ่มเติมที่ฟอร์ม "เพิ่มทรัพย์สิน" (เพิ่มทีละรายการ) กรอกได้ — ไม่บังคับเหมือน brand/building
-            const floorName = String(row.floor || row.Floor || row.ชั้น || "").trim();
-            const divisionName = String(row.division || row.Division || row.ฝ่าย || "").trim();
-            const departmentName = String(row.department || row.Department || row.แผนก || "").trim();
-            const contractNo = String(row.contract_no || row["Contract No"] || row.เลขที่สัญญา || "").trim();
-            const priceOverrideRaw = String(
-                row.price_override ?? row["Price Override"] ?? row.ราคาพิเศษเฉพาะเครื่อง ?? ""
-            ).trim();
-            const location = String(row.location || row.Location || row.ตำแหน่ง || "").trim();
-            const categoryName = String(row.meter_category || row["Meter Category"] || row.หมวดมิเตอร์ || "").trim();
-
-
-            // สถานะ — ถ้าไม่กรอกมา/พิมพ์ค่าที่ไม่รู้จัก ให้ default เป็น "active" เหมือนฟอร์มเพิ่มทีละรายการ
-            // รองรับทั้งค่า enum อังกฤษ (active/repair/retired) และป้ายภาษาไทยที่ผู้ใช้อาจพิมพ์มา
-            const STATUS_MAP = {
-                active: "active",
-                repair: "repair",
-                retired: "retired",
-                "ใช้งานอยู่": "active",
-                "ซ่อมบำรุง": "repair",
-                "ปลดระวาง": "retired",
+        // บันทึก: อ่านข้อมูลและวางแผนใหม่ใน transaction เดียวกับการเขียน — สิ่งที่คนอื่นแก้ระหว่าง
+        // ที่ผู้ดูแลกำลังตรวจไฟล์อยู่ ถูกนับรวมในแผนนี้ ไม่ใช่แผนเก่าตอนกดตรวจ
+        const { described, result } = await db.withTransaction(async (conn) => {
+            const context = await loadRegistryContext(conn);
+            const plan = planWith(context);
+            if (!plan.valid) {
+                throw badRequest("ยังบันทึกไม่ได้ มีรายการที่ต้องตัดสินหรือแก้ก่อน", {
+                    code: "import_needs_decisions",
+                    detail: "ตรวจไฟล์อีกครั้งแล้วตัดสินชื่อ หมวดมิเตอร์ และสัญญาที่ขึ้นเตือนให้ครบ",
+                });
+            }
+            return {
+                described: describeRegistryPlan(parsed, plan, context),
+                result: await applyRegistryPlan(conn, plan, { userId: req.user?.id ?? null }),
             };
-
-            const statusRaw = String(
-                row.status ||
-                row.Status ||
-                row.สถานะ ||
-                ""
-            ).trim();
-
-            const status = STATUS_MAP[statusRaw.toLowerCase()] || STATUS_MAP[statusRaw] || "active";
-
-
-            const brand_id = brandMap[brand];
-
-            const building_id = buildingMap[building];
-
-
-            const reasons = [];
-
-            // กฎที่ตรวจได้จากตัวแถวเอง อยู่ใน row-rules.js เพื่อให้เขียนเทสได้โดยไม่ต้องมีฐานข้อมูล (#85)
-            reasons.push(...rowFieldProblems({ serial_number, model, location }, seenSerials));
-
-            if (!brand_id) reasons.push(`ไม่พบยี่ห้อ "${brand || "(ว่าง)"}" ในระบบ`);
-            if (!building_id) reasons.push(`ไม่พบอาคาร "${building || "(ว่าง)"}" ในระบบ`);
-
-
-            // ฟิลด์เสริม — ถ้าผู้ใช้กรอกมาต้องหาเจอจริง (กันพิมพ์ชื่อผิด/สะกดคลาดเงียบๆ)
-            // แต่ถ้าเว้นว่างไว้ก็ปล่อยผ่านเป็น null ได้เหมือนตอนไม่เลือกใน dropdown ของฟอร์มเพิ่มทีละรายการ
-            let floor_id = null;
-            if (floorName) {
-                floor_id = building_id ? floorMap[`${building_id}::${floorName}`] : undefined;
-                if (!floor_id) reasons.push(`ไม่พบชั้น "${floorName}" ในอาคาร "${building || "(ว่าง)"}"`);
-            }
-
-            let division_id = null;
-            if (divisionName) {
-                division_id = divisionMap[divisionName];
-                if (!division_id) reasons.push(`ไม่พบฝ่าย "${divisionName}" ในระบบ`);
-            }
-
-            let department_id = null;
-            if (departmentName) {
-                department_id = division_id ? departmentMap[`${division_id}::${departmentName}`] : undefined;
-                if (!department_id) {
-                    reasons.push(
-                        divisionName
-                            ? `ไม่พบแผนก "${departmentName}" ในฝ่าย "${divisionName}"`
-                            : `ไม่พบแผนก "${departmentName}" (กรุณาระบุคอลัมน์ฝ่ายด้วย)`
-                    );
-                }
-            }
-
-            let contract_id = null;
-            if (contractNo) {
-                contract_id = contractMap[contractNo];
-                if (!contract_id) reasons.push(`ไม่พบเลขที่สัญญา "${contractNo}" ในระบบ`);
-            }
-
-            let meter_category_id = null;
-            if (categoryName) {
-                meter_category_id = categoryMap.get(categoryName) ?? null;
-                if (!meter_category_id) reasons.push(`ไม่พบหมวดมิเตอร์ "${categoryName}" ในระบบ`);
-            }
-
-            let price_override = null;
-            if (priceOverrideRaw !== "") {
-                const parsedPrice = Number(priceOverrideRaw);
-                if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
-                    reasons.push(`ราคาพิเศษเฉพาะเครื่อง "${priceOverrideRaw}" ไม่ใช่ตัวเลข`);
-                } else {
-                    price_override = parsedPrice;
-                }
-            }
-
-
-            if (reasons.length) {
-
-                skipped.push({
-                    serial_number: serial_number || "(ไม่มีเลขซีเรียล)",
-                    brand,
-                    building,
-                    reason: reasons.join(", "),
-                });
-
-                continue;
-            }
-
-
-
-            // นับซีเรียลนี้เข้าไปเฉพาะเมื่อแถวผ่านจริง — แถวที่ถูกข้ามด้วยเหตุผลอื่น
-            // ไม่ควรไปกันแถวถัดไปที่มีซีเรียลเดียวกันและอาจจะถูกต้อง
-            seenSerials.add(serial_number);
-
-            insertData.push({
-                serial_number,
-                brand_id,
-                model: model || null,
-                building_id,
-                floor_id,
-                location: location || null,
-                division_id,
-                department_id,
-                contract_id,
-                price_override,
-                status,
-                meter_category_id,
-            });
-
-        }
-
-
-
-        // Insert ทีละแถวในทรานแซกชันเดียว (แทนที่จะ bulk INSERT ... VALUES ?) เพราะต้องได้ insertId
-        // ของแต่ละเครื่องมาเปิด "ช่วงประวัติแรก" ผ่าน recordLocationHistory เหมือนฟอร์มเพิ่มทีละรายการ
-        // (ดู deviceController.js create()) ไม่งั้นเครื่องที่มาจาก import จะไม่มีประวัติการย้ายเลย
-        // และหน้ารายงานที่อ้างอิงปีงบ/ช่วงเวลาของ device_location_history จะไม่เห็นเครื่องกลุ่มนี้
-        if (insertData.length > 0) {
-
-            await db.withTransaction(async (conn) => {
-
-            for (const d of insertData) {
-                const [result] = await conn.query(
-                    `
-                    INSERT INTO devices
-                    (
-                        serial_number,
-                        brand_id,
-                        model,
-                        building_id,
-                        floor_id,
-                        location,
-                        division_id,
-                        department_id,
-                        contract_id,
-                        price_override,
-                        status
-                    )
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
-                    `,
-                    [
-                        d.serial_number,
-                        d.brand_id,
-                        d.model,
-                        d.building_id,
-                        d.floor_id,
-                        d.location,
-                        d.division_id,
-                        d.department_id,
-                        d.contract_id,
-                        d.price_override,
-                        d.status,
-                    ]
-                );
-
-                await recordLocationHistory(conn, result.insertId, {
-                    building_id: d.building_id,
-                    floor_id: d.floor_id,
-                    location: d.location,
-                    division_id: d.division_id,
-                    department_id: d.department_id,
-                });
-
-                // ช่วงการคิดเงินแรก — ไม่มีช่วงนี้ ยอดของเครื่องจะหาราคาไม่ได้ทั้งที่ไฟล์ระบุ
-                // สัญญาไว้ ราคาของสัญญามีผลตลอดอายุสัญญา (ADR-0021) จึงเริ่มที่วันเริ่มสัญญา
-                await recordContractHistory(
-                    conn,
-                    result.insertId,
-                    { contractId: d.contract_id, priceOverride: d.price_override },
-                    contractStart.get(d.contract_id) || today()
-                );
-
-                await setDeviceMeters(conn, result.insertId, { primaryCategoryId: d.meter_category_id });
-            }
-
-            });
-
-        }
-
-
-
-        res.json({
-
-            message: "Import สำเร็จ",
-
-            total_rows: rows.length,
-
-            inserted: insertData.length,
-
-            skipped
-
         });
-
-
-
+        res.json({ mode, ...described, created: result.created, filled: result.filled });
     } catch (err) {
-        // ไม่ตอบ error เอง — โยนต่อให้ handler กลางแปลงเป็น Problem Details
-        // ตาม ADR-0010 ข้อความดิบของ MySQL จึงไม่มีทางหลุดออกไปถึงเบราว์เซอร์
+        // ไม่ตอบ error เอง — โยนต่อให้ handler กลางแปลงเป็น Problem Details (ADR-0010)
         throw asImportError(err);
     } finally {
         removeUploadedFile(req.file);
     }
-
 });
 
 
@@ -491,6 +333,21 @@ async function loadMeters(conn) {
 }
 
 /** รายงานของผู้ให้เช่า → ยอดรายมิเตอร์ */
+/**
+ * เหตุผลของเลขซีเรียลที่ไม่มีในทะเบียน — ถ้าในทะเบียนมีเลขที่น่าจะเป็นเครื่องเดียวกันแต่พิมพ์ผิด
+ * (เช่น "WB1B…" ในรายงานของผู้ให้เช่ากับ "BW1B…" ในทะเบียน) บอกเลขนั้นด้วย คนแก้จะรู้ว่าต้องแก้ที่ไหน
+ */
+const indexOfMeters = new WeakMap();
+
+function unknownSerialReason(serial, meters) {
+  // ดัชนีสร้างครั้งเดียวต่อชุดมิเตอร์ ไฟล์ที่มีเลขไม่รู้จักหลายหมื่นแถวต้องไม่เทียบทุกคู่
+  if (!indexOfMeters.has(meters)) indexOfMeters.set(meters, serialIndex([...meters.keys()]));
+  const [similar] = indexOfMeters.get(meters).similar(serial);
+  return similar
+    ? `ไม่พบเครื่อง SN "${serial}" ในทะเบียน — ในทะเบียนมี "${similar}" ตรวจว่าพิมพ์ผิดหรือไม่`
+    : `ไม่พบเครื่อง SN "${serial}" ในทะเบียน — ลงทะเบียนเครื่องก่อน`;
+}
+
 function mapVendorReadings(vendor, meters) {
   const candidates = [];
   const errors = [...vendor.errors];
@@ -505,7 +362,7 @@ function mapVendorReadings(vendor, meters) {
     };
     const device = meters.get(reading.serial_number.toUpperCase());
     if (!device) {
-      errors.push({ ...where, reason: `ไม่พบเครื่อง SN "${reading.serial_number}" ในทะเบียน — ลงทะเบียนเครื่องก่อน` });
+      errors.push({ ...where, reason: unknownSerialReason(reading.serial_number, meters) });
       continue;
     }
 
@@ -590,7 +447,7 @@ function mapTemplateReadings(raw, meters) {
 
     const device = meters.get(sn.toUpperCase());
     if (!device || !device.primary) {
-      errors.push({ row: r + 1, serial_number: sn, reason: `ไม่พบเครื่อง SN "${sn}" ในระบบ` });
+      errors.push({ row: r + 1, serial_number: sn, reason: device ? `เครื่อง SN "${sn}" ยังไม่มีมิเตอร์ในทะเบียน` : unknownSerialReason(sn, meters) });
       continue;
     }
 
@@ -896,3 +753,6 @@ exports.importPrintTransactions = asyncHandler(async (req, res) => {
         removeUploadedFile(req.file);
     }
 });
+
+// ให้เทสอ่านไฟล์จริงผ่านทางเดียวกับที่ API ใช้ (CSV ต้องอ่านเป็นข้อความ)
+exports.readAllSheets = readAllSheets;
