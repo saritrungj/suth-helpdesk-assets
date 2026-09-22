@@ -27,7 +27,7 @@ vi.mock("../lib/app-router", () => ({
   setAppRouter: () => {},
 }));
 
-const { fiscalYearState, loadFiscalYears, resetFiscalYearState, setActiveFiscalYear, registerFiscalYearGuard, startFiscalYearRouterSync } =
+const { fiscalYearState, loadFiscalYears, refreshFiscalYears, resetFiscalYearState, setActiveFiscalYear, registerFiscalYearGuard, startFiscalYearRouterSync } =
   await import("./fiscalYear");
 
 // registry ของด่านเป็น module singleton — ถ้า assertion ล้มกลาง test body แล้วเราถอด
@@ -209,5 +209,22 @@ describe("เลือกปีงบตั้งต้นหลังโหล�
 
     expect(fiscalYearState.activeId).toBe(2);
     expect(replace).toHaveBeenCalledWith({ query: { months: "2025-11", division: "2", fy: 2 } });
+  });
+});
+
+describe("refreshFiscalYears", () => {
+  test("ส่ง header Cache-Control: no-cache เพื่อบังคับให้ดึงข้อมูลล่าสุดข้าม HTTP cache", async () => {
+    resetFiscalYearState();
+    get.mockResolvedValue({
+      data: [
+        { id: 1, year: "2567", start_month: "2566-10", end_month: "2567-09" },
+      ],
+    });
+
+    await refreshFiscalYears();
+
+    expect(get).toHaveBeenCalledWith("/fiscal-years", {
+      headers: { "Cache-Control": "no-cache" },
+    });
   });
 });

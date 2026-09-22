@@ -7,10 +7,20 @@
 // ระบบไม่มีอาคารเลย
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { markForRevalidation, resetRevalidationMarks } from "../api/http-cache";
 
 const get = vi.fn();
 const post = vi.fn();
-vi.mock("../services/api", () => ({ default: { get: (...a) => get(...a), post: (...a) => post(...a) } }));
+const put = vi.fn();
+const del = vi.fn();
+vi.mock("../services/api", () => ({
+  default: {
+    get: (...a) => get(...a),
+    post: (...a) => post(...a),
+    put: (...a) => put(...a),
+    delete: (...a) => del(...a),
+  },
+}));
 vi.mock("../store/confirmDialog", () => ({ askConfirm: vi.fn(async () => true) }));
 vi.mock("../store/toast", () => ({ toastError: vi.fn(), toastSuccess: vi.fn() }));
 vi.mock("../api/invalidate", () => ({ invalidateAfterWrite: vi.fn(async () => {}), changeKindForEndpoint: () => null }));
@@ -26,8 +36,11 @@ let buildingsFail;
 
 beforeEach(() => {
   buildingsFail = true;
+  resetRevalidationMarks();
   get.mockReset();
   post.mockReset();
+  put.mockReset();
+  del.mockReset();
   get.mockImplementation(async (path) => {
     if (path === "/floors") return { data: FLOORS };
     if (path === "/buildings") {
@@ -104,5 +117,27 @@ describe("ข้อมูลอ้างอิงโหลดไม่สำเ�
     expect(wrapper.vm.form.name).toBe("ชั้น 5");
     const column = wrapper.vm.tableColumns.find((col) => col.key === "building_id");
     expect(column.value(FLOORS[0])).toBe("อาคารผู้ป่วยนอก");
+  });
+});
+
+describe("การดึงข้อมูลและ revalidation ข้าม HTTP cache (#136)", () => {
+  test("ดึงข้อมูลใหม่พร้อม Cache-Control: no-cache เมื่อมีเครื่องหมาย revalidate", async () => {
+    markForRevalidation(["/floors"]);
+    await mountFloors();
+    expect(get).toHaveBeenCalledWith("/floors", {
+      headers: { "Cache-Control": "no-cache" },
+    });
+  });
+
+  test("หลังล้างเครื่องหมายแล้ว การโหลดรอบถัดไปไม่ส่ง no-cache ซ้ำ", async () => {
+    markForRevalidation(["/floors"]);
+    const wrapper = await mountFloors();
+    expect(get).toHaveBeenCalledWith("/floors", {
+      headers: { "Cache-Control": "no-cache" },
+    });
+
+    get.mockClear();
+    await wrapper.vm.load();
+    expect(get).toHaveBeenCalledWith("/floors", undefined);
   });
 });

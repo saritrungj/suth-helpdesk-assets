@@ -221,6 +221,8 @@ router.post(
   asyncHandler(async (req, res) => {
     const id = await db.withTransaction((conn) => writeContract(conn, null, req.body));
     const [contract] = await loadContracts(db, id);
+    cache.noStore(res);
+    res.set("Location", req.baseUrl);
     res.status(201).json(contract);
   })
 );
@@ -268,6 +270,8 @@ router.put(
       });
 
       const [contract] = await loadContracts(db, id);
+      cache.noStore(res);
+      res.set("Location", req.baseUrl);
       res.json({ ...contract, impact: result.impact, message: "บันทึกสัญญาเรียบร้อยแล้ว" });
     } catch (err) {
       if (err instanceof PreviewRollback) {
@@ -290,6 +294,8 @@ router.delete(
     const [result] = await db.query("DELETE FROM contracts WHERE id = ?", [req.params.id]);
     if (!result.affectedRows) throw notFound("ไม่พบสัญญาที่ต้องการลบ");
 
+    cache.noStore(res);
+    res.set("Location", req.baseUrl);
     res.json({ message: "ลบสัญญาเรียบร้อยแล้ว" });
   })
 );

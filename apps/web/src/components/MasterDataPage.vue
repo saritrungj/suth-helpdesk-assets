@@ -26,6 +26,7 @@ import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { askConfirm } from "../store/confirmDialog";
 import { invalidateAfterWrite, changeKindForEndpoint } from "../api/invalidate";
+import { takeRevalidationHeaders } from "../api/http-cache";
 import { toastError, toastSuccess } from "../store/toast";
 import { errorMessage } from "../lib/api-error";
 import {
@@ -122,7 +123,8 @@ async function load() {
   loadError.value = "";
 
   try {
-    const res = await api.get(props.endpoint);
+    const headers = takeRevalidationHeaders(props.endpoint);
+    const res = await api.get(props.endpoint, headers ? { headers } : undefined);
     rows.value = res.data ?? [];
   } catch (err) {
     console.error(`Load ${props.endpoint} error:`, err);
@@ -244,7 +246,8 @@ async function submit() {
     }
 
     dialogOpen.value = false;
-    await Promise.all([load(), invalidateRelatedCaches()]);
+    await invalidateRelatedCaches();
+    await load();
     await props.onChanged?.();
   } catch (err) {
     console.error(err);
@@ -285,7 +288,8 @@ async function remove(row) {
   try {
     await api.delete(`${props.endpoint}/${row.id}`);
     toastSuccess(t("ลบ{0}เรียบร้อย", [props.itemNoun]));
-    await Promise.all([load(), invalidateRelatedCaches()]);
+    await invalidateRelatedCaches();
+    await load();
     await props.onChanged?.();
   } catch (err) {
     console.error(err);
