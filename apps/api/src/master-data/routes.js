@@ -27,8 +27,9 @@ const asyncHandler = require("../shared/async-handler");
 const requireAuth = require("../auth/require-auth");
 const requireAdmin = require("../auth/require-admin");
 const { validate, idParam, requiredText, optionalId } = require("../shared/validate");
-const { notFound, badRequest } = require("../shared/http-error");
+const { notFound, badRequest, conflict } = require("../shared/http-error");
 const cache = require("../shared/cache");
+const { normalizeName, nameKey } = require("./names");
 
 // ต้องล็อกอินก่อนถึงจะเรียกข้อมูลอ้างอิงได้
 router.use(requireAuth);
@@ -53,8 +54,11 @@ const byName = (a, b) => thaiCollator.compare(a.name ?? "", b.name ?? "");
  * @param {string} config.label ชื่อภาษาไทยที่ใช้ในข้อความ error
  * @param {string} [config.parentField] คอลัมน์ที่ชี้ไปตารางแม่ เช่น "building_id"
  * @param {boolean} [config.parentRequired] ตารางแม่บังคับต้องเลือกหรือไม่
+ * @param {{ table: string, column: string }} [config.alias] ตารางชื่อเรียกอื่น (ADR-0025)
+ * @param {number} [config.maxLength] ความยาวคอลัมน์ name ใน schema.sql — ฐานแบบ strict
+ *   ตอบ error แทนการตัดทิ้งเงียบ ถ้าตรวจยาวกว่าคอลัมน์ ผู้ใช้จะเห็น 500 แทน 400
  */
-function registerLookup({ table, path, label, parentField, parentRequired = true }) {
+function registerLookup({ table, path, label, parentField, parentRequired = true, alias, maxLength = 255 }) {
   // ระบุคอลัมน์ที่ส่งออกชัดเจน ไม่ใช้ SELECT * — คอลัมน์ status มีอยู่ในตารางแต่
   // ไม่เคยถูกใช้งานที่ไหนเลยในระบบ จึงไม่ส่งออกไปให้ฝั่งเว็บต้องเดาว่าต้องทำอะไรกับมัน
   const columns = ["id", "name", ...(parentField ? [parentField] : [])]
@@ -62,7 +66,9 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
     .join(", ");
 
   const bodySchema = z.object({
-    name: requiredText(label, 255),
+    // เก็บในรูปเดียวกับชื่อเรียกอื่น (NFC ยุบช่องว่าง) — ชื่อที่ติดอักขระมองไม่เห็นมาจากการคัดลอก
+    // จะไม่กลายเป็นอีกชื่อที่หน้าตาเหมือนกันทุกอย่าง
+    name: requiredText(label, maxLength).transform(normalizeName),
     ...(parentField
       ? {
           [parentField]: parentRequired
@@ -71,6 +77,94 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
         }
       : {}),
   });
+
+  const aliasColumns = alias && `id, \`${alias.column}\` AS target_id, alias`;
+  const loadAliases = async () => (await db.query(`SELECT ${aliasColumns} FROM \`${alias.table}\``))[0];
+
+  /**
+   * ชื่อหลักห้ามชนชื่อเรียกอื่น — ไม่งั้นชื่อเดียวชี้ได้สองรายการ แล้วตัวนำเข้าต้องเดาเอง
+   * เทียบด้วย nameKey (ไม่สนตัวพิมพ์เล็กใหญ่ และรวม "ำ" สองรูป) ซึ่ง UNIQUE ของฐานจับไม่ครบ
+   */
+  async function assertNotAlias(name) {
+    if (!alias) return;
+    const clash = (await loadAliases()).find((row) => nameKey(row.alias) === nameKey(name));
+    if (clash) {
+      throw conflict(`ชื่อนี้เป็นชื่อเรียกอื่นของ${label}อีกรายการอยู่แล้ว`, {
+        code: "name_is_alias",
+        detail: `ลบชื่อเรียกอื่น "${clash.alias}" ออกก่อน หรือใช้ชื่ออื่น`,
+      });
+    }
+  }
+
+  // ---------- ชื่อเรียกอื่น (ADR-0025) ----------
+  //
+  // ลงทะเบียนก่อน `${path}/:id` — ไม่งั้น "/aliases" ถูกอ่านเป็น id แล้วตอบ 400
+
+  if (alias) {
+    const aliasBody = z.object({ alias: requiredText("ชื่อเรียกอื่น", 255) });
+
+    router.get(
+      `${path}/aliases`,
+      asyncHandler(async (req, res) => {
+        const rows = await loadAliases();
+        cache.referenceData(res);
+        res.json(rows.sort((a, b) => thaiCollator.compare(a.alias, b.alias)));
+      })
+    );
+
+    router.post(
+      `${path}/:id/aliases`,
+      requireAdmin,
+      validate({ params: idParam, body: aliasBody }),
+      asyncHandler(async (req, res) => {
+        const text = normalizeName(req.body.alias);
+        const [names] = await db.query(`SELECT id, name FROM \`${table}\``);
+        if (!names.some((row) => row.id === req.params.id)) throw notFound(`ไม่พบ${label}ที่ต้องการ`);
+
+        const sameName = names.find((row) => nameKey(row.name) === nameKey(text));
+        if (sameName) {
+          throw conflict(`ชื่อนี้เป็นชื่อหลักของ${label}อยู่แล้ว`, {
+            code: "alias_is_name",
+            detail: `"${sameName.name}" จับคู่ได้อยู่แล้วโดยไม่ต้องเพิ่มชื่อเรียกอื่น`,
+          });
+        }
+
+        const taken = (await loadAliases()).find((row) => nameKey(row.alias) === nameKey(text));
+        if (taken) {
+          const owner = names.find((row) => row.id === taken.target_id);
+          throw conflict("ชื่อเรียกอื่นนี้มีอยู่แล้ว", {
+            code: "alias_taken",
+            detail: `"${taken.alias}" ชี้ไปที่${label} "${owner?.name ?? taken.target_id}"`,
+          });
+        }
+
+        // ด่านข้างบนคือตัวกันหลัก UNIQUE ของ alias เป็นแค่ชั้นสำรองของคำขอที่มาพร้อมกัน
+        // (collation ของฐานกับ nameKey เทียบไม่เหมือนกันทุกกรณี) — ชนแล้วตอบรหัสเดียวกับด่านข้างบน
+        let result;
+        try {
+          [result] = await db.query(
+            `INSERT INTO \`${alias.table}\` (\`${alias.column}\`, alias) VALUES (?, ?)`,
+            [req.params.id, text]
+          );
+        } catch (err) {
+          if (err.code !== "ER_DUP_ENTRY") throw err;
+          throw conflict("ชื่อเรียกอื่นนี้มีอยู่แล้ว", { code: "alias_taken", detail: `"${text}" มีอยู่ในระบบแล้ว` });
+        }
+        res.status(201).json({ id: result.insertId, target_id: req.params.id, alias: text });
+      })
+    );
+
+    router.delete(
+      `${path}/aliases/:id`,
+      requireAdmin,
+      validate({ params: idParam }),
+      asyncHandler(async (req, res) => {
+        const [result] = await db.query(`DELETE FROM \`${alias.table}\` WHERE id = ?`, [req.params.id]);
+        if (!result.affectedRows) throw notFound("ไม่พบชื่อเรียกอื่นที่ต้องการลบ");
+        res.json({ message: "ลบชื่อเรียกอื่นเรียบร้อยแล้ว" });
+      })
+    );
+  }
 
   // ---------- อ่าน ----------
 
@@ -102,6 +196,7 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
     requireAdmin,
     validate({ body: bodySchema }),
     asyncHandler(async (req, res) => {
+      await assertNotAlias(req.body.name);
       const fields = parentField ? ["name", parentField] : ["name"];
       const values = fields.map((field) => req.body[field]);
 
@@ -119,6 +214,7 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
     requireAdmin,
     validate({ params: idParam, body: bodySchema }),
     asyncHandler(async (req, res) => {
+      await assertNotAlias(req.body.name);
       const fields = parentField ? ["name", parentField] : ["name"];
 
       const [result] = await db.query(
@@ -147,13 +243,15 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
   );
 }
 
-registerLookup({ table: "brand", path: "/brands", label: "ยี่ห้อ" });
-registerLookup({ table: "building", path: "/buildings", label: "อาคาร" });
-registerLookup({ table: "division", path: "/divisions", label: "ฝ่าย" });
+// ชื่อเรียกอื่นมีเฉพาะสามตารางที่ชื่อไม่ซ้ำทั้งระบบ — ชื่อชั้นและแผนกซ้ำกันได้คนละอาคาร/ฝ่าย
+// ชื่อเรียกอื่นของสองตารางนั้นจึงต้องผูกตารางแม่ด้วย ยังไม่ทำจนกว่าจะเจอกรณีจริง (ADR-0025)
+registerLookup({ table: "brand", path: "/brands", label: "ยี่ห้อ", maxLength: 100, alias: { table: "brand_alias", column: "brand_id" } });
+registerLookup({ table: "building", path: "/buildings", label: "อาคาร", alias: { table: "building_alias", column: "building_id" } });
+registerLookup({ table: "division", path: "/divisions", label: "ฝ่าย", alias: { table: "division_alias", column: "division_id" } });
 
 // floor และ department ผูกกับตารางแม่ — ถ้าไม่บันทึก building_id / division_id
 // ไปด้วย ชั้นจะลอยไม่สังกัดอาคารไหน และตัวกรองแบบลูกโซ่ในหน้าเว็บจะกรองไม่ได้
-registerLookup({ table: "floor", path: "/floors", label: "ชั้น", parentField: "building_id" });
+registerLookup({ table: "floor", path: "/floors", label: "ชั้น", maxLength: 50, parentField: "building_id" });
 registerLookup({ table: "department", path: "/departments", label: "แผนก", parentField: "division_id" });
 
 // ============================================================

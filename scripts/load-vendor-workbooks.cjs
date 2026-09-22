@@ -2,6 +2,9 @@
 //
 //   node scripts/load-vendor-workbooks.cjs <config.json> --confirm
 //
+// ก่อนรัน ต้องลงยี่ห้อ อาคาร ฝ่าย และชื่อเรียกอื่นด้วย scripts/master-data/load-master-data.cjs
+// (ADR-0025) — ชื่อในไฟล์ที่จับคู่ไม่ได้ทำให้สคริปต์หยุด ไม่สร้างข้อมูลหลักใหม่เอง
+//
 // ใช้ตั้งฐานข้อมูลใหม่จากไฟล์จริงของผู้ให้เช่าครั้งแรก (ADR-0023) ทุกการอ่านและเขียน
 // ผ่าน HTTP API เดิม — ไม่ต่อ MySQL ตรง (AGENTS.md) กฎสิทธิ์และการตรวจข้อมูลจึงเป็น
 // ชุดเดียวกับที่หน้าเว็บใช้ และยอดมิเตอร์เข้าทางหน้านำเข้าตัวเดียวกับที่เจ้าหน้าที่ใช้
@@ -154,9 +157,29 @@ function readRegister(workbookPath) {
 // ข้อมูลหลัก
 // ------------------------------------------------------------------------------
 
+const { createNameResolver } = require(path.join(ROOT, "apps/api/src/master-data/names"));
+
+// ยี่ห้อ อาคาร และฝ่ายมีชื่อเรียกอื่น (ADR-0025) — จับคู่ด้วยชื่อหลักหรือชื่อเรียกอื่น และ
+// ไม่สร้างใหม่เอง ชื่อที่ไม่รู้จักหยุดทั้งหมด เพราะเคยทำให้อาคารเดียวแตกเป็นหลายแถวมาแล้ว
+// ลงข้อมูลหลักด้วย scripts/master-data/load-master-data.cjs ก่อน
+const ALIASED = new Set(["/brands", "/buildings", "/divisions"]);
+const resolvers = new Map();
+
 async function ensureLookup(route, name, extra = {}, cache) {
   const key = `${route}|${extra.building_id ?? extra.division_id ?? ""}|${name}`;
   if (cache.has(key)) return cache.get(key);
+  if (ALIASED.has(route)) {
+    if (!resolvers.has(route)) {
+      const [names, aliases] = await Promise.all([api("GET", route), api("GET", `${route}/aliases`)]);
+      resolvers.set(route, createNameResolver({ names, aliases }));
+    }
+    const hit = resolvers.get(route).resolve(name);
+    if (!hit) {
+      fail(`ไม่รู้จัก "${name}" (${route}) — เพิ่มเป็นรายการใหม่หรือชื่อเรียกอื่นใน plan ของ load-master-data.cjs ก่อน`);
+    }
+    cache.set(key, hit.id);
+    return hit.id;
+  }
   const existing = (await api("GET", route)).find(
     (row) =>
       row.name === name &&
