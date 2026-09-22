@@ -8,7 +8,7 @@ source of truth คือ `apps/api/.env.example` และ `apps/web/.env.examp
 
 | ตัวแปร | จำเป็น | ความหมาย |
 |---|---|---|
-| `DB_HOST` | ใช่ | โฮสต์ของ MySQL/MariaDB ปกติ `localhost` |
+| `DB_HOST` | ใช่ | โฮสต์ของ MySQL ปกติ `localhost` (ฐานบน Docker ใช้ `127.0.0.1` พอร์ต `3307`) |
 | `DB_USER` | ใช่ | ผู้ใช้ฐานข้อมูล |
 | `DB_PASSWORD` | ใช่ | รหัสผ่านฐานข้อมูล ว่างได้เฉพาะบนเครื่องพัฒนา |
 | `DB_NAME` | ใช่ | ชื่อฐานข้อมูล |

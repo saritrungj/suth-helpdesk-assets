@@ -50,6 +50,7 @@ npm run dev:api
 | 8 | `migration_round_cost_per_reading.sql` | ให้ view ปัดค่าใช้จ่ายทีละรายการ ให้ตรงกับที่โค้ดคำนวณ (ต้องรันหลังข้อ 6) |
 | 9 | `migration_add_effective_pricing.sql` | ราคาผูกกับช่วงที่มีผลจริง และประวัติว่าเครื่องคิดเงินภายใต้สัญญาไหน (ต้องรันหลังข้อ 8) |
 | 10 | `migration_billing_lines_and_meters.sql` | อายุสัญญา รายการราคาต่อหมวด มิเตอร์ ราคา 4 ตำแหน่ง และการปัดยอดระดับรายการราคา (ต้องรันหลังข้อ 9) |
+| 11 | `migration_add_master_aliases.sql` | ชื่อเรียกอื่นของยี่ห้อ อาคาร และฝ่าย ([ADR-0025](../decisions/0025-master-data-aliases.md)) |
 
 ```sh
 mysql --default-character-set=utf8mb4 -u root -p your_database < database/migrations/migration_add_device_location.sql
