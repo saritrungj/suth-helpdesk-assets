@@ -47,3 +47,23 @@ test("ปฏิเสธไฟล์ที่ประกาศแถวรว�
   const { error } = await importFile(workbook);
   assert.equal(error?.code, "import_too_large");
 });
+
+const { readAllSheets } = require("./controller");
+const { parseRegistryWorkbook } = require("./registry-sheet");
+
+// SheetJS แปลงข้อความที่หน้าตาเป็นวันที่ใน CSV แบบ เดือน/วัน ของสหรัฐ และอ่าน CSV ที่ไม่มี BOM
+// เป็น latin1 — สองอย่างนี้ทำให้วันติดตั้งผิดและหัวคอลัมน์ไทยหายโดยไม่มีอะไรเตือน
+for (const [label, bom] of [["ไม่มี BOM", ""], ["มี BOM", "﻿"]]) {
+  test(`CSV ทะเบียน (${label}): วันที่ 1/10/2567 คือ 1 ต.ค. ไม่ใช่ 10 ม.ค. และหัวคอลัมน์ไทยอ่านได้`, () => {
+    const file = path.join(os.tmpdir(), `suth-registry-${process.pid}-${Date.now()}-${bom ? "bom" : "plain"}`);
+    fs.writeFileSync(file, `${bom}Model,Serial No.,Date,สถานะ\nOKI ES5112,TESTSN1,1/10/2567,completed\n`);
+    try {
+      const [row] = parseRegistryWorkbook(readAllSheets(file, "registry.csv")).rows;
+      assert.equal(row.installation, "installed");
+      assert.equal(row.installed_on, "2024-10-01");
+      assert.equal(row.installed_on_known, true);
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+}

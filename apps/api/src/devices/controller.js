@@ -394,7 +394,11 @@ exports.getOne = async (req, res) => {
 // 'YYYY-MM' ไม่มีวันที่) ถ้าย้ายซ้ำภายในเดือนปฏิทินเดียวกัน ยอดทั้งเดือนจะไปตกอยู่กับ
 // ช่วงที่ "เปิดอยู่" ตอนดึงรายงาน ส่วนช่วงที่ปิดไปแล้วในเดือนเดียวกันจะได้ 0 แผ่นสำหรับ
 // เดือนนั้น — getHistory ติดธง is_same_month_transition ไว้ให้ฝั่งเว็บอธิบายผู้ใช้
-async function recordLocationHistory(conn, deviceId, loc) {
+//
+// `firstFrom` ใช้กับช่วงแรกของเครื่องที่ยังไม่มีประวัติเท่านั้น — เครื่องที่นำเข้าจากไฟล์มียอด
+// ย้อนหลังตั้งแต่เริ่มสัญญา ถ้าช่วงแรกเริ่มวันนี้ ยอดเดือนก่อนๆ จะไปตกที่หน่วยงานปัจจุบันเสมอ
+// แม้เครื่องจะย้ายไปแล้ว (ADR-0014) การย้ายยังมีผลวันนี้เสมอ
+async function recordLocationHistory(conn, deviceId, loc, firstFrom) {
   const [[latest]] = await conn.query(
     `SELECT * FROM device_location_history
      WHERE device_id = ? AND effective_to IS NULL
@@ -422,7 +426,8 @@ async function recordLocationHistory(conn, deviceId, loc) {
     `INSERT INTO device_location_history
        (device_id, building_id, floor_id, location, division_id, department_id, effective_from, effective_to)
      VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
-    [deviceId, loc.building_id, loc.floor_id, loc.location, loc.division_id, loc.department_id, today]
+    // วันเริ่มสัญญาที่อยู่ในอนาคตใช้วันนี้แทน — ช่วงที่เริ่มหลังวันที่ถูกปิดจะไม่มีความหมาย
+    [deviceId, loc.building_id, loc.floor_id, loc.location, loc.division_id, loc.department_id, latest || !firstFrom || firstFrom > today ? today : firstFrom]
   );
 }
 
@@ -462,8 +467,8 @@ exports.create = async (req, res) => {
     await recordLocationHistory(conn, result.insertId, data);
 
     // เครื่องที่บันทึกผ่านฟอร์มมีคนตอบสถานะการติดตั้งไว้แล้ว จึงยืนยันครบทุกช่วงเวลา
-    // (service_unverified_before คงเป็น NULL) ต่างจากเครื่องที่ย้ายมาจากข้อมูลเดิม
-    // หรือมาจากไฟล์นำเข้า ซึ่งยังไม่มีใครตอบและต้องผ่านหน้าตรวจยืนยันก่อน
+    // (service_unverified_before คงเป็น NULL) ต่างจากเครื่องที่ย้ายมาจากข้อมูลเดิม ซึ่งยังไม่มีใคร
+    // ตอบ และเครื่องจากไฟล์นำเข้า ซึ่งยืนยันย้อนหลังได้เฉพาะเมื่อไฟล์ระบุวันติดตั้ง (ADR-0026)
     await servicePeriod.recordInstallationReview(conn, result.insertId, {
       installationStatus: data.installation_status,
       effectiveFrom: data.installed_on || servicePeriod.today(),

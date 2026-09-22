@@ -24,7 +24,7 @@ prefix และความรับผิดชอบ — รายละเ�
 | `/api/expense` | ค่าใช้จ่ายตามปีงบ และอุปกรณ์ที่ไม่มีสัญญา | `src/expense/` |
 | `/api/users` | จัดการผู้ใช้ (admin เท่านั้น) | `src/users/` |
 | `/api/health` | ตรวจว่าระบบพร้อมรับงาน (ไม่ต้องล็อกอิน) | `src/health/` |
-| `/api/devices/import`<br>`/api/print-transactions/import` | นำเข้าไฟล์ (admin เท่านั้น) — ยอดมิเตอร์ตรวจทั้งไฟล์ก่อนแล้วจึงยืนยันบันทึก ดู [รูปแบบไฟล์นำเข้า](import-format.md) | `src/import/` |
+| `/api/devices/import`<br>`/api/print-transactions/import` | นำเข้าไฟล์ (admin เท่านั้น) — ทั้งสองเส้นตรวจก่อน (`mode=preview`) แล้วจึงบันทึก (`mode=commit`) ทะเบียนรับ `decisions` ที่ผู้ดูแลเลือก ดู [รูปแบบไฟล์นำเข้า](import-format.md) | `src/import/` |
 
 Master Data ใช้ prefix แยกกันแต่อยู่ในโฟลเดอร์เดียว (`src/master-data/`) — `/api/brands`, `/api/buildings`, `/api/floors`, `/api/divisions`, `/api/departments` และ `/api/fiscal-years`
 
