@@ -15,6 +15,11 @@
 -- ที่นี่ต้องคำนวณให้ตรงกันเป๊ะๆ ด้วยมือ เพราะเรียก .cjs จาก SQL ตรงๆ ไม่ได้)
 -- ==============================================================================
 
+-- ข้อความไทยในไฟล์นี้เป็น UTF-8 — บอก server ตรงๆ ไม่พึ่ง charset ของ client ที่โหลดไฟล์
+-- client ของ image MySQL และ mysql บน Windows ใช้ latin1/cp874 เป็นค่าเริ่มต้น ถ้าไม่มีบรรทัดนี้
+-- ชื่อไทยจะถูกเข้ารหัสซ้อนลงฐานโดยไม่ error (พบจริงตอนย้ายฐานบน Docker ไป MySQL 8.4, #130)
+SET NAMES utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 0;
 
 DELETE FROM device_contract_history;
@@ -24,6 +29,11 @@ DELETE FROM print_transactions;
 DELETE FROM devices;
 DELETE FROM contracts;
 DELETE FROM department;
+-- FOREIGN_KEY_CHECKS = 0 ปิด ON DELETE CASCADE ด้วย ต้องลบชื่อเรียกอื่นเอง ไม่งั้นมันค้าง
+-- แล้วชี้ไปข้อมูลหลักที่ seed ใส่ใหม่ด้วย id เดิม (ADR-0025)
+DELETE FROM brand_alias;
+DELETE FROM building_alias;
+DELETE FROM division_alias;
 DELETE FROM division;
 DELETE FROM floor;
 DELETE FROM building;
