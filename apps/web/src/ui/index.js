@@ -9,6 +9,10 @@
  *   - ห้ามเรียก API หรือ import store ที่ผูกกับข้อมูล (ยกเว้น toast/confirm ซึ่ง
  *     เป็นกลไกของ UI ล้วนๆ)
  *   - ทุกตัวต้องใช้ได้ทั้งโหมดสว่างและมืดโดยไม่ต้องมี prop มาบอก
+ *
+ * ข้อยกเว้น: UiChart ไม่ export จากที่นี่ — หน้าที่วาดกราฟ import `../ui/UiChart.vue` ตรงๆ
+ * เพราะไฟล์นี้ถูกโหลดทุกหน้า (รวมหน้าเข้าสู่ระบบ) ถ้า export ไว้ chart.js ทั้งก้อนจะติดไป
+ * ทุกหน้าด้วย ทั้งที่ใช้แค่สองหน้า (#169) — scripts/check-bundle-budget.cjs จับถ้าหลุดกลับมา
  */
 export { default as UiAlert } from "./UiAlert.vue";
 export { default as UiActionRow } from "./UiActionRow.vue";
@@ -16,7 +20,6 @@ export { default as UiBadge } from "./UiBadge.vue";
 export { default as UiButton } from "./UiButton.vue";
 export { default as UiCard } from "./UiCard.vue";
 export { default as UiMetric } from "./UiMetric.vue";
-export { default as UiChart } from "./UiChart.vue";
 export { default as UiCheckbox } from "./UiCheckbox.vue";
 export { default as UiCombobox } from "./UiCombobox.vue";
 export { default as UiConfirm } from "./UiConfirm.vue";

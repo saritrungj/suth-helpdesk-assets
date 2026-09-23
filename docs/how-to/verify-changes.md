@@ -22,7 +22,10 @@ npm test
 
 ```powershell
 npm run build
+node scripts/check-bundle-budget.cjs
 ```
+
+สคริปต์ที่สองคือ performance budget: รวมขนาด gzip ของ JS ที่ `index.html` โหลดก่อนแสดงหน้าแรก (ทุกหน้า รวมหน้าเข้าสู่ระบบ) ล้มเมื่อเกินงบใน `INITIAL_JS_GZIP_BUDGET_KB` หรือเมื่อไลบรารีที่ใช้แค่บางหน้า (chart.js, xlsx) หลุดเข้าไปในไฟล์ชุดนั้น ถ้าต้องเพิ่มงบให้เขียนเหตุผลใน PR (#169)
 
 ## Health check ฝั่ง API
 
@@ -79,7 +82,7 @@ hook ติดตั้งเองตอน `npm install` หรือ `npm ci`
 
 1. **ห้าม push ตรงเข้า `main`** — ต้องเปิด branch แล้วส่งผ่าน PR การ merge บนเว็บไม่ผ่าน
    hook นี้ เส้นทาง PR จึงใช้ได้ตามปกติ
-2. **`npm run verify`** — unit ทุก workspace → build → E2E โปรเจกต์ `fixture` ที่ไม่ต้องใช้
+2. **`npm run verify`** — unit ทุก workspace → build → performance budget → E2E โปรเจกต์ `fixture` ที่ไม่ต้องใช้
    ฐานข้อมูล โดยรายงานเคสที่ถูกข้ามและล้มถ้าไม่มีเคสผ่านหรือมีเคสข้าม พร้อมตรวจช่องว่างท้ายบรรทัด
    ชุด fixture เปิด preview ของ build บนพอร์ตว่างที่เลือกเอง ไม่ใช้ server ที่งานอื่นเปิดอยู่
 
