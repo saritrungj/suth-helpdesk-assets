@@ -162,8 +162,28 @@ function fromDatabaseError(err) {
   }
 }
 
+/**
+ * แปลง error ของตัวอ่าน body (express.json) ให้เป็น ApiError
+ *
+ * body ที่อ่านไม่ได้เป็นความผิดของคำขอ ถ้าปล่อยผ่านไปถึงส่วนท้ายของ handler กลางจะกลายเป็น 500
+ * และ route ไม่ถูกเรียกเลย — เคยทำให้ออกจากระบบแล้ว cookie ไม่ถูกล้าง (#175)
+ *
+ * @param {any} err
+ * @returns {ApiError|null} null = ไม่ใช่ error ของการอ่าน body
+ */
+function fromRequestError(err) {
+  if (err?.type === "entity.parse.failed") {
+    return badRequest("ข้อมูลที่ส่งมาไม่ใช่ JSON ที่อ่านได้", { code: "invalid_json" });
+  }
+  if (err?.type === "entity.too.large") {
+    return new ApiError(413, "ข้อมูลที่ส่งมาใหญ่เกินไป", { code: "payload_too_large" });
+  }
+  return null;
+}
+
 module.exports = {
   ApiError,
+  fromRequestError,
   PROBLEM_JSON,
   badRequest,
   unauthorized,

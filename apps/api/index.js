@@ -29,7 +29,7 @@ require("dotenv").config();
 
 const db = require("./src/shared/db");
 const { logger, requestLogger } = require("./src/shared/logger");
-const { ApiError, PROBLEM_JSON, notFound, fromDatabaseError } = require("./src/shared/http-error");
+const { ApiError, PROBLEM_JSON, notFound, fromDatabaseError, fromRequestError } = require("./src/shared/http-error");
 const { noStore } = require("./src/shared/cache");
 const { findSchemaGaps, describeGaps } = require("./src/shared/schema-check");
 const { jwtSecretProblem } = require("./src/auth/jwt-secret");
@@ -161,9 +161,9 @@ app.use((req, res, next) => {
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  // error ของ MySQL ที่รู้จัก (ชื่อซ้ำ ลบไม่ได้เพราะมีคนอ้างถึง) แปลงเป็นข้อความ
-  // ที่ผู้ใช้อ่านรู้เรื่องที่นี่ที่เดียว แทนที่จะให้ทุก route เขียน if ซ้ำกันเอง
-  const problem = err instanceof ApiError ? err : fromDatabaseError(err);
+  // error ของ MySQL ที่รู้จัก (ชื่อซ้ำ ลบไม่ได้เพราะมีคนอ้างถึง) และ body ที่อ่านไม่ได้ แปลงเป็น
+  // ข้อความที่ผู้ใช้อ่านรู้เรื่องที่นี่ที่เดียว แทนที่จะให้ทุก route เขียน if ซ้ำกันเอง
+  const problem = err instanceof ApiError ? err : fromRequestError(err) ?? fromDatabaseError(err);
 
   if (problem) {
     // 4xx ที่คาดไว้แล้วไม่ต้องบันทึก stack — บรรทัดล็อกของคำขอ (requestLogger)
