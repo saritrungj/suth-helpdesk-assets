@@ -92,3 +92,33 @@ test("every literal translation used by the app has an English entry", () => {
   scan(sourceRoot);
   expect([...missing].sort()).toEqual([]);
 });
+
+// คำแปลของหน้าที่ถูกลบไปแล้วค้างอยู่เงียบๆ (#192 พบ 175 รายการ) — คำแปลต้องมีที่ใช้จริงในซอร์ส
+// ข้อความภาษาไทยมาได้จากเว็บ ข้อความ error ของ API ค่าจาก packages/domain และข้อมูลตั้งต้นใน database/
+test("every English entry is still used somewhere in the source", () => {
+  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
+  const roots = ["apps/web/src", "apps/api/src", "apps/api/index.js", "packages/domain", "database"].map((p) => join(repoRoot, p));
+  const chunks = [];
+  function collect(path) {
+    let entries;
+    try {
+      entries = readdirSync(path, { withFileTypes: true });
+    } catch {
+      chunks.push(readFileSync(path, "utf8"));
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name === "node_modules" || entry.name === "locales") continue;
+      const file = join(path, entry.name);
+      if (entry.isDirectory()) collect(file);
+      else if ([".js", ".cjs", ".mjs", ".vue", ".sql"].includes(extname(entry.name)) && !/\.(test|spec)\.[cm]?js$/.test(entry.name)) {
+        chunks.push(readFileSync(file, "utf8").replace(/&quot;/g, '"').replace(/&amp;/g, "&"));
+      }
+    }
+  }
+  roots.forEach(collect);
+  const source = chunks.join("\n");
+  const forms = (key) => [key, JSON.stringify(key).slice(1, -1), key.replace(/"/g, '\\"'), key.replace(/'/g, "\'")];
+  const unused = Object.keys(english).filter((key) => !forms(key).some((form) => source.includes(form)));
+  expect(unused).toEqual([]);
+});

@@ -16,6 +16,7 @@
 //   POST   /import-sessions/:id/auto            ให้ระบบตัดสินส่วนที่เหลือ ({ commit } = บันทึกด้วยถ้าไม่เหลืออะไรต้องถาม)
 //   POST   /import-sessions/:id/commit          บันทึก
 //   POST   /import-sessions/:id/abandon         ยกเลิก (กลายเป็น expired ประวัติยังอยู่)
+//   DELETE /import-sessions/:id                 ลบถาวร — เฉพาะงาน expired ที่ไม่เคยบันทึกข้อมูล (ADR-0031)
 
 const express = require("express");
 const { z } = require("zod");
@@ -144,6 +145,15 @@ router.post(
   validate({ params: idParam, body: z.object({ reason: z.string().trim().max(500).optional() }) }),
   noStore(async (req, res) => {
     res.json(await sessions.abandonSession(req.params.id, req.user, req.body.reason));
+  })
+);
+
+router.delete(
+  "/import-sessions/:id",
+  validate({ params: idParam }),
+  noStore(async (req, res) => {
+    await sessions.purgeSession(req.params.id, req.user);
+    res.status(204).end();
   })
 );
 

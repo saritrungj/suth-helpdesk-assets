@@ -9,7 +9,7 @@ import { t } from "../lib/locale";
 
 /**
  * หัวคอลัมน์มิเตอร์ของเดือนหนึ่ง — รูปแบบเดียวกับที่ API อ่าน ("meter M/YY" ปี พ.ศ. 2 หลัก
- * ดู parseMeterMonthHeader ใน apps/api/src/import/controller.js)
+ * ดู parseMeterMonthHeader ใน apps/api/src/import/readings-import.js)
  *
  * @param {string} month "YYYY-MM" (ค.ศ.)
  */
