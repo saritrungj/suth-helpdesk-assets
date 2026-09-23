@@ -20,6 +20,7 @@
 const { MAX_LENGTH, monthIndex, formulaStarter, ZERO_WIDTH_CHARS } = require("@suth/domain");
 const { normalizeName, nameKey, createNameResolver } = require("../master-data/names");
 const { comparableContractNo } = require("./vendor-meter");
+const { requiredPrice } = require("../shared/validate");
 
 const NAME_KINDS = ["brand", "building", "division"];
 const LOCATION_FIELDS = ["building_id", "floor_id", "location", "division_id", "department_id"];
@@ -377,11 +378,13 @@ function planRegistryImport(input) {
     const contract = resolveContract(row.contract_no);
     if (contract === undefined) reasons.push(`ไม่พบสัญญา "${row.contract_no}" ในระบบ`);
 
+    // เกณฑ์เดียวกับฟอร์มและ API (shared/validate.js) — เดิมใช้ Number() ซึ่งรับ "0x10" เป็น 16 บาท
+    // "0.36549" ถูกฐานปัดเป็น 0.3655 (ราคาที่ไม่มีใครกรอก) และ 1,000,000 ทำให้ฐานปฏิเสธเป็น 500 (#148)
     let priceOverride = null;
     if (row.price_override) {
-      const value = Number(row.price_override);
-      if (!Number.isFinite(value) || value < 0) reasons.push(`ราคาพิเศษเฉพาะเครื่อง "${row.price_override}" ไม่ใช่ตัวเลข`);
-      else priceOverride = value;
+      const parsed = requiredPrice.safeParse(row.price_override);
+      if (!parsed.success) reasons.push(`ราคาพิเศษเฉพาะเครื่อง "${row.price_override}" ใช้ไม่ได้ — ${parsed.error.issues[0].message}`);
+      else priceOverride = parsed.data;
     }
 
     // วันเริ่มรับผิดชอบยอด: วันที่ในไฟล์ (ยืนยันย้อนหลังได้) หรือวันแรกที่มีหลักฐาน (ยืนยันไม่ได้)
