@@ -25,7 +25,8 @@ import api from "../../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateAfterWrite } from "../../api/invalidate";
 import { takeRevalidationHeaders } from "../../api/http-cache";
-import { toastSuccess } from "../../store/toast";
+import { askConfirm } from "../../store/confirmDialog";
+import { toastError, toastSuccess } from "../../store/toast";
 import { errorMessage } from "../../lib/api-error";
 import {
   UiAlert,
@@ -46,6 +47,7 @@ const loadError = ref("");
 const dialogOpen = ref(false);
 const editing = ref(null);
 const saving = ref(false);
+const deleting = ref(false);
 const previewing = ref(false);
 const formError = ref("");
 const formErrors = ref([]);
@@ -232,6 +234,36 @@ async function save() {
   }
 }
 
+async function removeContract() {
+  if (!editing.value || saving.value || previewing.value || deleting.value) return;
+
+  const contract = editing.value;
+  const confirmed = await askConfirm(
+    t("สัญญา {0} และรายการราคาทั้งหมดจะถูกลบถาวร รายงานค่าเช่าย้อนหลังและประวัติที่มีการใช้งานจะทำให้ลบไม่ได้", [contract.contract_no]),
+    { title: t("ลบสัญญานี้"), confirmText: t("ลบสัญญา"), danger: true }
+  );
+  if (!confirmed) return;
+
+  deleting.value = true;
+  formError.value = "";
+  formErrors.value = [];
+  try {
+    await api.delete(`/contracts/${contract.id}`);
+    toastSuccess(t("ลบสัญญา {0} แล้ว", [contract.contract_no]));
+    dialogOpen.value = false;
+    editing.value = null;
+    await invalidateAfterWrite(queryClient, "contracts");
+    await load();
+  } catch (err) {
+    console.error(err);
+    // Conflict title/detail from the API explains which reference or invoice month blocks deletion.
+    formError.value = errorMessage(err, t("ลบสัญญาไม่สำเร็จ"));
+    toastError(formError.value);
+  } finally {
+    deleting.value = false;
+  }
+}
+
 const impactTotal = computed(() => {
   if (!impact.value) return null;
   const total = (key) => fromSatang(impact.value.reduce((sum, row) => sum + toSatang(row[key]), 0));
@@ -386,6 +418,17 @@ onMounted(load);
       </div>
 
       <template #footer>
+        <UiButton
+          v-if="editing"
+          variant="danger-ghost"
+          class="mr-auto"
+          :loading="deleting"
+          :disabled="saving || previewing"
+          @click="removeContract"
+        >
+          <template #icon><Trash2 :size="14" /></template>
+          {{ t("ลบสัญญา") }}
+        </UiButton>
         <UiButton variant="ghost" @click="dialogOpen = false">{{ t("ยกเลิก") }}</UiButton>
         <UiButton v-if="editing" variant="secondary" :loading="previewing" @click="preview">
           {{ t("ดูผลกระทบ") }}

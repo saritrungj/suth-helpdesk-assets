@@ -27,7 +27,7 @@ const {
   dateString,
   booleanQuery,
 } = require("../shared/validate");
-const { notFound, badRequest } = require("../shared/http-error");
+const { notFound, badRequest, conflict } = require("../shared/http-error");
 const cache = require("../shared/cache");
 
 router.use(requireAuth);
@@ -230,8 +230,6 @@ router.post(
   asyncHandler(async (req, res) => {
     const id = await db.withTransaction((conn) => writeContract(conn, null, req.body));
     const [contract] = await loadContracts(db, id);
-    cache.noStore(res);
-    res.set("Location", `${req.baseUrl}/${id}`);
     res.status(201).json(contract);
   })
 );
@@ -279,12 +277,9 @@ router.put(
       });
 
       const [contract] = await loadContracts(db, id);
-      cache.noStore(res);
-      res.set("Location", req.baseUrl);
       res.json({ ...contract, impact: result.impact, message: "บันทึกสัญญาเรียบร้อยแล้ว" });
     } catch (err) {
       if (err instanceof PreviewRollback) {
-        cache.noStore(res);
         res.json({ preview: true, impact: err.result.impact });
         return;
       }
@@ -299,10 +294,61 @@ router.delete(
   requireAdmin,
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {
-    // เครื่องที่ยังผูกกับสัญญานี้จะทำให้ MySQL ปฏิเสธการลบ (foreign key) แล้ว
-    // error handler กลางแปลงเป็น 409 พร้อมข้อความว่าต้องย้ายของที่อ้างถึงออกก่อน
-    const [result] = await db.query("DELETE FROM contracts WHERE id = ?", [req.params.id]);
-    if (!result.affectedRows) throw notFound("ไม่พบสัญญาที่ต้องการลบ");
+    const id = Number(req.params.id);
+    await db.withTransaction(async (conn) => {
+      // ล็อกสัญญาก่อนตรวจ เพื่อให้การเพิ่ม reference ใหม่รอจนกว่าการลบจะจบ
+      const [contracts] = await conn.query("SELECT id FROM contracts WHERE id = ? FOR UPDATE", [id]);
+      if (!contracts.length) throw notFound("ไม่พบสัญญาที่ต้องการลบ");
+
+      const [[currentRows], [historyRows], [rentalRows]] = await Promise.all([
+        conn.query("SELECT COUNT(*) AS count FROM devices WHERE contract_id = ?", [id]),
+        conn.query("SELECT COUNT(*) AS count FROM device_contract_history WHERE contract_id = ?", [id]),
+        conn.query(
+          `SELECT COUNT(*) AS count
+           FROM v_contract_invoice i
+           JOIN contracts c ON c.id = i.contract_id
+           WHERE i.contract_id = ? AND i.rental > 0
+             AND (
+               i.month < DATE_FORMAT(CURRENT_DATE, '%Y-%m')
+               OR (
+                 i.month = DATE_FORMAT(CURRENT_DATE, '%Y-%m')
+                 AND CURRENT_DATE >= CASE
+                   WHEN DAY(c.effective_from) = 1 THEN LAST_DAY(CURRENT_DATE)
+                   ELSE LEAST(
+                     LAST_DAY(CURRENT_DATE),
+                     DATE_ADD(
+                       STR_TO_DATE(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), '%Y-%m-%d'),
+                       INTERVAL (DAY(c.effective_from) - 2) DAY
+                     )
+                   )
+                 END
+               )
+             )`,
+          [id]
+        ),
+      ]);
+
+      if (Number(currentRows[0]?.count) > 0) {
+        throw conflict("ลบสัญญาไม่ได้ เพราะยังมีเครื่องผูกอยู่", {
+          code: "contract_has_current_devices",
+          detail: "ย้ายเครื่องทั้งหมดไปยังสัญญาอื่นก่อน แล้วจึงลบสัญญานี้ได้",
+        });
+      }
+      if (Number(historyRows[0]?.count) > 0) {
+        throw conflict("ลบสัญญาไม่ได้ เพราะมีประวัติการคิดเงินอ้างถึงอยู่", {
+          code: "contract_has_history",
+          detail: "สัญญานี้มีประวัติผูกกับเครื่องและอาจมีผลต่อรายงานย้อนหลัง จึงเก็บสัญญาไว้",
+        });
+      }
+      if (Number(rentalRows[0]?.count) > 0) {
+        throw conflict("ลบสัญญาไม่ได้ เพราะมีงวดค่าเช่าที่เกิดขึ้นแล้ว", {
+          code: "contract_has_realized_rental_months",
+          detail: "ลบสัญญาจะทำให้ยอดใบแจ้งหนี้ย้อนหลังหายไป ให้เก็บสัญญานี้ไว้",
+        });
+      }
+
+      await conn.query("DELETE FROM contracts WHERE id = ?", [id]);
+    });
 
     cache.noStore(res);
     res.set("Location", req.baseUrl);

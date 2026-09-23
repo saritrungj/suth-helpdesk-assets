@@ -54,6 +54,7 @@ const DB_SPECS = [
   "fiscal-year-cache.spec.js",
   "billing-shapes.spec.js",
   "contract-edit.spec.js",
+  "contract-delete.spec.js",
   "contract-preview.spec.js",
   "login-wcag.spec.js",
   "login.spec.js",
