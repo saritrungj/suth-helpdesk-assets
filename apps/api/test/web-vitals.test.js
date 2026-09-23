@@ -8,6 +8,10 @@ const assert = require("node:assert/strict");
 
 const app = require("../index");
 
+// origin ที่เครื่องนี้อนุญาตจริง — index.js โหลด .env แล้ว เครื่องที่ deploy ตั้ง CORS_ORIGIN เป็นที่อยู่ของเว็บจริง
+// เดิมเขียนตายตัวเป็น localhost:5173 เทสจึงล้มบนเครื่อง production ทั้งที่ปลายทางทำงานถูก
+const ORIGIN = (process.env.CORS_ORIGIN || "http://localhost:5173").split(",")[0].trim();
+
 const LCP = { name: "LCP", value: 1234.5678, rating: "good", id: "v5-1-1", navigationType: "navigate", page: "/dashboard", target: "main>h1" };
 const INP = {
   name: "INP", value: 320, rating: "needs-improvement", id: "v5-1-2", page: "/assets/:id",
@@ -45,11 +49,11 @@ test("รับ batch แบบ text/plain (sendBeacon) ตอบ 204 และ�
     withServer(async (url) => {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8", Origin: "http://localhost:5173" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8", Origin: ORIGIN },
         body: JSON.stringify([LCP, INP]),
       });
       assert.equal(res.status, 204);
-      assert.equal(res.headers.get("access-control-allow-origin"), "http://localhost:5173");
+      assert.equal(res.headers.get("access-control-allow-origin"), ORIGIN);
       // beacon text/plain เป็นคำขอ no-cors — ถ้าเป็น same-origin เบราว์เซอร์ทิ้งคำตอบแล้วขึ้น error ใน console
       assert.equal(res.headers.get("cross-origin-resource-policy"), "cross-origin");
     })
