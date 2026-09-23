@@ -53,6 +53,7 @@ const DB_SPECS = [
   "axe-pages.spec.js",
   "billing-shapes.spec.js",
   "contract-edit.spec.js",
+  "contract-preview.spec.js",
   "login-wcag.spec.js",
   "login.spec.js",
   "meter-numbers.spec.js",
