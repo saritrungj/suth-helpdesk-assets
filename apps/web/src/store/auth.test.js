@@ -6,6 +6,12 @@ vi.mock("../api/query-client", () => ({
   resetQueryCacheForNewIdentity,
 }));
 
+const clearFormDrafts = vi.fn();
+
+vi.mock("../lib/form-draft", () => ({
+  clearFormDrafts,
+}));
+
 const { authState, setAuth, clearAuth } = await import("./auth");
 
 const alice = { id: 1, username: "alice", role: "staff" };
@@ -62,5 +68,16 @@ describe("ล้างแคชเมื่อเปลี่ยนตัวต�
     setAuth({ ...alice, role: "admin" });
 
     expect(resetQueryCacheForNewIdentity).toHaveBeenCalledOnce();
+  });
+});
+
+describe("ร่างที่กรอกค้างเป็นของคนที่ออกไป (#177)", () => {
+  test("ออกจากระบบหรือ session หมดอายุ — ล้างร่างทุกฟอร์ม", () => {
+    setAuth(alice);
+    clearFormDrafts.mockReset();
+
+    clearAuth();
+
+    expect(clearFormDrafts).toHaveBeenCalledOnce();
   });
 });
