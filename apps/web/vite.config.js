@@ -9,12 +9,23 @@ export default defineConfig({
   ],
 
   server: {
+    // ผูก IPv4 loopback ให้ชัดเจน (#124) ค่าเริ่มต้นของ Vite คือ "localhost" แล้วปล่อยให้
+    // Node แปลงชื่อเอง ซึ่งบน Windows ได้ ::1 ก่อน Node จึงผูกเฉพาะ IPv6 แล้วเบราว์เซอร์ที่
+    // แปลง localhost เป็น IPv4 ต่อไม่ติด ทั้งที่ curl (เลือก IPv6) ได้ 200 จนดูเหมือนปกติ
+    // ยังเป็น loopback เหมือนเดิม ไม่เปิดสู่เครือข่าย — สั่ง --host ทับเมื่อต้องการเปิด
+    host: '127.0.0.1',
     // Playwright writes downloads and traces here while Vite is running. On
     // Windows, watching a temporary .crdownload file can raise EBUSY and stop
     // the development server in the middle of the E2E suite.
     watch: {
       ignored: ['**/e2e/.artifacts/**'],
     },
+  },
+
+  // preview เสิร์ฟ bundle จริงให้ชุด E2E และ pre-push hook ซึ่งส่ง SUTH_WEB_URL เป็น
+  // 127.0.0.1 ได้ ต้องผูกที่อยู่เดียวกับ dev ไม่งั้น Playwright รอ webServer จนหมดเวลา (#124)
+  preview: {
+    host: '127.0.0.1',
   },
 
   test: {

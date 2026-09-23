@@ -70,6 +70,8 @@ npm run dev:web
 
 API อยู่ที่ `http://localhost:3000` เว็บอยู่ที่ `http://localhost:5173` และเรียก API ที่ `http://localhost:3000/api`
 
+เว็บผูกที่ `127.0.0.1` โดยตั้งใจ ([#124](https://github.com/saritrungj/suth-helpdesk-assets/issues/124)) ถ้าต้องให้เครื่องอื่นในเครือข่ายเข้าถึงได้ ให้สั่ง `npm run dev:web -- --host=0.0.0.0` เอง
+
 ## ตรวจว่าใช้ได้จริง
 
 ```text
