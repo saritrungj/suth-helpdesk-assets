@@ -209,3 +209,18 @@ test("หัวคอลัมน์ 'ตำแหน่ง' (ตำแหน่
   }]).rows;
   assert.equal(row.location, "");
 });
+
+// เลขซีเรียลในรายงานมิเตอร์ที่มีช่องว่างซ้อนหรืออักขระล่องหน (คัดลอกจากเว็บ/PDF) เคยทำให้ตัวอ่าน
+// ทะเบียนล้มด้วย TypeError → API ตอบ 500 เพราะตัวอ่านรายงานมิเตอร์ตัดแค่หัวท้าย แต่ตัวอ่านทะเบียน
+// ยุบช่องว่างและตัดอักขระล่องหน คีย์ของสองตัวจึงไม่ตรงกัน (#147)
+test("รายงานมิเตอร์ที่เลขซีเรียลมีช่องว่างซ้อนหรืออักขระล่องหน อ่านเป็นทะเบียนได้ ไม่ล้ม", () => {
+  const title = ["Meter Reading Report from Installation Date; July 24, 2026 to Aug 23, 2026 : Contract No. TEST 9/2567"];
+  const header = ["No.", "SN.", "Model", "Printer Name", "Meter Start (B&W)", "Meter End (B&W)", "Cost/Click"];
+  for (const serial of ["TEST  123", "TEST 123​", "​TEST 123"]) {
+    const rows = [title, header, [1, serial, "HP M404", "ห้อง 1", 100, 200, 0.365]];
+    const parsed = parseRegistryWorkbook([{ name: "Aug", rows, rawRows: rows }]);
+    assert.equal(parsed.rows.length, 1, JSON.stringify(serial));
+    assert.equal(parsed.rows[0].serial_number, "TEST 123");
+    assert.equal(parsed.rows[0].installation, "installed");
+  }
+});

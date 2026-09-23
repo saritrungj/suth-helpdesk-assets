@@ -26,6 +26,7 @@
 // มิเตอร์ผิด ราคาจะไม่ตรงและทั้งไฟล์ถูกปฏิเสธ
 
 const { MAX_PAGES_PER_MONTH, MONTHS_TH_FULL, normalizeMonth } = require("@suth/domain");
+const { normalizeName } = require("../master-data/names");
 
 const EN_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
@@ -140,7 +141,9 @@ function parseVendorWorkbook(sheets) {
     const sheetReadingsFrom = readings.length;
     for (let r = columns.headerRow + 1; r < sheet.rows.length; r++) {
       const row = sheet.rows[r];
-      const serial = String(row[columns.serial] ?? "").trim();
+      // รูปเดียวกับตัวอ่านทะเบียน (ยุบช่องว่าง ตัดอักขระล่องหน) — เดิมตัดแค่หัวท้าย คีย์ของสองตัวอ่าน
+      // จึงไม่ตรงกัน เลขอย่าง "ABC  123" ทำให้นำเข้าทะเบียนจากรายงานมิเตอร์ล้ม 500 (#147)
+      const serial = normalizeName(row[columns.serial]);
       if (!serial) continue; // แถวว่าง แถวสรุปท้ายแผ่น และแถวลายเซ็น
 
       const occurrence = (seenInSheet.get(serial.toUpperCase()) ?? 0) + 1;
