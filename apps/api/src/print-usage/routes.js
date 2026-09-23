@@ -138,11 +138,20 @@ async function writeReading(conn, deviceId, month, pages) {
 
   // ON DUPLICATE KEY UPDATE พึ่ง UNIQUE KEY (meter_id, month) ใน schema.sql
   // ถ้าคีย์นั้นหายไป การกดบันทึกซ้ำเดือนเดิมจะเพิ่มแถวใหม่ทุกครั้งและยอดจะถูกนับซ้ำ
-  // เลขมิเตอร์ต้นงวด/สิ้นงวดถูกล้าง เพราะยอดที่กรอกมือไม่ได้มาจากสองค่านั้นแล้ว
+  //
+  // เลขมิเตอร์ต้นงวด/สิ้นงวด (จากไฟล์ผู้ให้เช่า) ถูกล้างเฉพาะเมื่อจำนวนหน้าเปลี่ยน เพราะยอดใหม่
+  // ไม่ได้มาจากสองค่านั้นแล้ว — หน้าต่างกรอกทั้งปีส่งครบ 12 เดือนเสมอ ถ้าล้างทุกครั้ง แก้เดือน
+  // เดียวก็ลบเลขมิเตอร์ของทุกเดือนที่ไม่ได้แก้ (#143) ใช้ <=> ให้ NULL เทียบได้
+  //
+  // ⚠️ ลำดับการกำหนดค่าสำคัญ: MySQL ประมวลผลซ้ายไปขวาและค่าด้านขวาเห็น pages ที่กำหนดแล้ว
+  // สองบรรทัดเลขมิเตอร์จึงต้องมาก่อน pages เสมอ
   await conn.query(
     `INSERT INTO print_transactions (device_id, meter_id, month, pages)
      VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE pages = VALUES(pages), meter_start = NULL, meter_end = NULL`,
+     ON DUPLICATE KEY UPDATE
+       meter_start = IF(pages <=> VALUES(pages), meter_start, NULL),
+       meter_end = IF(pages <=> VALUES(pages), meter_end, NULL),
+       pages = VALUES(pages)`,
     [deviceId, meterId, month, pages]
   );
 
