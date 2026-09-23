@@ -88,6 +88,28 @@ export function invalidateAfterWrite(queryClient, change) {
   ).then(() => undefined);
 }
 
+/**
+ * ล้างแคชของการเขียนหลายชนิดพร้อมกัน โดยล้างแต่ละ key ครั้งเดียว
+ *
+ * การนำเข้าไฟล์ครั้งเดียวเขียนทั้งเครื่อง ยอด สัญญา ปีงบ และข้อมูลอ้างอิง — เรียก invalidateAfterWrite ทีละชนิด
+ * ทำให้ query ที่อยู่ในหลายชนิด (เช่นภาพรวมของแดชบอร์ด) ถูกยิงซ้ำหลายรอบในวินาทีเดียว (log production
+ * 2026-09-23: 6 คำขอต่อการนำเข้าหนึ่งครั้ง)
+ *
+ * @param {import("@tanstack/vue-query").QueryClient} queryClient
+ * @param {Array<keyof typeof AFFECTED_KEYS>} changes
+ */
+export function invalidateAfterWrites(queryClient, changes) {
+  const keys = new Map();
+  const urls = new Set();
+  for (const change of changes) {
+    if (!AFFECTED_KEYS[change]) throw new Error(t("invalidateAfterWrite: ไม่รู้จักชนิดการเขียน \"{0}\"", [change]));
+    for (const key of AFFECTED_KEYS[change]) keys.set(JSON.stringify(key), key);
+    for (const url of AFFECTED_URLS[change] ?? []) urls.add(url);
+  }
+  markForRevalidation([...urls]);
+  return Promise.all([...keys.values()].map((queryKey) => queryClient.invalidateQueries({ queryKey }))).then(() => undefined);
+}
+
 /** ชนิดของข้อมูลอ้างอิงที่ MasterDataPage ใช้ — map จาก endpoint ที่หน้านั้นรับมาเป็น prop */
 export function changeKindForEndpoint(endpoint) {
   const name = String(endpoint || "").replace(/^\//, "");

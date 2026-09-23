@@ -474,12 +474,11 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(kpiOf(page)).toContainText("5,970");
   });
 
-  test("ลิงก์เก่าของหน้านำเข้าทรัพย์สินเปิดเป็นแท็บนำเข้าของหน้าเพิ่มทรัพย์สิน", async ({ page }) => {
+  test("ลิงก์เก่าของหน้านำเข้าทรัพย์สินเปิดหน้านำเข้าไฟล์จากผู้ให้เช่า (#180)", async ({ page }) => {
     await prototypeFixture(page, "admin");
     await page.goto("/admin/import-devices");
-    await expect(page).toHaveURL(/\/admin\/add-asset/);
-    await expect(page).toHaveURL(/tab=import/);
-    await expect(page.getByRole("tab", { name: /นำเข้า/ })).toHaveAttribute("aria-selected", "true");
+    await expect(page).toHaveURL(/\/admin\/import(\?|$)/);
+    await expect(page.getByTestId("import-sessions")).toBeVisible();
   });
 
   test("ลิงก์เก่าของหน้าเปรียบเทียบเปิดหน้าภาพรวมด้วยขอบเขตเดิม", async ({ page }) => {

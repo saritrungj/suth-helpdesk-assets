@@ -64,6 +64,10 @@ export const keys = {
 
   // เดือนที่มียอดบันทึกไว้แล้ว (ทุกปี) — ขึ้นต้นด้วย print-transactions ให้การล้างแคชหลังบันทึกยอดครอบถึง
   readingMonths: () => ["print-transactions", "months"],
+
+  // งานนำเข้าไฟล์ (#180) — รายการงานค้าง และรายละเอียดหนึ่งงาน
+  importSessions: (all = false) => ["import-sessions", all ? "all" : "open"],
+  importSession: (id) => ["import-sessions", "detail", Number(id)],
 };
 
 // ส่ง header บังคับ revalidate เฉพาะคำขอแรกหลังจากที่เพิ่งเขียนข้อมูลชนิดนั้น —
@@ -312,3 +316,25 @@ export function useReferenceData() {
     ),
   };
 }
+
+
+/**
+ * งานนำเข้าไฟล์ — สถานะอยู่บนเซิร์ฟเวอร์ (ADR-0027) จึงถามใหม่ทุกครั้งที่เปิดหน้า ไม่ใช้ค่าค้าง:
+ * อีกคนอาจทำต่องานเดียวกันไปแล้ว (ADR-0029)
+ */
+export const useImportSessions = (all) =>
+  useQuery({
+    queryKey: computed(() => keys.importSessions(unref(all))),
+    queryFn: () => get("/import-sessions", unref(all) ? { all: 1 } : undefined),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+
+export const useImportSession = (id) =>
+  useQuery({
+    queryKey: computed(() => keys.importSession(unref(id))),
+    queryFn: () => get(`/import-sessions/${unref(id)}`),
+    enabled: computed(() => Boolean(unref(id))),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });

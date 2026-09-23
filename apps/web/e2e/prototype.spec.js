@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { prototypeFixture } from "./prototype-fixture.js";
+import { importSessionFixture } from "./import-session-fixture.js";
 
 async function paste(input, text) {
   await input.evaluate((element, text) => {
@@ -30,84 +31,43 @@ test("paste preview follows sort and page with serial and previous/new values", 
   await expect(page.getByRole("textbox", { name: "ยอดพิมพ์ของ SUTH-023", exact: true })).toHaveValue("300");
 });
 
-test("print usage import checks the file before the user confirms a write", async ({ page }) => {
+test("print usage import icon opens the guided vendor-file import", async ({ page }) => {
   await prototypeFixture(page, "admin");
-  const modes = [];
-  await page.route("**/api/print-transactions/import", async (route) => {
-    const body = route.request().postData() || "";
-    const mode = body.includes("\r\n\r\ncommit\r\n") ? "commit" : "preview";
-    modes.push(mode);
-    if (mode === "preview") {
-      return route.fulfill({ json: {
-        valid: true,
-        preview_token: "checked-file",
-        months_found: ["2025-10"],
-        new_rows: [{ device_id: 1, serial_number: "SUTH-001", month: "2025-10", pages: 0 }],
-        overwrite_rows: [{ device_id: 2, serial_number: "SUTH-002", month: "2025-10", previous_pages: 100, pages: 120 }],
-        unchanged_rows: [],
-        errors: [],
-      } });
-    }
-    return route.fulfill({ json: { rows_upserted: 2, months_found: ["2025-10"] } });
-  });
-
+  await importSessionFixture(page);
   await page.goto("/print-transactions");
-  await page.getByRole("button", { name: "นำเข้ายอดพิมพ์", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "นำเข้ายอดพิมพ์", exact: true });
-  await dialog.locator('input[type="file"]').setInputFiles({
-    name: "usage.csv",
-    mimeType: "text/csv",
-    buffer: Buffer.from("SN.,meter 10/68\nSUTH-001,0"),
-  });
-  await dialog.getByRole("button", { name: "ตรวจไฟล์", exact: true }).click();
-  await expect(dialog.getByText("จะเขียนทับข้อมูลเดิม", { exact: true })).toBeVisible();
-  await expect(dialog.getByText("SUTH-002", { exact: true })).toBeVisible();
-  await dialog.getByRole("button", { name: "ยืนยันบันทึก", exact: true }).click();
-  await expect(dialog).toBeHidden();
-  expect(modes).toEqual(["preview", "commit"]);
+  await page.getByRole("link", { name: "นำเข้ายอดพิมพ์", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/import$/);
+  await expect(page.getByTestId("import-sessions")).toBeVisible();
 });
 
 // เดิมนำเข้าเสร็จแล้วตารางกรอกเดือนเดียวกันยังแสดงช่องว่างจนรีเฟรช เจ้าหน้าที่จึงกรอกทับยอดที่เพิ่ง
-// นำเข้าได้ (#144) — ตารางต้องดึงยอดของเดือนใหม่ทันทีหลังยืนยัน โดยไม่ต้องโหลดหน้าใหม่
+// นำเข้าได้ (#144) — หลังบันทึกงานนำเข้า (#180) กลับมาที่ตารางด้วยเมนูต้องเห็นยอดใหม่ทันที โดยไม่ต้องโหลดหน้าใหม่
 test("print usage import refreshes the open month grid without a reload", async ({ page }) => {
   await prototypeFixture(page, "admin");
-  let committed = false;
+  const server = await importSessionFixture(page);
   await page.route(
     (url) => url.pathname.endsWith("/api/print-transactions") && url.searchParams.has("month"),
-    (route) => route.fulfill({ json: committed ? [{ device_id: 1, pages: 777 }] : [] })
+    (route) => route.fulfill({ json: server.commits ? [{ device_id: 1, pages: 777 }] : [] })
   );
-  await page.route("**/api/print-transactions/import", async (route) => {
-    const body = route.request().postData() || "";
-    if (!body.includes("\r\n\r\ncommit\r\n")) {
-      return route.fulfill({ json: {
-        valid: true,
-        preview_token: "checked-file",
-        months_found: ["2026-08"],
-        new_rows: [{ device_id: 1, serial_number: "SUTH-001", month: "2026-08", pages: 777 }],
-        overwrite_rows: [],
-        unchanged_rows: [],
-        errors: [],
-      } });
-    }
-    committed = true;
-    return route.fulfill({ json: { rows_upserted: 1, months_found: ["2026-08"] } });
-  });
 
   await page.goto("/print-transactions?month=2026-08");
   const cell = page.getByRole("textbox", { name: "ยอดพิมพ์ของ SUTH-001", exact: true }).first();
   await expect(cell).toHaveValue("");
 
-  await page.getByRole("button", { name: "นำเข้ายอดพิมพ์", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "นำเข้ายอดพิมพ์", exact: true });
-  await dialog.locator('input[type="file"]').setInputFiles({
-    name: "usage.csv",
-    mimeType: "text/csv",
-    buffer: Buffer.from("SN.,meter 8/69\nSUTH-001,777"),
-  });
-  await dialog.getByRole("button", { name: "ตรวจไฟล์", exact: true }).click();
-  await dialog.getByRole("button", { name: "ยืนยันบันทึก", exact: true }).click();
-  await expect(dialog).toBeHidden();
+  await page.getByRole("link", { name: "นำเข้ายอดพิมพ์", exact: true }).click();
+  await page.locator('input[type="file"]').setInputFiles({ name: "meter-report.xlsx", mimeType: "application/octet-stream", buffer: Buffer.from("x") });
+  await page.getByRole("combobox", { name: "ตัดสินชื่อ ศูนย์ ก (EMC)" }).selectOption({ label: "สร้างอาคารใหม่ชื่อนี้" });
+  await page.getByRole("combobox", { name: "หมวดมิเตอร์ของรุ่น ES5112" }).selectOption({ label: "A4 เลเซอร์ ขาวดำ" });
+  await expect.poll(() => server.puts.length).toBeGreaterThan(0);
+  await page.getByTestId("create-contract").click();
+  await expect(page.getByTestId("import-commit")).toBeEnabled();
+  await page.getByTestId("import-commit").click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "บันทึก", exact: true }).click();
+  await expect(page.getByTestId("import-result")).toBeVisible();
 
+  await page.goBack();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/print-transactions/);
   await expect(cell).toHaveValue("777");
 });
 
