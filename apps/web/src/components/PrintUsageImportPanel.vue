@@ -2,7 +2,9 @@
 import { computed, ref } from "vue";
 import { currentMonth } from "@suth/domain";
 import { Download, Upload } from "lucide-vue-next";
+import { useQueryClient } from "@tanstack/vue-query";
 import api from "../services/api";
+import { invalidateAfterWrite } from "../api/invalidate";
 import { errorMessage } from "../lib/api-error";
 import { formatBahtValue, formatCount, formatNetPages } from "../lib/format";
 import { toCsv } from "../lib/export-csv";
@@ -13,6 +15,7 @@ import { formatDate, formatMonth } from "../lib/locale-format";
 import { meterHeader, overwriteCsv, recentMonths, templateCsv } from "./print-usage-import";
 
 const emit = defineEmits(["imported"]);
+const queryClient = useQueryClient();
 const file = ref(null);
 const uploading = ref(false);
 const preview = ref(null);
@@ -112,6 +115,9 @@ async function commitImport() {
   try {
     const res = await send("commit", preview.value.preview_token);
     result.value = res.data;
+    // ยอดที่เพิ่งนำเข้าต้องขึ้นในตารางกรอกรายเดือนและความครบถ้วนทันที ไม่งั้นช่องของเดือนนั้น
+    // ยังว่างอยู่จนรีเฟรช แล้วเจ้าหน้าที่กรอกทับยอดที่เพิ่งนำเข้า (#144) — แบบเดียวกับการกรอกเอง
+    await invalidateAfterWrite(queryClient, "usage");
     emit("imported", res.data);
   } catch (err) {
     result.value = { error: errorMessage(err, t("นำเข้าไม่สำเร็จ กรุณาตรวจไฟล์อีกครั้ง")) };
