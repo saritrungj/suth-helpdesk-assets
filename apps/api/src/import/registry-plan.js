@@ -636,6 +636,14 @@ function planFill(existing, values, fill, source, warnings) {
   if (existing.contract_id && values.contract_id && existing.contract_id !== values.contract_id) {
     warnings.push({ ...where, reason: "สัญญาในไฟล์ต่างจากในระบบ — ไม่เปลี่ยนสัญญาจากการนำเข้า แก้ที่หน้าทะเบียน" });
   }
+  // การผูกสัญญาต้องระบุวันเริ่มคิดเงิน (ADR-0019) การนำเข้าจึงไม่ผูกให้เครื่องที่มีอยู่แล้ว — แต่ต้องบอก
+  // ไม่งั้นเครื่องยังคิดเงินไม่ได้ต่อไปโดยไม่มีใครรู้ (#155)
+  if (!existing.contract_id && values.contract_id) {
+    warnings.push({
+      ...where,
+      reason: `เครื่องนี้ยังไม่ผูกสัญญา แต่ไฟล์ระบุสัญญา ${source.contract_no} — การนำเข้าไม่ผูกสัญญาให้เครื่องที่มีอยู่แล้ว ผูกที่หน้าทะเบียนพร้อมวันเริ่มคิดเงิน`,
+    });
+  }
   if (differs.length) {
     warnings.push({ ...where, reason: "ที่ตั้งหรือหน่วยงานในไฟล์ต่างจากในระบบ — ไม่ย้ายเครื่องจากการนำเข้า ถ้าย้ายจริงให้ย้ายที่หน้าทะเบียน" });
   }
