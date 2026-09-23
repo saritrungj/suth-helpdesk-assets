@@ -135,7 +135,7 @@ async function main() {
   console.log("ตั้งรหัส admin แล้ว (รหัสอยู่ใน compose.env)");
   console.log("\nให้ API ต่อฐานนี้ ตั้งใน apps/api/.env:");
   console.log(`  DB_HOST=127.0.0.1\n  DB_PORT=${port}\n  DB_NAME=${database}`);
-  console.log(`  DB_USER=${env.SUTH_APP_USER || "suth_app"}\n  DB_PASSWORD=<SUTH_APP_PASSWORD ใน compose.env>`);
+  console.log(`  DB_USER=${env.SUTH_APP_USER || "suth_app"}\n  DB_PASSWORD=<${dev ? "SUTH_DEV_APP_PASSWORD" : "SUTH_APP_PASSWORD"} ใน compose.env>`);
 }
 
 main().catch((err) => fail(err.message));
