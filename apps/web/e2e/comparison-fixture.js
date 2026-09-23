@@ -92,6 +92,12 @@ export async function comparisonFixture(page, { rows = COMPARISON_ROWS } = {}) {
     state.masterRequests.push(key);
     return json(route, MASTERS[key]);
   });
+  // รายชื่อเดือนที่มียอด (#149) — ชุดเดียวกับเดือนในแถวของ fixture เหมือน API จริง
+  await page.route(/\/api\/print-transactions\/months$/, async (route) => {
+    state.requests.push({ path: new URL(route.request().url()).pathname, months: [] });
+    if (state.fail) return json(route, { title: "Service Unavailable", status: 503 }, 503);
+    return json(route, [...new Set(rows.map((row) => row.month))].sort().reverse());
+  });
   await page.route(/\/api\/dashboard\/(monthly-kpi|overview)\b/, async (route) => {
     const url = new URL(route.request().url());
     const months = (url.searchParams.get("month") || "").split(",").filter(Boolean);

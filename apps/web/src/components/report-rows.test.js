@@ -126,3 +126,23 @@ describe("ช่องว่าง ศูนย์ และสถานะย�
     expect(row._record_status).toBe("done");
   });
 });
+
+// monthly-kpi คืนหนึ่งแถวต่อ "มิเตอร์" เครื่อง A3 สีมีสองแถวต่อเดือน เดิมแถวที่สองเขียนทับแถวแรก
+// หน้ารายงานจึงแสดง 30 (มิเตอร์สี) แทน 230 และ Excel ไม่ตรงกับยอดของ API (#146)
+describe("readingsByDevice — เครื่องหลายมิเตอร์", () => {
+  test("ยอดของเครื่องในเดือนหนึ่งคือผลรวมทุกมิเตอร์ ไม่ว่าแถวไหนมาก่อน", () => {
+    const bw = { device_id: 7, month: "2025-10", pages_printed: 200, location_history_id: 4 };
+    const color = { device_id: 7, month: "2025-10", pages_printed: 30, location_history_id: 4 };
+    for (const order of [[bw, color], [color, bw]]) {
+      expect(readingsByDevice(order)[7]["2025-10"]).toEqual({ pages: 230, locationHistoryId: 4 });
+    }
+  });
+
+  test("เดือนที่มิเตอร์หนึ่งบันทึก 0 ยังนับว่ามียอด ไม่กลายเป็นช่องว่าง", () => {
+    const map = readingsByDevice([
+      { device_id: 7, month: "2025-11", pages_printed: 0, location_history_id: null },
+      { device_id: 7, month: "2025-11", pages_printed: 0, location_history_id: null },
+    ]);
+    expect(map[7]["2025-11"]).toEqual({ pages: 0, locationHistoryId: null });
+  });
+});

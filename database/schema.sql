@@ -568,17 +568,13 @@ LEFT JOIN usage_totals u ON u.contract_id = im.contract_id AND u.month = im.mont
 
 
 -- ==============================================================================
--- Prototype User
+-- บัญชีผู้ดูแลเริ่มต้น — ล็อกไว้ ล็อกอินไม่ได้จนกว่าจะตั้งรหัส (#138)
 -- ==============================================================================
 
--- backend/routes/auth.js ใช้ bcrypt.compare(password, user.password) ตอน login
--- เดิม schema นี้ insert รหัสผ่านเป็น plaintext ทำให้ bcrypt.compare เทียบไม่ตรง
--- และ login ไม่ผ่านทุกครั้ง (แม้กรอกรหัสถูก) ด้านล่างนี้จึงเก็บเป็นค่า hash จาก bcrypt
--- (saltRounds = 10) แทน
+-- repository นี้เป็นสาธารณะ hash ใดที่อยู่ในไฟล์นี้ใครก็เอาไปเดารหัสแบบออฟไลน์ได้ และทุกฐานที่
+-- สร้างจากไฟล์นี้จะมีบัญชีผู้ดูแลที่รหัสไม่ได้มาจากคนติดตั้ง — จึงไม่ใส่ hash เลย
 --
--- รหัสผ่านจริงไม่เก็บไว้ใน repo — ขอจากผู้ดูแลระบบ
--- ติดตั้งใหม่ควรสร้างบัญชีเองแล้วตั้งรหัสใหม่ อย่าใช้ hash ตัวอย่างด้านล่างบนระบบจริง
-INSERT IGNORE INTO users (username,password,role)
-VALUES
-('admin','$2b$10$yRofvUyNetzokkLKJAcqw.qRPIFUEdvi7eoqTkeSM4IQRKhZ7WsyC','admin'),
-('user1','$2b$10$5RJWHc6Ky55Rxuyjyc/o5Op0z.o9RpKC/g5KPHK/tjPpKNBNh4yEu','viewer');
+-- "!" ไม่ใช่ bcrypt hash: bcrypt.compare คืน false เสมอ บัญชีนี้จึงล็อกอินไม่ได้ ตั้งรหัสด้วย
+-- npm run db:bootstrap (ฐานบน Docker) หรือตามข้อ 3 ของ docs/how-to/set-up-development.md
+-- แถวนี้ยังต้องมี เพราะเป็น id 1 ที่ FK verified_by และเครื่องมือที่อ้างผู้ดูแลคนแรกใช้
+INSERT IGNORE INTO users (username, password, role) VALUES ('admin', '!', 'admin');

@@ -31,6 +31,8 @@ import { formatMonth } from "../../lib/locale-format";
 import { computed, onMounted, ref } from "vue";
 import { ClipboardCheck } from "lucide-vue-next";
 import api from "../../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
+import { invalidateAfterWrite } from "../../api/invalidate";
 import { toastSuccess } from "../../store/toast";
 import { errorMessage } from "../../lib/api-error";
 import {
@@ -46,6 +48,8 @@ import {
   UiPageHeader,
   UiSelect,
 } from "../../ui";
+
+const queryClient = useQueryClient();
 
 const devices = ref([]);
 const loading = ref(true);
@@ -130,7 +134,9 @@ async function save() {
 
     toastSuccess(t("บันทึกผลการตรวจยืนยันของ {0} แล้ว", [target.value.serial_number]));
     dialogOpen.value = false;
-    await load();
+    // สถานะการติดตั้งเปลี่ยนตัวส่วนของความครบถ้วนและรายการงานที่ต้องติดตาม — เดิมไม่ล้างแคช
+    // ลิ้นชักแจ้งเตือนยังนับเครื่องที่เพิ่งตรวจไปจนครบรอบดึงใหม่ 5 นาที (#153)
+    await Promise.all([load(), invalidateAfterWrite(queryClient, "device")]);
   } catch (err) {
     console.error(err);
     formError.value = errorMessage(err, t("บันทึกผลการตรวจยืนยันไม่สำเร็จ"));

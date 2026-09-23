@@ -991,7 +991,7 @@
   "มิเตอร์สี": "Colour meter",
   "มี {0} เครื่องที่มียอดพิมพ์นอกอายุสัญญา": "{0} devices have readings outside the contract term",
   "มี {0} เครื่องที่สัญญาไม่มีราคาของหมวดมิเตอร์": "{0} devices have no contract price for their meter category",
-  "ยอดค่าพิมพ์ที่จะเปลี่ยน": "Print charge affected",
+  "ยอดตามใบแจ้งหนี้ที่จะเปลี่ยน (รวมค่าเช่าและ VAT)": "Invoice totals affected (incl. rental and VAT)",
   "ยอดตามใบแจ้งหนี้": "Invoice line total",
   "ยอดตามใบแจ้งหนี้รวม VAT": "Invoice total incl. VAT",
   "ยอดพิมพ์สุทธิ": "Net print volume",

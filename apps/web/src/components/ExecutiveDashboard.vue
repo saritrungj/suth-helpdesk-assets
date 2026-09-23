@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { PanelRightOpen, RefreshCw } from 'lucide-vue-next';
-import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi } from '../api/queries';
+import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useReadingMonths } from '../api/queries';
 import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState, setActiveFiscalYear } from '../store/fiscalYear';
 import { t } from '../lib/locale';
 import { yearLabel } from '../lib/locale-format';
@@ -168,9 +168,9 @@ const primaryMonths = computed(() => (activeFiscalYearRange.value ? fiscalYearMo
  * เฉพาะปีที่เอามาเทียบ (ไม่ใช่ปีหลัก) จึงยังเลือกไม่ได้ — เป็นข้อจำกัดที่ยอมรับไว้
  * แทนการทำช่องเลือกเดือนที่ต้องอธิบายว่าเดือนนี้มีข้อมูลของปีไหนบ้าง
  */
-const { data: everyRow } = useMonthlyKpi();
+const { data: readingMonths } = useReadingMonths();
 const monthOptions = computed(() => {
-  const months = new Set((everyRow.value ?? []).map((row) => row.month));
+  const months = new Set(readingMonths.value ?? []);
   return primaryMonths.value.filter((month) => months.has(month));
 });
 

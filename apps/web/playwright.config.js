@@ -51,8 +51,12 @@ const apiUrl = process.env.SUTH_API_URL || "http://localhost:3000/api";
  */
 const DB_SPECS = [
   "axe-pages.spec.js",
+  "billing-shapes.spec.js",
+  "contract-edit.spec.js",
+  "contract-preview.spec.js",
   "login-wcag.spec.js",
   "login.spec.js",
+  "meter-numbers.spec.js",
   "month-entry.spec.js",
   "page-structure.spec.js",
   "report-workflow.spec.js",

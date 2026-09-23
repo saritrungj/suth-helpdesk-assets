@@ -227,3 +227,37 @@ test("viewer ไม่ได้ CTA ไปหน้า admin เมื่อย�
   await expect(page.getByText("ยังไม่มีสัญญาในปีงบนี้")).toBeVisible();
   await expect(page.getByRole("link", { name: "ไปหน้าจัดการสัญญา" })).toHaveCount(0);
 });
+
+// ตรวจยืนยันการติดตั้งแล้ว ลิ้นชักต้องไม่นับเครื่องนั้นอีกโดยไม่ต้องรอรอบดึงใหม่ 5 นาที (#153)
+test("บันทึกผลตรวจยืนยันการติดตั้งแล้ว กระดิ่งและลิ้นชักอัปเดตทันที", async ({ page }) => {
+  let reviewed = false;
+  await prototypeFixture(page, "admin");
+  await page.route("**/api/dashboard/overview**", (route) => route.fulfill({
+    json: {
+      attention: reviewed ? [] : ATTENTION.filter((item) => item.code === "unverified_installation"),
+      coverage: { total_months: 12, annual_complete_months: 12, months: [], unreviewed_devices: reviewed ? 0 : 1, verifiable: true },
+    },
+  }));
+  await page.route("**/api/devices/installation-review", (route) => route.fulfill({
+    json: reviewed ? { pending: 0, devices: [] } : {
+      pending: 1,
+      devices: [{ id: 42, serial_number: "TEST-REVIEW-1", model: "Office 400", status: "active", installation_status: null, reading_count: 0 }],
+    },
+  }));
+  await page.route("**/api/devices/42/installation", (route) => {
+    reviewed = true;
+    return route.fulfill({ json: { message: "ok" } });
+  });
+
+  await page.goto("/admin/installation-review");
+  await expect(bellOf(page)).toContainText("1");
+  await page.locator("tr", { hasText: "TEST-REVIEW-1" }).getByRole("button").first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("select").first().selectOption({ label: "ติดตั้งแล้ว" });
+  await dialog.getByRole("button", { name: "บันทึกผลการตรวจ", exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  await expect(bellOf(page)).not.toContainText("1");
+  await bellOf(page).click();
+  await expect(page.getByRole("dialog")).not.toContainText("ยังไม่ได้ตรวจยืนยันสถานะการติดตั้ง");
+});

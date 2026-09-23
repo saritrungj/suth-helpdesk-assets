@@ -67,6 +67,50 @@ test("print usage import checks the file before the user confirms a write", asyn
   expect(modes).toEqual(["preview", "commit"]);
 });
 
+// เดิมนำเข้าเสร็จแล้วตารางกรอกเดือนเดียวกันยังแสดงช่องว่างจนรีเฟรช เจ้าหน้าที่จึงกรอกทับยอดที่เพิ่ง
+// นำเข้าได้ (#144) — ตารางต้องดึงยอดของเดือนใหม่ทันทีหลังยืนยัน โดยไม่ต้องโหลดหน้าใหม่
+test("print usage import refreshes the open month grid without a reload", async ({ page }) => {
+  await prototypeFixture(page, "admin");
+  let committed = false;
+  await page.route(
+    (url) => url.pathname.endsWith("/api/print-transactions") && url.searchParams.has("month"),
+    (route) => route.fulfill({ json: committed ? [{ device_id: 1, pages: 777 }] : [] })
+  );
+  await page.route("**/api/print-transactions/import", async (route) => {
+    const body = route.request().postData() || "";
+    if (!body.includes("\r\n\r\ncommit\r\n")) {
+      return route.fulfill({ json: {
+        valid: true,
+        preview_token: "checked-file",
+        months_found: ["2026-08"],
+        new_rows: [{ device_id: 1, serial_number: "SUTH-001", month: "2026-08", pages: 777 }],
+        overwrite_rows: [],
+        unchanged_rows: [],
+        errors: [],
+      } });
+    }
+    committed = true;
+    return route.fulfill({ json: { rows_upserted: 1, months_found: ["2026-08"] } });
+  });
+
+  await page.goto("/print-transactions?month=2026-08");
+  const cell = page.getByRole("textbox", { name: "ยอดพิมพ์ของ SUTH-001", exact: true }).first();
+  await expect(cell).toHaveValue("");
+
+  await page.getByRole("button", { name: "นำเข้ายอดพิมพ์", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "นำเข้ายอดพิมพ์", exact: true });
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: "usage.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("SN.,meter 8/69\nSUTH-001,777"),
+  });
+  await dialog.getByRole("button", { name: "ตรวจไฟล์", exact: true }).click();
+  await dialog.getByRole("button", { name: "ยืนยันบันทึก", exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  await expect(cell).toHaveValue("777");
+});
+
 test("annual paste can undo without saving", async ({ page }) => {
   const state = await prototypeFixture(page);
   await page.goto("/print-transactions");
