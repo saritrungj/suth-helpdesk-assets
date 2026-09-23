@@ -13,6 +13,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret-for-unit-tests";
 const TOKEN = jwt.sign({ id: 1, username: "admin", role: "admin" }, process.env.JWT_SECRET, { expiresIn: "5m" });
 
 const db = require("../shared/db");
+const { ApiError, PROBLEM_JSON, fromDatabaseError } = require("../shared/http-error");
 
 async function post(body) {
   const calls = [];
@@ -70,28 +71,78 @@ test("สัญญา 3 ปีตามจริงผ่านด่านต�
   assert.ok(res.calls.length > 0);
 });
 
-test("DELETE /api/contracts/:id ส่ง Location: /api/contracts และ Cache-Control: no-store (#136)", async () => {
-  const originalQuery = db.query;
-  db.query = async (sql) => {
-    if (String(sql).includes("DELETE FROM contracts")) return [{ affectedRows: 1 }];
-    return [[]];
-  };
+async function deleteContract({ exists = true, current = 0, history = 0, rentals = 0, role = "admin" } = {}) {
+  const originalWithTransaction = db.withTransaction;
+  const calls = [];
+  db.withTransaction = async (work) => work({
+    query: async (sql) => {
+      const statement = String(sql);
+      calls.push(statement);
+      if (statement.includes("SELECT id FROM contracts")) return [exists ? [{ id: 1 }] : [], []];
+      if (statement.includes("FROM devices WHERE contract_id")) return [[{ count: current }], []];
+      if (statement.includes("FROM device_contract_history WHERE contract_id")) return [[{ count: history }], []];
+      if (statement.includes("FROM v_contract_invoice")) return [[{ count: rentals }], []];
+      if (statement.includes("DELETE FROM contracts")) return [{ affectedRows: 1 }, []];
+      throw new Error(`Unexpected SQL: ${statement}`);
+    },
+  });
 
   const app = express();
   app.use(express.json());
   app.use("/api/contracts", require("./routes"));
+  app.use((err, _req, res, _next) => {
+    const problem = err instanceof ApiError ? err : fromDatabaseError(err);
+    if (problem) return res.status(problem.status).type(PROBLEM_JSON).json(problem.toProblem());
+    return res.status(500).json({ title: "เกิดข้อผิดพลาดในระบบ" });
+  });
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
   try {
-    const res = await fetch(`http://localhost:${server.address().port}/api/contracts/1`, {
+    const token = jwt.sign({ id: 1, username: "tester", role }, process.env.JWT_SECRET, { expiresIn: "5m" });
+    const response = await fetch(`http://localhost:${server.address().port}/api/contracts/1`, {
       method: "DELETE",
-      headers: { authorization: `Bearer ${TOKEN}` },
+      headers: { authorization: `Bearer ${token}` },
     });
-    assert.equal(res.status, 200);
-    assert.equal(res.headers.get("location"), "/api/contracts");
-    assert.equal(res.headers.get("cache-control"), "no-store");
+    return { status: response.status, headers: response.headers, body: await response.json(), calls };
   } finally {
-    db.query = originalQuery;
+    db.withTransaction = originalWithTransaction;
     await new Promise((resolve) => server.close(resolve));
   }
+}
+
+test("DELETE /api/contracts/:id ลบสัญญาที่ไม่มี references หรืองวดค่าเช่าที่เกิดขึ้นแล้ว", async () => {
+  const res = await deleteContract();
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("location"), "/api/contracts");
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  assert.ok(res.calls.includes("DELETE FROM contracts WHERE id = ?"));
+  const rentalSql = res.calls.find((sql) => sql.includes("FROM v_contract_invoice"));
+  assert.match(rentalSql, /i\.month < DATE_FORMAT\(CURRENT_DATE, '%Y-%m'\)/);
+  assert.match(rentalSql, /CURRENT_DATE >= CASE[\s\S]*DAY\(c\.effective_from\)/);
+});
+
+for (const [reason, options] of [
+  ["contract_has_current_devices", { current: 1 }],
+  ["contract_has_history", { history: 1 }],
+  ["contract_has_realized_rental_months", { rentals: 1 }],
+]) {
+  test(`DELETE /api/contracts/:id ตอบ 409 ${reason} และไม่ลบสัญญา`, async () => {
+    const res = await deleteContract(options);
+    assert.equal(res.status, 409);
+    assert.match(res.headers.get("content-type"), /^application\/problem\+json/);
+    assert.equal(res.body.code, reason);
+    assert.equal(res.calls.some((sql) => sql.startsWith("DELETE FROM contracts")), false);
+  });
+}
+
+test("DELETE /api/contracts/:id ตอบ 404 เมื่อไม่มีสัญญา", async () => {
+  const res = await deleteContract({ exists: false });
+  assert.equal(res.status, 404);
+  assert.equal(res.calls.some((sql) => sql.startsWith("DELETE FROM contracts")), false);
+});
+
+test("DELETE /api/contracts/:id จำกัดสิทธิ์ผู้ดูแล", async () => {
+  const res = await deleteContract({ role: "viewer" });
+  assert.equal(res.status, 403);
+  assert.equal(res.calls.length, 0);
 });

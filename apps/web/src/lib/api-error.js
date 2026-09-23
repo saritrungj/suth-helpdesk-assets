@@ -47,6 +47,9 @@ export function errorMessage(error, fallback = t("เกิดข้อผิด
       not_found: t("ไม่พบข้อมูลที่ต้องการ"),
       conflict: t("ข้อมูลนี้มีอยู่แล้วหรือขัดแย้งกับข้อมูลเดิม"),
       still_referenced: t("ยังมีข้อมูลอื่นอ้างถึงรายการนี้อยู่"),
+      contract_has_current_devices: t("ลบสัญญาไม่ได้ เพราะยังมีเครื่องผูกอยู่"),
+      contract_has_history: t("ลบสัญญาไม่ได้ เพราะมีประวัติการคิดเงินอ้างถึงอยู่"),
+      contract_has_realized_rental_months: t("ลบสัญญาไม่ได้ เพราะมีงวดค่าเช่าที่เกิดขึ้นแล้ว"),
       bad_request: t("ตรวจสอบข้อมูลที่กรอกแล้วลองใหม่"),
       validation_error: t("ตรวจสอบช่องที่ระบุแล้วลองใหม่"),
     };
