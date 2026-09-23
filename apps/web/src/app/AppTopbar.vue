@@ -46,6 +46,7 @@ import {
 } from "../store/fiscalYear";
 import { modeState, setDensity, setMode } from "../store/theme";
 import { openCommandPalette, openMobileNav } from "../store/ui";
+import AppNotifications from "./AppNotifications.vue";
 import { UiBadge, UiButton, UiMenu, UiMenuItem, UiSegmented, UiSkeleton } from "../ui";
 
 const route = useRoute();
@@ -153,6 +154,8 @@ async function logout() {
       >
         <Search :size="17" />
       </UiButton>
+
+      <AppNotifications />
 
       <!-- ปีงบประมาณ -->
       <UiMenu :label="t(&quot;ปีงบประมาณที่กำลังดู&quot;)">

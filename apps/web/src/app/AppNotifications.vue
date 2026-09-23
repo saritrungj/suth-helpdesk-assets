@@ -5,7 +5,6 @@ import { Bell } from "lucide-vue-next";
 import { useOverview } from "../api/queries";
 import { authState } from "../store/auth";
 import { activeFiscalYear } from "../store/fiscalYear";
-import { uiState } from "../store/ui";
 import { t } from "../lib/locale";
 import { yearLabel } from "../lib/locale-format";
 import AttentionPanel from "../components/AttentionPanel.vue";
@@ -41,23 +40,23 @@ watch(() => route.fullPath, () => { open.value = false; });
 </script>
 
 <template>
-  <UiTooltip :content="uiState.navCollapsed ? label : ''" side="right">
+  <!-- ปุ่มกระดิ่งบนแถบบน (#196) — ตำแหน่งที่คนมองหาการแจ้งเตือนในแอปทั่วไป เดิมอยู่ท้ายแถบเมนูซึ่งคนมองข้าม -->
+  <UiTooltip :content="label" side="bottom">
     <button
       type="button"
-      class="relative flex items-center gap-2.5 w-full min-h-10 rounded-lg px-2.5 text-sm text-ink-soft hover:bg-chrome-hover hover:text-ink transition-colors"
-      :class="uiState.navCollapsed && 'justify-center'"
+      class="relative grid place-items-center w-9 h-9 rounded-lg text-ink-soft hover:bg-chrome-hover hover:text-ink transition-colors"
       :aria-label="label"
       aria-haspopup="dialog"
       :aria-expanded="open"
+      data-testid="app-notifications"
       @click="showNotifications"
     >
-      <Bell :size="18" class="shrink-0" aria-hidden="true" />
-      <span v-if="!uiState.navCollapsed" class="flex-1 text-left">{{ label }}</span>
-      <span v-if="isError" class="text-danger-ink" aria-hidden="true">!</span>
+      <Bell :size="18" aria-hidden="true" />
+      <span v-if="isError" class="absolute -top-0.5 -right-0.5 grid place-items-center min-w-4 h-4 rounded-full bg-danger text-danger-on text-2xs font-bold" aria-hidden="true">!</span>
       <span
         v-else-if="!loading && items.length"
-        class="rounded-full px-1.5 text-xs font-semibold"
-        :class="[critical ? 'bg-danger text-danger-on' : 'bg-brand text-brand-on', uiState.navCollapsed && 'absolute right-0 top-0']"
+        class="absolute -top-0.5 -right-0.5 grid place-items-center min-w-4 h-4 px-1 rounded-full text-2xs font-semibold"
+        :class="critical ? 'bg-danger text-danger-on' : 'bg-accent text-accent-on'"
       >
         {{ items.length }}<span class="sr-only"> {{ critical ? t("หัวข้อ รวมเรื่องที่ต้องแก้ทันที") : t("หัวข้อ") }}</span>
       </span>

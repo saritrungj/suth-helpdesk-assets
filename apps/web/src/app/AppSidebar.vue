@@ -20,7 +20,6 @@ import { APP_NAME, APP_NAME_SHORT, BRAND_ASSETS, ORG_NAME_SHORT } from "./brand"
 import { authState } from "../store/auth";
 import { closeMobileNav, isNavGroupOpen, toggleNavCollapsed, toggleNavGroup, uiState } from "../store/ui";
 import { UiTooltip } from "../ui";
-import AppNotifications from "./AppNotifications.vue";
 
 const route = useRoute();
 
@@ -64,6 +63,14 @@ watch(
   },
   { immediate: true }
 );
+
+/** สีประจำกลุ่มเมนู — ชื่อคลาสเต็มตัว Tailwind จึงสร้าง utility ให้ (ADR-0008: ใช้ semantic token ไม่ใช้สีดิบ) */
+const GROUP_TONE = {
+  overview: "bg-nav-overview-soft text-nav-overview-ink",
+  routine: "bg-nav-routine-soft text-nav-routine-ink",
+  reports: "bg-nav-reports-soft text-nav-reports-ink",
+  settings: "bg-nav-settings-soft text-nav-settings-ink",
+};
 </script>
 
 <template>
@@ -136,9 +143,10 @@ watch(
     <!-- รายการเมนู -->
     <nav class="flex-1 overflow-y-auto overscroll-contain px-2.5 py-3 flex flex-col gap-2">
       <section
-        v-for="group in visibleGroups"
+        v-for="(group, index) in visibleGroups"
         :key="group.key"
-        :class="group.admin ? 'border-t border-chrome-line pt-2' : ''"
+        :class="index > 0 && (uiState.navCollapsed || group.admin) ? 'border-t border-chrome-line pt-2' : ''"
+        :data-nav-group="group.key"
       >
         <button
           v-if="!uiState.navCollapsed"
@@ -168,7 +176,7 @@ watch(
             <UiTooltip :content="uiState.navCollapsed ? item.label : ''" side="right">
               <RouterLink
                 :to="item.to"
-                class="group relative flex items-center gap-2.5 rounded-lg px-2.5 h-9 text-sm transition-colors"
+                class="group relative flex items-center gap-2.5 rounded-lg px-1.5 h-9 text-sm transition-colors"
                 :class="[
                   uiState.navCollapsed ? 'justify-center' : '',
                   isActiveNav(item, route)
@@ -185,13 +193,10 @@ watch(
                   aria-hidden="true"
                 ></span>
 
-                <component
-                  :is="item.icon"
-                  :size="17"
-                  class="shrink-0"
-                  :class="isActiveNav(item, route) && 'text-brand-ink'"
-                  aria-hidden="true"
-                />
+                <!-- ไอคอนบนพื้นสีของกลุ่ม (#196) — พับเมนูแล้วยังบอกได้ว่าอยู่กลุ่มไหน -->
+                <span class="grid place-items-center shrink-0 w-7 h-7 rounded-md" :class="GROUP_TONE[group.key] ?? GROUP_TONE.overview">
+                  <component :is="item.icon" :size="16" aria-hidden="true" />
+                </span>
                 <span v-if="!uiState.navCollapsed" class="truncate">{{ item.label }}</span>
               </RouterLink>
             </UiTooltip>
@@ -199,10 +204,6 @@ watch(
         </ul>
       </section>
     </nav>
-
-    <div class="shrink-0 border-t border-chrome-line p-2">
-      <AppNotifications />
-    </div>
 
     <!-- ปุ่มพับ — เฉพาะจอใหญ่ที่แถบเมนูอยู่ประจำที่ -->
     <div class="hidden lg:block shrink-0 border-t border-chrome-line p-2">
