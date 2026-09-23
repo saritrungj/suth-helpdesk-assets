@@ -100,8 +100,9 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(page.getByText("เปรียบเทียบตาม", { exact: true })).toBeVisible();
 
     await expect(kpi).toContainText("5,970");
-    await expect(kpi).toContainText("119.4");
-    await expect(kpi).toContainText("5,850.6");
+    // หน้าที่คิดเงิน (หลังหัก 2%) เป็นคำอธิบายของการ์ดหน้าที่พิมพ์ ไม่ใช่การ์ดแยก (#197)
+    await expect(kpi).toContainText("คิดเงิน 5,850.6 หน้า (หัก 2%)");
+    await expect(kpi).toContainText("เฉลี่ยหน้าละ");
     await expect(kpi).toContainText("2,632.77");
     await expect(kpi.locator(":scope > div")).toHaveCount(4);
     await expect(kpi).not.toContainText("รอราคา");
@@ -198,7 +199,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
       const kpi = kpiOf(page);
       await expect(kpi).toContainText(parity.pages);
-      await expect(kpi).toContainText(`ยอดพิมพ์สุทธิ${parity.net}หน้า`);
+      await expect(kpi).toContainText(`คิดเงิน ${parity.net} หน้า`);
       await expect(kpi).toContainText(parity.cost);
 
       // ตารางรายละเอียดอ่านจากแถวชุดเดียวกับตัวเลขสำคัญ — กลุ่มที่มียอดสูงสุดต้องมีอยู่จริง
@@ -400,7 +401,9 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
     await expect(page).not.toHaveURL(/months=2024-10/);
     await expect(kpiOf(page)).toContainText("5,970");
-    const latest = state.requests.filter((request) => request.path.endsWith("/monthly-kpi")).at(-1);
+    const kpiRequests = state.requests.filter((request) => request.path.endsWith("/monthly-kpi"));
+    // การ์ดตัวเลขขอเดือนเดียวกันของปีงบก่อนด้วย (#197) — คำขอของช่วงที่เลือกคือชุดที่มีเดือนของปีงบ 2569
+    const latest = kpiRequests.filter((request) => request.months.includes("2026-09")).at(-1);
     expect(latest.months[0]).toBe("2025-10");
     expect(latest.months.at(-1)).toBe("2026-09");
   });
