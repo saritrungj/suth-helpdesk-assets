@@ -123,7 +123,7 @@ async function fiscalYearRange(id) {
  * ช่องบนหน้าจอคือมิเตอร์ขาวดำของเครื่อง (devices/meters.js) — มิเตอร์สีเข้าทาง
  * ไฟล์ของผู้ให้เช่าเท่านั้น การล้างช่องจึงลบเฉพาะยอดของมิเตอร์นั้น
  *
- * @returns {Promise<{ outcome: "saved"|"cleared"|"skipped", meterId: number }>}
+ * @returns {Promise<{ outcome: "saved"|"cleared"|"skipped", meterId: number, unchanged?: boolean }>}
  */
 async function writeReading(conn, deviceId, month, pages) {
   const meterId = await primaryMeterId(conn, deviceId);
@@ -135,6 +135,13 @@ async function writeReading(conn, deviceId, month, pages) {
     ]);
     return { outcome: result.affectedRows > 0 ? "cleared" : "skipped", meterId };
   }
+
+  // ยอดเดิมที่ส่งมาซ้ำด้วยจำนวนหน้าเท่าเดิมไม่ใช่ยอดใหม่ — หน้าต่างกรอกทั้งปีส่งครบทุกเดือนเสมอ (#154)
+  const [[existing]] = await conn.query(
+    "SELECT pages FROM print_transactions WHERE meter_id = ? AND month = ?",
+    [meterId, month]
+  );
+  const unchanged = existing !== undefined && Number(existing.pages) === pages;
 
   // ON DUPLICATE KEY UPDATE พึ่ง UNIQUE KEY (meter_id, month) ใน schema.sql
   // ถ้าคีย์นั้นหายไป การกดบันทึกซ้ำเดือนเดิมจะเพิ่มแถวใหม่ทุกครั้งและยอดจะถูกนับซ้ำ
@@ -155,12 +162,17 @@ async function writeReading(conn, deviceId, month, pages) {
     [deviceId, meterId, month, pages]
   );
 
-  return { outcome: "saved", meterId };
+  return { outcome: "saved", meterId, unchanged };
 }
 
 /**
  * บันทึกหลายช่องใน transaction เดียว แล้วตรวจว่าทุกยอดที่บันทึกหาราคาได้
  * ถ้าหาไม่ได้แม้รายการเดียว ทั้งชุดถูกย้อน (ADR-0021)
+ *
+ * ยอดที่ส่งซ้ำด้วยจำนวนหน้าเท่าเดิมไม่ถูกตรวจราคา — การเขียนค่าเดิมทำให้ราคาเปลี่ยนไม่ได้ ถ้าหา
+ * ราคาไม่ได้อยู่แล้ว (ยอดเก่าก่อน ADR-0021) ก็ไม่ใช่ความผิดของการบันทึกครั้งนี้ เดิมยอดเก่าหนึ่งเดือน
+ * ทำให้หน้าต่างกรอกทั้งปีบันทึกเดือนอื่นไม่ได้เลย (#154) — กฎเดียวกับด่านของการแก้เครื่อง
+ * (devices/meters.js unpricedDeviceReadingKeys) ส่วนยอดที่แก้ค่าหรือเพิ่มใหม่ยังต้องหาราคาได้เสมอ
  *
  * @param {Array<{ deviceId: number, month: string, pages: number|null }>} items
  */
@@ -169,9 +181,9 @@ async function writeReadings(conn, items) {
   const saved = [];
 
   for (const item of items) {
-    const { outcome, meterId } = await writeReading(conn, item.deviceId, item.month, item.pages);
+    const { outcome, meterId, unchanged } = await writeReading(conn, item.deviceId, item.month, item.pages);
     counts[outcome] += 1;
-    if (outcome === "saved") saved.push({ meterId, month: item.month });
+    if (outcome === "saved" && !unchanged) saved.push({ meterId, month: item.month });
   }
 
   await assertReadingsPriced(conn, saved);
@@ -504,3 +516,4 @@ module.exports = router;
 // เปิดให้เทสเรียกใช้ schema ตัวจริง ไม่ใช่ให้เทสสร้างสำเนาขึ้นมาเอง —
 // สำเนาจะผ่านเสมอแม้ของจริงจะพัง ซึ่งเป็นเทสที่ให้ความมั่นใจผิดๆ
 module.exports.pagesField = pagesField;
+module.exports.writeReadings = writeReadings;
