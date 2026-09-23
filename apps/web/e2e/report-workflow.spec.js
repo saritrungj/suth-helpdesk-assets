@@ -258,7 +258,10 @@ test("backdating a billing contract lets a previously rejected reading be saved"
   const template = devices.find((row) => row.brand_id);
   test.skip(!contract || !template, "No priced multi-month contract or device template");
 
-  const readingMonth = contract.effective_from.slice(0, 7);
+  // เดือนแรกที่สัญญาคิดเงินได้ — งวดนับเป็นเดือนที่งวดสิ้นสุด (ADR-0023) สัญญาที่เริ่มหลังวันที่ 1
+  // เช่น 24 มิ.ย. จึงเริ่มคิดเงินเดือน ก.ค. เดือนที่เริ่มสัญญาอยู่นอกอายุสัญญาในทางคิดเงิน (#140)
+  const [fromYear, fromMonth, fromDay] = contract.effective_from.split("-").map(Number);
+  const readingMonth = new Date(Date.UTC(fromYear, fromMonth - 1 + (fromDay > 1 ? 1 : 0), 1)).toISOString().slice(0, 7);
   const [year, month] = readingMonth.split("-").map(Number);
   const laterBillingFrom = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
   const reviewedBillingFrom = `${readingMonth}-01`;
