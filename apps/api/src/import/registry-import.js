@@ -58,9 +58,9 @@ async function loadRegistryContext(q) {
 /**
  * @param {import("mysql2/promise").PoolConnection} conn
  * @param {ReturnType<import("./registry-plan").planRegistryImport>} plan แผนที่ valid แล้ว
- * @param {{ userId: number|null }} actor
+ * @param {{ userId: number|null, importSessionId?: number|null }} actor importSessionId = ที่มาของเครื่องที่สร้าง (ADR-0027)
  */
-async function applyRegistryPlan(conn, plan, { userId }) {
+async function applyRegistryPlan(conn, plan, { userId, importSessionId = null }) {
   const refs = new Map();
   const id = (ref) => (typeof ref === "string" ? refs.get(ref) ?? null : ref ?? null);
 
@@ -108,10 +108,10 @@ async function applyRegistryPlan(conn, plan, { userId }) {
     };
 
     if (row.action === "create") {
-      const columns = ["serial_number", "brand_id", "model", "building_id", "floor_id", "location", "division_id", "department_id", "contract_id", "price_override", "status", "installation_status"];
+      const columns = ["serial_number", "brand_id", "model", "building_id", "floor_id", "location", "division_id", "department_id", "contract_id", "price_override", "status", "installation_status", "import_session_id"];
       const [result] = await conn.query(
         `INSERT INTO devices (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
-        columns.map((column) => values[column] ?? null)
+        columns.map((column) => (column === "import_session_id" ? importSessionId : values[column] ?? null))
       );
       const deviceId = result.insertId;
       // ช่วงประวัติแรกเริ่มที่วันเริ่มสัญญา ไม่ใช่วันนี้ — ยอดย้อนหลังในไฟล์ต้องอยู่กับหน่วยงานนี้

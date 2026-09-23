@@ -221,6 +221,7 @@ function parseVendorWorkbook(sheets) {
 }
 
 module.exports = {
+  findColumns,
   parseVendorWorkbook,
   periodDatesFromTitle,
   contractNoFromTitle,
