@@ -64,7 +64,6 @@ export const NAV_GROUPS = [
   },
   {
     key: "routine",
-    defaultOpen: true,
     label: t("งานประจำ"),
     items: [
       {

@@ -22,7 +22,7 @@ src/app/      เปลือกแอป   แถบเมนู แถบบ�
 
 ค่า layout กลางอยู่ที่ `design/tokens.css`: sidebar 232px, rail 64px, topbar 56px, content padding 24px, content max 1600px หน้าจอห้ามใส่ตัวเลขชุดนี้ซ้ำเอง
 
-เมนูแบ่งเป็น ภาพรวม → งานประจำ → รายงาน → ตั้งค่าระบบ โดย `app/navigation.js` เป็นเจ้าของชื่อ route, role visibility, breadcrumb และ command search งานประจำเปิดเริ่มต้น และหมวด active เปิดเองเมื่อเข้าผ่าน direct link ตอนเป็น rail ทุกรายการมี accessible name และ tooltip ที่เปิดทั้ง hover/focus
+เมนูแบ่งเป็น ภาพรวม → งานประจำ → รายงาน → ตั้งค่าระบบ โดย `app/navigation.js` เป็นเจ้าของชื่อ route, role visibility, breadcrumb และ command search ทุกหมวดเปิดเริ่มต้น การเปิด-ปิดหมวดที่ผู้ใช้กดเองถูกจำไว้ในเบราว์เซอร์ (`store/ui.js`) เหมือนการพับแถบเมนู และหมวด active เปิดเองเมื่อเข้าผ่าน direct link โดยไม่ทับค่าที่จำไว้ ตอนเป็น rail ทุกรายการมี accessible name และ tooltip ที่เปิดทั้ง hover/focus
 
 ### State inventory ของ shared UI
 
