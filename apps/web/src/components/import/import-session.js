@@ -39,6 +39,8 @@ const EVENTS = {
   expired: "หมดอายุ",
   abandoned: "ยกเลิก",
   file_downloaded: "ดาวน์โหลดไฟล์ต้นฉบับ",
+  auto_decided: "ระบบเลือกชื่อและหมวดให้",
+  auto_finished: "ระบบทำให้เสร็จเท่าที่ทำได้",
 };
 
 export function eventLabel(event) {
@@ -56,9 +58,13 @@ export function eventDetail(event) {
     case "decisions_changed":
       return t("{0} รายการ", [d.changes?.length ?? 0]);
     case "contract_created":
-      return `${d.contract_no ?? ""} ${d.effective_from ?? ""} – ${d.effective_to ?? ""}`.trim();
+      return `${d.auto ? t("(อัตโนมัติ)") + " " : ""}${d.contract_no ?? ""} ${d.effective_from ?? ""} – ${d.effective_to ?? ""}`.trim();
     case "fiscal_years_created":
-      return (d.years ?? []).join(", ");
+      return `${d.auto ? t("(อัตโนมัติ)") + " " : ""}${(d.years ?? []).join(", ")}`;
+    case "auto_decided":
+      return t("ชื่อ {0} · รุ่น {1}", [d.names?.length ?? 0, d.models?.length ?? 0]);
+    case "auto_finished":
+      return d.stopped?.length ? t("หยุดถาม {0} เรื่อง", [d.stopped.length]) : t("ไม่มีอะไรต้องถาม");
     case "completed":
       return t("เครื่องใหม่ {0} · เติม {1} · ยอดใหม่ {2} · เขียนทับ {3}", [d.devices_created ?? 0, d.devices_filled ?? 0, d.readings_new ?? 0, d.readings_overwritten ?? 0]);
     case "failed":
@@ -128,4 +134,29 @@ export function fiscalYearForMonths(list, months) {
 /** แถวของ checklist ที่ยังกันการบันทึก */
 export function blockingItems(validation) {
   return (validation?.checklist ?? []).filter((item) => item.state === "blocking" || item.state === "waiting");
+}
+
+const KIND_LABEL = { brand: "ยี่ห้อ", building: "อาคาร", division: "ฝ่าย" };
+
+/**
+ * สิ่งที่ระบบทำให้ในโหมดอัตโนมัติ (#190) → บรรทัดสรุปที่คนอ่าน
+ * @param {{ names?: object[], models?: object[], contracts?: object[], fiscal_years?: string[] }} made
+ */
+export function autoMadeLines(made = {}) {
+  const lines = [];
+  for (const contract of made.contracts ?? []) {
+    lines.push(t("สร้างสัญญา {0} ({1} – {2}) จากหัวรายงาน", [contract.contract_no, contract.effective_from, contract.effective_to]));
+  }
+  if (made.fiscal_years?.length) lines.push(t("สร้างปีงบ {0}", [made.fiscal_years.join(", ")]));
+  for (const kind of ["brand", "building", "division"]) {
+    const entries = (made.names ?? []).filter((n) => n.kind === kind);
+    const created = entries.filter((n) => n.decision === "create").map((n) => n.name);
+    const merged = entries.filter((n) => n.decision === "alias");
+    if (created.length) lines.push(t("สร้าง{0}ใหม่ {1} รายการ: {2}", [t(KIND_LABEL[kind]), created.length, created.join(", ")]));
+    for (const n of merged) lines.push(t("ถือว่า{0} “{1}” คือ “{2}”", [t(KIND_LABEL[kind]), n.name, n.target]));
+  }
+  if (made.models?.length) {
+    lines.push(t("เลือกหมวดมิเตอร์ของรุ่น: {0}", [made.models.map((m) => `${m.name} → ${m.category}`).join(", ")]));
+  }
+  return lines;
 }

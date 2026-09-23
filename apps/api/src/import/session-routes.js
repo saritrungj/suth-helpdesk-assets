@@ -5,7 +5,7 @@
 // เฉพาะ admin ทุก endpoint admin ทุกคนเห็นและทำต่องานของกันได้ ทุกการกระทำเขียนลงประวัติพร้อมผู้ทำ
 //
 //   GET    /import-sessions                     งานที่ยังเปิดอยู่ (?all=1 = รวมที่ปิดแล้ว)
-//   POST   /import-sessions                     อัปโหลดไฟล์ → session ใหม่ที่ตรวจแล้ว
+//   POST   /import-sessions                     อัปโหลดไฟล์ → session ใหม่ที่ตรวจแล้ว (auto=commit|resolve → ADR-0030)
 //   GET    /import-sessions/:id                 สถานะ ผลตรวจ การตัดสินใจ ประวัติล่าสุด
 //   GET    /import-sessions/:id/events          ประวัติทั้งหมด
 //   GET    /import-sessions/:id/file            ดาวน์โหลดไฟล์ต้นฉบับ
@@ -13,6 +13,7 @@
 //   POST   /import-sessions/:id/validate        ตรวจใหม่ (เช่น หลังแก้สัญญาที่หน้าสัญญา)
 //   POST   /import-sessions/:id/contracts       สร้างสัญญาที่ไฟล์อ้างถึง (เติมจากหัวไฟล์ได้)
 //   POST   /import-sessions/:id/fiscal-years    สร้างปีงบที่ครอบเดือนในไฟล์
+//   POST   /import-sessions/:id/auto            ให้ระบบตัดสินส่วนที่เหลือ ({ commit } = บันทึกด้วยถ้าไม่เหลืออะไรต้องถาม)
 //   POST   /import-sessions/:id/commit          บันทึก
 //   POST   /import-sessions/:id/abandon         ยกเลิก (กลายเป็น expired ประวัติยังอยู่)
 
@@ -51,7 +52,9 @@ router.post(
   handleUpload,
   noStore(async (req, res) => {
     try {
-      const detail = await sessions.createFromUpload(req.file, req.user);
+      // ช่องในฟอร์ม multipart — ค่าอื่นหรือไม่ส่ง = ทำเองทุกขั้นแบบเดิม
+      const auto = ["commit", "resolve"].includes(req.body?.auto) ? req.body.auto : null;
+      const detail = await sessions.createFromUpload(req.file, req.user, { auto });
       res.set("Location", `${req.baseUrl}/import-sessions/${detail.id}`);
       res.status(201).json(detail);
     } finally {
@@ -117,6 +120,14 @@ router.post(
   validate({ params: idParam, body: z.object({ years: z.array(z.coerce.string().max(10)).min(1).max(10) }) }),
   noStore(async (req, res) => {
     res.json(await sessions.createFiscalYears(req.params.id, req.user, req.body.years));
+  })
+);
+
+router.post(
+  "/import-sessions/:id/auto",
+  validate({ params: idParam, body: z.object({ commit: z.boolean().optional() }) }),
+  noStore(async (req, res) => {
+    res.json(await sessions.autoResolveSession(req.params.id, req.user, { commit: Boolean(req.body.commit) }));
   })
 );
 

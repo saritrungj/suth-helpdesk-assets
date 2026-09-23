@@ -17,7 +17,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute } from "vue-router";
 import { useQueryClient } from "@tanstack/vue-query";
-import { ArrowLeft, CircleCheck, Download, RefreshCw, Upload, XCircle } from "lucide-vue-next";
+import { ArrowLeft, CircleCheck, Download, RefreshCw, Upload, XCircle, Sparkles } from "lucide-vue-next";
 import api from "../../services/api";
 import { keys, useImportSession } from "../../api/queries";
 import { invalidateAfterWrites } from "../../api/invalidate";
@@ -32,6 +32,7 @@ import { toastError, toastSuccess } from "../../store/toast";
 import { UiAlert, UiBadge, UiButton, UiCard, UiPageHeader, UiSkeleton } from "../../ui";
 import { initialChoices } from "../../components/device-import";
 import ImportChecklist from "../../components/import/ImportChecklist.vue";
+import ImportAutoSummary from "../../components/import/ImportAutoSummary.vue";
 import ImportContracts from "../../components/import/ImportContracts.vue";
 import ImportDecisions from "../../components/import/ImportDecisions.vue";
 import ImportDevices from "../../components/import/ImportDevices.vue";
@@ -164,6 +165,15 @@ async function run(label, request, after) {
 
 const revalidate = () => run(t("ตรวจไฟล์ไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/validate`));
 
+/** ให้ระบบเลือกชื่อ หมวดของรุ่น สร้างสัญญาและปีงบที่เหลือให้ (#190) — ไม่บันทึก คนกดบันทึกเอง */
+async function autoResolve() {
+  const data = await run(t("ให้ระบบเลือกให้ไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/auto`, { commit: false }), async () => {
+    await refreshFiscalYears();
+    await invalidateAfterWrites(queryClient, ["contracts", "fiscal-years"]);
+  });
+  if (data) toastSuccess(t("ระบบเลือกให้เท่าที่เลือกได้แล้ว"));
+}
+
 async function createContract(body) {
   contractErrors.value = {};
   const data = await run(t("สร้างสัญญาไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/contracts`, body), () =>
@@ -284,6 +294,7 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
         <p class="text-sm text-ink-soft mt-1">
           {{ t("เครื่องใหม่ {0} · เติมข้อมูล {1} · ยอดใหม่ {2} · เขียนทับ {3}", [formatCount(session.result.devices_created), formatCount(session.result.devices_filled), formatCount(session.result.readings_new), formatCount(session.result.readings_overwritten)]) }}
         </p>
+        <ImportAutoSummary v-if="session.result.auto" :auto="session.result.auto" class="mt-3" />
         <div class="flex flex-wrap gap-2 mt-3">
           <UiButton v-if="dashboardFy" variant="primary" size="sm" :to="{ path: '/dashboard', query: { fy: dashboardFy.id } }" data-testid="open-dashboard">
             {{ t("ดูภาพรวมปีงบ {0}", [dashboardFy.year]) }}
@@ -296,10 +307,14 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
 
       <template v-if="validation">
         <UiCard class="mb-4">
+          <ImportAutoSummary v-if="validation.auto && editable" :auto="validation.auto" class="mb-3 pb-3 border-b border-line-soft" />
           <p class="text-sm font-semibold text-ink mb-2">{{ t("สิ่งที่ต้องทำก่อนบันทึก") }}</p>
           <ImportChecklist :items="validation.checklist" :busy="busy" :editable="editable" @action="onChecklistAction" />
           <div v-if="editable" class="flex flex-wrap justify-end gap-2 mt-4">
             <p v-if="busy" class="text-sm text-ink-mute mr-auto" role="status">{{ t("กำลังบันทึกการเลือกและตรวจใหม่…") }}</p>
+            <UiButton v-if="!session.can_commit" variant="secondary" :disabled="busy" data-testid="import-auto-resolve" @click="autoResolve">
+              <template #icon><Sparkles :size="15" /></template>{{ t("ให้ระบบเลือกส่วนที่เหลือ") }}
+            </UiButton>
             <UiButton variant="primary" :disabled="!session.can_commit || busy" :loading="busy && session.status === 'processing'" data-testid="import-commit" @click="commit">
               <template #icon><Upload :size="15" /></template>{{ t("บันทึกทั้งหมด") }}
             </UiButton>
