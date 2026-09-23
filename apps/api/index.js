@@ -123,7 +123,6 @@ app.use("/api/health", require("./src/health/routes"));
 app.use("/api/metrics", require("./src/metrics/routes"));
 
 app.use("/api", require("./src/master-data/routes"));
-app.use("/api", require("./src/import/routes"));
 app.use("/api", require("./src/import/session-routes"));
 
 app.use("/api/devices", require("./src/devices/routes"));

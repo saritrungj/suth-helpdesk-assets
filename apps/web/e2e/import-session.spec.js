@@ -205,3 +205,22 @@ test("นำเข้าอัตโนมัติ (#190): ชื่อที�
   expect(firstId).toBeLessThan(id);
   await apiFetch(`/import-sessions/${id}/abandon`, { method: "POST", body: JSON.stringify({ reason: "e2e cleanup" }) });
 });
+
+test("ลบงานนำเข้าที่ยกเลิกแล้วถาวรจากหน้างาน — งานที่บันทึกแล้วลบไม่ได้ (#192)", async ({ page }) => {
+  test.skip(process.env.SUTH_E2E_DISPOSABLE_DB !== "1", "ลบข้อมูลถาวร — รันเฉพาะฐานชั่วคราวของ verify:db");
+  test.setTimeout(120000);
+  const file = syntheticFile(`P${run}`);
+  const id = await upload(page, "meter-report-purge.xlsx", file.buffer);
+  await apiFetch(`/import-sessions/${id}/abandon`, { method: "POST", body: JSON.stringify({ reason: "e2e purge" }) });
+
+  await page.goto(`/admin/import/${id}`);
+  await page.getByTestId("import-purge").click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "ลบถาวร", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/import$/);
+  await expect(apiFetch(`/import-sessions/${id}`)).rejects.toThrow(/404/);
+
+  // งานที่บันทึกแล้วคือที่มาของเครื่องและยอด — ลบไม่ได้
+  const completed = (await apiFetch("/import-sessions?all=1")).find((row) => row.status === "completed");
+  expect(completed, "ต้องมีงานที่บันทึกแล้วจากเทสก่อนหน้าในไฟล์นี้").toBeTruthy();
+  await expect(apiFetch(`/import-sessions/${completed.id}`, { method: "DELETE" })).rejects.toThrow(/409/);
+});

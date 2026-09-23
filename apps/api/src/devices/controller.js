@@ -433,7 +433,7 @@ async function recordLocationHistory(conn, deviceId, loc, firstFrom) {
   );
 }
 
-// ส่งออกให้ import/controller.js เรียกใช้ตอนนำเข้าไฟล์หลายเครื่องพร้อมกัน เพื่อให้
+// ส่งออกให้ import/registry-import.js เรียกใช้ตอนนำเข้าไฟล์หลายเครื่องพร้อมกัน เพื่อให้
 // เครื่องที่มาจากการนำเข้าเปิด "ช่วงประวัติแรก" เหมือนเครื่องที่เพิ่มทีละรายการทุกประการ
 exports.recordLocationHistory = recordLocationHistory;
 

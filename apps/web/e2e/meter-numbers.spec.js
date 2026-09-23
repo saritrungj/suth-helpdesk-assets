@@ -6,7 +6,7 @@
 // ล้างเลขมิเตอร์ แก้เดือนเดียวเลขมิเตอร์ของทุกเดือนที่นำเข้าจากไฟล์จึงหายหมด ใช้เทียบใบแจ้งหนี้
 // และตรวจความต่อเนื่องของเลขต่องวดไม่ได้อีก
 //
-// เทสนี้สร้างสัญญาและเครื่องของตัวเอง นำเข้าไฟล์ผ่านเส้นทางจริง แล้วลบทิ้งเมื่อจบ
+// เทสนี้สร้างสัญญาและเครื่องของตัวเอง นำเข้าไฟล์ผ่านงานนำเข้า (/import-sessions) เหมือนหน้าเว็บ แล้วลบทิ้งเมื่อจบ
 
 import { expect, test } from "@playwright/test";
 import * as XLSX from "xlsx";
@@ -22,33 +22,43 @@ test.beforeAll(async () => {
 });
 
 /** รายงานมิเตอร์ของผู้ให้เช่าหนึ่งงวด (งวดเดือนปฏิทิน) หนึ่งเครื่อง — รูปเดียวกับไฟล์จริงของ SUTH 86 */
-function vendorFile({ month, contractNo, serial, start, end, price }) {
+function vendorFile({ month, contractNo, serial, model, start, end, price }) {
   const [year, m] = month.split("-").map(Number);
   const lastDay = new Date(Date.UTC(year, m, 0)).getUTCDate();
   const name = EN_MONTHS[m - 1];
   const rows = [
     [`Meter Reading Report ${name} 1, ${year} to ${name} ${lastDay}, ${year} : Contract No. ${contractNo}`],
     ["No.", "SN.", "Model", "Printer Name", "Meter Start (B&W)", "Meter End (B&W)", "Cost/Click"],
-    [1, serial, "Office 400", "E2E", start, end, price],
+    [1, serial, model, "E2E", start, end, price],
   ];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), name);
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
-async function importMeters(buffer, mode, previewToken) {
+/**
+ * อัปโหลดเป็นงานนำเข้า เลือกหมวดของรุ่นที่ยังไม่มี (แบบที่ผู้ดูแลเลือกในหน้า) ต้องพร้อมบันทึก แล้วบันทึก
+ * (ADR-0027, ADR-0028)
+ */
+async function importMeters(buffer, categoryId) {
   const form = new FormData();
-  form.append("mode", mode);
-  if (previewToken) form.append("preview_token", previewToken);
   form.append("file", new Blob([buffer]), "meters.xlsx");
-  const res = await fetch(`${API_URL}/print-transactions/import`, {
+  const res = await fetch(`${API_URL}/import-sessions`, {
     method: "POST",
     headers: { Cookie: `suth_session=${issueToken()}` },
     body: form,
   });
-  const body = await res.json();
-  expect(res.status, JSON.stringify(body)).toBe(200);
-  return body;
+  let session = await res.json();
+  expect(res.status, JSON.stringify(session)).toBe(201);
+  const undecided = (session.validation?.registry?.models ?? []).filter((m) => !m.meter_category_id);
+  if (undecided.length) {
+    const models = Object.fromEntries(undecided.map((m) => [m.key, { meter_category_id: categoryId }]));
+    session = await apiFetch(`/import-sessions/${session.id}/decisions`, { method: "PUT", body: JSON.stringify({ decisions: { models } }) });
+  }
+  expect(session.status, JSON.stringify(session.validation?.checklist)).toBe("ready");
+  const committed = await apiFetch(`/import-sessions/${session.id}/commit`, { method: "POST" });
+  expect(committed.status, JSON.stringify(committed.error ?? committed.validation?.notice)).toBe("completed");
+  return committed;
 }
 
 async function reading(month, serial) {
@@ -103,10 +113,9 @@ test("บันทึกทั้งปีที่ไม่เปลี่ย�
     });
     deviceId = device.id;
 
-    const file = vendorFile({ month: importedMonth, contractNo, serial, start: 1000, end: 1300, price: 0.4 });
-    const preview = await importMeters(file, "preview");
-    expect(preview.errors).toEqual([]);
-    await importMeters(file, "commit", preview.preview_token);
+    // ยี่ห้อในไฟล์ตรงกับเครื่องที่สร้าง — ไม่มียี่ห้อใหม่ให้ต้องตัดสิน เหลือแค่หมวดของรุ่น
+    const file = vendorFile({ month: importedMonth, contractNo, serial, model: `${template.brand_name} E2E400`, start: 1000, end: 1300, price: 0.4 });
+    await importMeters(file, monochrome.id);
 
     const imported = await reading(importedMonth, serial);
     expect([imported.pages_printed, imported.meter_start, imported.meter_end]).toEqual([300, 1000, 1300]);

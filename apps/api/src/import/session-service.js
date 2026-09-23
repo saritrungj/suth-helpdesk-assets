@@ -856,6 +856,29 @@ async function autoResolveSession(id, actor, { commit }) {
   return autoProcess(id, actor, { commit });
 }
 
+/**
+ * ลบงานนำเข้าที่ปิดแล้วและไม่เคยบันทึกข้อมูลทิ้งถาวร ทั้งแถว ประวัติ และไฟล์ (#192, ADR-0031)
+ * แถวหายจากฐาน จึงเขียนหนึ่งบรรทัดลง log ของเซิร์ฟเวอร์ว่าใครลบอะไร
+ */
+async function purgeSession(id, actor) {
+  const row = await store.purgeSession(id);
+  let fileRemoved = false;
+  try {
+    fs.rmSync(store.absoluteFilePath(row), { force: true });
+    fileRemoved = true;
+  } catch (err) {
+    logger.warn("ลบไฟล์ของงานนำเข้าไม่สำเร็จ", { import_session_id: row.id, error: err.message });
+  }
+  logger.info("ลบงานนำเข้าถาวร", {
+    import_session_id: row.id,
+    file_name: row.file_name,
+    file_sha256: row.file_sha256,
+    owner_id: row.created_by,
+    by_user_id: actorId(actor),
+    file_removed: fileRemoved,
+  });
+}
+
 async function listForAdmins({ includeClosed }) {
   await store.sweep();
   const rows = await store.listSessions({ includeClosed });
@@ -895,6 +918,7 @@ module.exports = {
   createContract,
   createFiscalYears,
   abandonSession,
+  purgeSession,
   commitSession,
   autoResolveSession,
   listForAdmins,

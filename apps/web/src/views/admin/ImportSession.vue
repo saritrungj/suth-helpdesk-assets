@@ -15,9 +15,9 @@
  * → ยอดมิเตอร์และยอดตามใบแจ้งหนี้ → บันทึก
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { onBeforeRouteLeave, useRoute } from "vue-router";
+import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useQueryClient } from "@tanstack/vue-query";
-import { ArrowLeft, CircleCheck, Download, RefreshCw, Upload, XCircle, Sparkles } from "lucide-vue-next";
+import { ArrowLeft, CircleCheck, Download, RefreshCw, Upload, XCircle, Sparkles, Trash2 } from "lucide-vue-next";
 import api from "../../services/api";
 import { keys, useImportSession } from "../../api/queries";
 import { invalidateAfterWrites } from "../../api/invalidate";
@@ -41,6 +41,7 @@ import ImportReadings from "../../components/import/ImportReadings.vue";
 import { EDITABLE, decisionsPayload, fiscalYearForMonths, statusOf } from "../../components/import/import-session";
 
 const route = useRoute();
+const router = useRouter();
 const queryClient = useQueryClient();
 const id = computed(() => Number(route.params.id));
 
@@ -218,6 +219,30 @@ async function abandon() {
   if (ok) await run(t("ยกเลิกไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/abandon`, {}));
 }
 
+/** ลบถาวร — เฉพาะงานที่ปิดแล้วและไม่เคยบันทึก (#192, ADR-0031) */
+const purgeable = computed(() => session.value?.status === "expired" && !session.value?.completed_at);
+async function purge() {
+  const ok = await askConfirm(t("ลบงานนำเข้านี้ถาวร? ไฟล์และประวัติของงานจะหายทั้งหมด งานนี้ไม่เคยบันทึกข้อมูลลงระบบ จึงไม่กระทบข้อมูลเครื่องหรือยอด"), {
+    title: t("ลบงานนำเข้าถาวร"),
+    confirmText: t("ลบถาวร"),
+    danger: true,
+  });
+  if (!ok) return;
+  busy.value = true;
+  try {
+    await api.delete(`/import-sessions/${id.value}`);
+    queryClient.removeQueries({ queryKey: keys.importSession(id.value) });
+    await queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+    toastSuccess(t("ลบงานนำเข้าแล้ว"));
+    await router.push("/admin/import");
+  } catch (err) {
+    actionError.value = errorMessage(err, t("ลบไม่สำเร็จ"));
+    toastError(actionError.value);
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function onChecklistAction(item) {
   const type = item.action?.type;
   if (type === "create_fiscal_years") return createFiscalYears(item.action.years);
@@ -257,6 +282,9 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
           </UiButton>
           <UiButton v-if="editable" variant="secondary" size="sm" :disabled="busy" data-testid="revalidate" @click="revalidate">
             <template #icon><RefreshCw :size="14" /></template>{{ t("ตรวจอีกครั้ง") }}
+          </UiButton>
+          <UiButton v-if="purgeable" variant="ghost" size="sm" :disabled="busy" data-testid="import-purge" @click="purge">
+            <template #icon><Trash2 :size="14" /></template>{{ t("ลบถาวร") }}
           </UiButton>
           <UiButton v-if="editable" variant="ghost" size="sm" :disabled="busy" @click="abandon">
             <template #icon><XCircle :size="14" /></template>{{ t("ยกเลิกงานนี้") }}

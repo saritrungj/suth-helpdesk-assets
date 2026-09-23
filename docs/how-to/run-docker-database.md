@@ -64,7 +64,7 @@ node scripts/master-data/load-master-data.cjs D:/suth-data/master-data/plan.json
 node scripts/master-data/load-master-data.cjs D:/suth-data/master-data/plan.json --confirm  # ลงจริง
 ```
 
-เครื่องและยอดมิเตอร์จากรายงานของผู้ให้เช่า ใช้ `scripts/load-vendor-workbooks.cjs` (วิธีตั้ง config อยู่หัวไฟล์) — ต้องลงข้อมูลหลักก่อน ชื่อที่จับคู่ไม่ได้ทำให้สคริปต์หยุด
+เครื่องและยอดมิเตอร์จากรายงานของผู้ให้เช่า อัปโหลดที่หน้านำเข้าไฟล์ของระบบ — โหมดอัตโนมัติสร้างสัญญา ปีงบ และชื่อที่ขาดให้ ([นำเข้าไฟล์](import-files.md))
 
 ## 5. ดูว่าข้อมูลเข้าหรือยัง
 

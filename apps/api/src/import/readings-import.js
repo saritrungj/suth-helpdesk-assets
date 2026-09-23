@@ -1,7 +1,7 @@
 // apps/api/src/import/readings-import.js
 //
 // นำเข้ายอดพิมพ์ (มิเตอร์) — อ่านแผ่นงานเป็นยอดรายมิเตอร์ เทียบกับยอดเดิม และตรวจยอดที่เขียนแล้วกับราคาในระบบ
-// ใช้ทั้ง POST /print-transactions/import และ import session
+// ใช้โดยงานนำเข้า (session-service.js)
 // ย้ายมาจาก import/controller.js โดยไม่เปลี่ยนพฤติกรรม (#178)
 //
 // รับสองรูปแบบ ตรวจรูปแบบเองจากหัวตาราง
@@ -11,7 +11,6 @@
 //   2. เทมเพลตเดิม — แผ่นเดียว คอลัมน์ "meter M/YY" เป็นยอดรายเดือนของมิเตอร์หลัก
 //      ไฟล์จริงเก็บนอก repo (repo เป็น public) — หัวตารางดูที่ docs/reference/import-format.md
 
-const crypto = require("crypto");
 const { badRequest } = require("../shared/http-error");
 const { assertReadingsPriced } = require("../devices/meters");
 const { MAX_PAGES_PER_MONTH, normalizeMonth } = require("@suth/domain");
@@ -397,28 +396,6 @@ async function compareWithExisting(q, candidates, months) {
   return { existingMap, newRows, overwriteRows, unchangedRows };
 }
 
-/**
- * ผูก token กับทั้งไฟล์และค่าเดิมที่ผู้ใช้เห็นในหน้าตรวจ หากมีคนแก้ยอด
- * ระหว่างเปิด preview กับกดยืนยัน token จะไม่ตรงและระบบจะให้ตรวจใหม่
- * แทนการเขียนทับค่าที่ผู้ใช้ไม่เคยเห็น
- */
-function readingsToken(fileDigest, candidates, existingMap) {
-  return crypto
-    .createHash("sha256")
-    .update(fileDigest)
-    .update(JSON.stringify(candidates.map((row) => ({
-      meter_id: row.meter_id,
-      month: row.month,
-      pages: row.pages,
-      meter_start: row.meter_start,
-      meter_end: row.meter_end,
-      previous_pages: existingMap.has(`${row.meter_id}|${row.month}`)
-        ? existingMap.get(`${row.meter_id}|${row.month}`)
-        : null,
-    }))))
-    .digest("hex");
-}
-
 module.exports = {
   parseMeterMonthHeader,
   loadMeters,
@@ -427,7 +404,6 @@ module.exports = {
   mapTemplateReadings,
   readingsFromSheets,
   compareWithExisting,
-  readingsToken,
   writeCandidates,
   checkWrittenReadings,
   PreviewRollback,

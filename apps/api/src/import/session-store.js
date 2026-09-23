@@ -211,7 +211,36 @@ async function sweep() {
   });
 }
 
+/**
+ * ลบงานนำเข้าถาวร (#192, ADR-0031) — เฉพาะงานที่ปิดแล้ว (expired) และไม่เคยเขียนข้อมูลลงระบบ
+ * คืนแถวที่ลบ (ให้ผู้เรียกลบไฟล์หลัง commit) หรือโยน conflict พร้อมเหตุผล
+ */
+async function purgeSession(id) {
+  return db.withTransaction(async (conn) => {
+    const [[row]] = await conn.query(
+      "SELECT id, status, completed_at, file_name, file_path, file_sha256, created_by FROM import_session WHERE id = ? FOR UPDATE",
+      [id]
+    );
+    if (!row) throw notFound("ไม่พบงานนำเข้านี้");
+    if (row.status !== "expired" || row.completed_at) {
+      throw conflict("ลบได้เฉพาะงานที่ยกเลิกหรือหมดอายุ และไม่เคยบันทึกข้อมูล", { code: "import_session_not_purgeable" });
+    }
+    const [[refs]] = await conn.query(
+      `SELECT (SELECT COUNT(*) FROM devices WHERE import_session_id = ?) AS devices,
+              (SELECT COUNT(*) FROM print_transactions WHERE import_session_id = ?) AS readings`,
+      [id, id]
+    );
+    if (Number(refs.devices) || Number(refs.readings)) {
+      throw conflict("งานนี้มีข้อมูลในระบบที่อ้างถึงอยู่ ลบไม่ได้", { code: "import_session_not_purgeable" });
+    }
+    await conn.query("DELETE FROM import_session_event WHERE session_id = ?", [id]);
+    await conn.query("DELETE FROM import_session WHERE id = ?", [id]);
+    return row;
+  });
+}
+
 module.exports = {
+  purgeSession,
   EXPIRE_AFTER_DAYS,
   OPEN,
   sessionDir,
