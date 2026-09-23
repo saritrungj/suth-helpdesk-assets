@@ -18,7 +18,7 @@ import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, FileSpreadsheet, Plus } from "lucide-vue-next";
 import DeviceFormFields from "../../components/DeviceFormFields.vue";
-import DeviceImportPanel from "../../components/DeviceImportPanel.vue";
+import ImportStart from "../../components/import/ImportStart.vue";
 import { UiButton, UiCard, UiPageHeader, UiTabs } from "../../ui";
 
 const router = useRouter();
@@ -98,7 +98,8 @@ async function save(goBack) {
 
       <template #import>
         <UiCard>
-          <DeviceImportPanel />
+          <!-- ทางเข้าเดียวกับหน้านำเข้าไฟล์จากผู้ให้เช่า — อัปโหลดแล้วไปหน้าตรวจของงานนั้น (#180) -->
+          <ImportStart />
         </UiCard>
       </template>
     </UiTabs>

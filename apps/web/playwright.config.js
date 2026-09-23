@@ -54,6 +54,7 @@ const DB_SPECS = [
   "axe-pages.spec.js",
   "default-fiscal-year.spec.js",
   "fiscal-year-cache.spec.js",
+  "import-session.spec.js",
   "billing-shapes.spec.js",
   "contract-edit.spec.js",
   "contract-delete.spec.js",
@@ -71,6 +72,8 @@ const DB_SPECS = [
 ];
 
 const MANUAL_SPECS = [
+  // ไฟล์จริงของผู้ให้เช่า — อยู่นอก repo รันบนฐานชั่วคราวเท่านั้น ดู docs/how-to/import-files.md (#180)
+  "import-real-files.spec.js",
   // ถ่ายภาพไว้ให้คนดู ไม่ได้เทียบกับอะไร — `npm run test:e2e:shots`
   "screenshots.spec.js",
   // ใช้ฐาน QA แยกบนเครื่องผ่าน scripts/qa48 (ADR-0016)

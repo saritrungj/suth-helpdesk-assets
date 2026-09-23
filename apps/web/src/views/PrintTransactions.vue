@@ -48,7 +48,6 @@ import { applyPaste, describePaste, parseNumbers } from "../lib/paste-numbers";
 import { useCoverage, useMonthPages } from "../api/queries";
 import MonthEntryGrid from "../components/MonthEntryGrid.vue";
 import DeviceSerialLink from "../components/DeviceSerialLink.vue";
-import PrintUsageImportPanel from "../components/PrintUsageImportPanel.vue";
 import {
   UiAlert,
   UiBadge,
@@ -100,7 +99,6 @@ const divisions = ref([]);
 const departments = ref([]);
 const brands = ref([]);
 const contracts = ref([]);
-const importOpen = ref(false);
 
 /**
  * โหมดการทำงานของหน้านี้
@@ -1039,7 +1037,7 @@ onUnmounted(unregisterFiscalYearGuard);
           />
         </UiField>
         <UiTooltip v-if="canImport" :content="t(&quot;นำเข้ายอดพิมพ์จาก Excel หรือ CSV&quot;)">
-          <UiButton variant="secondary" icon-only :label="t(&quot;นำเข้ายอดพิมพ์&quot;)" @click="importOpen = true">
+          <UiButton variant="secondary" icon-only :label="t(&quot;นำเข้ายอดพิมพ์&quot;)" to="/admin/import">
             <FileUp :size="16" />
           </UiButton>
         </UiTooltip>
@@ -1090,15 +1088,7 @@ onUnmounted(unregisterFiscalYearGuard);
       </UiField>
     </UiFilterBar>
 
-    <UiModal
-      v-if="canImport"
-      v-model:open="importOpen"
-      :title="t(&quot;นำเข้ายอดพิมพ์&quot;)"
-      :description="t(&quot;ตรวจไฟล์และจับคู่ด้วย Serial Number ก่อนยืนยันบันทึก&quot;)"
-      size="lg"
-    >
-      <PrintUsageImportPanel @imported="importOpen = false; init()" />
-    </UiModal>
+    <!-- นำเข้ายอดย้ายไปหน้า "นำเข้าไฟล์จากผู้ให้เช่า" — ไฟล์เดียวได้ทั้งเครื่องและยอด (#180) -->
 
     <!-- ================= โหมดกรอกรายเดือน ================= -->
     <UiAlert v-if="mode === 'month' && awaitingDefaultMonth && coverageQuery.isError.value" tone="danger" class="mb-4">

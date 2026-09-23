@@ -154,11 +154,17 @@ const routes = [
     component: () => import("../views/admin/InstallationReview.vue"),
   },
 
-  // การนำเข้าไฟล์กลายเป็นแท็บในหน้าเพิ่มทรัพย์สินแล้ว — เก็บ path เดิมไว้ redirect
+  // นำเข้าไฟล์จากผู้ให้เช่า — ทางเข้าเดียวของทั้งทะเบียนและยอด งานค้างอยู่บนเซิร์ฟเวอร์ (#180, ADR-0027)
+  { path: "/admin/import", name: "ImportSessions", component: () => import("../views/admin/ImportSessions.vue") },
   {
-    path: "/admin/import-devices",
-    redirect: { path: "/admin/add-asset", query: { tab: "import" } },
+    path: "/admin/import/:id",
+    name: "ImportSession",
+    component: () => import("../views/admin/ImportSession.vue"),
+    meta: { breadcrumb: t("งานนำเข้า") },
   },
+
+  // path เดิมของหน้านำเข้าทะเบียน — เก็บไว้ redirect กันลิงก์และบุ๊กมาร์กพัง
+  { path: "/admin/import-devices", redirect: "/admin/import" },
 
   // เส้นทางที่ไม่มีอยู่จริง — พากลับหน้าแรกแทนหน้าขาว
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },

@@ -25,3 +25,14 @@ export const formatTime = (iso) => {
     timeZone: "Asia/Bangkok",
   }).format(date);
 };
+
+/** วันและเวลาแบบสั้นตามเวลาไทย เช่น "23 ก.ย. 2569 14:05" — ใช้กับประวัติว่าใครทำอะไรเมื่อไร */
+export const formatDateTime = (iso) => {
+  const date = new Date(iso);
+  if (!iso || Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(locale.value === "en" ? "en-GB" : "th-TH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Bangkok",
+  }).format(date);
+};

@@ -1,0 +1,126 @@
+<script setup>
+/**
+ * ImportStart — จุดเริ่มงานนำเข้าไฟล์ (#180)
+ *
+ * อัปโหลดไฟล์แล้วไปหน้าตรวจของงานนั้นทันที และแสดงงานที่ยังไม่เสร็จของผู้ดูแลทุกคน (ADR-0029)
+ * งานอยู่บนเซิร์ฟเวอร์ (ADR-0027) — ออกจากหน้าแล้วกลับมาทำต่อจากรายการนี้ได้ ไม่ต้องอัปโหลดใหม่
+ * ใช้ทั้งหน้า "นำเข้าไฟล์จากผู้ให้เช่า" และแท็บนำเข้าของหน้าเพิ่มเครื่อง
+ */
+import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
+import { useQueryClient } from "@tanstack/vue-query";
+import { Download, FolderOpen } from "lucide-vue-next";
+import api from "../../services/api";
+import { keys, useImportSessions } from "../../api/queries";
+import { errorMessage } from "../../lib/api-error";
+import { formatCount } from "../../lib/format";
+import { formatDateTime } from "../../lib/locale-format";
+import { t } from "../../lib/locale";
+import { UiAlert, UiBadge, UiButton, UiCheckbox, UiMenu, UiMenuItem, UiSkeleton } from "../../ui";
+import FileDropzone from "../FileDropzone.vue";
+import { statusOf } from "./import-session";
+import { TEMPLATE_CSV, downloadCsv, readingsTemplateCsv } from "./templates";
+
+const router = useRouter();
+const queryClient = useQueryClient();
+
+const showClosed = ref(false);
+const sessions = useImportSessions(showClosed);
+const rows = computed(() => sessions.data.value ?? []);
+
+const uploading = ref(false);
+const uploadError = ref("");
+
+async function upload(file) {
+  if (!file || uploading.value) return;
+  uploading.value = true;
+  uploadError.value = "";
+  try {
+    const body = new FormData();
+    body.append("file", file);
+    const { data } = await api.post("/import-sessions", body, { headers: { "Content-Type": "multipart/form-data" } });
+    queryClient.setQueryData(keys.importSession(data.id), data);
+    queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+    await router.push(`/admin/import/${data.id}`);
+  } catch (err) {
+    uploadError.value = errorMessage(err, t("อัปโหลดไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"));
+  } finally {
+    uploading.value = false;
+  }
+}
+
+function headline(row) {
+  const h = row.headline ?? {};
+  if (row.status === "completed") {
+    return t("เครื่องใหม่ {0} · ยอดใหม่ {1} · เขียนทับ {2}", [formatCount(h.devices_created ?? 0), formatCount(h.readings_new ?? 0), formatCount(h.readings_overwritten ?? 0)]);
+  }
+  if (row.blocking) return t("ยังต้องทำอีก {0} ข้อ", [formatCount(row.blocking)]);
+  return t("สร้าง {0} · เติม {1} · ยอดใหม่ {2}", [formatCount(h.devices_create ?? 0), formatCount(h.devices_fill ?? 0), formatCount(h.readings_new ?? 0)]);
+}
+</script>
+
+<template>
+  <div class="flex flex-col gap-4">
+    <UiAlert tone="info" :title="t('อัปโหลดไฟล์จากผู้ให้เช่าได้ตรงๆ')">
+      {{ t("รายงานมิเตอร์ได้ทั้งเครื่องและยอดในครั้งเดียว รายงานสถานะเครื่องเติมอาคารและหน่วยงาน ระบบตรวจสัญญา ปีงบ ชื่อที่ไม่รู้จัก และยอด แล้วบอกทีละข้อว่าต้องทำอะไร งานที่ทำค้างเก็บไว้ที่เซิร์ฟเวอร์ ออกจากหน้าแล้วกลับมาทำต่อได้") }}
+      <template #actions>
+        <UiMenu :label="t('ไฟล์ตัวอย่าง')">
+          <template #trigger>
+            <UiButton size="sm" variant="secondary">
+              <template #icon><Download :size="14" /></template>{{ t("ไฟล์ตัวอย่าง") }}
+            </UiButton>
+          </template>
+          <UiMenuItem @select="downloadCsv(TEMPLATE_CSV, 'template-import-devices.csv')">{{ t("ทะเบียนเครื่อง") }}</UiMenuItem>
+          <UiMenuItem @select="downloadCsv(readingsTemplateCsv(), 'template-import-print-usage.csv')">{{ t("ยอดรายเดือน") }}</UiMenuItem>
+        </UiMenu>
+      </template>
+    </UiAlert>
+
+    <FileDropzone :model-value="null" :disabled="uploading" @update:model-value="upload" />
+    <p v-if="uploading" class="text-sm text-ink-soft" role="status">{{ t("กำลังอัปโหลดและตรวจไฟล์…") }}</p>
+    <UiAlert v-if="uploadError" tone="danger">{{ uploadError }}</UiAlert>
+
+    <section class="rounded-lg border border-line-soft p-3" data-testid="import-sessions">
+      <div class="flex flex-wrap items-center gap-2 mb-2">
+        <p class="text-sm font-semibold text-ink mr-auto">
+          {{ showClosed ? t("งานนำเข้าทั้งหมด") : t("งานนำเข้าที่ยังไม่เสร็จ") }}
+        </p>
+        <UiCheckbox v-model="showClosed" :label="t('แสดงงานที่ปิดแล้ว')" />
+      </div>
+      <div v-if="sessions.isPending.value" class="flex flex-col gap-2"><UiSkeleton v-for="n in 3" :key="n" height="2rem" /></div>
+      <UiAlert v-else-if="sessions.isError.value" tone="danger">
+        {{ t("โหลดรายการงานนำเข้าไม่สำเร็จ") }}
+        <template #actions><UiButton size="sm" variant="secondary" @click="sessions.refetch()">{{ t("ลองใหม่") }}</UiButton></template>
+      </UiAlert>
+      <p v-else-if="!rows.length" class="text-sm text-ink-mute">{{ t("ไม่มีงานที่ค้างอยู่") }}</p>
+      <div v-else class="overflow-x-auto">
+        <table class="w-full text-sm [&_th]:pr-4 [&_td]:pr-4">
+          <thead>
+            <tr class="border-b border-line-soft text-left text-ink-mute">
+              <th class="py-2">{{ t("ไฟล์") }}</th><th>{{ t("สถานะ") }}</th><th>{{ t("เจ้าของ") }}</th><th>{{ t("สร้างเมื่อ") }}</th><th>{{ t("ใช้ล่าสุด") }}</th><th>{{ t("สรุป") }}</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in rows" :key="row.id" class="border-b border-line-soft align-top" data-testid="import-session-row">
+              <td class="py-2 font-medium text-ink break-all">{{ row.file_name }}</td>
+              <td><UiBadge :tone="statusOf(row.status).tone" dot>{{ statusOf(row.status).label }}</UiBadge></td>
+              <td>{{ row.owner.username }}</td>
+              <td class="numeral whitespace-nowrap">{{ formatDateTime(row.created_at) }}</td>
+              <td class="numeral whitespace-nowrap">
+                {{ formatDateTime(row.last_activity_at) }}
+                <span v-if="row.last_activity_by" class="block text-xs text-ink-mute">{{ row.last_activity_by.username }}</span>
+              </td>
+              <td class="text-ink-soft">{{ headline(row) }}</td>
+              <td class="text-right">
+                <UiButton size="sm" variant="secondary" :to="`/admin/import/${row.id}`">
+                  <template #icon><FolderOpen :size="14" /></template>
+                  {{ ["draft", "ready", "failed"].includes(row.status) ? t("ทำต่อ") : t("ดู") }}
+                </UiButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</template>

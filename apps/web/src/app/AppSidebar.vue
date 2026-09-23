@@ -24,10 +24,15 @@ import AppNotifications from "./AppNotifications.vue";
 
 const route = useRoute();
 
-const visibleGroups = computed(() => [
-  ...NAV_GROUPS,
-  ...(authState.user?.role === "admin" ? ADMIN_GROUPS : []),
-]);
+// รายการที่ติด admin ในหมวดทั่วไป (เช่นนำเข้าไฟล์ในงานประจำ) ซ่อนจากบทบาทอื่น — เหมือนช่องค้นหาคำสั่ง
+// เป็นแค่ความสะดวก สิทธิ์จริงอยู่ที่ API
+const visibleGroups = computed(() => {
+  const isAdmin = authState.user?.role === "admin";
+  return [
+    ...NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => !item.admin || isAdmin) })),
+    ...(isAdmin ? ADMIN_GROUPS : []),
+  ];
+});
 
 // หมวดที่เปิดเพราะเข้าหน้าในหมวดนั้น — เปิดไว้ตลอดรอบนี้แต่ไม่จำลง store เพื่อไม่ทับสิ่งที่ผู้ใช้เลือก
 const openedByRoute = ref({});

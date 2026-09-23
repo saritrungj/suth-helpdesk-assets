@@ -2,7 +2,7 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../services/api", () => ({ default: { get: vi.fn() } }));
 
-const { AFFECTED_KEYS, invalidateAfterWrite, changeKindForEndpoint } = await import("./invalidate");
+const { AFFECTED_KEYS, invalidateAfterWrite, invalidateAfterWrites, changeKindForEndpoint } = await import("./invalidate");
 const { takeRevalidationHeaders, resetRevalidationMarks } = await import("./http-cache");
 
 /** queryClient ปลอมที่จำว่าถูกสั่งล้าง key ไหนบ้าง */
@@ -113,5 +113,22 @@ describe("changeKindForEndpoint", () => {
 
   test("endpoint ที่ไม่มีในตารางต้องได้ null ไม่ใช่เดา", () => {
     expect(changeKindForEndpoint("/users")).toBe(null);
+  });
+});
+
+describe("invalidateAfterWrites — การนำเข้าไฟล์เขียนหลายชนิดพร้อมกัน (#180)", () => {
+  test("ล้างแต่ละ key ครั้งเดียว — แดชบอร์ดไม่ถูกยิงซ้ำหลายรอบ", async () => {
+    const qc = fakeQueryClient();
+
+    await invalidateAfterWrites(qc, ["device", "usage", "buildings", "contracts"]);
+
+    const dashboard = qc.invalidated.filter((key) => JSON.stringify(key) === JSON.stringify(["dashboard"]));
+    expect(dashboard).toHaveLength(1);
+    expect(new Set(qc.invalidated.map((key) => JSON.stringify(key))).size).toBe(qc.invalidated.length);
+    expect(takeRevalidationHeaders("/buildings")).toEqual({ "Cache-Control": "no-cache" });
+  });
+
+  test("ชนิดที่ไม่รู้จักต้องดัง ไม่ล้างเงียบๆ ไม่ครบ", () => {
+    expect(() => invalidateAfterWrites(fakeQueryClient(), ["device", "unknown"])).toThrow();
   });
 });
