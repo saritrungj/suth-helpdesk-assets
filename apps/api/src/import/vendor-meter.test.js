@@ -8,6 +8,16 @@ const {
 } = require("./vendor-meter");
 
 describe("vendor meter workbook", () => {
+  test("normalizes serial numbers the same way the registry reader does (#147)", () => {
+    const rows = [
+      ["Meter Reading Report; July 24, 2569 to Aug 23, 2569 : Contract No. TEST 9/2567"],
+      ["No.", "SN.", "Meter Start (B&W)", "Meter End (B&W)", "Cost/Click"],
+      [1, "TEST  7​", 10, 20, 0.4],
+    ];
+    const [reading] = parseVendorWorkbook([{ name: "Aug", rows }]).readings;
+    assert.equal(reading.serial_number, "TEST 7");
+  });
+
   test("reads the billing period before the contract term in English and Thai titles", () => {
     assert.deepEqual(periodDatesFromTitle(
       "Meter Reading Report; July 24, 2569 to Aug 23, 2569 : Contract No. SUTH192/2568"

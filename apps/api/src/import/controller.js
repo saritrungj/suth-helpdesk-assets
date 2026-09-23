@@ -17,6 +17,7 @@ const MAX_IMPORT_COLUMNS = 200;
 // เซลล์ (SheetJS กางทุกเซลล์ในช่วงที่ประกาศ) ไฟล์จริงมีไม่กี่หมื่นเซลล์ (#142)
 const MAX_IMPORT_CELLS = 1_000_000;
 const { parseVendorWorkbook, comparableContractNo } = require("./vendor-meter");
+const { normalizeName } = require("../master-data/names");
 const { parseRegistryWorkbook } = require("./registry-sheet");
 const { planRegistryImport, serialIndex } = require("./registry-plan");
 const { loadRegistryContext, applyRegistryPlan } = require("./registry-import");
@@ -349,7 +350,9 @@ async function loadMeters(conn) {
 
   const bySerial = new Map();
   for (const device of devices) {
-    bySerial.set(String(device.serial_number).trim().toUpperCase(), {
+    // คีย์รูปเดียวกับเลขซีเรียลที่ตัวอ่านไฟล์คืนมา (normalizeName) — ไม่งั้นเลขในทะเบียนที่มีช่องว่างซ้อน
+    // จะไม่ตรงกับเลขเดียวกันในไฟล์ (#147)
+    bySerial.set(normalizeName(device.serial_number).toUpperCase(), {
       deviceId: device.id,
       ...(byDevice.get(device.id) ?? { primary: null, color: null }),
     });
@@ -467,7 +470,7 @@ function mapTemplateReadings(raw, meters) {
     const row = raw[r];
     if (!row || !row.length) continue;
 
-    const sn = String(row[snColIndex] || "").trim();
+    const sn = normalizeName(row[snColIndex]);
     if (!sn) continue;
 
     const device = meters.get(sn.toUpperCase());
