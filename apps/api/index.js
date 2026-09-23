@@ -63,7 +63,10 @@ app.use(
   cors({
     origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "If-None-Match", "X-Request-Id"],
+    // Cache-Control: เว็บส่ง "no-cache" ในคำขอแรกหลังเขียนข้อมูล ให้เบราว์เซอร์ถามเซิร์ฟเวอร์ใหม่แทน
+    // การคืนรายการเก่าจาก max-age (apps/web/src/api/http-cache.js) — ถ้าไม่อยู่ในรายการนี้ preflight
+    // ของคำขอข้ามโดเมนไม่ผ่าน เบราว์เซอร์บล็อกคำขอทั้งคำขอ หน้าจึงค้างข้อมูลเก่าหลังบันทึก (#152)
+    allowedHeaders: ["Content-Type", "Authorization", "If-None-Match", "X-Request-Id", "Cache-Control"],
     // ให้เบราว์เซอร์อ่าน header เหล่านี้จากคำตอบข้ามโดเมนได้ — ปกติ CORS ซ่อนไว้
     // ทั้งหมด ทำให้ฝั่งเว็บอ่านจำนวนรายการทั้งหมด (สำหรับแบ่งหน้า) และ id ของคำขอ
     // (สำหรับแจ้งปัญหา) ไม่ได้เลย
