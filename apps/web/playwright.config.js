@@ -63,6 +63,7 @@ const DB_SPECS = [
   "report-workflow.spec.js",
   "shell.spec.js",
   "wcag.spec.js",
+  "web-vitals.spec.js",
 ];
 
 const MANUAL_SPECS = [

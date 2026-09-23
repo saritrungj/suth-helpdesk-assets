@@ -8,6 +8,8 @@ import "./style.css";
 import router from "./router";
 import { restoreSession } from "./store/session";
 import { startFiscalYearRouterSync } from "./store/fiscalYear";
+import { startWebVitals } from "./lib/web-vitals";
+import { API_BASE_URL } from "./services/api";
 
 const app = createApp(App);
 installLocale(app);
@@ -33,4 +35,6 @@ restoreSession()
   .then(() => {
     startFiscalYearRouterSync();
     app.mount("#app");
+    // วัดความเร็วจากผู้ใช้จริง (#171) — เฉพาะ build ที่ใช้งานจริง ไม่รบกวน dev server
+    if (import.meta.env.PROD) startWebVitals(router, API_BASE_URL);
   });

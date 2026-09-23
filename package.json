@@ -14,7 +14,7 @@
     "start": "npm run start --workspace @suth/api",
     "build": "npm run build --workspace @suth/web",
     "preview": "npm run preview --workspace @suth/web",
-    "test": "npm run test --workspaces --if-present && node --test scripts/playwright-report.test.cjs scripts/check-bundle-budget.test.cjs",
+    "test": "npm run test --workspaces --if-present && node --test scripts/playwright-report.test.cjs scripts/check-bundle-budget.test.cjs scripts/web-vitals-report.test.cjs",
     "verify": "npm test && npm run build && node scripts/check-bundle-budget.cjs && node scripts/verify-fixture.cjs",
     "verify:db": "node scripts/verify-db.cjs",
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}\"",

@@ -31,6 +31,7 @@
 - [นำเข้าไฟล์ Excel/CSV](how-to/import-files.md)
 - [ตรวจยอดและติดตามงานจากรายงาน](how-to/use-report-workflow.md)
 - [ตรวจการเปลี่ยนแปลงก่อนส่งมอบ](how-to/verify-changes.md)
+- [วัดความเร็วที่ผู้ใช้จริงรู้สึก (Core Web Vitals)](how-to/measure-web-performance.md)
 - [เปิดและทดสอบ QA แยกสำหรับ #48](how-to/run-qa48.md)
 - [ตรวจต้นแบบสามหน้าก่อนขยายทั้งระบบ](how-to/review-three-page-prototype.md)
 - [เตรียมขึ้น production](how-to/prepare-for-production.md)
