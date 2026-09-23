@@ -2,6 +2,9 @@
 
 ฐาน MySQL 8.4 LTS กับ phpMyAdmin ในคำสั่งเดียว ตั้งใหม่ได้ทุกเมื่อ ฐานนี้คือ**ข้อมูลจริง**ฐานเดียวของระบบ — ห้ามใส่ข้อมูลจำลองหรือรันชุดทดสอบที่เขียนข้อมูลกับฐานนี้ (ใช้ `npm run verify:db` ซึ่งสร้างฐานชั่วคราวเอง) เหตุผลและขอบเขตอยู่ใน [ADR-0024](../decisions/0024-docker-development-database.md)
 
+> **เครื่องพัฒนาใช้ฐานพัฒนา ไม่ใช่ฐานนี้** — `npm run db:dev:up` เปิดฐานข้อมูลตัวอย่างแยก (พอร์ต 3308 รหัสคนละชุด)
+> ดูหัวข้อ [ฐานพัฒนา](#ฐานพัฒนา-ข้อมูลตัวอย่าง) และ [ADR-0032](../decisions/0032-separate-development-database.md)
+
 ต้องมี Docker Desktop เปิดอยู่ และติดตั้ง dependency แล้ว (`npm install`)
 
 ## 1. ตั้งรหัสผ่านของเครื่องนี้
@@ -79,6 +82,16 @@ SELECT c.contract_no, i.month, i.print_cost, i.rental, i.vat, i.invoice_total
 FROM v_contract_invoice i JOIN contracts c ON c.id = i.contract_id
 ORDER BY c.contract_no, i.month;
 ```
+
+## ฐานพัฒนา (ข้อมูลตัวอย่าง)
+
+1. ตั้ง `SUTH_DEV_DB_ROOT_PASSWORD` `SUTH_DEV_APP_PASSWORD` `SUTH_DEV_READONLY_PASSWORD` `SUTH_DEV_ADMIN_PASSWORD` ใน
+   `database/docker/compose.env` — **คนละค่ากับรหัสของฐานจริง**
+2. `npm run db:dev:up` — ครั้งแรกสร้างจาก `schema.sql` + `seed_ci.sql`
+3. `npm run db:dev:bootstrap` — ตั้งรหัส `admin` จาก `SUTH_DEV_ADMIN_PASSWORD`
+4. `apps/api/.env` ของเครื่องพัฒนา: `DB_PORT=3308`, `DB_NAME=hospital_it_asset_dev`, `DB_PASSWORD=<SUTH_DEV_APP_PASSWORD>`
+
+ข้อมูลเลอะแล้วเริ่มใหม่ได้ทุกเมื่อด้วย `npm run db:dev:reset` แล้ว `db:dev:bootstrap` อีกครั้ง
 
 ## สำรอง กู้คืน และย้ายไปเครื่องอื่น
 

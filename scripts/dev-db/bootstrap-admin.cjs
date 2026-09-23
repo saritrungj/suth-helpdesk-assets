@@ -1,6 +1,7 @@
 // scripts/dev-db/bootstrap-admin.cjs — ตั้งรหัสผู้ดูแลของฐานบน Docker ที่เพิ่งสร้าง
 //
-//   npm run db:bootstrap
+//   npm run db:bootstrap              ฐานจริง (บริการ db, พอร์ต SUTH_DB_PORT)
+//   npm run db:dev:bootstrap          ฐานพัฒนาข้อมูลตัวอย่าง (บริการ db-dev, ADR-0032) — ค่าจาก SUTH_DEV_*
 //
 // schema.sql สร้างบัญชี admin ที่ล็อกไว้ (รหัส "!" ล็อกอินไม่ได้) ฐานใหม่จึงยังไม่มีใครเข้าได้
 // และระบบไม่มี endpoint ตั้งรหัสให้บัญชีที่ยังล็อกอินไม่ได้ — ซึ่งไม่ควรมี สคริปต์นี้จึงต่อ
@@ -62,11 +63,31 @@ function readEnvFile(file) {
   return env;
 }
 
+/**
+ * ค่าของฐานที่จะตั้ง — ฐานพัฒนา (--dev) ใช้รหัสชุดของตัวเอง ไม่ใช้ชุดเดียวกับฐานจริง: .env ของเครื่องพัฒนา
+ * ที่ชี้พอร์ตผิดจึงเข้าฐานจริงไม่ได้ (ADR-0032)
+ */
+function settingsFor(fileEnv, dev) {
+  if (!dev) return fileEnv;
+  const pick = (key, fallback) => fileEnv[`SUTH_DEV_${key}`] || fallback;
+  return {
+    ...fileEnv,
+    SUTH_DB_PORT: pick("DB_PORT", "3308"),
+    SUTH_DB_NAME: pick("DB_NAME", "hospital_it_asset_dev"),
+    SUTH_DB_ROOT_PASSWORD: pick("DB_ROOT_PASSWORD"),
+    SUTH_APP_PASSWORD: pick("APP_PASSWORD"),
+    SUTH_READONLY_PASSWORD: pick("READONLY_PASSWORD"),
+    SUTH_ADMIN_PASSWORD: pick("ADMIN_PASSWORD"),
+  };
+}
+
 async function main() {
-  const env = readEnvFile(ENV_FILE);
+  const dev = process.argv.includes("--dev");
+  const env = settingsFor(readEnvFile(ENV_FILE), dev);
   const port = Number(env.SUTH_DB_PORT || 3307);
   const database = env.SUTH_DB_NAME || "hospital_it_asset";
   const adminPassword = env.SUTH_ADMIN_PASSWORD;
+  if (dev && port === Number(readEnvFile(ENV_FILE).SUTH_DB_PORT || 3307)) fail("SUTH_DEV_DB_PORT ต้องไม่ซ้ำกับพอร์ตของฐานจริง");
 
   if (port === 3306) fail("SUTH_DB_PORT เป็น 3306 ซึ่งชนกับ XAMPP — สคริปต์นี้ใช้กับฐานบน Docker เท่านั้น");
   // docker compose แปล $ และตัดเครื่องหมายคำพูดใน env file เอง ส่วนสคริปต์นี้อ่านตรงตัว
@@ -74,7 +95,7 @@ async function main() {
   for (const key of Object.keys(env).filter((k) => k.endsWith("_PASSWORD"))) {
     if (/['"\\$]/.test(env[key])) fail(`${key} ห้ามมี ' " \\ หรือ $`);
   }
-  if (!adminPassword || adminPassword.length < 12) fail("ตั้ง SUTH_ADMIN_PASSWORD ใน compose.env อย่างน้อย 12 ตัวอักษร");
+  if (!adminPassword || adminPassword.length < 12) fail(`ตั้ง ${dev ? "SUTH_DEV_ADMIN_PASSWORD" : "SUTH_ADMIN_PASSWORD"} ใน compose.env อย่างน้อย 12 ตัวอักษร`);
 
   const connect = (user, password) =>
     mysql.createConnection({ host: "127.0.0.1", port, user, password, database });
