@@ -178,4 +178,40 @@ async function applyRegistryPlan(conn, plan, { userId }) {
   return { created, filled };
 }
 
-module.exports = { loadRegistryContext, applyRegistryPlan };
+/** คำตอบของทั้งสองโหมด — ไม่ส่งค่าภายใน (ref ของรายการใหม่) ออกไป */
+function describeRegistryPlan(parsed, plan, context) {
+  return {
+    valid: plan.valid,
+    blocking: plan.blocking,
+    sheets: parsed.sheets,
+    errors: parsed.errors,
+    warnings: [...parsed.warnings, ...plan.warnings],
+    summary: plan.summary,
+    unresolved: plan.unresolved,
+    models: plan.models,
+    contracts: plan.contracts,
+    new_floors: plan.new_floors.map(({ name, rows }) => ({ name, rows })),
+    new_departments: plan.new_departments.map(({ name, rows }) => ({ name, rows })),
+    rows: plan.rows.map((row) => ({
+      sheet: row.sheet,
+      row: row.row,
+      serial_number: row.serial_number,
+      action: row.action,
+      reasons: row.reasons,
+      notes: row.notes,
+      waiting: row.waiting,
+      fill: row.fill,
+      installation: row.installation,
+      ...row.display,
+    })),
+    // ตัวเลือกของหน้าตรวจ: "เป็นชื่อเรียกอื่นของ…" และหมวดมิเตอร์ของรุ่น
+    choices: {
+      brand: context.master.brand.names,
+      building: context.master.building.names,
+      division: context.master.division.names,
+      meter_categories: context.categories.filter((c) => !c.is_color).map(({ id, code, name }) => ({ id, code, name })),
+    },
+  };
+}
+
+module.exports = { loadRegistryContext, applyRegistryPlan, describeRegistryPlan };

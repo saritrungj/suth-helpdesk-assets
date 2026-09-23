@@ -48,3 +48,6 @@
 | [0024](0024-docker-development-database.md) | ฐานข้อมูลบน Docker Compose ด้วย MySQL 8.4 LTS ฐานเดียวที่เป็นข้อมูลจริง | Accepted |
 | [0025](0025-master-data-aliases.md) | ชื่อเรียกอื่นของยี่ห้อ อาคาร และฝ่าย | Accepted |
 | [0026](0026-raw-registry-import.md) | นำเข้าทะเบียนเครื่องจากไฟล์ดิบ: ตรวจก่อน ให้คนตัดสินชื่อ และเติมเฉพาะช่องที่ว่าง | Accepted |
+| [0027](0027-import-session-lifecycle.md) | งานนำเข้าไฟล์เป็น session ฝั่งเซิร์ฟเวอร์ที่มีวงจรชีวิตและประวัติ | Accepted |
+| [0028](0028-import-commit-strategy.md) | บันทึกการนำเข้าแบบคำนวณก่อน แล้วเขียนผลใน transaction เดียวที่สั้น | Accepted |
+| [0029](0029-import-session-visibility.md) | ผู้ดูแลทุกคนเห็นและทำต่องานนำเข้าของกันได้ ทุกการกระทำมีชื่อผู้ทำ | Accepted |
