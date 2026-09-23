@@ -58,6 +58,7 @@ const DB_SPECS = [
   "contract-preview.spec.js",
   "login-wcag.spec.js",
   "login.spec.js",
+  "logout.spec.js",
   "meter-numbers.spec.js",
   "month-entry.spec.js",
   "page-structure.spec.js",

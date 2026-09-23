@@ -29,10 +29,13 @@ export async function restoreSession() {
  *
  * เคลียร์ state เสมอแม้เรียก API ไม่สำเร็จ เพราะผู้ใช้กด logout แล้วต้องหลุดออกจริง
  * ไม่ใช่ค้างอยู่ในระบบเพราะเน็ตมีปัญหา
+ *
+ * ส่ง {} ไม่ใช่ null — axios ส่ง null เป็นข้อความ "null" พร้อม Content-Type: application/json
+ * ซึ่ง express.json ปฏิเสธ route จึงไม่ถูกเรียกและ cookie ไม่ถูกล้าง เปิดหน้าใหม่ก็เข้าระบบได้เลย (#175)
  */
 export async function logout() {
   try {
-    await api.post("/auth/logout", null, { skipAuthRedirect: true });
+    await api.post("/auth/logout", {}, { skipAuthRedirect: true });
   } catch {
     // ไม่ต้องทำอะไร — เคลียร์ฝั่งเว็บต่อไปอยู่ดี
   } finally {

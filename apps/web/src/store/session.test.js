@@ -88,8 +88,19 @@ describe("logout", () => {
 
     await logout();
 
-    expect(post).toHaveBeenCalledWith("/auth/logout", null, { skipAuthRedirect: true });
+    expect(post).toHaveBeenCalledWith("/auth/logout", {}, { skipAuthRedirect: true });
     expect(authState.user).toBe(null);
+  });
+
+  test("body ต้องเป็น JSON ที่ API อ่านได้ — null ถูกส่งเป็น \"null\" แล้ว cookie ไม่ถูกล้าง (#175)", async () => {
+    post.mockResolvedValue({ data: {} });
+
+    await logout();
+
+    const body = post.mock.calls[0][1];
+    expect(body).not.toBeNull();
+    expect(() => JSON.parse(JSON.stringify(body))).not.toThrow();
+    expect(typeof body).toBe("object");
   });
 
   test("เรียก API ไม่สำเร็จก็ต้องหลุดออกจากระบบฝั่งเว็บอยู่ดี", async () => {
