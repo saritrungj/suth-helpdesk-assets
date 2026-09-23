@@ -16,6 +16,7 @@
 
 - [กฎธุรกิจและโดเมน](explanation/domain.md) — ปีงบประมาณ การคิดค่าใช้จ่าย ประวัติการย้ายเครื่อง และบทบาทผู้ใช้
 - [สถาปัตยกรรม](explanation/architecture.md) — โครงสร้างระบบ โครงสร้างโค้ด และเหตุผลที่จัดแบบนี้
+- [เส้นทางงานสำคัญ](explanation/workflows.md) — ผลลัพธ์ของผู้ใช้ กฎที่เกี่ยวข้อง หลักฐานทดสอบ และวงจรส่งมอบ
 - [Design system ของหน้าเว็บ](explanation/design-system.md) — สามชั้น token/ui/app ประกอบกันเป็นหน้าตาของระบบยังไง (ดู [ADR-0008](decisions/0008-design-system-tokens-and-ui-kit.md))
 - [กระดานอ้างอิงงานออกแบบ](explanation/design-references.md) — ดูงานของใคร เพราะอะไร และเอามาใช้จริงที่ไฟล์ไหน
 - [แหล่งอ้างอิงภายนอก](explanation/research-sources.md) — มาตรฐานและบทความที่อ้างอิงตอนออกแบบรอบล่าสุด และไปโผล่ที่ไหนในโค้ด
@@ -33,6 +34,7 @@
 - [เปิดและทดสอบ QA แยกสำหรับ #48](how-to/run-qa48.md)
 - [ตรวจต้นแบบสามหน้าก่อนขยายทั้งระบบ](how-to/review-three-page-prototype.md)
 - [เตรียมขึ้น production](how-to/prepare-for-production.md)
+- [ส่งรุ่น ตรวจหลังส่ง และกู้คืน](how-to/release-and-recovery.md)
 
 ## reference — เพื่อเปิดหา
 

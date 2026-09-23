@@ -3,10 +3,10 @@
 //   npm run verify:db
 //
 // ต้องเปิด Docker ไว้ ทุกอย่างแยกจากเครื่องพัฒนา:
-//   MySQL  127.0.0.1:3317 — container ชื่อ suth-verify-db สร้างจาก schema.sql + seed_ci.sql
+//   MySQL  127.0.0.1:3317 — ค่าเริ่มต้น container ชื่อ suth-verify-db สร้างจาก schema.sql + seed_ci.sql
 //                            ใหม่ทุกรอบ แล้วลบทิ้งทุกครั้งที่จบ ไม่ว่าผ่านหรือล้ม
-//   API    localhost:3310 — ต่อฐานข้างบนเท่านั้น ด้วย JWT_SECRET ที่สุ่มใหม่ทุกรอบ
-//   เว็บ   localhost:5310 — preview ของ build แยกใน apps/web/dist-verify-db ที่ฝังที่อยู่ API ข้างบน
+//   API    localhost:3310 — ค่าเริ่มต้น ต่อฐานข้างบนเท่านั้น ด้วย JWT_SECRET ที่สุ่มใหม่ทุกรอบ
+//   เว็บ   localhost:5310 — ค่าเริ่มต้น preview ของ build แยกใน apps/web/dist-verify-db
 //
 // ห้ามใช้ API/เว็บที่เปิดค้างอยู่เด็ดขาด — ชุดนี้ตั้ง SUTH_E2E_ALLOW_WRITES=1 ถ้าไปเจอ
 // dev API ที่ต่อฐานพัฒนา เทสจะเขียนทับข้อมูลจริง จึงเช็คว่าพอร์ตว่างก่อนเริ่ม และตั้ง
@@ -17,14 +17,32 @@ const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { assertReportFile } = require("./playwright-report.cjs");
 
 const root = path.resolve(__dirname, "..");
-const container = "suth-verify-db";
+// งานหลาย worktree อาจรันพร้อมกันได้ ใช้ suffix + พอร์ตของตัวเองเมื่อจำเป็น
+// และห้ามลบ container ที่มีอยู่ก่อน เพราะอาจเป็นงานของอีก session
+const instance = process.env.SUTH_VERIFY_DB_INSTANCE || "";
+if (instance && !/^[a-z0-9-]{1,30}$/.test(instance)) {
+  throw new Error("SUTH_VERIFY_DB_INSTANCE ต้องเป็น a-z, 0-9 หรือ - ยาวไม่เกิน 30 ตัว");
+}
+const container = `suth-verify-db${instance ? `-${instance}` : ""}`;
 const database = "suth_ci";
-const ports = { mysql: 3317, api: 3310, web: 5310 };
+function port(name, fallback) {
+  const value = Number(process.env[name] || fallback);
+  if (!Number.isInteger(value) || value < 1024 || value > 65535) throw new Error(`${name} ต้องเป็นพอร์ต 1024–65535`);
+  return value;
+}
+const ports = {
+  mysql: port("SUTH_VERIFY_MYSQL_PORT", 3317),
+  api: port("SUTH_VERIFY_API_PORT", 3310),
+  web: port("SUTH_VERIFY_WEB_PORT", 5310),
+};
+if (new Set(Object.values(ports)).size !== 3) throw new Error("พอร์ต MySQL, API และเว็บต้องไม่ซ้ำกัน");
 const apiUrl = `http://localhost:${ports.api}/api`;
 const webUrl = `http://localhost:${ports.web}`;
 const webDist = "dist-verify-db";
+const dbResultFile = path.join(root, "apps", "web", "e2e", ".artifacts", "db-results.json");
 
 // รหัสไม่ว่าง เพราะบน Windows env ที่เป็นค่าว่างอาจไม่ถูกส่งต่อ แล้ว dotenv ของ API
 // จะเติม DB_PASSWORD จาก apps/api/.env ของฐานพัฒนาแทน
@@ -62,7 +80,8 @@ function portFree(port) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function removeContainer() {
-  spawnSync("docker", ["rm", "-f", container], { stdio: "ignore" });
+  const result = spawnSync("docker", ["rm", "-f", container], { stdio: "ignore" });
+  if (result.error || result.status !== 0) throw new Error(`ลบ container ทดสอบ ${container} ไม่สำเร็จ`);
 }
 
 async function waitForMysql() {
@@ -95,18 +114,20 @@ async function main() {
     throw new Error("ต่อ Docker ไม่ได้ — เปิด Docker Desktop ก่อนแล้วรันใหม่");
   }
 
-  // container ชื่อนี้เป็นของสคริปต์นี้เท่านั้น ถ้าค้างจากรอบที่ถูกตัดกลางคันให้ลบทิ้งก่อน
-  removeContainer();
   for (const port of Object.values(ports)) await portFree(port);
+  const existing = spawnSync("docker", ["ps", "-a", "--filter", `name=^/${container}$`, "--format", "{{.ID}}"], { encoding: "utf8" });
+  if (existing.error || existing.status !== 0) throw new Error("ตรวจ container เดิมไม่ได้");
+  if (existing.stdout.trim()) throw new Error(`พบ container ${container} อยู่ก่อน — หยุดเพื่อรักษางานของ session อื่น`);
 
   console.log(`verify:db — สร้าง MySQL ชั่วคราวที่พอร์ต ${ports.mysql}`);
-  must("สร้าง container", "docker", [
-    "run", "-d", "--name", container,
-    "-e", `MYSQL_ROOT_PASSWORD=${dbPassword}`, "-e", `MYSQL_DATABASE=${database}`,
-    "-p", `127.0.0.1:${ports.mysql}:3306`, "mysql:8.4",
-  ], { stdio: "ignore" });
-
+  let created = false;
   try {
+    must("สร้าง container", "docker", [
+      "run", "-d", "--name", container,
+      "-e", `MYSQL_ROOT_PASSWORD=${dbPassword}`, "-e", `MYSQL_DATABASE=${database}`,
+      "-p", `127.0.0.1:${ports.mysql}:3306`, "mysql:8.4",
+    ], { stdio: "ignore" });
+    created = true;
     await waitForMysql();
     load("schema.sql");
     load("seed_ci.sql");
@@ -137,16 +158,21 @@ async function main() {
       SUTH_E2E_START_API: "1",
       SUTH_E2E_REQUIRE_SERVICES: "1",
       SUTH_E2E_ALLOW_WRITES: "1",
+      SUTH_E2E_REPORT_FILE: dbResultFile,
     };
     // token ที่ตั้งไว้ก่อนหน้าอาจเป็นของ server อื่น fixtures.js ใช้ตัวนี้ก่อน JWT_SECRET
     delete env.SUTH_E2E_TOKEN;
 
     console.log("verify:db — รัน E2E โปรเจกต์ db");
+    fs.rmSync(dbResultFile, { force: true });
     const status = run("npm", ["run", "test:e2e:db", "--workspace", "@suth/web"], { cwd: root, env });
-    process.exitCode = status ?? 1;
+    if (status !== 0) throw new Error(`E2E โปรเจกต์ db ล้ม (exit ${status ?? "unknown"})`);
+    console.log(assertReportFile(dbResultFile, "verify:db"));
   } finally {
-    removeContainer();
-    console.log("verify:db — ลบ MySQL ชั่วคราวแล้ว");
+    if (created) {
+      removeContainer();
+      console.log("verify:db — ลบ MySQL ชั่วคราวแล้ว");
+    }
   }
 }
 
