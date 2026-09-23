@@ -421,14 +421,14 @@ const entryColumns = computed(() => [
   },
   {
     key: "previous_month",
-    label: previousMonth.value ? t("ยอด {0}", [formatMonth(previousMonth.value)]) : t("เดือนก่อนหน้า"),
+    label: previousMonth.value ? formatMonth(previousMonth.value) : t("เดือนก่อนหน้า"),
     align: "right",
     width: "9rem",
     value: (d) => previousPages.value[d.id] ?? null,
   },
   {
     key: "entry",
-    label: filters.value.month ? t("ยอด {0}", [formatMonth(filters.value.month)]) : t("จำนวนพิมพ์"),
+    label: filters.value.month ? formatMonth(filters.value.month) : t("จำนวนพิมพ์"),
     align: "right",
     width: "9rem",
     sortable: false,
