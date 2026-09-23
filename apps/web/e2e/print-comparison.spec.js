@@ -71,7 +71,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
     await comparisonFixture(page);
     await page.goto("/dashboard");
-    await expect(page.getByRole("heading", { name: "ค่าใช้จ่ายสุทธิรายเดือน", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ค่าใช้จ่ายรายเดือน", exact: true })).toBeVisible();
     await expect(page.locator("#main-content canvas").first()).toBeVisible();
     expect(chartRequests.length, "หน้าภาพรวมต้องโหลดโค้ดกราฟเมื่อใช้").toBeGreaterThan(0);
   });
@@ -82,7 +82,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
     const filter = page.getByLabel(/^ช่วงเวลา/);
     const kpi = kpiOf(page);
-    const chart = page.getByRole("heading", { name: "ค่าใช้จ่ายสุทธิรายเดือน", exact: true });
+    const chart = page.getByRole("heading", { name: "ค่าใช้จ่ายรายเดือน", exact: true });
     const table = page.getByRole("heading", { name: "ตารางรายละเอียด", exact: true });
     await expect(table).toBeVisible();
     const tops = await Promise.all([filter, kpi, chart, table].map(async (item) => (await item.boundingBox()).y));
