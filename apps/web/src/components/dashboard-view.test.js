@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   emptyView,
   filterRows,
+  pruneUnavailableScopes,
   requestedMonths,
   selectedKeysFor,
   viewFromQuery,
@@ -25,6 +26,19 @@ describe("ตัวกรองชุดเดียวของหน้าภ�
     expect(filterRows(rows, { divisions: ["1", "2"] }).map((item) => item.device_id)).toEqual([1, 2, 3]);
     expect(filterRows(rows, { divisions: ["1"], buildings: ["2"] }).map((item) => item.device_id)).toEqual([2]);
     expect(filterRows(rows, {})).toEqual(rows);
+  });
+
+  test("เปลี่ยนปีงบแล้วตัดเฉพาะตัวกรองที่ไม่มีแถวในปีใหม่", () => {
+    const view = { ...emptyView(), divisions: ["1", "2"], departments: ["12"], devices: ["9"] };
+    const result = pruneUnavailableScopes(view, [row({ division_id: 1, department_id: 11, device_id: 9 })]);
+    expect(result.view.divisions).toEqual(["1"]);
+    expect(result.view.departments).toEqual([]);
+    expect(result.view.devices).toEqual(["9"]);
+    expect(result.removed).toEqual([
+      { key: "divisions", values: ["2"] },
+      { key: "departments", values: ["12"] },
+    ]);
+    expect(view.divisions).toEqual(["1", "2"]);
   });
 
   test("เลือกแผนกข้ามฝ่ายได้โดยไม่ต้องเลือกฝ่ายก่อน — สองตัวกรองไม่ผูกกัน", () => {

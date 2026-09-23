@@ -24,7 +24,7 @@ import {
   monthsSlug, rankingSheet, saveWorkbook, standardNotes, summarySheet,
 } from './comparison-export';
 import {
-  SCOPE_KEYS, VIEW_QUERY_KEYS, filterRows, requestedMonths, selectedKeysFor, viewFromQuery, viewToQuery,
+  SCOPE_KEYS, VIEW_QUERY_KEYS, filterRows, pruneUnavailableScopes, requestedMonths, selectedKeysFor, viewFromQuery, viewToQuery,
 } from './dashboard-view';
 import { dashboardCsv, downloadCsv } from './dashboard-csv';
 
@@ -56,6 +56,7 @@ const detailScope = ref(null);
 const detailGroup = ref('department');
 const exportBusy = ref(false);
 const exportError = ref('');
+const scopeNotice = ref('');
 
 /* --------------------------------------------------------------------------
    สถานะ ↔ URL — เขียนที่เดียว อ่านที่เดียว
@@ -240,6 +241,28 @@ const rawRows = computed(() => {
   return requestMonths.value.length ? rows.filter((row) => wanted.value.has(row.month)) : rows;
 });
 const rows = computed(() => filterRows(rawRows.value, view.value));
+
+// รอคำตอบของช่วงใหม่ก่อนตรวจ; แถวของช่วงเก่าที่ cache ค้างอยู่ห้ามใช้ตัดตัวกรอง
+let yearChangePending = false;
+watch(activeYear, (year, previous) => {
+  if (previous && year !== previous) {
+    yearChangePending = true;
+    scopeNotice.value = '';
+  }
+});
+watch([ready, rawRows], ([isReady, currentRows]) => {
+  if (!yearChangePending || !isReady) return;
+  yearChangePending = false;
+  const result = pruneUnavailableScopes(view.value, currentRows);
+  if (!result.removed.length) return;
+  view.value = result.view;
+  const labels = { divisions: t('ฝ่าย'), departments: t('แผนก'), contracts: t('สัญญา'), buildings: t('อาคาร'), devices: t('เครื่อง') };
+  const removedText = result.removed.flatMap(({ key, values }) => {
+    const names = new Map((scopeOptions.value[key] ?? []).map((option) => [String(option.value), option.label]));
+    return values.map((value) => `${labels[key]}: ${names.get(String(value)) ?? value}`);
+  }).join(', ');
+  scopeNotice.value = t('เปลี่ยนปีงบแล้ว: นำตัวกรองที่ไม่มีข้อมูลออก ({0})', [removedText]);
+});
 
 const references = computed(() => ({
   divisions: divisions.data.value ?? [],
@@ -434,6 +457,7 @@ function runCsv() {
       {{ errorMessage(report.error.value, t('โหลดภาพรวมไม่สำเร็จ')) }}
       <template #actions><UiButton variant="secondary" @click="reload">{{ t('ลองใหม่') }}</UiButton></template>
     </UiAlert>
+    <UiAlert v-if="scopeNotice" tone="info" class="mb-4">{{ scopeNotice }}</UiAlert>
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
     <p class="text-xs text-ink-mute mb-1.5">{{ shownStats.caption }}</p>

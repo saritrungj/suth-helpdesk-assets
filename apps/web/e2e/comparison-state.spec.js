@@ -41,6 +41,23 @@ test("changing fiscal year clears months and keeps the other filters", async ({ 
   await expect(page.getByRole("region", { name: "สรุปตัวเลขสำคัญ" })).toContainText("5,450");
 });
 
+test("changing fiscal year removes selections with no readings and announces it", async ({ page }) => {
+  await comparisonFixture(page);
+  await page.route(/\/api\/fiscal-years$/, route => route.fulfill({ json: [
+    { id: 7, year: 2568, start_month: "2024-10", end_month: "2025-09" },
+    { id: 1, year: 2569, start_month: "2025-10", end_month: "2026-09" },
+  ] }));
+  await page.goto("/dashboard?fy=1&division=9");
+  await expect(comparisonCard(page)).toHaveAttribute("aria-busy", "false");
+  await page.getByRole("button", { name: "ปีงบ 2569", exact: true }).click();
+  await page.getByRole("menuitem", { name: /2568/ }).click();
+  await expect(page).not.toHaveURL(/division=/);
+  await expect(page.getByRole("status")).toContainText("นำตัวกรองที่ไม่มีข้อมูลออก");
+  await page.getByRole("button", { name: "ปีงบ 2568", exact: true }).click();
+  await page.getByRole("menuitem", { name: /2569/ }).click();
+  await expect(page.getByRole("status")).toHaveCount(0);
+});
+
 test("picking a second year then switching year from the topbar leaves one meaning of the fiscal year", async ({ page }) => {
   await comparisonFixture(page);
   await page.route(/\/api\/fiscal-years$/, route => route.fulfill({ json: [
@@ -68,7 +85,7 @@ test("picking a second year then switching year from the topbar leaves one meani
   await expect(filters.getByRole("button", { name: /^ปีงบประมาณ / })).toContainText("2568");
 });
 
-test.describe("หน้ารายละเอียดเครื่อง → เทียบกับปีงบก่อน (#115)", () => {
+test.describe("หน้ารายละเอียดเครื่อง → เทียบปีงบ (#123)", () => {
   test("failed previous-year readings are reported instead of appearing as missing months", async ({ page }) => {
     await comparisonFixture(page);
     await page.route(/\/api\/fiscal-years$/, route => route.fulfill({ json: [
@@ -79,7 +96,7 @@ test.describe("หน้ารายละเอียดเครื่อง �
       const previous = new URL(route.request().url()).searchParams.get("fiscal_year_id") === "7";
       return route.fulfill(previous ? { status: 503, json: {} } : { json: [{ month: "2025-10", pages: 1000 }] });
     });
-    await page.goto("/assets/1?fy=1&compare=previous-year");
+    await page.goto("/assets/1?fy=1&years=2568,2569");
     const card = page.locator("section.card").filter({ hasText: "ยอดพิมพ์รายเดือน" });
     await expect(card.getByRole("alert")).toContainText("โหลดยอดพิมพ์ของเครื่องนี้ไม่สำเร็จ");
     await expect(card.getByRole("button", { name: "ลองใหม่", exact: true })).toBeVisible();
@@ -99,14 +116,39 @@ test.describe("หน้ารายละเอียดเครื่อง �
     });
     await page.goto("/assets/1?fy=1");
     const card = page.locator("section.card").filter({ hasText: "ยอดพิมพ์รายเดือน" });
-    await card.getByRole("radio", { name: "เทียบกับปีงบก่อน", exact: true }).click();
-    await expect(page).toHaveURL(/compare=previous-year/);
+    await expect(card.getByRole("button", { name: /ปีงบที่เปรียบเทียบ/ })).toContainText("2568");
     await card.getByRole("radio", { name: "ตาราง", exact: true }).click();
     const values = card.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" });
     await expect(values.getByRole("row", { name: /^ต\.ค\.\s+800\s+1,000$/ })).toBeVisible();
     await expect(values.getByRole("row", { name: /^ม\.ค\.\s+400\s+—$/ })).toBeVisible();
     await page.reload();
-    await expect(card.getByRole("radio", { name: "เทียบกับปีงบก่อน", exact: true })).toBeChecked();
+    await expect(card.getByRole("button", { name: /ปีงบที่เปรียบเทียบ/ })).toContainText("2568");
+  });
+
+  test("ลิงก์เลือกสามปีแสดงสามชุดและเดือนที่ไม่มียอดเป็นช่องว่าง", async ({ page }) => {
+    await comparisonFixture(page);
+    await page.route(/\/api\/fiscal-years$/, route => route.fulfill({ json: [
+      { id: 6, year: 2567, start_month: "2023-10", end_month: "2024-09" },
+      { id: 7, year: 2568, start_month: "2024-10", end_month: "2025-09" },
+      { id: 1, year: 2569, start_month: "2025-10", end_month: "2026-09" },
+    ] }));
+    await page.route(/\/api\/print-transactions\/by-device\/1\b/, route => {
+      const year = new URL(route.request().url()).searchParams.get("fiscal_year_id");
+      return route.fulfill({ json: year === "6" ? [{ month: "2023-10", pages: 600 }]
+        : year === "7" ? [{ month: "2024-10", pages: 800 }]
+          : [{ month: "2025-10", pages: 1000 }] });
+    });
+    await page.goto("/assets/1?fy=1&years=2567,2568,2569");
+    const card = page.locator("section.card").filter({ hasText: "ยอดพิมพ์รายเดือน" });
+    await card.getByRole("radio", { name: "ตาราง", exact: true }).click();
+    const values = card.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" });
+    await expect(values.getByRole("row", { name: /^ต\.ค\.\s+600\s+800\s+1,000$/ })).toBeVisible();
+    await expect(values.getByRole("row", { name: /^พ\.ย\.\s+—\s+—\s+—$/ })).toBeVisible();
+    await page.goto("/assets/1?fy=1&years=2568,2568");
+    await expect(card.getByRole("button", { name: /ปีงบที่เปรียบเทียบ/ })).toContainText("2569");
+    await page.getByRole("button", { name: "ปีงบ 2569", exact: true }).click();
+    await page.getByRole("menuitem", { name: /2568/ }).click();
+    await expect(card.getByRole("button", { name: /ปีงบที่เปรียบเทียบ/ })).toContainText("2567");
   });
 });
 
