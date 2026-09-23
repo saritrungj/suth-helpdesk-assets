@@ -319,6 +319,17 @@
   --info-soft: var(--sky-100);
   --info-line: var(--sky-300);
 
+  /* สีประจำกลุ่มเมนู (#196) — ไอคอนบนพื้นอ่อนของกลุ่ม ให้จำได้ว่าอยู่กลุ่มไหนแม้พับเมนูเหลือแต่ไอคอน
+     ลำดับเดียวกับ NAV_GROUPS: ภาพรวม · งานประจำ · รายงาน · ตั้งค่าระบบ */
+  --nav-overview-ink: var(--teal-700);
+  --nav-overview-soft: var(--teal-100);
+  --nav-routine-ink: var(--sky-700);
+  --nav-routine-soft: var(--sky-100);
+  --nav-reports-ink: var(--violet-700);
+  --nav-reports-soft: oklch(0.955 0.032 292);
+  --nav-settings-ink: var(--amber-800);
+  --nav-settings-soft: var(--amber-100);
+
   /* ------------------------------------------------------------------
      ชุดสีของกราฟ (categorical) — 8 สลอต เรียงลำดับตายตัว ห้ามสลับ ห้ามวนซ้ำ
      ลำดับคือกลไกความปลอดภัยของคนตาบอดสี ไม่ใช่แค่รสนิยม
@@ -469,6 +480,15 @@
   --info-soft: oklch(0.300 0.055 240);
   --info-line: oklch(0.400 0.078 240);
 
+  --nav-overview-ink: var(--teal-300);
+  --nav-overview-soft: oklch(0.310 0.043 205);
+  --nav-routine-ink: var(--sky-300);
+  --nav-routine-soft: oklch(0.300 0.055 240);
+  --nav-reports-ink: var(--violet-300);
+  --nav-reports-soft: oklch(0.310 0.070 292);
+  --nav-settings-ink: var(--amber-300);
+  --nav-settings-soft: oklch(0.320 0.060 78);
+
   /* ชุดสีกราฟของโหมดมืด — เฉดเดียวกันและลำดับเดียวกับโหมดสว่าง แต่เลือกขั้นความสว่าง
      ใหม่ให้อยู่ในช่วงของโหมดมืด (0.48–0.67) ไม่ใช่พลิกค่าจากโหมดสว่างอัตโนมัติ
      ผ่านตัวตรวจทั้ง 6 ข้อเช่นกัน — คู่ที่แย่ที่สุด ΔE 13.3 ภายใต้ deuteranopia */
@@ -568,6 +588,14 @@
   --color-info-ink: var(--info-ink);
   --color-info-soft: var(--info-soft);
   --color-info-line: var(--info-line);
+  --color-nav-overview-ink: var(--nav-overview-ink);
+  --color-nav-overview-soft: var(--nav-overview-soft);
+  --color-nav-routine-ink: var(--nav-routine-ink);
+  --color-nav-routine-soft: var(--nav-routine-soft);
+  --color-nav-reports-ink: var(--nav-reports-ink);
+  --color-nav-reports-soft: var(--nav-reports-soft);
+  --color-nav-settings-ink: var(--nav-settings-ink);
+  --color-nav-settings-soft: var(--nav-settings-soft);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
