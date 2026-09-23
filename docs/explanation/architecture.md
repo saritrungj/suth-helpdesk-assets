@@ -6,7 +6,7 @@
 
 ```text
 Vue SPA (:5173)
-    │ Axios + Bearer JWT
+    │ Axios + httpOnly session cookie
     ▼
 Express API (:3000)
     │ mysql2 connection pool
@@ -15,6 +15,10 @@ MySQL
 ```
 
 ระบบทำงานภายในโรงพยาบาล ข้อมูลไม่ออกนอกเครือข่าย จึงไม่พึ่ง managed service ใดๆ
+
+เบราว์เซอร์รับ `suth_session` จาก API หลังล็อกอินแล้วแนบ cookie ไปกับคำขอเอง
+ส่วน script และการทดสอบยังใช้ `Authorization: Bearer` ได้ตาม
+[ขอบเขต API](../reference/api.md) และ [ADR-0006](../decisions/0006-session-cookie-instead-of-localstorage.md)
 
 ## repository เป็น workspace เดียว
 
@@ -43,7 +47,7 @@ middleware ตรวจสิทธิ์อยู่ใต้ `auth/` เพร
 ## โค้ดฝั่งเว็บ
 
 - route และ navigation อยู่ใน `apps/web/src/router/` — **มีแต่ `main.js` ที่ import โมดูลนี้ได้** โค้ดที่อยู่นอก component ต้องหยิบ router จาก `apps/web/src/lib/app-router.js` ส่วนหน้าเว็บใช้ `useRouter()` ตามปกติ เพราะวง import ที่วนกลับมาหา `router/index.js` ทำให้ hot reload พังเป็นจอขาวด้วย `Cannot access 'router' before initialization` (`lib/app-router.test.js` เฝ้ากฎนี้และเฝ้าไม่ให้มีวง import ใดๆ ในฝั่งเว็บ)
-- HTTP client กลางอยู่ที่ `apps/web/src/services/api.js` — จุดเดียวที่แนบ token และดัก 401
+- HTTP client กลางอยู่ที่ `apps/web/src/services/api.js` — จุดเดียวที่ตั้งค่าการส่ง cookie และดัก 401
 - ชั้นดึงข้อมูลกลางอยู่ที่ `apps/web/src/api/queries.js` ผ่าน TanStack Query — เฉพาะข้อมูลอ่านที่ใช้ซ้ำข้ามหน้า การเขียนยังยิง `services/api.js` ตรงๆ ดู [ADR-0009](../decisions/0009-tanstack-query-as-the-data-layer.md)
 - state ที่ใช้ร่วมหลายหน้าอยู่ใน `apps/web/src/store/` เขียนด้วย reactive ของ Vue ตรงๆ ยังไม่มี state manager
 - หน้าตาของระบบแยกออกมาเป็นชั้นของตัวเอง (`design/` token, `ui/` component กลาง, `app/` เปลือกของแอป) แล้วบังคับให้ทุกหน้าจอ (`views/`, `components/`) เรียกผ่านชั้นนั้นเท่านั้น ห้ามเขียนคลาสสีของ Tailwind ตรงๆ — ดู [Design system ของหน้าเว็บ](design-system.md) และ [ADR-0008](../decisions/0008-design-system-tokens-and-ui-kit.md)
