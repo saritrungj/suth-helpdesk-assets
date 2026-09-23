@@ -29,8 +29,8 @@ const columns = computed(() => {
   const list = [];
   list.push({ key: "label", label: props.model.view === "overall" ? t("เดือน") : dimensionLabel(props.model.dimension), value: (row) => row.displayLabel, sortable: props.model.view !== "overall" });
   list.push(
-    { key: "rawPages", label: t("ยอดพิมพ์จริง (หน้า)"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.rawPages) },
-    { key: "netPages", label: t("สุทธิหลังหัก 2% (หน้า)"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.netPages) },
+    { key: "rawPages", label: t("หน้าที่พิมพ์"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.rawPages) },
+    { key: "netPages", label: t("หน้าที่คิดเงิน"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.netPages) },
     // ยอดเงินที่ยังไม่ครบห้ามถูกเรียงเป็นอันดับ (Q30) — ปิดการเรียงคอลัมน์นี้จนราคาครบ
     { key: "cost", label: t("ค่าใช้จ่าย (บาท)"), align: "right", value: (row) => row.summary.cost },
     { key: "devices", label: t("เครื่องที่มีข้อมูล"), align: "right", value: (row) => row.summary.devices },

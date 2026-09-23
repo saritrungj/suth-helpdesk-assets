@@ -55,35 +55,35 @@ const localizedItems = computed(() => props.items.map((item) => {
     missing_readings: {
       title: t("ค้างกรอก {0} เดือน", [item.count]),
       detail: t("เดือนที่ค้างนานที่สุด: {0} ยังขาดอีก {1} เครื่อง", [formatMonth(item.params?.month ?? item.months?.[0]), item.params?.missing_devices ?? "—"]),
-      action: t("บันทึกยอดพิมพ์"),
+      action: t("บันทึกจำนวนพิมพ์"),
     },
     unpriced_outside_term: {
-      title: t("มี {0} เครื่องที่มียอดพิมพ์นอกอายุสัญญา", [item.count]),
-      detail: t("{0} รายการ รวม {1} หน้า ยังไม่ถูกนับในยอดเงิน", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
+      title: t("มี {0} เครื่องที่พิมพ์นอกอายุสัญญา", [item.count]),
+      detail: t("{0} รายการ รวม {1} หน้า ยังไม่ถูกนับเป็นเงิน", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
       action: t("ตรวจอายุสัญญา"),
     },
     unpriced_missing_price_line: {
       title: t("มี {0} เครื่องที่สัญญาไม่มีราคาของหมวดมิเตอร์", [item.count]),
-      detail: t("{0} รายการ รวม {1} หน้า ยังไม่ถูกนับในยอดเงิน", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
+      detail: t("{0} รายการ รวม {1} หน้า ยังไม่ถูกนับเป็นเงิน", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
       action: t("ตรวจรายการราคาของสัญญา"),
     },
     unassigned_unbilled_devices: {
       title: t("มี {0} เครื่องที่ยังไม่ได้ผูกสัญญา", [item.count]),
-      detail: t("{0} รายการ รวม {1} หน้า ยังไม่ถูกนับในยอดเงิน", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
+      detail: t("{0} รายการ รวม {1} หน้า ยังไม่ถูกนับเป็นเงิน", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
       action: t("ผูกสัญญาให้เครื่อง"),
     },
     unpriced_contract_history: {
-      title: t("มี {0} เครื่องที่ประวัติสัญญาไม่ครอบคลุมยอดพิมพ์", [item.count]),
+      title: t("มี {0} เครื่องที่ประวัติสัญญาไม่ครอบคลุมช่วงที่พิมพ์", [item.count]),
       detail: t("{0} รายการ รวม {1} หน้า ต้องตรวจวันที่เริ่มคิดเงินของเครื่อง", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
       action: t("ตรวจประวัติสัญญาของเครื่อง"),
     },
     unverified_installation: {
       title: t("มี {0} เครื่องที่ยังไม่ได้ตรวจยืนยันสถานะการติดตั้ง", [item.count]),
-      detail: t("ยืนยันความครบถ้วนของยอดพิมพ์ไม่ได้จนกว่าจะตรวจครบ"),
+      detail: t("ยังยืนยันว่าบันทึกครบไม่ได้จนกว่าจะตรวจครบ"),
       action: t("ตรวจยืนยันการติดตั้ง"),
     },
     idle_devices: {
-      title: t("มี {0} เครื่องที่ไม่มียอดพิมพ์ในปีงบนี้", [item.count]),
+      title: t("มี {0} เครื่องที่ไม่มีการพิมพ์ในปีงบนี้", [item.count]),
       detail: t("ตรวจสอบว่ายังจำเป็นต้องใช้เครื่องเหล่านี้ก่อนต่อสัญญา"),
       action: t("ดูรายการเครื่อง"),
     },
@@ -133,7 +133,7 @@ const hasItems = computed(() => props.items.length > 0);
         <CircleCheck class="size-4 shrink-0 text-ok-ink" aria-hidden="true" />
         {{ t("ไม่มีงานค้าง") }}
       </span>
-      <span class="text-sm text-ink-soft"> {{ t("กรอกยอดพิมพ์ครบทุกเดือนที่ถึงกำหนดแล้ว และไม่พบเครื่องที่คิดค่าใช้จ่ายไม่ได้") }} </span>
+      <span class="text-sm text-ink-soft"> {{ t("กรอกครบทุกเดือนแล้ว และทุกเครื่องคิดค่าใช้จ่ายได้") }} </span>
     </p>
 
     <div v-else class="grid gap-5">

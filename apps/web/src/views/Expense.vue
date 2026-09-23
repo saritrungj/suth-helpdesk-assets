@@ -239,7 +239,7 @@ async function exportExcel() {
     t("ยี่ห้อ"),
     t("รุ่น"),
     t("จำนวนหน้าดิบ"),
-    t("ค่าใช้จ่ายสุทธิ (หัก 2%)"),
+    t("ค่าใช้จ่าย (หัก 2%)"),
   ];
 
   const rows = filteredContracts.value.flatMap((contract) =>
@@ -325,14 +325,14 @@ onMounted(() => {
       class="card grid grid-cols-1 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4"
       :class="anyInvoiceExtras ? 'sm:grid-cols-4' : 'sm:grid-cols-3'"
     >
-      <UiStat plain :label="t('ค่าพิมพ์สุทธิ')" :unit="t(&quot;บาท&quot;)" :hint="t('หัก 2% แล้ว')" :loading="loading">
+      <UiStat plain :label="t('ค่าพิมพ์')" :unit="t(&quot;บาท&quot;)" :hint="t('หัก 2% แล้ว')" :loading="loading">
         {{ formatBahtValue(printTotal) }}
       </UiStat>
 
       <UiStat
         v-if="anyInvoiceExtras"
         plain
-        :label="t('ยอดตามใบแจ้งหนี้รวม VAT')"
+        :label="t('เงินตามใบแจ้งหนี้รวม VAT')"
         :unit="t(&quot;บาท&quot;)"
         :hint="t('รวมค่าเช่าคงที่และ VAT')"
         tone="ink"
@@ -341,12 +341,12 @@ onMounted(() => {
         {{ formatBahtValue(invoiceTotal) }}
       </UiStat>
 
-      <UiStat plain :label="t(&quot;จำนวนหน้าดิบ&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ยอดตามที่กรอก ยังไม่หัก 2%&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;จำนวนหน้าดิบ&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ตามที่กรอก ยังไม่หัก 2%&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 
       <UiStat plain
-        :label="t(&quot;เครื่องที่มียอด&quot;)"
+        :label="t(&quot;เครื่องที่มีการพิมพ์&quot;)"
         :unit="t(&quot;เครื่อง&quot;)"
         :hint="t(&quot;{0} สัญญา&quot;, [formatCount(contracts.length)])"
         tone="ink"
@@ -371,7 +371,7 @@ onMounted(() => {
     </UiAlert>
 
     <UiAlert v-if="unassignedError" tone="warn" class="mb-4">
-      {{ t("โหลดรายการเครื่องที่ยังไม่ผูกสัญญาไม่สำเร็จ จึงยังบอกไม่ได้ว่ามีเครื่องที่ไม่ถูกนับในยอดด้านบนหรือไม่") }}
+      {{ t("โหลดรายการเครื่องที่ยังไม่ผูกสัญญาไม่สำเร็จ ยังบอกไม่ได้ว่ามีเครื่องที่ไม่ถูกนับหรือไม่") }}
       <template #actions>
         <UiButton size="sm" variant="secondary" @click="loadUnassignedDevices"> {{ t("ลองใหม่") }} </UiButton>
       </template>
@@ -440,7 +440,7 @@ onMounted(() => {
             <span class="min-w-0 flex-1">
               <span class="block font-medium text-ink truncate">{{ contract.contract_no }}</span>
               <span class="block text-xs text-ink-soft numeral">
-                {{ formatCount((contract.devices ?? []).length) }} {{ t("เครื่องที่มียอด") }}
+                {{ formatCount((contract.devices ?? []).length) }} {{ t("เครื่องที่มีการพิมพ์") }}
                 <template v-if="contract.effective_from">
                   · {{ formatDate(contract.effective_from) }} – {{ formatDate(contract.effective_to) }}
                 </template>
@@ -540,7 +540,7 @@ onMounted(() => {
                 </tbody>
               </table>
 
-              <p v-else class="text-sm text-ink-mute py-2"> {{ t("ยังไม่มีการบันทึกยอดพิมพ์ของเครื่องนี้") }} </p>
+              <p v-else class="text-sm text-ink-mute py-2"> {{ t("ยังไม่มีการบันทึกของเครื่องนี้") }} </p>
             </div>
           </div>
         </div>
@@ -565,8 +565,8 @@ onMounted(() => {
           />
           <TriangleAlert :size="16" class="shrink-0 text-warn-ink" aria-hidden="true" />
           <span class="min-w-0 flex-1">
-            <span class="block font-medium text-warn-ink"> {{ t("ยอดในปีงบนี้ที่ไม่มีสัญญาคิดเงิน") }} </span>
-            <span class="block text-2xs text-warn-ink"> {{ t("ผูกสัญญาให้เครื่องเหล่านี้ ยอดจึงจะมีราคา") }} </span>
+            <span class="block font-medium text-warn-ink"> {{ t("การพิมพ์ในปีงบนี้ที่ไม่มีสัญญาคิดเงิน") }} </span>
+            <span class="block text-2xs text-warn-ink"> {{ t("ผูกสัญญาให้เครื่องเหล่านี้ จึงจะคิดเงินได้") }} </span>
           </span>
           <UiBadge tone="warn" size="lg">
             {{ formatCount(noContractDevices.length) }} {{ t("เครื่อง") }} </UiBadge>
@@ -607,7 +607,7 @@ onMounted(() => {
 
           <span class="min-w-0 flex-1">
             <span class="block font-medium text-warn-ink"> {{ t("เครื่องที่ยังไม่ได้ผูกสัญญา") }} </span>
-            <span class="block text-2xs text-warn-ink"> {{ t("ยอดของเครื่องเหล่านี้ไม่ถูกนับรวมในค่าใช้จ่ายตามสัญญาด้านบน") }} </span>
+            <span class="block text-2xs text-warn-ink"> {{ t("เครื่องเหล่านี้ไม่ถูกนับในค่าใช้จ่ายตามสัญญาด้านบน") }} </span>
           </span>
 
           <UiBadge tone="warn" size="lg">

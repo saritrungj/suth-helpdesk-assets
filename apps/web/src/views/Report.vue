@@ -90,12 +90,12 @@ const filters = ref({
  * (ADR-0018) เดิมป้าย "กรอกครบทุกเดือน" ทำให้เครื่องที่รับผิดชอบหกเดือนและกรอก
  * ครบหกเดือนดูเหมือนงานค้าง งานค้างจริงอยู่ที่การแจ้งเตือน
  */
-const FILL_STATUS_LABEL = t("ยอดในเดือนที่แสดง");
+const FILL_STATUS_LABEL = t("การบันทึกในเดือนที่แสดง");
 const FILL_STATUS_OPTIONS = [
   { value: "", label: t("ทั้งหมด") },
-  { value: "done", label: t("มียอดครบทุกเดือน") },
-  { value: "partial", label: t("ขาดยอดบางเดือน") },
-  { value: "none", label: t("ยังไม่มียอด") },
+  { value: "done", label: t("บันทึกครบทุกเดือน") },
+  { value: "partial", label: t("ขาดบางเดือน") },
+  { value: "none", label: t("ยังไม่บันทึก") },
 ];
 
 const DEVICE_STATUS_OPTIONS = [
@@ -415,8 +415,8 @@ onMounted(async () => {
 <template>
   <div>
     <UiPageHeader
-      :title="t(&quot;รายงานสรุปยอดพิมพ์&quot;)"
-      :description="t(&quot;ยอดมิเตอร์ดิบของแต่ละเครื่องในปีงบ {0} — เครื่องที่ย้ายที่ตั้งกลางปีจะถูกแยกเป็นคนละแถวตามช่วงที่ตั้ง&quot;, [displayYearBE])"
+      :title="t(&quot;รายงานสรุปการพิมพ์&quot;)"
+      :description="t(&quot;เลขมิเตอร์ของแต่ละเครื่องในปีงบ {0} — เครื่องที่ย้ายกลางปีแยกเป็นแถวตามที่ตั้ง&quot;, [displayYearBE])"
     />
 
     <!--
@@ -463,7 +463,7 @@ onMounted(async () => {
             :options="FILL_STATUS_OPTIONS"
             value-key="value"
             label-key="label"
-            :aria-label="t('กรองตามยอดในเดือนที่แสดง')"
+            :aria-label="t('กรองตามการบันทึกในเดือนที่แสดง')"
           />
 
         </UiField>
@@ -525,7 +525,7 @@ onMounted(async () => {
         export-filename="report-print-by-device"
         :export-context="reportContext({ months: displayMonths, filters: exportFilters, labels: EXPORT_FILTER_LABELS })"
         :search-placeholder="t(&quot;ค้นหาในตาราง…&quot;)"
-        :caption="t(&quot;ยอดพิมพ์รายเดือนตามเครื่อง&quot;)"
+        :caption="t(&quot;จำนวนพิมพ์รายเดือนตามเครื่อง&quot;)"
         :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับตัวกรอง&quot;)"
         sticky-first
         :row-class="rowClass"

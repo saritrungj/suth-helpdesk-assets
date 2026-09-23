@@ -294,7 +294,7 @@ const monthPagesReady = computed(
 
 const monthPagesError = computed(() =>
   monthPagesQuery.isError.value
-    ? errorMessage(monthPagesQuery.error.value, t("โหลดยอดพิมพ์ของเดือนนี้ไม่สำเร็จ"))
+    ? errorMessage(monthPagesQuery.error.value, t("โหลดจำนวนพิมพ์ของเดือนนี้ไม่สำเร็จ"))
     : ""
 );
 
@@ -324,7 +324,7 @@ function onDirtyChange(count) {
 const confirmDiscardDraft = createDraftGuard({
   dirtyCount: () => (mode.value === "month" ? monthDirtyCount.value : 0),
   describe: (count, consequence) =>
-    t("มียอดพิมพ์ที่แก้ไว้ {0} รายการแต่ยังไม่ได้บันทึก {1}", [count, consequence]),
+    t("มี {0} รายการที่แก้แล้วยังไม่ได้บันทึก {1}", [count, consequence]),
   discard: () => {
     monthDirty.value = false;
     monthDirtyCount.value = 0;
@@ -428,7 +428,7 @@ const entryColumns = computed(() => [
   },
   {
     key: "entry",
-    label: filters.value.month ? t("ยอด {0}", [formatMonth(filters.value.month)]) : t("ยอดพิมพ์"),
+    label: filters.value.month ? t("ยอด {0}", [formatMonth(filters.value.month)]) : t("จำนวนพิมพ์"),
     align: "right",
     width: "9rem",
     sortable: false,
@@ -672,14 +672,14 @@ const columns = computed(() => [
   {
     key: "total_pages",
     label: filters.value.month
-      ? t("ยอดขาวดำเดือน {0}", [formatMonth(filters.value.month)])
-      : t("ยอดขาวดำรวมทั้งปีงบ"),
+      ? t("ขาวดำเดือน {0}", [formatMonth(filters.value.month)])
+      : t("ขาวดำรวมทั้งปีงบ"),
     align: "right",
     value: (d) => (filters.value.month ? (monthPages.value[d.id] ?? 0) : fillInfo(d.id).totalPages),
   },
   {
     key: "latest_transaction",
-    label: t("ยอดขาวดำล่าสุดที่กรอก"),
+    label: t("ขาวดำล่าสุดที่กรอก"),
     align: "right",
     value: (d) => {
       const info = fillInfo(d.id);
@@ -722,7 +722,7 @@ const annualDirtyCount = computed(() => dialogOpen.value && annualReady.value
   : 0);
 const confirmDiscardAnnual = createDraftGuard({
   dirtyCount: () => annualDirtyCount.value,
-  describe: (count, consequence) => t("มียอดพิมพ์ที่แก้ไว้ {0} รายการแต่ยังไม่ได้บันทึก {1}", [count, consequence]),
+  describe: (count, consequence) => t("มี {0} รายการที่แก้แล้วยังไม่ได้บันทึก {1}", [count, consequence]),
   discard: () => { dialogOpen.value = false; },
 });
 
@@ -779,7 +779,7 @@ async function openDialog(device) {
     annualReady.value = true;
   } catch (err) {
     console.error("Load device months error:", err);
-    dialogError.value = t("โหลดยอดที่เคยกรอกไว้ไม่สำเร็จ");
+    dialogError.value = t("โหลดตัวเลขที่เคยกรอกไว้ไม่สำเร็จ");
   } finally {
     dialogLoading.value = false;
   }
@@ -885,7 +885,7 @@ async function save() {
       items,
     });
 
-    toastSuccess(t("บันทึกยอดพิมพ์ของ {0} เรียบร้อย", [dialogDevice.value.serial_number]));
+    toastSuccess(t("บันทึกของ {0} แล้ว", [dialogDevice.value.serial_number]));
     await Promise.all([loadSummary(), invalidateAfterWrite(queryClient, "usage")]);
     dialogOpen.value = false;
   } catch (err) {
@@ -918,8 +918,8 @@ onUnmounted(unregisterFiscalYearGuard);
     <!-- หัวหน้าแถวเดียว (รอบที่ 3 ของ #51): ความคืบหน้าของทั้งปีงบเป็นบรรทัดสรุปข้างชื่อหน้า
          ส่วนสลับโหมดอยู่ขวาสุด เหนือทุกอย่างที่มันเปลี่ยน เพราะมันเปลี่ยนทั้งหน้า -->
     <UiPageHeader
-      :title="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
-      :description="t(&quot;กรอกยอดมิเตอร์ของแต่ละเครื่องทีละเดือน หรือดูภาพรวมการกรอกของทั้งปีงบ&quot;)"
+      :title="t(&quot;บันทึกจำนวนพิมพ์รายเดือน&quot;)"
+      :description="t(&quot;กรอกทีละเดือน หรือดูภาพรวมทั้งปีงบ&quot;)"
     >
       <template #badge>
         <!-- ไม่ใส่ "ปีงบ" ซ้ำบนจอปกติ — ปีงบที่กำลังดูอยู่บนแถบบนตลอดเวลาแล้ว
@@ -1005,7 +1005,7 @@ onUnmounted(unregisterFiscalYearGuard);
       <template #actions><UiButton variant="secondary" size="sm" @click="init">{{ t("ลองใหม่") }}</UiButton></template>
     </UiAlert>
 
-    <UiAlert v-if="!canEdit" tone="info" class="mb-4"> {{ t("บัญชีของคุณมีสิทธิ์ดูอย่างเดียว จึงเปิดดูยอดที่บันทึกไว้ได้ แต่แก้ไขไม่ได้") }} </UiAlert>
+    <UiAlert v-if="!canEdit" tone="info" class="mb-4"> {{ t("บัญชีของคุณดูได้อย่างเดียว แก้ไขไม่ได้") }} </UiAlert>
 
     <!-- ตัวกรอง — ค้นหากับเดือนอยู่ในสายตาเสมอ ที่เหลือซ่อนอยู่หลังปุ่ม
          เพราะจากตัวกรองเก้าช่อง มีสองช่องที่คนแตะเกือบทุกครั้ง ส่วนอีกเจ็ดช่อง
@@ -1027,7 +1027,7 @@ onUnmounted(unregisterFiscalYearGuard);
           </UiInput>
         </UiField>
 
-        <UiField :label="t('ดูยอดของเดือน')" class="w-full sm:w-56">
+        <UiField :label="t('ดูเดือน')" class="w-full sm:w-56">
           <UiSelect
             :model-value="filters.month"
             :options="monthOptions"
@@ -1036,8 +1036,8 @@ onUnmounted(unregisterFiscalYearGuard);
             @update:model-value="changeMonth"
           />
         </UiField>
-        <UiTooltip v-if="canImport" :content="t(&quot;นำเข้ายอดพิมพ์จาก Excel หรือ CSV&quot;)">
-          <UiButton variant="secondary" icon-only :label="t(&quot;นำเข้ายอดพิมพ์&quot;)" to="/admin/import">
+        <UiTooltip v-if="canImport" :content="t(&quot;นำเข้าจำนวนพิมพ์จาก Excel หรือ CSV&quot;)">
+          <UiButton variant="secondary" icon-only :label="t(&quot;นำเข้าจำนวนพิมพ์&quot;)" to="/admin/import">
             <FileUp :size="16" />
           </UiButton>
         </UiTooltip>
@@ -1128,7 +1128,7 @@ onUnmounted(unregisterFiscalYearGuard);
           :searchable="false"
           v-model:search-value="search"
           tools-target="#entry-table-tools"
-          :caption="t(&quot;บันทึกยอดพิมพ์รายเดือน&quot;)"
+          :caption="t(&quot;บันทึกจำนวนพิมพ์รายเดือน&quot;)"
           :empty-text="t(&quot;ไม่มีเครื่องที่ตรงกับเงื่อนไข&quot;)"
           :empty-hint="t(&quot;ลองล้างตัวกรอง หรือเพิ่มเครื่องเข้าทะเบียนก่อน&quot;)"
           sticky-first
@@ -1154,7 +1154,7 @@ onUnmounted(unregisterFiscalYearGuard);
               inputmode="numeric"
               class="w-28 text-right"
               :disabled="!canEdit || !monthPagesReady || loading || !!pageError"
-              :aria-label="t(&quot;ยอดพิมพ์ของ {0}&quot;, [row.serial_number])"
+              :aria-label="t(&quot;จำนวนพิมพ์ของ {0}&quot;, [row.serial_number])"
               :class="draft.has(row.id) ? 'ring-1 ring-brand-line' : ''"
               @update:model-value="(v) => onInput(row.id, v)"
               @paste="(e) => onPaste(e, index, rows)"
@@ -1226,9 +1226,9 @@ onUnmounted(unregisterFiscalYearGuard);
       </template>
 
       <template v-if="canEdit" #actions="{ row }">
-        <UiTooltip :content="t(&quot;กรอกยอดพิมพ์ทั้งปีของเครื่องนี้&quot;)">
+        <UiTooltip :content="t(&quot;กรอกทั้งปีของเครื่องนี้&quot;)">
           <UiButton size="sm" variant="secondary" @click="openDialog(row)">
-            <template #icon><Pencil :size="14" /></template> {{ t("กรอกยอด") }} </UiButton>
+            <template #icon><Pencil :size="14" /></template> {{ t("กรอก") }} </UiButton>
         </UiTooltip>
       </template>
     </UiDataTable>
@@ -1237,7 +1237,7 @@ onUnmounted(unregisterFiscalYearGuard);
     <UiModal
       :open="dialogOpen"
       @update:open="closeAnnual"
-      :title="t(&quot;กรอกยอดพิมพ์ · {0}&quot;, [dialogDevice?.serial_number ?? ''])"
+      :title="t(&quot;กรอกจำนวนพิมพ์ · {0}&quot;, [dialogDevice?.serial_number ?? ''])"
       :description="t(&quot;ปีงบ {0} — เว้นเดือนที่ยังไม่มีข้อมูลไว้ว่างได้ ระบบจะไม่นับเป็นศูนย์&quot;, [displayYearBE])"
       size="lg"
     >
@@ -1297,7 +1297,7 @@ onUnmounted(unregisterFiscalYearGuard);
 
       <template #footer>
         <UiButton variant="secondary" :disabled="dialogSaving" @click="closeAnnual(false)"> {{ t("ยกเลิก") }} </UiButton>
-        <UiButton variant="primary" :disabled="!annualReady" :loading="dialogSaving" @click="save"> {{ t("บันทึกยอดทั้งปี") }} </UiButton>
+        <UiButton variant="primary" :disabled="!annualReady" :loading="dialogSaving" @click="save"> {{ t("บันทึกทั้งปี") }} </UiButton>
       </template>
     </UiModal>
   </div>

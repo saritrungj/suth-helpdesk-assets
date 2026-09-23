@@ -36,20 +36,20 @@ function downloadErrors() {
 <template>
   <div class="flex flex-col gap-3">
     <p v-if="readings.status === 'waiting'" class="text-sm text-ink-mute">
-      {{ t("ตรวจยอดได้หลังจากตัดสินชื่อ หมวดมิเตอร์ และสัญญาครบ — เครื่องใหม่ในไฟล์ต้องสร้างได้ก่อน ยอดของมันจึงจะหาราคาได้") }}
+      {{ t("ตรวจตัวเลขได้หลังเลือกชื่อ หมวดมิเตอร์ และสัญญาครบ") }}
     </p>
     <template v-else>
       <p v-if="readings.months?.length" class="text-sm text-ink-soft">
         {{ t("งวดในไฟล์: {0}", [readings.months.map((m) => formatMonth(m)).join(", ")]) }}
       </p>
       <div class="grid grid-cols-3 gap-3" role="status">
-        <div class="rounded-lg bg-surface-2 p-3"><span class="block text-xs text-ink-mute">{{ t("ยอดใหม่") }}</span><strong class="numeral text-lg text-ink" data-testid="readings-new">{{ formatCount(counts.new) }}</strong></div>
+        <div class="rounded-lg bg-surface-2 p-3"><span class="block text-xs text-ink-mute">{{ t("ตัวเลขใหม่") }}</span><strong class="numeral text-lg text-ink" data-testid="readings-new">{{ formatCount(counts.new) }}</strong></div>
         <div class="rounded-lg p-3" :class="counts.overwrite ? 'bg-warn-soft' : 'bg-surface-2'"><span class="block text-xs text-ink-mute">{{ t("เขียนทับค่าเดิม") }}</span><strong class="numeral text-lg text-ink">{{ formatCount(counts.overwrite) }}</strong></div>
         <div class="rounded-lg bg-surface-2 p-3"><span class="block text-xs text-ink-mute">{{ t("ไม่เปลี่ยน") }}</span><strong class="numeral text-lg text-ink">{{ formatCount(counts.unchanged) }}</strong></div>
       </div>
 
       <UiAlert v-if="readings.error_count" tone="danger" data-testid="readings-errors">
-        <strong class="block">{{ t("ยอด {0} รายการต้องแก้ก่อน — ทั้งไฟล์ยังบันทึกไม่ได้", [formatCount(readings.error_count)]) }}</strong>
+        <strong class="block">{{ t("มี {0} รายการต้องแก้ก่อน — ทั้งไฟล์ยังบันทึกไม่ได้", [formatCount(readings.error_count)]) }}</strong>
         <ul class="mt-2 list-disc pl-5 text-sm">
           <li v-for="(error, index) in readings.errors.slice(0, 20)" :key="index">
             {{ [error.sheet, error.row && t("แถว {0}", [error.row]), error.serial_number, error.month].filter(Boolean).join(" · ") }} — {{ error.reason }}
@@ -87,8 +87,8 @@ function downloadErrors() {
       </div>
 
       <div v-if="reconciliation.length" class="overflow-x-auto" data-testid="reconciliation">
-        <p class="text-sm font-semibold text-ink mb-1">{{ t("ยอดตามใบแจ้งหนี้เทียบกับท้ายแผ่นของไฟล์") }}</p>
-        <p class="text-xs text-ink-mute mb-2">{{ t("ต่างกันไม่เกิน 1 สตางค์ต่องวดถือว่าตรง — ผู้ให้เช่าปัดยอดรวม ส่วนระบบปัดทีละรายการราคา") }}</p>
+        <p class="text-sm font-semibold text-ink mb-1">{{ t("เงินตามใบแจ้งหนี้เทียบกับท้ายรายงาน") }}</p>
+        <p class="text-xs text-ink-mute mb-2">{{ t("ต่างกันไม่เกิน 1 สตางค์ต่องวดถือว่าตรง (ผู้ให้เช่าปัดเศษต่างวิธี)") }}</p>
         <table class="w-full text-sm [&_th]:pr-4 [&_td]:pr-4">
           <thead><tr class="border-b border-line-soft text-left text-ink-mute"><th class="py-2">{{ t("งวด") }}</th><th>{{ t("เทียบ") }}</th><th class="text-right">{{ t("ในไฟล์") }}</th><th class="text-right">{{ t("ในระบบ") }}</th><th class="text-right">{{ t("ต่าง") }}</th></tr></thead>
           <tbody>

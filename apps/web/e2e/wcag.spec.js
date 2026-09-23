@@ -321,7 +321,7 @@ test.describe("WCAG 2.2 AA — ทุกหน้าหลังล็อกอ�
     });
     await open(page, "/print-transactions");
     await page.getByRole("radio", { name: "กรอกรายเดือน", exact: true }).click();
-    const inputs = page.locator('input[aria-label^="ยอดพิมพ์ของ"]');
+    const inputs = page.locator('input[aria-label^="จำนวนพิมพ์ของ"]');
     await expect(inputs.first()).toBeVisible();
     const original = await inputs.first().inputValue();
     await inputs.first().fill(original === "1" ? "2" : "1");

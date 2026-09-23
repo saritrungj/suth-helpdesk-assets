@@ -303,7 +303,7 @@ onMounted(load);
       row-key="id"
       export-filename="contracts"
       :search-placeholder="t(&quot;ค้นหาเลขที่สัญญา…&quot;)"
-      :empty-text="t(&quot;ต้องมีสัญญาก่อน ระบบถึงจะคิดค่าใช้จ่ายจากยอดพิมพ์ได้&quot;)"
+      :empty-text="t(&quot;ต้องมีสัญญาก่อน ระบบจึงคิดค่าใช้จ่ายได้&quot;)"
     >
       <template #actions="{ row }">
         <UiButton size="sm" variant="secondary" @click="openEdit(row)">
@@ -380,9 +380,9 @@ onMounted(load);
         </div>
 
         <div v-if="impact" class="flex flex-col gap-2">
-          <p v-if="!impact.length" class="text-sm text-ink-soft">{{ t("ยอดเงินทุกงวดไม่เปลี่ยน") }}</p>
+          <p v-if="!impact.length" class="text-sm text-ink-soft">{{ t("เงินทุกงวดไม่เปลี่ยน") }}</p>
           <table v-else class="w-full text-sm tabular-nums">
-            <caption class="mb-1 text-left font-medium text-ink">{{ t("ยอดตามใบแจ้งหนี้ที่จะเปลี่ยน (รวมค่าเช่าและ VAT)") }}</caption>
+            <caption class="mb-1 text-left font-medium text-ink">{{ t("เงินตามใบแจ้งหนี้ที่จะเปลี่ยน (รวมค่าเช่าและ VAT)") }}</caption>
             <thead class="text-ink-mute">
               <tr>
                 <th class="text-left font-normal">{{ t("งวด") }}</th>

@@ -45,6 +45,7 @@
 - [ขอบเขต API](reference/api.md) — prefix และความรับผิดชอบ
 - [ตัวแปร environment](reference/environment.md)
 - [รูปแบบไฟล์นำเข้า](reference/import-format.md)
+- [คำที่ใช้บนหน้าจอ](reference/ui-words.md) — คำเดียวต่อหนึ่งความหมาย ภาษาง่าย
 - [ระบบกับ WCAG 2.2 ระดับ AA](reference/accessibility.md) — ขอบเขตของเทส ผลที่ตรวจแล้ว และสิ่งที่ยังไม่ได้ตรวจ
 
 ## decisions — บันทึกการตัดสินใจ

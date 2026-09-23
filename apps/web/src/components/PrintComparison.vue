@@ -42,7 +42,7 @@ const DIMENSION_OPTIONS = [
 ];
 const METRIC_OPTIONS = [
   { value: "cost", label: t("ค่าใช้จ่าย") },
-  { value: "rawPages", label: t("ยอดพิมพ์จริง") },
+  { value: "rawPages", label: t("หน้าที่พิมพ์") },
 ];
 
 const update = (patch) => { state.value = { ...state.value, ...patch }; };
@@ -108,7 +108,7 @@ function select({ index }) {
       <UiSkeleton v-if="loading && !hasChart" height="18rem" />
       <UiEmpty v-else-if="failed" :title="t('โหลดข้อมูลไม่สำเร็จ')" compact />
       <UiEmpty v-else-if="!hasChart" compact
-        :title="t('ยังไม่มียอดพิมพ์ในขอบเขตที่เลือก')"
+        :title="t('ยังไม่มีการพิมพ์ในขอบเขตที่เลือก')"
         :description="t('เปลี่ยนช่วงเวลาหรือเอาตัวกรองบางตัวออก แล้วลองใหม่')" />
       <UiChart v-else :kind="chart.kind" :horizontal="chart.horizontal" :labels="chart.labels" :series="series"
         :height="chart.horizontal ? `${Math.max(12, chart.labels.length * 2.6 + 4)}rem` : '18rem'"
@@ -117,8 +117,8 @@ function select({ index }) {
 
       <ul v-if="!loading && !failed && !displayModel.blocked && (hidden || spread)"
         class="mt-3 flex flex-col gap-1 text-sm text-ink-soft list-none">
-        <li v-if="hidden">{{ t("กราฟแสดง {0} {1}แรกที่ยอดสูงสุด เพราะมีสีที่แยกกันออกเท่านี้ · อีก {2} รายการอยู่ครบในตารางด้านล่างและในไฟล์ที่ส่งออก", [formatCount(displayModel.chartEntries.length), noun, formatCount(hidden)]) }}</li>
-        <li v-if="spread">{{ t("จำนวนเครื่องที่มีข้อมูลต่างกัน ({0}–{1} เครื่อง) ยอดรวมจึงต่างกันได้ตามจำนวนเครื่อง ไม่ได้แปลว่าแต่ละเครื่องใช้งานต่างกัน", [formatCount(spread.min), formatCount(spread.max)]) }}</li>
+        <li v-if="hidden">{{ t("กราฟแสดง {0} {1}แรกที่สูงสุด · อีก {2} รายการอยู่ในตารางและไฟล์ที่ส่งออก", [formatCount(displayModel.chartEntries.length), noun, formatCount(hidden)]) }}</li>
+        <li v-if="spread">{{ t("จำนวนเครื่องต่างกัน ({0}–{1} เครื่อง) ผลรวมจึงต่างกันได้ ไม่ได้แปลว่าแต่ละเครื่องใช้งานต่างกัน", [formatCount(spread.min), formatCount(spread.max)]) }}</li>
       </ul>
 
       <template #footer>

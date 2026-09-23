@@ -210,7 +210,7 @@ watch(
     }
 
     const ok = await askConfirm(
-      t("มียอดพิมพ์ของเดือน{0} ที่แก้ไว้ {1} รายการแต่ยังไม่ได้บันทึก ", [formatMonth(previous, { long: true }), dirtyCount.value]) +
+      t("เดือน{0} มีตัวเลขที่แก้ไว้ {1} รายการ ยังไม่ได้บันทึก ", [formatMonth(previous, { long: true }), dirtyCount.value]) +
         t("ถ้าเปลี่ยนไปเดือนอื่นตอนนี้ ค่าที่กรอกไว้จะหายทั้งหมด", []),
       { title: t("ยังมีข้อมูลที่ยังไม่ได้บันทึก"), confirmText: t("เปลี่ยนเดือนโดยไม่บันทึก"), danger: true }
     );
@@ -236,9 +236,9 @@ async function save() {
   // ถามก่อนลบเสมอ และบอกจำนวนที่จะหายไปให้ชัด
   if (clearingCount.value > 0) {
     const ok = await askConfirm(
-      t("จะลบยอดพิมพ์ที่เคยบันทึกไว้ของ {0} เครื่องในเดือน", [clearingCount.value]) +
+      t("จะลบตัวเลขที่บันทึกไว้ของ {0} เครื่องในเดือน", [clearingCount.value]) +
         t("{0} ข้อมูลเดิมจะหายไปและรายงานจะเปลี่ยนตาม", [formatMonth(props.month, { long: true })]),
-      { title: t("ยืนยันการลบยอดที่บันทึกไว้"), confirmText: t("ลบและบันทึก"), danger: true }
+      { title: t("ยืนยันลบตัวเลขที่บันทึกไว้"), confirmText: t("ลบและบันทึก"), danger: true }
     );
     if (!ok) return;
   }
@@ -257,7 +257,7 @@ async function save() {
     const items = [...sending].map(([device_id, pages]) => ({ device_id, pages }));
     await api.post("/print-transactions/bulk", { month: props.month, items });
 
-    toastSuccess(t("บันทึกยอดพิมพ์เรียบร้อย"));
+    toastSuccess(t("บันทึกแล้ว"));
 
     // ยอดพิมพ์เป็นฐานของทุกบาทในรายงาน — แดชบอร์ดต้องไม่ค้างตัวเลขเก่า
     await invalidateAfterWrite(queryClient, "usage");
@@ -364,7 +364,7 @@ onBeforeRouteLeave(async () => {
   if (!isDirty.value) return true;
 
   return askConfirm(
-    t("มียอดพิมพ์ที่แก้ไว้ {0} รายการแต่ยังไม่ได้บันทึก ถ้าออกจากหน้านี้ตอนนี้ค่าที่กรอกไว้จะหายทั้งหมด", [dirtyCount.value]),
+    t("มี {0} รายการที่แก้แล้วยังไม่ได้บันทึก ออกจากหน้านี้แล้วจะหายทั้งหมด", [dirtyCount.value]),
     { title: t("ยังมีข้อมูลที่ยังไม่ได้บันทึก"), confirmText: t("ออกโดยไม่บันทึก"), danger: true }
   );
 });
@@ -466,7 +466,7 @@ defineExpose({ isDirty, dirtyCount, discard });
         >
         <p class="text-sm text-ink flex-1 min-w-0"> {{ t("แก้ไว้") }} <span class="numeral font-semibold">{{ dirtyCount }}</span> {{ t("รายการ") }} <span class="text-ink-mute"> {{ t("· เดือน") }} {{ formatMonth(month, { long: true }) }}</span>
           <span v-if="clearingCount" class="block text-xs text-danger-ink mt-0.5">
-            <TriangleAlert :size="12" class="inline align-[-1px]" aria-hidden="true" /> {{ t("ในนั้นมี") }} {{ clearingCount }} {{ t("รายการที่จะถูกลบยอดเดิมทิ้ง") }} </span>
+            <TriangleAlert :size="12" class="inline align-[-1px]" aria-hidden="true" /> {{ t("ในนั้นมี") }} {{ clearingCount }} {{ t("รายการที่จะถูกลบ") }} </span>
         </p>
 
         <UiButton variant="ghost" :disabled="saving" @click="discard">

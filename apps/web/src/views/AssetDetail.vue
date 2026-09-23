@@ -130,7 +130,7 @@ const loadError = computed(() => {
     return errorMessage(historyQuery.error.value, t("โหลดประวัติการย้ายไม่สำเร็จ"));
   }
   if (usageQuery.isError.value) {
-    return errorMessage(usageQuery.error.value, t("โหลดยอดพิมพ์ของเครื่องนี้ไม่สำเร็จ"));
+    return errorMessage(usageQuery.error.value, t("โหลดจำนวนพิมพ์ของเครื่องนี้ไม่สำเร็จ"));
   }
   return "";
 });
@@ -288,11 +288,11 @@ const usageSeries = computed(() => selectedYears.value.map((year, index) => ({
         <!-- ยอดพิมพ์ — ใหญ่ที่สุดเพราะเป็นสิ่งที่คนเปิดหน้านี้มาดูบ่อยที่สุด -->
         <UiCard
           class="lg:col-span-2"
-          :eyebrow="t(&quot;ยอดพิมพ์รายเดือน&quot;)"
+          :eyebrow="t(&quot;จำนวนพิมพ์รายเดือน&quot;)"
           :title="
             activeFiscalYear
               ? t(&quot;ปีงบประมาณ {0}&quot;, [yearLabel(activeFiscalYear.year)])
-              : t(&quot;ยอดพิมพ์ที่บันทึกไว้&quot;)
+              : t(&quot;จำนวนพิมพ์ที่บันทึกไว้&quot;)
           "
         >
           <template #actions>
@@ -309,7 +309,7 @@ const usageSeries = computed(() => selectedYears.value.map((year, index) => ({
           </UiField>
 
           <UiAlert v-if="yearLoadError" tone="danger">
-            {{ t("โหลดยอดพิมพ์ของเครื่องนี้ไม่สำเร็จ") }}
+            {{ t("โหลดจำนวนพิมพ์ของเครื่องนี้ไม่สำเร็จ") }}
             <template #actions>
               <UiButton variant="secondary" @click="retryYears">{{ t("ลองใหม่") }}</UiButton>
             </template>
@@ -327,12 +327,12 @@ const usageSeries = computed(() => selectedYears.value.map((year, index) => ({
 
           <UiEmpty
             v-else
-            :title="t(&quot;ยังไม่มียอดพิมพ์ในปีงบนี้&quot;)"
-            :description="t(&quot;ยอดพิมพ์บันทึกจากหน้า “บันทึกยอดพิมพ์” — เดือนที่ยังไม่กรอกจะไม่ถูกนับเป็นศูนย์&quot;)"
+            :title="t(&quot;ยังไม่มีการพิมพ์ในปีงบนี้&quot;)"
+            :description="t(&quot;มาจากหน้า “บันทึกจำนวนพิมพ์” — เดือนที่ยังไม่กรอกไม่นับเป็นศูนย์&quot;)"
             compact
           >
             <template #actions>
-              <UiButton to="/print-transactions" variant="secondary" size="sm"> {{ t("ไปกรอกยอดพิมพ์") }} </UiButton>
+              <UiButton to="/print-transactions" variant="secondary" size="sm"> {{ t("ไปกรอกจำนวนพิมพ์") }} </UiButton>
             </template>
           </UiEmpty>
         </UiCard>
@@ -384,7 +384,7 @@ const usageSeries = computed(() => selectedYears.value.map((year, index) => ({
                 <span class="block text-xs text-ink-mute mt-0.5"> {{ t("จาก") }} {{ effectivePrice.source }}
                 </span>
               </dd>
-              <dd v-else class="text-danger-ink text-sm"> {{ t("ไม่มีราคา — ยอดพิมพ์ของเครื่องนี้คิดเป็นค่าใช้จ่ายไม่ได้") }} </dd>
+              <dd v-else class="text-danger-ink text-sm"> {{ t("ไม่มีราคา — เครื่องนี้ยังคิดค่าใช้จ่ายไม่ได้") }} </dd>
             </div>
           </dl>
         </UiCard>

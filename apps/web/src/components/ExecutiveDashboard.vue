@@ -397,7 +397,7 @@ function reload() { report.refetch(); }
    -------------------------------------------------------------------------- */
 const blockedReason = computed(() => {
   if (!ready.value) return t('รอข้อมูลโหลดเสร็จ');
-  if (!exportRows.value.length) return t('ยังไม่มียอดพิมพ์ในขอบเขตที่เลือก');
+  if (!exportRows.value.length) return t('ยังไม่มีการพิมพ์ในขอบเขตที่เลือก');
   return '';
 });
 
@@ -424,9 +424,9 @@ function conditions(m, includedRows) {
     ...activeFilters.value.map((filter) => [filter.label, filter.text]),
     [t('เปรียบเทียบตาม'), dimensionLabel(m.dimension)],
     [t('ตัวเลขที่ดู'), metricText.value],
-    ...(m.hidden ? [[t('กลุ่มที่อยู่บนกราฟ'), t('{0} จาก {1} รายการที่ยอดสูงสุด — ตารางและแผ่นอื่นมีครบทุกรายการ', [formatCount(m.chartEntries.length), formatCount(m.entries.length)])]] : []),
+    ...(m.hidden ? [[t('กลุ่มที่อยู่บนกราฟ'), t('{0} จาก {1} รายการที่สูงสุด — ตารางและแผ่นอื่นมีครบ', [formatCount(m.chartEntries.length), formatCount(m.entries.length)])]] : []),
     ...(ranking ? [[t('อันดับ'), ranking]] : []),
-    [t('จำนวนรายการยอดพิมพ์'), formatCount(includedRows.length)],
+    [t('จำนวนรายการ'), formatCount(includedRows.length)],
     [t('จำนวนเครื่องที่มีข้อมูล'), formatCount(summarize(includedRows).devices)],
     ...standardNotes(),
   ];

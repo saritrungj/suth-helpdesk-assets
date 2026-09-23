@@ -66,7 +66,7 @@ export function eventDetail(event) {
     case "auto_finished":
       return d.stopped?.length ? t("หยุดถาม {0} เรื่อง", [d.stopped.length]) : t("ไม่มีอะไรต้องถาม");
     case "completed":
-      return t("เครื่องใหม่ {0} · เติม {1} · ยอดใหม่ {2} · เขียนทับ {3}", [d.devices_created ?? 0, d.devices_filled ?? 0, d.readings_new ?? 0, d.readings_overwritten ?? 0]);
+      return t("เครื่องใหม่ {0} · เติม {1} · ตัวเลขใหม่ {2} · แทนที่ {3}", [d.devices_created ?? 0, d.devices_filled ?? 0, d.readings_new ?? 0, d.readings_overwritten ?? 0]);
     case "failed":
       return d.message ?? "";
     case "abandoned":
