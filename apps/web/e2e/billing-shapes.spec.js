@@ -87,3 +87,21 @@ test("ยอดรายเดือนสำหรับช่องกรอ�
     expect(Number(rows[0].pages), month).toBe(bw.pages_printed);
   }
 });
+
+test("สรุปปีงบของหน้าบันทึกยอดนับเฉพาะมิเตอร์ขาวดำเหมือนช่องกรอก", async () => {
+  const { readings } = await seededShape();
+  const fy = await activeFiscalYear();
+  const inYear = readings.filter((row) => row.month >= fy.start_month && row.month <= fy.end_month);
+  test.skip(!inYear.length, "ยอดเครื่องมิเตอร์สีไม่อยู่ในปีงบปัจจุบัน");
+
+  const deviceId = inYear[0].device_id;
+  const bw = inYear.filter((row) => !row.is_color);
+  const latestMonth = bw.map((row) => row.month).sort().at(-1);
+  const summary = await apiFetch(`/print-transactions/summary?fiscal_year_id=${fy.id}`);
+  const row = summary.find((entry) => entry.device_id === deviceId);
+
+  expect(row).toBeTruthy();
+  expect(Number(row.total_pages)).toBe(bw.reduce((sum, reading) => sum + reading.pages_printed, 0));
+  expect(row.latest_month).toBe(latestMonth);
+  expect(Number(row.latest_pages)).toBe(bw.find((reading) => reading.month === latestMonth).pages_printed);
+});

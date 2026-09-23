@@ -337,7 +337,7 @@ router.get(
 
 // ============================================================
 // GET /api/print-transactions/summary?fiscal_year_id=ID
-// นับจำนวนเดือนที่กรอกแล้วของแต่ละเครื่อง (ใช้โชว์แถบความคืบหน้าในตารางหลัก)
+// นับเฉพาะมิเตอร์หลักขาวดำ ให้ตรงกับช่องกรอกและยอดเดือนในตารางหลัก (#159)
 // ============================================================
 router.get(
   "/summary",
@@ -353,17 +353,21 @@ router.get(
          totals.latest_month,
          latest.pages AS latest_pages
        FROM (
-         SELECT device_id, COUNT(DISTINCT month) AS filled, SUM(pages) AS total_pages, MAX(month) AS latest_month
-         FROM print_transactions
-         WHERE month BETWEEN ? AND ?
-         GROUP BY device_id
+         SELECT pt.device_id, COUNT(DISTINCT pt.month) AS filled, SUM(pt.pages) AS total_pages, MAX(pt.month) AS latest_month
+         FROM print_transactions pt
+         JOIN device_meter dm ON dm.id = pt.meter_id
+         JOIN meter_category mc ON mc.id = dm.category_id
+         WHERE mc.is_color = 0 AND pt.month BETWEEN ? AND ?
+         GROUP BY pt.device_id
        ) totals
-       -- ยอดล่าสุดรวมทุกมิเตอร์ของเครื่อง ให้ตรงกับ total_pages ข้างบน
+       -- ยอดล่าสุดของมิเตอร์ขาวดำ ให้ตรงกับ total_pages ข้างบน
        JOIN (
-         SELECT device_id, month, SUM(pages) AS pages
-         FROM print_transactions
-         WHERE month BETWEEN ? AND ?
-         GROUP BY device_id, month
+         SELECT pt.device_id, pt.month, SUM(pt.pages) AS pages
+         FROM print_transactions pt
+         JOIN device_meter dm ON dm.id = pt.meter_id
+         JOIN meter_category mc ON mc.id = dm.category_id
+         WHERE mc.is_color = 0 AND pt.month BETWEEN ? AND ?
+         GROUP BY pt.device_id, pt.month
        ) latest
          ON latest.device_id = totals.device_id AND latest.month = totals.latest_month`,
       [range.start_month, range.end_month, range.start_month, range.end_month]

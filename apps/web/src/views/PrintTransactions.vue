@@ -674,14 +674,14 @@ const columns = computed(() => [
   {
     key: "total_pages",
     label: filters.value.month
-      ? t("ยอดเดือน {0}", [formatMonth(filters.value.month)])
-      : t("ยอดรวมทั้งปีงบ"),
+      ? t("ยอดขาวดำเดือน {0}", [formatMonth(filters.value.month)])
+      : t("ยอดขาวดำรวมทั้งปีงบ"),
     align: "right",
     value: (d) => (filters.value.month ? (monthPages.value[d.id] ?? 0) : fillInfo(d.id).totalPages),
   },
   {
     key: "latest_transaction",
-    label: t("ยอดล่าสุดที่กรอก"),
+    label: t("ยอดขาวดำล่าสุดที่กรอก"),
     align: "right",
     value: (d) => {
       const info = fillInfo(d.id);
