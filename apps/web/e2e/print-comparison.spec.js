@@ -552,3 +552,31 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await page.screenshot({ path: testInfo.outputPath("dashboard-320.png"), fullPage: true });
   });
 });
+
+// รายชื่อเดือนของตัวเลือกช่วงเวลาเคยมาจาก /dashboard/monthly-kpi แบบไม่กรอง — ยอดรายมิเตอร์ทุกเดือน
+// ทุกปี (11.6 MB ที่ 5 ปี) ดึงซ้ำทุก 5 นาที เพื่อเอาแค่ชื่อเดือน (#149) ทุกคำขอยอดต้องมีช่วงเดือนเสมอ
+test("หน้าภาพรวมไม่ดึงยอดรายเดือนแบบไม่กรองเพื่อหารายชื่อเดือน", async ({ page }) => {
+  const state = await comparisonFixture(page);
+  await page.goto("/dashboard");
+  await expect.poll(() => state.requests.some((request) => request.path.endsWith("/print-transactions/months"))).toBe(true);
+  await expect.poll(() => state.requests.some((request) => request.path.endsWith("/monthly-kpi"))).toBe(true);
+  await expect(page.getByRole("button", { name: /ช่วงเวลา|เดือน/ }).first()).toBeVisible();
+  // เหลือได้หนึ่งคำขอ: คำขอยอดของหน้าที่ยิงก่อนรายการปีงบโหลดเสร็จ (ยังไม่รู้ช่วงเดือน) ซึ่งเป็นอีกเรื่อง
+  // ที่แยกติดตามไว้ — ของเดิมมีสองคำขอ คำขอที่สองคือการหารายชื่อเดือนที่ #149 ตัดออก
+  const unfiltered = state.requests.filter((request) => request.path.endsWith("/monthly-kpi") && !request.months.length);
+  expect(unfiltered.length).toBeLessThanOrEqual(1);
+});
+
+test("หน้าค่าใช้จ่ายได้รายชื่อเดือนจาก /print-transactions/months ไม่ใช่ยอดทั้งหมด", async ({ page }) => {
+  await prototypeFixture(page, "admin");
+  const kpiRequests = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.endsWith("/dashboard/monthly-kpi")) kpiRequests.push(url.search);
+  });
+  const monthsLoaded = page.waitForResponse((response) => response.url().endsWith("/api/print-transactions/months"));
+  await page.goto("/expense");
+  await monthsLoaded;
+  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).toBeVisible();
+  expect(kpiRequests.filter((search) => !new URLSearchParams(search).get("month"))).toEqual([]);
+});
