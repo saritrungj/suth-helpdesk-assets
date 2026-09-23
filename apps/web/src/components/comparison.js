@@ -453,6 +453,14 @@ export function yearComparisonOptions(fiscalYears, currentYear) {
     .map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) }));
 }
 
+/** ปีงบของกราฟรายเครื่องจาก URL — ลิงก์เสีย/ค่าซ้ำกลับไปคู่ปีตั้งต้น */
+export function deviceYearSelection(queryYears, options, currentYear) {
+  const allowed = new Set(options.map((item) => item.value));
+  const requested = [...new Set(String(queryYears ?? "").split(",").filter((year) => allowed.has(year)))];
+  const years = requested.length >= 2 ? requested : defaultYearPair(currentYear);
+  return [...new Set(years)].sort().slice(-MAX_YEARS);
+}
+
 /** เดือนทั้งหมดของหลายปีงบ — พารามิเตอร์ month ของ /dashboard/monthly-kpi */
 export function fiscalYearsMonths(years) {
   return (years ?? []).flatMap((year) => fiscalYearMonths(getFiscalYearRange(Number(year))));

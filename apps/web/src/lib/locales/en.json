@@ -1,4 +1,6 @@
 {
+  "ปีงบที่เปรียบเทียบ (2–3 ปี)": "Fiscal years to compare (2–3 years)",
+  "เปลี่ยนปีงบแล้ว: นำตัวกรองที่ไม่มีข้อมูลออก ({0})": "Fiscal year changed: removed filters without data ({0})",
   "ยอดพิมพ์จริง": "Actual pages printed",
   "ยอดพิมพ์จริง (หน้า)": "Actual pages printed (pages)",
   "สุทธิหลังหัก 2% (หน้า)": "Net after 2% deduction (pages)",

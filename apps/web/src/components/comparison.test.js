@@ -8,6 +8,7 @@ import {
   fiscalYearsMonths,
   monthText,
   comparisonChart,
+  deviceYearSelection,
   deviceSpread,
   difference,
   itemOptions,
@@ -25,6 +26,15 @@ const row = (overrides) => ({
 });
 
 const entry = (key, label, summary) => ({ key, label, displayLabel: label, summary: { readings: 1, rawPages: 0, netPages: 0, costSatang: 0, cost: 0, unpriced: 0, devices: 1, ...summary } });
+
+test("กราฟรายเครื่องเลือกสองถึงสามปีจาก URL และลิงก์ปีซ้ำกลับไปคู่ตั้งต้น", () => {
+  const options = [2567, 2568, 2569, 2570].map((year) => ({ value: String(year) }));
+  expect(deviceYearSelection(undefined, options, 2569)).toEqual(["2568", "2569"]);
+  expect(deviceYearSelection("2567,2568,2569", options, 2569)).toEqual(["2567", "2568", "2569"]);
+  expect(deviceYearSelection("2568,2568", options, 2569)).toEqual(["2568", "2569"]);
+  expect(deviceYearSelection("0000,2568", options, 2569)).toEqual(["2568", "2569"]);
+  expect(deviceYearSelection("2567,2568,2569,2570", options, 2569)).toEqual(["2568", "2569", "2570"]);
+});
 
 describe("สรุปยอดของกลุ่ม", () => {
   test("รวมเงินเป็นสตางค์ หน้าสุทธิไม่มีเศษทศนิยมลอย และนับเครื่องไม่ซ้ำ", () => {

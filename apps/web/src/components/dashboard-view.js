@@ -139,6 +139,21 @@ export function filterRows(rows, view = {}) {
   return (rows ?? []).filter((row) => active.every((key) => selected[key].has(String(row[SCOPE_FIELDS[key]] ?? "unassigned"))));
 }
 
+/** หลังเปลี่ยนปีงบ คงเฉพาะตัวกรองที่มีแถวในช่วงใหม่ โดยตรวจแต่ละมิติแยกกัน */
+export function pruneUnavailableScopes(view, rows) {
+  const removed = [];
+  const next = { ...view };
+  for (const key of SCOPE_KEYS) {
+    const available = new Set((rows ?? []).map((row) => String(row[SCOPE_FIELDS[key]] ?? "unassigned")));
+    const kept = (view[key] ?? []).filter((value) => available.has(String(value)));
+    if (kept.length !== (view[key] ?? []).length) {
+      removed.push({ key, values: (view[key] ?? []).filter((value) => !available.has(String(value))) });
+      next[key] = kept;
+    }
+  }
+  return { view: next, removed };
+}
+
 /**
  * รหัสที่ผู้ใช้เลือกไว้ในตัวกรองของมิติที่กำลังเทียบ
  *
