@@ -48,7 +48,42 @@ test("ปฏิเสธไฟล์ที่ประกาศแถวรว�
   assert.equal(error?.code, "import_too_large");
 });
 
+/** แผ่นเล็กที่ประกาศขอบเขต `ref` — ไฟล์จริงแบบนี้เกิดจากการจัดรูปแบบทั้งแถวหรือทั้งคอลัมน์ใน Excel */
+function declared(ref) {
+  const sheet = XLSX.utils.aoa_to_sheet([["SN.", "meter 9/67"], ["TEST-SN-1", 5]]);
+  sheet["!ref"] = ref;
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "ยอด");
+  return workbook;
+}
+
+// ไฟล์ 16 KB ที่ประกาศ A1:XFD1500 เคยทำให้ health check รอ 17 วินาที (#142) — ต้องถูกปฏิเสธ
+// ก่อนกางแผ่นเป็นแถว เทสใช้ 228 คอลัมน์ (เกินเพดาน 200) เพราะการ "เขียน" ไฟล์กว้างแบบนั้นด้วย
+// SheetJS เองก็ช้า ไม่เกี่ยวกับ API
+test("นำเข้ายอดมิเตอร์ปฏิเสธแผ่นที่ประกาศคอลัมน์เกินเพดาน ก่อนถามฐานข้อมูล", async () => {
+  const { error, queries } = await importFile(declared("A1:HT3"));
+  assert.equal(error?.code, "import_too_large");
+  assert.deepEqual(queries, []);
+});
+
+// 200 คอลัมน์ × 6,000 แถว ผ่านเพดานแถวและคอลัมน์ทั้งคู่ แต่เป็น 1.2 ล้านเซลล์
+test("นำเข้ายอดมิเตอร์ปฏิเสธไฟล์ที่เซลล์รวมเกินเพดานแม้แถวและคอลัมน์ไม่เกิน", async () => {
+  const { error, queries } = await importFile(declared("A1:GR6000"));
+  assert.equal(error?.code, "import_too_large");
+  assert.deepEqual(queries, []);
+});
+
 const { readAllSheets } = require("./controller");
+
+test("นำเข้าทะเบียนใช้เพดานเซลล์รวมเดียวกัน", () => {
+  const file = path.join(os.tmpdir(), `suth-registry-cells-${process.pid}-${Date.now()}.xlsx`);
+  XLSX.writeFile(declared("A1:GR6000"), file);
+  try {
+    assert.throws(() => readAllSheets(file, "registry.xlsx"), (error) => error.code === "import_too_large");
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
+});
 const { parseRegistryWorkbook } = require("./registry-sheet");
 
 // SheetJS แปลงข้อความที่หน้าตาเป็นวันที่ใน CSV แบบ เดือน/วัน ของสหรัฐ และอ่าน CSV ที่ไม่มี BOM

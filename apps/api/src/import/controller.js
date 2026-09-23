@@ -13,6 +13,9 @@ const { MAX_PAGES_PER_MONTH, normalizeMonth } = require("@suth/domain");
 const MAX_IMPORT_SHEETS = 60;
 const MAX_IMPORT_ROWS = 50000;
 const MAX_IMPORT_COLUMNS = 200;
+// แถว × คอลัมน์ที่ประกาศรวมทุกแผ่น — แถวกับคอลัมน์ที่ผ่านเพดานของตัวเองทั้งคู่ยังคูณกันได้หลายล้าน
+// เซลล์ (SheetJS กางทุกเซลล์ในช่วงที่ประกาศ) ไฟล์จริงมีไม่กี่หมื่นเซลล์ (#142)
+const MAX_IMPORT_CELLS = 1_000_000;
 const { parseVendorWorkbook, comparableContractNo } = require("./vendor-meter");
 const { normalizeName } = require("../master-data/names");
 const { parseRegistryWorkbook } = require("./registry-sheet");
@@ -163,6 +166,43 @@ function parseDecisions(raw) {
 }
 
 /**
+ * ปฏิเสธไฟล์ที่ประกาศขนาดใหญ่ผิดปกติ ก่อนกางแผ่นใดเป็นแถว — ใช้กับการนำเข้าทั้งสองแบบ
+ *
+ * SheetJS กางทุกเซลล์ในช่วงที่แผ่นประกาศ (`!ref`) ไม่ใช่เฉพาะเซลล์ที่มีค่า และการกางเป็นงาน
+ * sync ที่บล็อกทั้ง API ไฟล์ .xlsx 16 KB ที่ประกาศ A1:XFD1500 ทำให้ health check รอ 17 วินาที
+ * (#142) ด่านนี้เคยมีเฉพาะนำเข้าทะเบียน ส่วนนำเข้ายอดมิเตอร์ตรวจแค่แผ่นกับแถว
+ */
+function assertWithinImportLimits(workbook) {
+  let rows = 0;
+  let widest = 0;
+  let cells = 0;
+  for (const name of workbook.SheetNames) {
+    const ref = workbook.Sheets[name]?.["!ref"];
+    if (!ref) continue;
+    const range = XLSX.utils.decode_range(ref);
+    const sheetRows = range.e.r + 1;
+    const sheetColumns = range.e.c + 1;
+    rows += sheetRows;
+    widest = Math.max(widest, sheetColumns);
+    cells += sheetRows * sheetColumns;
+  }
+  if (
+    workbook.SheetNames.length > MAX_IMPORT_SHEETS ||
+    rows > MAX_IMPORT_ROWS ||
+    widest > MAX_IMPORT_COLUMNS ||
+    cells > MAX_IMPORT_CELLS
+  ) {
+    throw badRequest("ไฟล์ใหญ่เกินกว่าที่นำเข้าได้ในครั้งเดียว", {
+      code: "import_too_large",
+      detail:
+        `รับได้ไม่เกิน ${MAX_IMPORT_SHEETS} แผ่น ${MAX_IMPORT_ROWS.toLocaleString("th-TH")} แถวรวม ` +
+        `${MAX_IMPORT_COLUMNS} คอลัมน์ต่อแผ่น และ ${MAX_IMPORT_CELLS.toLocaleString("th-TH")} เซลล์รวม — ` +
+        "ถ้าไฟล์มีข้อมูลไม่มาก ให้ลบแถว/คอลัมน์ว่างที่จัดรูปแบบไว้ แล้วบันทึกใหม่ หรือแยกไฟล์",
+    });
+  }
+}
+
+/**
  * แผ่นทั้งหมดของไฟล์ ทั้งค่าที่จัดรูปแล้ว (ทะเบียน) และค่าดิบ (รายงานมิเตอร์) — กันไฟล์ใหญ่ผิดปกติก่อน
  *
  * CSV อ่านเป็นข้อความตรงๆ (raw) — ไม่งั้น SheetJS แปลง "1/10/2567" เป็นวันที่แบบ เดือน/วัน
@@ -171,22 +211,7 @@ function parseDecisions(raw) {
 function readAllSheets(filePath, originalName = "") {
   const isCsv = /\.csv$/i.test(originalName);
   const workbook = readWorkbook(filePath, isCsv ? { csv: true } : undefined);
-  const declaredRows = workbook.SheetNames.reduce((sum, name) => {
-    const ref = workbook.Sheets[name]["!ref"];
-    return sum + (ref ? XLSX.utils.decode_range(ref).e.r + 1 : 0);
-  }, 0);
-  // ไฟล์เล็กที่ประกาศขอบเขตกว้างผิดปกติ (A1:XFD49999) กางเป็นเซลล์ว่างได้หลายร้อยล้านช่อง
-  // ไฟล์ทะเบียนจริงกว้างไม่ถึง 50 คอลัมน์
-  const widest = Math.max(0, ...workbook.SheetNames.map((name) => {
-    const ref = workbook.Sheets[name]["!ref"];
-    return ref ? XLSX.utils.decode_range(ref).e.c + 1 : 0;
-  }));
-  if (workbook.SheetNames.length > MAX_IMPORT_SHEETS || declaredRows > MAX_IMPORT_ROWS || widest > MAX_IMPORT_COLUMNS) {
-    throw badRequest("ไฟล์ใหญ่เกินกว่าที่นำเข้าได้ในครั้งเดียว", {
-      code: "import_too_large",
-      detail: `รับได้ไม่เกิน ${MAX_IMPORT_SHEETS} แผ่น ${MAX_IMPORT_ROWS.toLocaleString("th-TH")} แถวรวม และ ${MAX_IMPORT_COLUMNS} คอลัมน์ต่อแผ่น`,
-    });
-  }
+  assertWithinImportLimits(workbook);
   return workbook.SheetNames.map((name) => ({
     name,
     rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "", raw: false }),
@@ -622,18 +647,9 @@ exports.importPrintTransactions = asyncHandler(async (req, res) => {
         if (!req.file) throw badRequest("กรุณาเลือกไฟล์ที่ต้องการนำเข้า", { code: "no_file" });
 
         const workbook = readWorkbook(req.file.path);
-        // ไฟล์ 5MB ที่บีบอัดได้ดีกางออกเป็นแถวได้มหาศาล — นับจากขอบเขตของแผ่นก่อนแปลง
+        // ไฟล์ 5MB ที่บีบอัดได้ดีกางออกเป็นแถวได้มหาศาล — ตรวจจากขอบเขตของแผ่นก่อนแปลง
         // ทุกแถวเป็น object และก่อนยิงคำสั่งเขียนก้อนเดียว (ไฟล์จริงมีไม่กี่แผ่น แผ่นละไม่กี่ร้อยแถว)
-        const declaredRows = workbook.SheetNames.reduce((sum, name) => {
-            const ref = workbook.Sheets[name]?.["!ref"];
-            return sum + (ref ? XLSX.utils.decode_range(ref).e.r + 1 : 0);
-        }, 0);
-        if (workbook.SheetNames.length > MAX_IMPORT_SHEETS || declaredRows > MAX_IMPORT_ROWS) {
-            throw badRequest("ไฟล์ใหญ่เกินกว่าที่นำเข้าได้ในครั้งเดียว", {
-                code: "import_too_large",
-                detail: `นำเข้าได้ไม่เกิน ${MAX_IMPORT_SHEETS} แผ่น และรวมไม่เกิน ${MAX_IMPORT_ROWS.toLocaleString("th-TH")} แถวต่อไฟล์ — แยกไฟล์เป็นหลายครั้ง`,
-            });
-        }
+        assertWithinImportLimits(workbook);
         const sheets = workbook.SheetNames.map((name) => ({
             name,
             rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "", raw: true }),
