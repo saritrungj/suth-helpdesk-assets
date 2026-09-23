@@ -377,10 +377,16 @@ function buildValidation({ info, plan, described, contracts, readings, reconcili
       count ? { type: "decide_names" } : null);
     const invalid = plan.blocking.find((b) => b.code === "invalid_name");
     if (invalid) add("names:invalid", "blocking", "ชื่อที่ตั้งใช้ไม่ได้", invalid.messages.join(" · "), { type: "decide_names" });
-    const models = plan.blocking.find((b) => b.code === "undecided_model");
-    add("models", models ? "blocking" : "ok",
-      models ? `ยังต้องเลือกหมวดมิเตอร์ของรุ่นใหม่ ${models.count} รุ่น` : "หมวดมิเตอร์ของทุกรุ่นครบแล้ว",
-      null, models ? { type: "decide_models" } : null);
+    // สัญญาที่ไฟล์อ้างยังไม่มี = ตัววางแผนยังไม่บังคับหมวดของรุ่น (ไม่มีสัญญาให้เทียบราคา) แต่ราคาของสัญญาที่จะสร้าง
+    // จากไฟล์ขึ้นกับหมวดของรุ่น — ถ้าบอกว่า "ครบแล้ว" ตอนนี้ ผู้ใช้จะกดสร้างสัญญาที่ไม่มีรายการราคา (พบตอนทดสอบกับไฟล์จริง)
+    const contractMissing = contracts.some((c) => c.state === "missing");
+    const undecidedModels = contractMissing
+      ? plan.models.filter((m) => !m.meter_category_id).length
+      : plan.blocking.find((b) => b.code === "undecided_model")?.count ?? 0;
+    add("models", undecidedModels ? "blocking" : "ok",
+      undecidedModels ? `ยังต้องเลือกหมวดมิเตอร์ของรุ่นใหม่ ${undecidedModels} รุ่น` : "หมวดมิเตอร์ของทุกรุ่นครบแล้ว",
+      undecidedModels && contractMissing ? "เลือกก่อนสร้างสัญญา — ราคาต่อหน้าของสัญญาที่เติมจากไฟล์ขึ้นกับหมวดของรุ่น" : null,
+      undecidedModels ? { type: "decide_models" } : null);
     const s = plan.summary;
     if (plan.blocking.some((b) => b.code === "missing_contract")) {
       // ทุกแถวของสัญญาที่ยังไม่มีถูกนับเป็น "ข้าม" ซึ่งอ่านแล้วเหมือนไฟล์ผิด — จริงๆ แค่รอสัญญา
