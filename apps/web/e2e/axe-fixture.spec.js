@@ -74,11 +74,11 @@ const STATES = [
     },
   },
   {
-    name: "ภาพรวม: ค่าใช้จ่ายสุทธิ",
+    name: "ภาพรวม: ค่าใช้จ่าย",
     async setup(page) {
       await comparisonFixture(page);
       await page.goto("/dashboard?by=department");
-      await expect(page.getByRole("region", { name: "พื้นที่เปรียบเทียบ" })).toContainText("ค่าใช้จ่ายสุทธิรายเดือน");
+      await expect(page.getByRole("region", { name: "พื้นที่เปรียบเทียบ" })).toContainText("ค่าใช้จ่ายรายเดือน");
     },
   },
 ];

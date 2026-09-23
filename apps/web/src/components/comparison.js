@@ -68,7 +68,7 @@ function emptyLabel(dimension) {
 
 /** ชื่อตัวชี้วัดแบบเต็มที่ใช้ทั้งหัวกราฟ หัวตาราง และไฟล์ */
 export function metricLabel(metric) {
-  return metric === "rawPages" ? t("หน้าที่พิมพ์") : t("ค่าใช้จ่ายสุทธิ");
+  return metric === "rawPages" ? t("หน้าที่พิมพ์") : t("ค่าใช้จ่าย");
 }
 
 export function metricUnit(metric) {

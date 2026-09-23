@@ -526,7 +526,7 @@ onMounted(() => {
                   <tr class="text-xs text-ink-mute">
                     <th class="text-left font-medium py-1.5"> {{ t("เดือน") }} </th>
                     <th class="text-right font-medium py-1.5"> {{ t("จำนวนหน้า") }} </th>
-                    <th class="text-right font-medium py-1.5"> {{ t("ค่าใช้จ่ายสุทธิ") }} </th>
+                    <th class="text-right font-medium py-1.5"> {{ t("ค่าใช้จ่าย") }} </th>
                   </tr>
                 </thead>
                 <tbody>

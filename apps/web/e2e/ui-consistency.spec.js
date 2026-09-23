@@ -59,7 +59,7 @@ test("comparison rejects inherited object properties as metric query values", as
 
   await expect(page.getByRole("radio", { name: "ค่าใช้จ่าย", exact: true })).toBeChecked();
   await expect(page.getByRole("radio", { name: "ภาพรวม", exact: true })).toBeChecked();
-  await expect(page.getByRole("heading", { name: "ค่าใช้จ่ายสุทธิรายเดือน", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "ค่าใช้จ่ายรายเดือน", exact: true })).toBeVisible();
 });
 
 /**
