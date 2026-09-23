@@ -29,6 +29,7 @@ export const {
   getFiscalYearRange,
   fiscalYearMonths,
   fiscalYearOfMonth,
+  defaultFiscalYear,
   MONTHS_TH,
   MONTHS_TH_FULL,
   toBuddhistYear,

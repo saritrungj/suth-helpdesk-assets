@@ -117,4 +117,26 @@ function fiscalYearDateRange(range) {
   };
 }
 
-module.exports = { getFiscalYearRange, fiscalYearMonths, fiscalYearDateRange, fiscalYearOfMonth, BE_OFFSET };
+/**
+ * ปีงบที่แอปควรเปิดเป็นค่าเริ่มต้น (#176)
+ *
+ * ปีที่ครอบเดือนปัจจุบันก่อน — เดิมเลือกปีสุดท้ายของรายการ ผู้ดูแลที่เตรียมปีงบล่วงหน้าไว้หลายปี
+ * จึงเปิดทุกหน้ามาเจอปีในอนาคตที่ยังไม่มีข้อมูล ถ้าไม่มีปีที่ครอบ ใช้ปีล่าสุดที่เริ่มไปแล้ว (ข้อมูล
+ * ล่าสุดที่มีได้) ถ้าทุกปีอยู่ในอนาคต ใช้ปีที่ใกล้ที่สุด ลำดับในรายการไม่มีผล
+ *
+ * @template {{ start_month: string, end_month: string }} T
+ * @param {T[]} list ปีงบจาก API (เดือนเป็น ค.ศ. "YYYY-MM")
+ * @param {string} month เดือนปัจจุบัน ค.ศ. "YYYY-MM" (ดู currentMonth)
+ * @returns {T|null}
+ */
+function defaultFiscalYear(list, month) {
+  if (!list?.length) return null;
+  const byStart = [...list].sort((a, b) => a.start_month.localeCompare(b.start_month));
+  return (
+    byStart.find((fy) => fy.start_month <= month && month <= fy.end_month) ??
+    byStart.filter((fy) => fy.start_month <= month).at(-1) ??
+    byStart[0]
+  );
+}
+
+module.exports = { getFiscalYearRange, fiscalYearMonths, fiscalYearDateRange, fiscalYearOfMonth, defaultFiscalYear, BE_OFFSET };
