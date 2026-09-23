@@ -35,6 +35,8 @@ export { fiscalYearMonths };
 
 let loaded = false;
 let loadingPromise = null;
+let refreshPromise = null;
+let refreshRequests = 0;
 
 async function fetchFiscalYears() {
   fiscalYearState.loading = true;
@@ -88,18 +90,42 @@ export async function loadFiscalYears() {
 // โดยไม่ต้อง refresh หน้าเว็บเอง
 export async function refreshFiscalYears() {
   markForRevalidation(["/fiscal-years"]);
-  if (loadingPromise) {
-    try {
-      await loadingPromise;
-    } catch {}
-    return fetchFiscalYears();
-  }
-  return fetchFiscalYears();
+  refreshRequests += 1;
+  if (refreshPromise) return refreshPromise;
+
+  let sharedRefresh;
+  const currentRefresh = (async () => {
+    if (loadingPromise) {
+      try {
+        await loadingPromise;
+      } catch {}
+    }
+
+    // ถ้ามีคำขอ refresh ใหม่ระหว่าง fetch ต้องยิงซ้ำพร้อม no-cache; คำขอที่รอ initial load
+    // จะถูกรวมไว้ใน fetch แรกที่ตามมา เพราะมันเกิดก่อนเริ่ม revalidate
+    let handledRequests = refreshRequests;
+    while (true) {
+      await fetchFiscalYears();
+      if (handledRequests === refreshRequests) {
+        if (refreshPromise === sharedRefresh) refreshPromise = null;
+        return;
+      }
+      handledRequests = refreshRequests;
+    }
+  })();
+
+  sharedRefresh = currentRefresh.finally(() => {
+    if (refreshPromise === sharedRefresh) refreshPromise = null;
+  });
+  refreshPromise = sharedRefresh;
+  return sharedRefresh;
 }
 
 export function resetFiscalYearState() {
   loaded = false;
   loadingPromise = null;
+  refreshPromise = null;
+  refreshRequests = 0;
   fiscalYearState.list = [];
   fiscalYearState.activeId = null;
 }

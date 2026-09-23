@@ -248,4 +248,70 @@ describe("refreshFiscalYears", () => {
       headers: { "Cache-Control": "no-cache" },
     });
   });
+
+  test("refresh ที่เกิดพร้อมกันระหว่างโหลดจะไม่ยิงคำขอที่สองซึ่งอาจเขียนข้อมูลเก่าทับ", async () => {
+    resetFiscalYearState();
+    let resolveInitial;
+    get.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveInitial = resolve; })
+    );
+    get.mockResolvedValueOnce({
+      data: [{ id: 2, year: "2569", start_month: "2568-10", end_month: "2569-09" }],
+    });
+    get.mockResolvedValueOnce({
+      data: [{ id: 1, year: "2568", start_month: "2567-10", end_month: "2568-09" }],
+    });
+
+    const initialLoad = loadFiscalYears();
+    const firstRefresh = refreshFiscalYears();
+    const secondRefresh = refreshFiscalYears();
+
+    resolveInitial({
+      data: [{ id: 1, year: "2568", start_month: "2567-10", end_month: "2568-09" }],
+    });
+    await Promise.all([initialLoad, firstRefresh, secondRefresh]);
+
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenNthCalledWith(2, "/fiscal-years", {
+      headers: { "Cache-Control": "no-cache" },
+    });
+    expect(fiscalYearState.list).toEqual([
+      { id: 2, year: "2569", start_month: "2568-10", end_month: "2569-09" },
+    ]);
+  });
+
+  test("refresh ใหม่ระหว่าง revalidation จะตามด้วยคำขอ no-cache อีกครั้ง", async () => {
+    resetFiscalYearState();
+    get.mockResolvedValueOnce({
+      data: [{ id: 1, year: "2568", start_month: "2567-10", end_month: "2568-09" }],
+    });
+    let resolveFirstRefresh;
+    get.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveFirstRefresh = resolve; })
+    );
+    get.mockResolvedValueOnce({
+      data: [{ id: 3, year: "2570", start_month: "2569-10", end_month: "2570-09" }],
+    });
+
+    await loadFiscalYears();
+    const firstRefresh = refreshFiscalYears();
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    const secondRefresh = refreshFiscalYears();
+
+    resolveFirstRefresh({
+      data: [{ id: 2, year: "2569", start_month: "2568-10", end_month: "2569-09" }],
+    });
+    await Promise.all([firstRefresh, secondRefresh]);
+
+    expect(get).toHaveBeenCalledTimes(3);
+    expect(get).toHaveBeenNthCalledWith(2, "/fiscal-years", {
+      headers: { "Cache-Control": "no-cache" },
+    });
+    expect(get).toHaveBeenNthCalledWith(3, "/fiscal-years", {
+      headers: { "Cache-Control": "no-cache" },
+    });
+    expect(fiscalYearState.list).toEqual([
+      { id: 3, year: "2570", start_month: "2569-10", end_month: "2570-09" },
+    ]);
+  });
 });

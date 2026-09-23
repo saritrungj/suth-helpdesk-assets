@@ -62,7 +62,9 @@ app.use(
   cors({
     origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "If-None-Match", "X-Request-Id"],
+    // Cache-Control ไม่ใช่ CORS-safelisted header — browser จะ preflight ตอนเว็บส่ง no-cache เพื่อ revalidate
+    // รายการหลัง mutation จึงต้อง allow ไว้ ไม่เช่นนั้น browser จะบล็อก GET ก่อนถึง route
+    allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "If-None-Match", "X-Request-Id"],
     // ให้เบราว์เซอร์อ่าน header เหล่านี้จากคำตอบข้ามโดเมนได้ — ปกติ CORS ซ่อนไว้
     // ทั้งหมด ทำให้ฝั่งเว็บอ่านจำนวนรายการทั้งหมด (สำหรับแบ่งหน้า) และ id ของคำขอ
     // (สำหรับแจ้งปัญหา) ไม่ได้เลย

@@ -164,4 +164,47 @@ describe("การดึงข้อมูลและ revalidation ข้า�
     expect(del).toHaveBeenCalledWith("/floors/1");
     expect(callOrder).toEqual(["invalidate", "get-nocache"]);
   });
+
+  test("ผลโหลดเก่าที่กลับมาทีหลังไม่เขียนทับรายการจากการโหลดล่าสุด", async () => {
+    let resolveInitialLoad;
+    let floorsRequests = 0;
+    get.mockImplementation(async (path) => {
+      if (path === "/floors") {
+        floorsRequests += 1;
+        if (floorsRequests === 1) {
+          return new Promise((resolve) => { resolveInitialLoad = resolve; });
+        }
+        return { data: [{ id: 2, building_id: 3, name: "ชั้นล่าสุด" }] };
+      }
+      if (path === "/buildings") return { data: BUILDINGS };
+      return { data: [] };
+    });
+
+    const wrapper = mount(MasterDataPage, {
+      props: {
+        title: "ชั้น",
+        endpoint: "/floors",
+        itemNoun: "ชั้น",
+        columns: [{ key: "name", label: "ชื่อชั้น" }],
+        fields: [{ key: "name", label: "ชื่อชั้น", required: true }],
+      },
+      global: {
+        stubs: {
+          UiDataTable: true,
+          UiModal: { template: "<div><slot /><slot name=\"footer\" /></div>" },
+        },
+      },
+    });
+    mounted.push(wrapper);
+    await flushPromises();
+
+    await wrapper.vm.load();
+    resolveInitialLoad({ data: FLOORS });
+    await flushPromises();
+
+    expect(get.mock.calls.filter(([path]) => path === "/floors")[1][1]).toEqual({
+      headers: { "Cache-Control": "no-cache" },
+    });
+    expect(wrapper.vm.rows).toEqual([{ id: 2, building_id: 3, name: "ชั้นล่าสุด" }]);
+  });
 });

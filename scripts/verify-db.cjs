@@ -137,6 +137,9 @@ async function main() {
       SUTH_E2E_START_API: "1",
       SUTH_E2E_REQUIRE_SERVICES: "1",
       SUTH_E2E_ALLOW_WRITES: "1",
+      // fiscal-year-cache.spec.js อาจต้องกู้แถวหลัง POST ที่ผลตอบกลับไม่ชัดเจน
+      // จึงรันได้เฉพาะกับฐานชั่วคราวที่สคริปต์นี้สร้าง ไม่ใช่ฐานที่แชร์กัน
+      SUTH_E2E_DISPOSABLE_DB: "1",
     };
     // token ที่ตั้งไว้ก่อนหน้าอาจเป็นของ server อื่น fixtures.js ใช้ตัวนี้ก่อน JWT_SECRET
     delete env.SUTH_E2E_TOKEN;

@@ -306,9 +306,8 @@ router.delete(
     if (!result.affectedRows) throw notFound("ไม่พบปีงบประมาณที่ต้องการลบ");
 
     cache.noStore(res);
-    // ตาม RFC 9111 §4.4 (Invalidation) เมื่อลบรายการใน collection
-    // การส่ง Location ชี้ไปยัง collection URI จะสั่งให้ HTTP cache ของเบราว์เซอร์
-    // invalidate แคชของ collection นั้นทันที
+    // RFC 9111 §4.4 บังคับ invalidate target URI ของ DELETE อยู่แล้ว; Location นี้
+    // ชี้ไปยัง collection เพิ่มเติม เพื่อให้ cache ที่รองรับเลือก invalidate URI นั้นได้
     res.set("Location", `${req.baseUrl}/fiscal-years`);
     res.json({ message: "ลบปีงบประมาณเรียบร้อยแล้ว" });
   })
