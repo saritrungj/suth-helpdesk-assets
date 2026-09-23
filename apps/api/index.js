@@ -32,6 +32,7 @@ const { logger, requestLogger } = require("./src/shared/logger");
 const { ApiError, PROBLEM_JSON, notFound, fromDatabaseError } = require("./src/shared/http-error");
 const { noStore } = require("./src/shared/cache");
 const { findSchemaGaps, describeGaps } = require("./src/shared/schema-check");
+const { jwtSecretProblem } = require("./src/auth/jwt-secret");
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -210,6 +211,17 @@ app.use((err, req, res, next) => {
  * — ล้มแบบดังๆ ตั้งแต่ตอนบูตชัดเจนกว่าและซ่อมได้เร็วกว่า
  */
 async function start() {
+  // กุญแจเซ็น token ที่ใช้ไม่ได้ = ล็อกอินพังทุกครั้ง หรือใครก็ปลอม token ได้ — ดู src/auth/jwt-secret.js
+  const secretProblem = jwtSecretProblem(process.env.JWT_SECRET);
+  if (secretProblem) {
+    logger.error("JWT_SECRET ใช้ไม่ได้ ไม่เปิดเซิร์ฟเวอร์", { problem: secretProblem });
+    process.stderr.write(
+      `\n${secretProblem}\nสร้างค่าสุ่มด้วย: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"\n` +
+        "แล้วตั้งใน apps/api/.env — ดู docs/reference/environment.md\n\n"
+    );
+    process.exit(1);
+  }
+
   try {
     await db.verifyConnection();
   } catch (err) {
