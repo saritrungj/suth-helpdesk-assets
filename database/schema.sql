@@ -107,6 +107,51 @@ CREATE TABLE division_alias (
 -- 2. Main Tables
 -- ------------------------------------------------------------------------------
 
+-- งานนำเข้าไฟล์ (ADR-0027) — หนึ่งแถวต่อหนึ่งไฟล์ที่อัปโหลด และประวัติแบบเพิ่มอย่างเดียว
+-- อยู่ก่อน devices / print_transactions เพราะสองตารางนั้นอ้างถึงว่าข้อมูลมาจากการนำเข้าครั้งไหน
+-- ไฟล์ต้นฉบับอยู่บนดิสก์ของ API (IMPORT_SESSION_DIR) ไม่อยู่ในฐาน
+CREATE TABLE import_session (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    status ENUM('draft','validating','ready','processing','completed','failed','expired') NOT NULL DEFAULT 'draft',
+
+    file_name VARCHAR(255) NOT NULL,
+    file_size INT UNSIGNED NOT NULL,
+    file_sha256 CHAR(64) NOT NULL,
+    file_path VARCHAR(255) NOT NULL,
+    file_kind VARCHAR(30) NULL,
+
+    decisions JSON NULL,
+    validation JSON NULL,
+    fingerprint CHAR(64) NULL,
+    result JSON NULL,
+    error JSON NULL,
+
+    created_by INT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_activity_by INT NULL,
+    last_activity_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status_changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL DEFAULT NULL,
+
+    CONSTRAINT fk_import_session_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT fk_import_session_last_by FOREIGN KEY (last_activity_by) REFERENCES users(id),
+    INDEX idx_import_session_status (status, last_activity_at),
+    INDEX idx_import_session_sha (file_sha256)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE import_session_event (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    event VARCHAR(40) NOT NULL,
+    actor_id INT NULL,
+    detail JSON NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    CONSTRAINT fk_import_event_session FOREIGN KEY (session_id) REFERENCES import_session(id),
+    CONSTRAINT fk_import_event_actor FOREIGN KEY (actor_id) REFERENCES users(id),
+    INDEX idx_import_event_session (session_id, id)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- สัญญาเช่าเครื่อง (ADR-0023) — เลขที่สัญญาไม่ซ้ำ และมีอายุสัญญาของตัวเอง
 --
 -- อายุสัญญา (effective_from–effective_to) คร่อมได้หลายปีงบ เช่น 36 งวดครอบปีงบ
@@ -199,12 +244,16 @@ CREATE TABLE devices (
     -- เฉพาะเครื่องเดิมที่ตรวจได้แค่ปัจจุบันเท่านั้นที่ต้องใส่วันที่
     service_unverified_before DATE DEFAULT NULL,
 
+    -- session ที่สร้างเครื่องนี้ (ADR-0027) — NULL = เพิ่มด้วยมือ หรือมีมาก่อนระบบนำเข้าแบบ session
+    import_session_id INT NULL DEFAULT NULL,
+
     FOREIGN KEY (brand_id) REFERENCES brand(id),
     FOREIGN KEY (building_id) REFERENCES building(id),
     FOREIGN KEY (floor_id) REFERENCES floor(id),
     FOREIGN KEY (division_id) REFERENCES division(id),
     FOREIGN KEY (department_id) REFERENCES department(id),
-    FOREIGN KEY (contract_id) REFERENCES contracts(id)
+    FOREIGN KEY (contract_id) REFERENCES contracts(id),
+    CONSTRAINT fk_devices_import_session FOREIGN KEY (import_session_id) REFERENCES import_session(id)
 );
 
 -- มิเตอร์ของเครื่อง (ADR-0023) — เครื่องหนึ่งมีได้หลายมิเตอร์ เช่นเครื่อง A3 สีมีมิเตอร์
@@ -239,8 +288,12 @@ CREATE TABLE print_transactions (
     meter_end INT UNSIGNED NULL,
     pages INT DEFAULT 0,
 
+    -- session ที่เขียนค่าปัจจุบัน (ADR-0027) — แก้จำนวนหน้าด้วยมือแล้วกลายเป็น NULL
+    import_session_id INT NULL DEFAULT NULL,
+
     FOREIGN KEY (device_id) REFERENCES devices(id),
     CONSTRAINT fk_print_transactions_meter FOREIGN KEY (meter_id) REFERENCES device_meter(id),
+    CONSTRAINT fk_print_transactions_import_session FOREIGN KEY (import_session_id) REFERENCES import_session(id),
     UNIQUE KEY uq_meter_month (meter_id, month),
     KEY idx_print_transactions_device (device_id),
 

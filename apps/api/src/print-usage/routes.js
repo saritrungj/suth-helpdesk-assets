@@ -150,14 +150,17 @@ async function writeReading(conn, deviceId, month, pages) {
   // ไม่ได้มาจากสองค่านั้นแล้ว — หน้าต่างกรอกทั้งปีส่งครบ 12 เดือนเสมอ ถ้าล้างทุกครั้ง แก้เดือน
   // เดียวก็ลบเลขมิเตอร์ของทุกเดือนที่ไม่ได้แก้ (#143) ใช้ <=> ให้ NULL เทียบได้
   //
+  // ที่มาของค่า (import_session_id, ADR-0027) ล้างด้วยกฎเดียวกัน — ยอดที่แก้มือไม่ได้มาจากไฟล์แล้ว
+  //
   // ⚠️ ลำดับการกำหนดค่าสำคัญ: MySQL ประมวลผลซ้ายไปขวาและค่าด้านขวาเห็น pages ที่กำหนดแล้ว
-  // สองบรรทัดเลขมิเตอร์จึงต้องมาก่อน pages เสมอ
+  // บรรทัดที่เทียบ pages จึงต้องมาก่อน pages เสมอ
   await conn.query(
     `INSERT INTO print_transactions (device_id, meter_id, month, pages)
      VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        meter_start = IF(pages <=> VALUES(pages), meter_start, NULL),
        meter_end = IF(pages <=> VALUES(pages), meter_end, NULL),
+       import_session_id = IF(pages <=> VALUES(pages), import_session_id, NULL),
        pages = VALUES(pages)`,
     [deviceId, meterId, month, pages]
   );

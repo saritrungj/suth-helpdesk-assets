@@ -25,6 +25,9 @@ const decisionSchema = z.object({
       has_color_meter: z.boolean().optional(),
     })
   ).optional(),
+  // ยอมรับความต่างระหว่างสัญญาในระบบกับไฟล์ พร้อมเหตุผล (import session, #179) — คีย์เช่น
+  // "contract:SUTH86/2567:rental" เหตุผลถูกเก็บในประวัติของ session
+  acknowledged: z.record(z.string().max(200), z.string().trim().min(3, "ระบุเหตุผลอย่างน้อย 3 ตัวอักษร").max(500)).optional(),
 });
 
 function parseDecisions(raw) {
@@ -40,4 +43,16 @@ function parseDecisions(raw) {
   return parsed.data;
 }
 
-module.exports = { decisionSchema, parseDecisions };
+/** การตัดสินใจที่ส่งมาเป็น object (import session) — ผ่านกฎเดียวกับ parseDecisions */
+function validateDecisions(value) {
+  const parsed = decisionSchema.safeParse(value ?? {});
+  if (!parsed.success) {
+    throw badRequest("ข้อมูลการตัดสินใจไม่ถูกต้อง", {
+      code: "invalid_decisions",
+      errors: parsed.error.issues.map((issue) => ({ field: issue.path.join("."), message: issue.message })),
+    });
+  }
+  return parsed.data;
+}
+
+module.exports = { decisionSchema, parseDecisions, validateDecisions };

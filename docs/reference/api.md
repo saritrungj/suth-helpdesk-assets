@@ -25,6 +25,7 @@ prefix และความรับผิดชอบ — รายละเ�
 | `/api/users` | จัดการผู้ใช้ (admin เท่านั้น) | `src/users/` |
 | `/api/health` | ตรวจว่าระบบพร้อมรับงาน (ไม่ต้องล็อกอิน) | `src/health/` |
 | `/api/devices/import`<br>`/api/print-transactions/import` | นำเข้าไฟล์ (admin เท่านั้น) — ทั้งสองเส้นตรวจก่อน (`mode=preview`) แล้วจึงบันทึก (`mode=commit`) ทะเบียนรับ `decisions` ที่ผู้ดูแลเลือก ดู [รูปแบบไฟล์นำเข้า](import-format.md) | `src/import/` |
+| `/api/import-sessions` | งานนำเข้าไฟล์จากผู้ให้เช่าแบบ session (admin เท่านั้น — [ADR-0027](../decisions/0027-import-session-lifecycle.md), [ADR-0029](../decisions/0029-import-session-visibility.md)): อัปโหลดหนึ่งครั้งได้ทั้งทะเบียนและยอดมิเตอร์ `GET` รายการงานค้าง, `POST` อัปโหลด, `GET /:id` ผลตรวจ+checklist+ประวัติล่าสุด, `PUT /:id/decisions`, `POST /:id/validate`, `POST /:id/contracts` (สร้างสัญญาที่ไฟล์อ้าง เติมจากหัวไฟล์), `POST /:id/fiscal-years`, `POST /:id/commit`, `POST /:id/abandon`, `GET /:id/events`, `GET /:id/file` — สถานะ `draft` `validating` `ready` `processing` `completed` `failed` `expired` บันทึกตาม [ADR-0028](../decisions/0028-import-commit-strategy.md) | `src/import/session-*.js` |
 
 Master Data ใช้ prefix แยกกันแต่อยู่ในโฟลเดอร์เดียว (`src/master-data/`) — `/api/brands`, `/api/buildings`, `/api/floors`, `/api/divisions`, `/api/departments` และ `/api/fiscal-years`
 

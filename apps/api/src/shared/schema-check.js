@@ -83,6 +83,12 @@ const REQUIREMENTS = [
   { migration: "migration_add_master_aliases.sql", table: "brand_alias" },
   { migration: "migration_add_master_aliases.sql", table: "building_alias" },
   { migration: "migration_add_master_aliases.sql", table: "division_alias" },
+
+  // ADR-0027 — งานนำเข้าไฟล์เป็น session และที่มาของเครื่อง/ยอด
+  { migration: "migration_add_import_sessions.sql", table: "import_session" },
+  { migration: "migration_add_import_sessions.sql", table: "import_session_event" },
+  { migration: "migration_add_import_sessions.sql", column: ["devices", "import_session_id"] },
+  { migration: "migration_add_import_sessions.sql", column: ["print_transactions", "import_session_id"] },
 ];
 
 /**

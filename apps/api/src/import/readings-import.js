@@ -236,15 +236,24 @@ function mapTemplateReadings(raw, meters) {
   return { candidates, errors, months: [...new Set(meterColumns.map((m) => m.month))].sort() };
 }
 
-async function writeCandidates(conn, rows) {
-  if (!rows.length) return;
-  await conn.query(
-    `INSERT INTO print_transactions (device_id, meter_id, month, meter_start, meter_end, pages)
-     VALUES ?
-     ON DUPLICATE KEY UPDATE
-       pages = VALUES(pages), meter_start = VALUES(meter_start), meter_end = VALUES(meter_end)`,
-    [rows.map((row) => [row.device_id, row.meter_id, row.month, row.meter_start, row.meter_end, row.pages])]
-  );
+/** คำสั่งเขียนละไม่เกินเท่านี้แถว — ไฟล์ใหญ่ไม่กลายเป็นคำสั่งเดียวขนาดหลาย MB (ADR-0028) */
+const WRITE_CHUNK = 500;
+
+/**
+ * เขียนยอดที่ตรวจแล้ว — importSessionId คือที่มาของค่าที่เขียน (ADR-0027) การนำเข้าแบบเดิมส่ง null
+ */
+async function writeCandidates(conn, rows, { importSessionId = null } = {}) {
+  for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
+    const chunk = rows.slice(i, i + WRITE_CHUNK);
+    await conn.query(
+      `INSERT INTO print_transactions (device_id, meter_id, month, meter_start, meter_end, pages, import_session_id)
+       VALUES ?
+       ON DUPLICATE KEY UPDATE
+         pages = VALUES(pages), meter_start = VALUES(meter_start), meter_end = VALUES(meter_end),
+         import_session_id = VALUES(import_session_id)`,
+      [chunk.map((row) => [row.device_id, row.meter_id, row.month, row.meter_start, row.meter_end, row.pages, importSessionId])]
+    );
+  }
 }
 
 /**
