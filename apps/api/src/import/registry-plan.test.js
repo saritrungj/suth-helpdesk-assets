@@ -367,3 +367,21 @@ test("เลขซีเรียลปกติที่มีขีดกล�
   assert.equal(result.rows[0].action, "create");
   assert.equal(result.rows[0].reasons.length, 0);
 });
+
+// ราคาพิเศษจากไฟล์ต้องผ่านเกณฑ์เดียวกับฟอร์ม (#148) — เดิมใช้ Number() "0x10" กลายเป็น 16 บาท/หน้า
+// "0.36549" ถูกฐานปัดเป็น 0.3655 ซึ่งไม่มีใครกรอก และ 1,000,000 ทำให้ฐานปฏิเสธเป็น 500 ตอนบันทึก
+test("ราคาพิเศษเฉพาะเครื่องในไฟล์ใช้เกณฑ์เดียวกับฟอร์ม", () => {
+  const cases = { "0.365": 0.365, " 0.4 ": 0.4, "0.36549": null, "0x10": null, "1e3": null, "1000000": null, "-1": null };
+  const serials = Object.keys(cases).map((_, i) => `TESTSN${String(i + 10).padStart(4, "0")}`);
+  const result = plan(Object.keys(cases).map((price, i) => row({ serial_number: serials[i], price_override: price })), { decisions: allCreate });
+  Object.entries(cases).forEach(([price, expected], i) => {
+    const planned = result.rows[i];
+    if (expected === null) {
+      assert.equal(planned.action, "skip", `ราคา ${JSON.stringify(price)} ต้องถูกปฏิเสธ`);
+      assert.match(planned.reasons.join(" "), /ราคาพิเศษเฉพาะเครื่อง/);
+    } else {
+      assert.equal(planned.action, "create", `ราคา ${JSON.stringify(price)} ต้องผ่าน`);
+      assert.equal(planned.values.price_override, expected);
+    }
+  });
+});
