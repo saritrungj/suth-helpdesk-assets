@@ -58,7 +58,7 @@ async function openMonthEntry(page) {
   await page.goto("/print-transactions");
   await page.getByRole("radio", { name: "กรอกรายเดือน" }).click();
 
-  const inputs = page.locator('input[aria-label^="ยอดพิมพ์ของ"]');
+  const inputs = page.locator('input[aria-label^="จำนวนพิมพ์ของ"]');
   await expect(inputs.first()).toBeVisible({ timeout: 15000 });
   return inputs;
 }
@@ -341,7 +341,7 @@ test("เปลี่ยนเดือนเร็วๆ ยอดของเ�
   const expected = await apiFetch(`/print-transactions?month=${encodeURIComponent(empty)}`);
   const byDevice = new Map(expected.map((r) => [r.device_id, String(r.pages)]));
 
-  const shown = await page.locator('input[aria-label^="ยอดพิมพ์ของ"]').evaluateAll((els) =>
+  const shown = await page.locator('input[aria-label^="จำนวนพิมพ์ของ"]').evaluateAll((els) =>
     els.map((el) => ({ label: el.getAttribute("aria-label"), value: el.value }))
   );
 
@@ -371,10 +371,10 @@ test("โหลดยอดของเดือนไม่สำเร็จ �
   await page.getByRole("radio", { name: "กรอกรายเดือน" }).click();
 
   // ต้องมีข้อความบอก ไม่ใช่ตารางว่างเปล่าที่ดูเหมือน "ยังไม่มีใครกรอก"
-  await expect(page.getByText(/โหลดยอดพิมพ์ของเดือนนี้ไม่สำเร็จ|พัง/)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/โหลดจำนวนพิมพ์ของเดือนนี้ไม่สำเร็จ|พัง/)).toBeVisible({ timeout: 15000 });
 
   // และช่องกรอกต้องถูกล็อก ไม่ให้กรอกทับข้อมูลที่ยังไม่รู้ว่ามีอะไรอยู่
-  const inputs = page.locator('input[aria-label^="ยอดพิมพ์ของ"]');
+  const inputs = page.locator('input[aria-label^="จำนวนพิมพ์ของ"]');
   if ((await inputs.count()) > 0) {
     await expect(inputs.first()).toBeDisabled();
   }
