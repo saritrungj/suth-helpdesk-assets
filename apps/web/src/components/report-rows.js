@@ -52,8 +52,17 @@ export function readingsByDevice(rows) {
   const map = {};
   for (const row of rows ?? []) {
     if (!map[row.device_id]) map[row.device_id] = {};
+    // API คืนหนึ่งแถวต่อ "มิเตอร์" เครื่องที่มีมิเตอร์สีจึงมีสองแถวต่อเดือน — ยอดของเครื่องคือผลรวม
+    // เดิมแถวหลังเขียนทับแถวแรก รายงานได้ยอดมิเตอร์เดียว (#146) ทุกมิเตอร์ของเครื่องเดียวกันในเดือน
+    // เดียวกันอยู่ช่วงที่ตั้งเดียวกันเสมอ จึงเก็บ locationHistoryId ของแถวแรกไว้ได้
+    const existing = map[row.device_id][row.month];
+    const pages = Number(row.pages_printed || 0);
+    if (existing) {
+      existing.pages += pages;
+      continue;
+    }
     map[row.device_id][row.month] = {
-      pages: Number(row.pages_printed || 0),
+      pages,
       // undefined = API รุ่นนี้ไม่ได้บอกช่วงมา ต่างจาก null ที่แปลว่าไม่มีช่วงครอบคลุม
       locationHistoryId: "location_history_id" in row ? row.location_history_id : undefined,
     };
