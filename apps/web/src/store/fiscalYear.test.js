@@ -199,16 +199,60 @@ describe("เลือกปีงบตั้งต้นหลังโหล�
   test("เลือกปีงบตั้งต้นหลังโหลดรายการ ไม่ใช่การสลับปี — เดือนที่มากับลิงก์ต้องอยู่ครบ", async () => {
     // ลิงก์ที่แชร์กันมาไม่มี ?fy= — store เลือกปีงบล่าสุดให้เอง แต่ขอบเขตอื่นในลิงก์เป็นของผู้ส่ง
     resetFiscalYearState();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2025-11-15T10:00:00+07:00"));
     currentQuery.value = { months: "2025-11", division: "2" };
     get.mockResolvedValue({ data: [
-      { id: 1, year: "2567", start_month: "2566-10", end_month: "2567-09" },
-      { id: 2, year: "2568", start_month: "2567-10", end_month: "2568-09" },
+      { id: 1, year: "2568", start_month: "2024-10", end_month: "2025-09" },
+      { id: 2, year: "2569", start_month: "2025-10", end_month: "2026-09" },
+    ] });
+
+    await loadFiscalYears();
+    vi.useRealTimers();
+
+    expect(fiscalYearState.activeId).toBe(2);
+    expect(replace).toHaveBeenCalledWith({ query: { months: "2025-11", division: "2", fy: 2 } });
+  });
+
+  test("มีปีงบล่วงหน้าต่อท้ายรายการ — ยังเปิดที่ปีงบที่ครอบวันนี้ ไม่ใช่ปีสุดท้าย (#176)", async () => {
+    resetFiscalYearState();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-23T10:00:00+07:00"));
+    get.mockResolvedValue({ data: [2568, 2569, 2570, 2571, 2572].map((year, i) => ({
+      id: i + 1,
+      year: String(year),
+      start_month: `${year - 544}-10`,
+      end_month: `${year - 543}-09`,
+    })) });
+
+    await loadFiscalYears();
+    vi.useRealTimers();
+
+    expect(fiscalYearState.list.find((f) => f.id === fiscalYearState.activeId).year).toBe("2569");
+  });
+
+  test("?fy= ในลิงก์ยังชนะค่าเริ่มต้นเสมอ", async () => {
+    resetFiscalYearState();
+    currentQuery.value = { fy: "5" };
+    get.mockResolvedValue({ data: [
+      { id: 2, year: "2569", start_month: "2025-10", end_month: "2026-09" },
+      { id: 5, year: "2572", start_month: "2028-10", end_month: "2029-09" },
     ] });
 
     await loadFiscalYears();
 
-    expect(fiscalYearState.activeId).toBe(2);
-    expect(replace).toHaveBeenCalledWith({ query: { months: "2025-11", division: "2", fy: 2 } });
+    expect(fiscalYearState.activeId).toBe(5);
+  });
+
+  test("ลบปีงบสุดท้ายทิ้ง — ไม่ถือ id ที่ไม่มีอยู่แล้ว และเอา ?fy= ออกจาก URL", async () => {
+    currentQuery.value = { fy: "1", tab: "x" };
+    fiscalYearState.activeId = 1;
+    get.mockResolvedValue({ data: [] });
+
+    await refreshFiscalYears();
+
+    expect(fiscalYearState.activeId).toBe(null);
+    expect(replace).toHaveBeenLastCalledWith({ query: { tab: "x" } });
   });
 });
 

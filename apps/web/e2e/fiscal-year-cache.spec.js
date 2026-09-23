@@ -69,8 +69,9 @@ test("หลังแก้และลบปีงบ รายการแล�
       );
     }
 
+    // ปีที่แก้เป็นปีในอนาคต — แถบบนยังเปิดที่ปีงบที่ครอบวันนี้ (#176) สิ่งที่ต้องสดคือรายการในเมนู
     const fiscalYearButton = page.locator('header[data-print="hide"] button').filter({ hasText: "ปีงบ" });
-    await expect(fiscalYearButton).toContainText(updatedYear);
+    await expect(fiscalYearButton).toContainText(fallbackYear);
     await fiscalYearButton.click();
     await expect(page.getByRole("menuitem").filter({ hasText: updatedYear })).toBeVisible();
     await page.keyboard.press("Escape");

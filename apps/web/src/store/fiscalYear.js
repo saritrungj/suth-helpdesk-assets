@@ -1,7 +1,7 @@
 import { reactive, computed, watch } from "vue";
 import api from "../services/api";
 import { appRouter } from "../lib/app-router";
-import { fiscalYearMonths } from "@suth/domain";
+import { currentMonth, defaultFiscalYear, fiscalYearMonths } from "@suth/domain";
 import { takeRevalidationHeaders, markForRevalidation } from "../api/http-cache";
 
 // state ปีงบกลาง ที่ทุกหน้า/ทุก component subscribe ร่วมกัน
@@ -53,14 +53,17 @@ async function fetchFiscalYears() {
 
       if (matched) {
         fiscalYearState.activeId = matched.id;
-      } else if (
-        fiscalYearState.list.length &&
-        !fiscalYearState.list.some((f) => f.id === fiscalYearState.activeId)
-      ) {
-        // 2) ไม่งั้น default เป็นปีงบล่าสุด (ตัวสุดท้ายของ list) — เฉพาะตอนที่ค่าที่เลือกไว้เดิม
+      } else if (!fiscalYearState.list.some((f) => f.id === fiscalYearState.activeId)) {
+        // 2) ไม่งั้นใช้ปีงบที่ครอบเดือนปัจจุบัน (กฎอยู่ที่ @suth/domain) — เฉพาะตอนที่ค่าที่เลือกไว้เดิม
         // ใช้ไม่ได้แล้ว (ยังไม่เคยเลือก หรือปีงบที่เคยเลือกไว้ถูกลบไปแล้ว) ไม่งั้นจะไปทับปีงบที่
         // ผู้ใช้ตั้งใจเลือกไว้อยู่ทุกครั้งที่มีคน add/edit ปีงบใหม่จากหน้า Admin
-        await applyFiscalYear(fiscalYearState.list[fiscalYearState.list.length - 1].id);
+        //
+        // เดิมเลือกตัวสุดท้ายของรายการ ซึ่ง API เรียงจากปีน้อยไปมาก — มีปีงบล่วงหน้าเมื่อไร ทุกหน้า
+        // เปิดมาที่ปีในอนาคตที่ยังไม่มีข้อมูล (#176)
+        const fallback = defaultFiscalYear(fiscalYearState.list, currentMonth());
+        if (fallback) await applyFiscalYear(fallback.id);
+        // ลบปีงบสุดท้ายทิ้งแล้ว ต้องไม่ถือ id ที่ไม่มีอยู่จริงไว้ ไม่งั้นทุกหน้าขอข้อมูลของปีที่ถูกลบแล้วได้ 404
+        else if (fiscalYearState.activeId !== null) await clearActiveFiscalYear();
       }
 
       // ล็อกว่าโหลดสำเร็จแล้วก็ต่อเมื่อ "สำเร็จจริง" เท่านั้น — ถ้าพลาดจะไม่ล็อก เพื่อให้เรียกซ้ำได้ใหม่
@@ -179,6 +182,15 @@ function withoutYearScoped(query) {
  * ใช้เฉพาะตอนเลือกปีงบเริ่มต้นหลังโหลดรายการเสร็จ ซึ่งยังไม่มีหน้าไหนมีของกรอกค้าง
  * และเป็นจังหวะที่ห้ามถูกยับยั้ง ไม่งั้นแอปจะค้างโดยไม่มีปีงบ active เลย
  */
+/** ไม่มีปีงบให้เลือกแล้ว — ล้างทั้ง state และ ?fy= ใน URL */
+async function clearActiveFiscalYear() {
+  fiscalYearState.activeId = null;
+  const router = appRouter();
+  if (!router) return;
+  const { fy: _removed, ...query } = router.currentRoute.value.query;
+  await router.replace({ query });
+}
+
 async function applyFiscalYear(id, query = null) {
   fiscalYearState.activeId = id;
 

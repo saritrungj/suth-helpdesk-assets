@@ -22,3 +22,26 @@ test("รูปแบบเดือนที่ไม่ถูกต้อง�
     assert.equal(fiscalYearOfMonth(value), null, String(value));
   }
 });
+
+// ---------- ปีงบเริ่มต้นของแอป (#176) ----------
+const { defaultFiscalYear } = require("./index.cjs");
+const fy = (year) => ({ id: year, year: String(year), ...(() => {
+  const r = getFiscalYearRange(year);
+  return { start_month: r.startMonth, end_month: r.endMonth };
+})() });
+
+test("ปีงบเริ่มต้น = ปีที่ครอบเดือนปัจจุบัน แม้มีปีล่วงหน้าต่อท้ายรายการ", () => {
+  const list = [2568, 2569, 2570, 2571, 2572].map(fy);
+  assert.equal(defaultFiscalYear(list, "2026-09").year, "2569");
+  assert.equal(defaultFiscalYear(list, "2026-10").year, "2570", "ต.ค. เปลี่ยนปีงบ");
+});
+
+test("ไม่มีปีที่ครอบวันนี้ → ปีล่าสุดที่เริ่มไปแล้ว ถ้าทุกปีอยู่ในอนาคต → ปีแรกสุด", () => {
+  assert.equal(defaultFiscalYear([2566, 2567].map(fy), "2026-09").year, "2567");
+  assert.equal(defaultFiscalYear([2571, 2570].map(fy), "2026-09").year, "2570");
+});
+
+test("ลำดับในรายการไม่มีผล และรายการว่างคืน null", () => {
+  assert.equal(defaultFiscalYear([2572, 2569, 2568].map(fy), "2026-01").year, "2569");
+  assert.equal(defaultFiscalYear([], "2026-01"), null);
+});
