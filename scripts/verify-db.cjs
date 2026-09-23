@@ -17,6 +17,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { assertReportFile } = require("./playwright-report.cjs");
 
 const root = path.resolve(__dirname, "..");
 // งานหลาย worktree อาจรันพร้อมกันได้ ใช้ suffix + พอร์ตของตัวเองเมื่อจำเป็น
@@ -42,15 +43,6 @@ const apiUrl = `http://localhost:${ports.api}/api`;
 const webUrl = `http://localhost:${ports.web}`;
 const webDist = "dist-verify-db";
 const dbResultFile = path.join(root, "apps", "web", "e2e", ".artifacts", "db-results.json");
-
-function assertDbCoverage() {
-  if (!fs.existsSync(dbResultFile)) throw new Error("ไม่มีผลทดสอบ DB จาก Playwright — ยืนยัน coverage ไม่ได้");
-  const { stats } = JSON.parse(fs.readFileSync(dbResultFile, "utf8"));
-  if (!stats || stats.expected < 1 || stats.skipped > 0) {
-    throw new Error(`ชุด DB ไม่ครบ: ผ่าน ${stats?.expected ?? 0}, ข้าม ${stats?.skipped ?? "ไม่ทราบ"} — เปิดรายงาน Playwright เพื่อดูเคสที่ข้าม`);
-  }
-  console.log(`verify:db — ผ่าน ${stats.expected} เคส, ข้าม 0 เคส`);
-}
 
 // รหัสไม่ว่าง เพราะบน Windows env ที่เป็นค่าว่างอาจไม่ถูกส่งต่อ แล้ว dotenv ของ API
 // จะเติม DB_PASSWORD จาก apps/api/.env ของฐานพัฒนาแทน
@@ -166,6 +158,7 @@ async function main() {
       SUTH_E2E_START_API: "1",
       SUTH_E2E_REQUIRE_SERVICES: "1",
       SUTH_E2E_ALLOW_WRITES: "1",
+      SUTH_E2E_REPORT_FILE: dbResultFile,
     };
     // token ที่ตั้งไว้ก่อนหน้าอาจเป็นของ server อื่น fixtures.js ใช้ตัวนี้ก่อน JWT_SECRET
     delete env.SUTH_E2E_TOKEN;
@@ -174,7 +167,7 @@ async function main() {
     fs.rmSync(dbResultFile, { force: true });
     const status = run("npm", ["run", "test:e2e:db", "--workspace", "@suth/web"], { cwd: root, env });
     if (status !== 0) throw new Error(`E2E โปรเจกต์ db ล้ม (exit ${status ?? "unknown"})`);
-    assertDbCoverage();
+    console.log(assertReportFile(dbResultFile, "verify:db"));
   } finally {
     if (created) {
       removeContainer();

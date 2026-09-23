@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const dbResultFile = path.join(HERE, "e2e", ".artifacts", "db-results.json");
+const requiredReportFile = process.env.SUTH_E2E_REPORT_FILE;
 
 /**
  * playwright.config.js — เทสที่รันบนเบราว์เซอร์จริง
@@ -118,15 +118,11 @@ export default defineConfig({
   fullyParallel: false,
 
   // บน CI เก็บ HTML report ไว้เป็น artifact ด้วย เพราะ log อย่างเดียวไล่ไม่ออกว่าพังตรงไหน
-  reporter: process.env.CI
-    ? [
-        ["list"],
-        ["html", { open: "never" }],
-        ...(process.env.SUTH_E2E_REQUIRE_SERVICES === "1"
-          ? [["json", { outputFile: dbResultFile }]]
-          : []),
-      ]
-    : [["list"]],
+  reporter: [
+    ["list"],
+    ...(process.env.CI ? [["html", { open: "never" }]] : []),
+    ...(requiredReportFile ? [["json", { outputFile: requiredReportFile }]] : []),
+  ],
 
   use: {
     baseURL: webUrl,
