@@ -99,16 +99,16 @@ test("accordion, rail tooltip และ command search ใช้คีย์บ�
   await page.getByRole("button", { name: "พับเมนู" }).click();
   await expect(page.getByRole("complementary", { name: "เมนูหลัก" })).toHaveCSS("width", "64px");
 
-  const entry = page.getByRole("link", { name: "บันทึกยอดพิมพ์" });
+  const entry = page.getByRole("link", { name: "บันทึกจำนวนพิมพ์" });
   await entry.hover();
-  await expectTooltip(page, entry, "บันทึกยอดพิมพ์");
+  await expectTooltip(page, entry, "บันทึกจำนวนพิมพ์");
   await page.mouse.move(800, 700);
   await expect(entry).not.toHaveAttribute("aria-describedby", /.+/);
 
   await page.getByRole("link", { name: "ภาพรวมการพิมพ์" }).focus();
   await page.keyboard.press("Tab");
   await expect(entry).toBeFocused();
-  await expectTooltip(page, entry, "บันทึกยอดพิมพ์");
+  await expectTooltip(page, entry, "บันทึกจำนวนพิมพ์");
 
   await page.keyboard.press("Control+k");
   const search = page.getByPlaceholder("พิมพ์ชื่อหน้าที่ต้องการไป…");

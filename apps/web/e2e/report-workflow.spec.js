@@ -94,7 +94,7 @@ test("overview exposes annual and overdue coverage separately", async () => {
 
 test("report table uses the remaining viewport when expanded", async ({ page }) => {
   await page.goto("/report");
-  await expect(page.getByRole("heading", { name: "รายงานสรุปยอดพิมพ์", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "รายงานสรุปการพิมพ์", exact: true })).toBeVisible();
 
   const tableScroll = page.locator("div.relative.overflow-auto").first();
   await expect(tableScroll).toBeVisible();
@@ -173,18 +173,18 @@ test("graph selection retains the filter and follow-up links retain their scope"
   }
   await page.getByRole("button", { name: "งานที่ต้องติดตาม", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  const overdue = page.getByRole("link", { name: "ไปกรอกยอดพิมพ์", exact: true });
+  const overdue = page.getByRole("link", { name: "ไปกรอกจำนวนพิมพ์", exact: true });
   if (await overdue.count()) {
     await overdue.click();
     await expect(page).toHaveURL(/fill=empty/);
-    await expect(page.getByRole("heading", { name: "บันทึกยอดพิมพ์รายเดือน" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "บันทึกจำนวนพิมพ์รายเดือน" })).toBeVisible();
   }
 });
 
 test("unavailable comparison month explains missing data", async ({ page }) => {
   await page.route("**/api/dashboard/monthly-kpi?**", (route) => route.fulfill({ json: [] }));
   await page.goto("/dashboard?months=2026-09");
-  await expect(page.getByText("ยังไม่มียอดพิมพ์ในขอบเขตที่เลือก", { exact: true })).toBeVisible();
+  await expect(page.getByText("ยังไม่มีการพิมพ์ในขอบเขตที่เลือก", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/months=2026-09/);
 });
 

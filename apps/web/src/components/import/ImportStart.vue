@@ -69,17 +69,17 @@ async function upload(file) {
 function headline(row) {
   const h = row.headline ?? {};
   if (row.status === "completed") {
-    return t("เครื่องใหม่ {0} · ยอดใหม่ {1} · เขียนทับ {2}", [formatCount(h.devices_created ?? 0), formatCount(h.readings_new ?? 0), formatCount(h.readings_overwritten ?? 0)]);
+    return t("เครื่องใหม่ {0} · ตัวเลขใหม่ {1} · แทนที่ {2}", [formatCount(h.devices_created ?? 0), formatCount(h.readings_new ?? 0), formatCount(h.readings_overwritten ?? 0)]);
   }
   if (row.blocking) return t("ยังต้องทำอีก {0} ข้อ", [formatCount(row.blocking)]);
-  return t("สร้าง {0} · เติม {1} · ยอดใหม่ {2}", [formatCount(h.devices_create ?? 0), formatCount(h.devices_fill ?? 0), formatCount(h.readings_new ?? 0)]);
+  return t("สร้าง {0} · เติม {1} · ใหม่ {2}", [formatCount(h.devices_create ?? 0), formatCount(h.devices_fill ?? 0), formatCount(h.readings_new ?? 0)]);
 }
 </script>
 
 <template>
   <div class="flex flex-col gap-4">
     <UiAlert tone="info" :title="t('อัปโหลดไฟล์จากผู้ให้เช่าได้ตรงๆ')">
-      {{ t("รายงานมิเตอร์ได้ทั้งเครื่องและยอดในครั้งเดียว รายงานสถานะเครื่องเติมอาคารและหน่วยงาน ระบบตรวจสัญญา ปีงบ ชื่อที่ไม่รู้จัก และยอด แล้วบอกทีละข้อว่าต้องทำอะไร งานที่ทำค้างเก็บไว้ที่เซิร์ฟเวอร์ ออกจากหน้าแล้วกลับมาทำต่อได้") }}
+      {{ t("รายงานมิเตอร์ได้ทั้งเครื่องและจำนวนพิมพ์ในครั้งเดียว ระบบตรวจให้แล้วบอกทีละข้อว่าต้องทำอะไร ออกจากหน้าแล้วกลับมาทำต่อได้") }}
       <template #actions>
         <UiMenu :label="t('ไฟล์ตัวอย่าง')">
           <template #trigger>
@@ -88,7 +88,7 @@ function headline(row) {
             </UiButton>
           </template>
           <UiMenuItem @select="downloadCsv(TEMPLATE_CSV, 'template-import-devices.csv')">{{ t("ทะเบียนเครื่อง") }}</UiMenuItem>
-          <UiMenuItem @select="downloadCsv(readingsTemplateCsv(), 'template-import-print-usage.csv')">{{ t("ยอดรายเดือน") }}</UiMenuItem>
+          <UiMenuItem @select="downloadCsv(readingsTemplateCsv(), 'template-import-print-usage.csv')">{{ t("จำนวนพิมพ์รายเดือน") }}</UiMenuItem>
         </UiMenu>
       </template>
     </UiAlert>
@@ -97,7 +97,7 @@ function headline(row) {
     <div>
       <UiCheckbox v-model="autoCommit" :disabled="uploading" :label="t('สร้างข้อมูลที่ขาดและบันทึกให้เลยเมื่อไม่มีอะไรต้องถาม')" data-testid="import-auto-toggle" />
       <p class="text-xs text-ink-mute mt-1 pl-6">
-        {{ t("ระบบสร้างสัญญาจากหัวรายงาน ปีงบ ยี่ห้อ อาคาร ฝ่าย และเลือกหมวดของรุ่นที่รู้จักให้ แล้วบันทึกทันที — หยุดถามเฉพาะชื่อที่คล้ายของเดิม ยอดที่จะเขียนทับ หรือตัวเลขสัญญาที่ไม่ตรงกับไฟล์") }}
+        {{ t("ระบบสร้างสัญญาจากหัวรายงาน ปีงบ ยี่ห้อ อาคาร ฝ่าย และเลือกหมวดของรุ่นที่รู้จักให้ แล้วบันทึกทันที — หยุดถามเฉพาะชื่อที่คล้ายของเดิม ตัวเลขที่จะแทนที่ค่าเดิม หรือตัวเลขสัญญาที่ไม่ตรงกับไฟล์") }}
       </p>
     </div>
     <p v-if="uploading" class="text-sm text-ink-soft" role="status">{{ autoCommit ? t("กำลังอัปโหลด ตรวจ และบันทึกให้… ไฟล์ใหญ่อาจใช้เวลาครึ่งนาที") : t("กำลังอัปโหลดและตรวจไฟล์…") }}</p>

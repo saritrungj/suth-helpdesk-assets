@@ -328,7 +328,7 @@ async function loadAssets({ refresh = false } = {}) {
     return true;
   } catch (err) {
     console.error("Load assets error:", err);
-    loadError.value = t("โหลดทะเบียนทรัพย์สินไม่สำเร็จ");
+    loadError.value = t("โหลดทะเบียนเครื่องพิมพ์ไม่สำเร็จ");
     return false;
   } finally {
     loading.value = false;
@@ -415,7 +415,7 @@ async function openMove(id) {
 
 async function remove(asset) {
   const confirmed = await askConfirm(
-    t("เครื่อง Serial “{0}” จะถูกลบออกจากทะเบียน ยอดพิมพ์ที่เคยบันทึกไว้จะไม่ถูกนำมาคิดในรายงานอีก", [asset.serial_number]),
+    t("เครื่อง Serial “{0}” จะถูกลบออกจากทะเบียน จำนวนพิมพ์ที่บันทึกไว้จะไม่ถูกนับในรายงานอีก", [asset.serial_number]),
     { title: t("ลบเครื่องนี้ออกจากทะเบียน"), confirmText: t("ลบเครื่องนี้"), danger: true }
   );
   if (!confirmed) return;
@@ -426,7 +426,7 @@ async function remove(asset) {
     await Promise.all([loadAssets(), invalidateAfterWrite(queryClient, "device")]);
   } catch (err) {
     console.error(err);
-    toastError(errorMessage(err, t("ลบไม่สำเร็จ — อาจมียอดพิมพ์ที่อ้างถึงเครื่องนี้อยู่")));
+    toastError(errorMessage(err, t("ลบไม่สำเร็จ — เครื่องนี้อาจมีจำนวนพิมพ์บันทึกไว้แล้ว")));
   }
 }
 

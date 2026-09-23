@@ -168,7 +168,7 @@ const effectivePriceHint = computed(() => {
     return t("เว้นว่างไว้ = ใช้ราคาตามสัญญา {0} บาท/หน้า", [formatUnitPrice(line.price_per_page)]);
   }
   if (contract && form.value.meter_category_id) {
-    return t("สัญญานี้ยังไม่มีราคาของหมวดที่เลือก — ยอดของเครื่องนี้จะบันทึกไม่ได้");
+    return t("สัญญานี้ยังไม่มีราคาของหมวดที่เลือก — เครื่องนี้จะบันทึกจำนวนพิมพ์ไม่ได้");
   }
   return t("เว้นว่างไว้ = ใช้ราคาตามสัญญาที่เลือก");
 });
@@ -480,7 +480,7 @@ defineExpose({ reset, submit, saving, loading, ready, discardDraft });
           <UiSelect v-model="form.meter_category_id" :options="primaryCategories" :placeholder="t(&quot;เลือกหมวด&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;มิเตอร์สี&quot;)" :hint="t(&quot;เครื่องที่ใบแจ้งหนี้แยกยอดพิมพ์สีเป็นอีกแถว&quot;)">
+        <UiField :label="t(&quot;มิเตอร์สี&quot;)" :hint="t(&quot;เครื่องที่ใบแจ้งหนี้แยกการพิมพ์สีเป็นอีกแถว&quot;)">
           <UiCheckbox v-model="form.has_color_meter" :label="t(&quot;เครื่องนี้มีมิเตอร์สี&quot;)" />
         </UiField>
 
@@ -491,7 +491,7 @@ defineExpose({ reset, submit, saving, loading, ready, discardDraft });
         <UiField
           v-if="isEdit"
           :label="t('เริ่มคิดเงินตามสัญญานี้ตั้งแต่วันที่')"
-          :hint="t('ตรวจเอกสารสัญญาหรือหลักฐานก่อนระบุ วันที่นี้จะมีผลกับยอดย้อนหลัง')"
+          :hint="t('ตรวจเอกสารก่อนใส่วันที่ — มีผลกับข้อมูลย้อนหลัง')"
           class="sm:col-span-2"
         >
           <UiInput v-model="form.billing_from" type="date" />
@@ -509,7 +509,7 @@ defineExpose({ reset, submit, saving, loading, ready, discardDraft });
         <template v-if="!isEdit">
           <UiField
             :label="t('สถานะการติดตั้ง')"
-            :hint="t('ใช้กำหนดว่าเครื่องนี้ต้องบันทึกยอดพิมพ์ของเดือนไหนบ้าง')"
+            :hint="t('ใช้กำหนดว่าเครื่องนี้ต้องบันทึกเดือนไหนบ้าง')"
             :error="errors.installation_status"
             required
             class="mt-4"

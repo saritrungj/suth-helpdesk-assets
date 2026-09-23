@@ -127,7 +127,7 @@ test("กดบันทึกแล้วค่าเข้าฐานข้�
   month = await activeMonth();
 
   // จับคู่ช่องกรอกกับ device id จาก aria-label ที่มี serial อยู่
-  const serial = (await inputs.nth(0).getAttribute("aria-label")).replace("ยอดพิมพ์ของ ", "");
+  const serial = (await inputs.nth(0).getAttribute("aria-label")).replace("จำนวนพิมพ์ของ ", "");
   const devices = await apiFetch("/devices?per_page=200");
   const rows = Array.isArray(devices) ? devices : devices.data;
   const device = rows.find((d) => d.serial_number === serial);
@@ -209,10 +209,10 @@ test("เปลี่ยนเดือนทั้งที่ยังมี�
   await inputs.nth(0).fill("777");
   await expect(page.getByRole("button", { name: "บันทึก 1 รายการ" })).toBeVisible();
 
-  // เปลี่ยนเดือนจากช่อง "ดูยอดของเดือน" — เลือกด้วย **value** ไม่ใช่ label
+  // เปลี่ยนเดือนจากช่อง "ดูเดือน" — เลือกด้วย **value** ไม่ใช่ label
   // เพราะ label ในตัวเลือกเป็นเดือนแบบเต็ม ("เมษายน 2569") ส่วน formatMonthTH
   // แบบสั้นคือ "เม.ย. 2569" การเทียบด้วย label จึงพลาดแล้วไปเลือก "ทั้งปีงบ"
-  const monthSelect = page.getByLabel("ดูยอดของเดือน");
+  const monthSelect = page.getByLabel("ดูเดือน");
   const values = await monthSelect.locator("option").evaluateAll((els) =>
     els.map((el) => el.value).filter(Boolean)
   );
@@ -251,7 +251,7 @@ test("แก้ค่าเพิ่มระหว่างรอบันท�
   month = await activeMonth();
   await assertMonthMatchesPage(page, month);
 
-  const serial = (await inputs.nth(0).getAttribute("aria-label")).replace("ยอดพิมพ์ของ ", "");
+  const serial = (await inputs.nth(0).getAttribute("aria-label")).replace("จำนวนพิมพ์ของ ", "");
   const devices = await apiFetch("/devices?per_page=200");
   const rows = Array.isArray(devices) ? devices : devices.data;
   const device = rows.find((d) => d.serial_number === serial);
@@ -291,7 +291,7 @@ test('เลือก "ทั้งปีงบ" ทั้งที่ยัง�
 
   // "ทั้งปีงบ" มี value เป็นค่าว่าง ซึ่งทำให้ v-if ของตารางเป็นเท็จและถอดตารางทิ้ง
   // ถ้าไม่มีการ์ดที่หน้าแม่ ค่าที่กรอกไว้จะหายเงียบๆ โดยไม่มีอะไรเตือน
-  await page.getByLabel("ดูยอดของเดือน").selectOption("");
+  await page.getByLabel("ดูเดือน").selectOption("");
 
   await expect(page.getByText("ยังมีข้อมูลที่ยังไม่ได้บันทึก")).toBeVisible();
 
@@ -304,7 +304,7 @@ test("เปลี่ยนเดือนเร็วๆ ยอดของเ�
   const inputs = await openMonthEntry(page);
   month = await activeMonth();
 
-  const monthSelect = page.getByLabel("ดูยอดของเดือน");
+  const monthSelect = page.getByLabel("ดูเดือน");
   const values = await monthSelect.locator("option").evaluateAll((els) =>
     els.map((el) => el.value).filter(Boolean)
   );
@@ -350,7 +350,7 @@ test("เปลี่ยนเดือนเร็วๆ ยอดของเ�
   const bySerial = new Map(rows.map((d) => [d.serial_number, d.id]));
 
   for (const cell of shown.slice(0, 5)) {
-    const serial = cell.label.replace("ยอดพิมพ์ของ ", "");
+    const serial = cell.label.replace("จำนวนพิมพ์ของ ", "");
     const id = bySerial.get(serial);
     const want = byDevice.get(id) ?? "";
     expect(

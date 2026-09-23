@@ -14,7 +14,7 @@ import { toCsv } from "../lib/export-csv";
 export function dashboardCsv(rows) {
   const header = [
     t("เดือน"), t("ปีงบประมาณ"), t("Serial"), t("ฝ่าย"), t("แผนก"), t("สัญญาที่คิดเงิน"), t("อาคาร"), t("ชั้น"),
-    t("ยอดพิมพ์จริง (หน้า)"), t("สุทธิหลังหัก 2% (หน้า)"), t("ค่าใช้จ่าย (บาท)"),
+    t("หน้าที่พิมพ์"), t("หน้าที่คิดเงิน"), t("ค่าใช้จ่าย (บาท)"),
   ];
   const body = (rows ?? []).map((row) => {
     const month = row.calendar_month ?? row.month;

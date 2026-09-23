@@ -12,8 +12,8 @@
 /** ทุกหน้าหลังล็อกอิน — ต้องเพิ่มที่นี่ทุกครั้งที่เพิ่มหน้าใหม่ */
 export const PAGES = [
   { name: "แดชบอร์ด", url: "/dashboard" },
-  { name: "บันทึกยอดพิมพ์", url: "/print-transactions" },
-  { name: "ทะเบียนทรัพย์สิน", url: "/assets" },
+  { name: "บันทึกจำนวนพิมพ์", url: "/print-transactions" },
+  { name: "ทะเบียนเครื่องพิมพ์", url: "/assets" },
   { name: "รายละเอียดเครื่อง", url: "/assets/:fixture" },
   { name: "ค่าใช้จ่าย", url: "/expense" },
   { name: "รายงานสรุป", url: "/report" },
@@ -25,7 +25,7 @@ export const PAGES = [
   { name: "ฝ่าย", url: "/admin/divisions" },
   { name: "แผนก", url: "/admin/departments" },
   { name: "ปีงบ", url: "/admin/fiscal-years" },
-  { name: "เพิ่มทรัพย์สิน", url: "/admin/add-asset" },
+  { name: "เพิ่มเครื่อง", url: "/admin/add-asset" },
   { name: "นำเข้าทรัพย์สิน", url: "/admin/add-asset?tab=import" },
   { name: "ตรวจยืนยันการติดตั้ง", url: "/admin/installation-review" },
 ];

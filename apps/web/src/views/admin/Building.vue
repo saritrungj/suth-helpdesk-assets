@@ -30,7 +30,7 @@ const fields = [
 <template>
   <MasterDataPage
     :title="t(&quot;อาคาร&quot;)"
-    :description="t(&quot;อาคารที่ใช้จัดกลุ่มเครื่องพิมพ์และแยกยอดในรายงาน&quot;)"
+    :description="t(&quot;อาคารที่ใช้จัดกลุ่มเครื่องพิมพ์ในรายงาน&quot;)"
     endpoint="/buildings"
     :item-noun="t(&quot;อาคาร&quot;)"
     export-filename="buildings"

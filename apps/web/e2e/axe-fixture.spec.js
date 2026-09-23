@@ -36,7 +36,7 @@ const updating = process.env.SUTH_AXE_UPDATE_BASELINE === "1";
 /** สถานะที่ fixture คุมอยู่แล้ว — ยืมมาจาก asset-drawer.spec.js / asset-evidence.spec.js */
 const STATES = [
   {
-    name: "ทะเบียนทรัพย์สิน",
+    name: "ทะเบียนเครื่องพิมพ์",
     async setup(page) {
       await assetFixture(page);
       await page.goto("/assets");

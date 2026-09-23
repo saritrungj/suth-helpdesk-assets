@@ -80,14 +80,14 @@ const columns = [
   { key: "model", label: t("รุ่น"), value: (row) => row.model || "—" },
   { key: "building_name", label: t("อาคาร"), value: (row) => row.building_name || "—" },
   { key: "department_name", label: t("แผนก"), value: (row) => row.department_name || "—" },
-  { key: "readings", label: t("ยอดที่บันทึกไว้แล้ว"), value: (row) => readingRange(row), sortable: false },
+  { key: "readings", label: t("ที่บันทึกไว้แล้ว"), value: (row) => readingRange(row), sortable: false },
 ];
 
 const pending = computed(() => devices.value.length);
 
 /** ช่วงเดือนที่เครื่องนี้มียอดบันทึกไว้ — หลักฐานชิ้นหนึ่งที่ช่วยผู้ดูแลตัดสินใจ */
 function readingRange(row) {
-  if (!Number(row.reading_count)) return t("ยังไม่มียอด");
+  if (!Number(row.reading_count)) return t("ยังไม่บันทึก");
   if (row.first_month === row.last_month) return formatMonth(row.first_month);
   return `${formatMonth(row.first_month)} – ${formatMonth(row.last_month)}`;
 }
@@ -153,7 +153,7 @@ onMounted(load);
     <UiPageHeader
       :eyebrow="t(&quot;ตั้งค่าระบบ&quot;)"
       :title="t(&quot;ตรวจยืนยันสถานะการติดตั้ง&quot;)"
-      :description="t(&quot;ระบบไม่เดาให้ว่าเครื่องเดิมติดตั้งแล้วหรือยัง ความครบถ้วนของยอดพิมพ์จะยืนยันได้เมื่อตรวจครบทุกเครื่อง&quot;)"
+      :description="t(&quot;ระบบไม่เดาว่าเครื่องเดิมติดตั้งแล้วหรือยัง ความครบของการบันทึกยืนยันได้เมื่อตรวจครบทุกเครื่อง&quot;)"
     >
       <template #badge>
         <UiBadge v-if="!loading && pending" tone="warn" dot>
@@ -172,7 +172,7 @@ onMounted(load);
     <UiEmpty
       v-else-if="!loading && !pending"
       :title="t(&quot;ตรวจยืนยันครบทุกเครื่องแล้ว&quot;)"
-      :description="t(&quot;ตัวเลขความครบถ้วนของยอดพิมพ์บนแดชบอร์ดยืนยันได้แล้ว&quot;)"
+      :description="t(&quot;ความครบของการบันทึกบนหน้าภาพรวมยืนยันได้แล้ว&quot;)"
     />
 
     <UiDataTable
@@ -225,7 +225,7 @@ onMounted(load);
         <UiCheckbox
           v-model="form.history_known"
           :label="t(&quot;ยืนยันข้อมูลก่อนหน้าวันดังกล่าวได้ด้วย&quot;)"
-          :description="t(&quot;ติ๊กเฉพาะเมื่อมีเอกสารหรือทราบแน่ชัดว่าก่อนหน้านั้นเครื่องนี้ต้องบันทึกยอดหรือไม่ ถ้าไม่ติ๊ก ระบบจะรายงานเดือนก่อนหน้าว่ายังยืนยันไม่ได้ แทนการสรุปเอง&quot;)"
+          :description="t(&quot;ติ๊กเฉพาะเมื่อมีเอกสารหรือทราบแน่ชัดว่าก่อนหน้านั้นเครื่องนี้ต้องบันทึกหรือไม่ ถ้าไม่ติ๊ก ระบบจะรายงานเดือนก่อนหน้าว่ายังยืนยันไม่ได้ แทนการสรุปเอง&quot;)"
         />
 
         <UiField :label="t(&quot;หมายเหตุ&quot;)" :hint="t(&quot;เช่น เลขที่เอกสารที่ใช้อ้างอิง&quot;)">

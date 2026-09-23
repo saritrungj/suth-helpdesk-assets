@@ -232,7 +232,7 @@ test("list failure has retry, empty and filtered empty have different recovery",
   const state = await assetFixture(page);
   state.failList = true;
   await page.goto("/assets");
-  await expect(page.getByText("โหลดทะเบียนทรัพย์สินไม่สำเร็จ")).toBeVisible();
+  await expect(page.getByText("โหลดทะเบียนเครื่องพิมพ์ไม่สำเร็จ")).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("list-error.png") });
   await expect(page.getByText("ยังไม่มีเครื่องในทะเบียน", { exact: true }).first()).not.toBeVisible();
   state.failList = false;

@@ -113,7 +113,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await page.goto("/dashboard");
     const card = comparisonCard(page);
     await card.getByRole("radio", { name: "ฝ่าย", exact: true }).click();
-    await card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true }).click();
+    await card.getByRole("radio", { name: "หน้าที่พิมพ์", exact: true }).click();
     await expect(page).toHaveURL(/by=division/);
     await expect(page).toHaveURL(/measure=pages/);
     // การแบ่งข้อมูลไม่ใช่การกรอง — ยอดรวมยังเป็นของทั้งองค์กร
@@ -144,13 +144,13 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     const table = detailTable(page);
     await expect(table.getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550/ })).toBeVisible();
     await expect(table).not.toContainText("ฝ่ายเภสัชกรรม");
-    await expect(comparisonCard(page)).toContainText("จำนวนเครื่องที่มีข้อมูลต่างกัน (2–3 เครื่อง)");
+    await expect(comparisonCard(page)).toContainText("จำนวนเครื่องต่างกัน (2–3 เครื่อง)");
 
     const file = await download(page, async () => (await exportAs(page, "Excel")).click());
     expect(file.name).toBe("print-usage-report-fy2569-full-year-division-pages.xlsx");
     expect(file.workbook.SheetNames).toEqual(["สรุป", "รายเดือน", "เปรียบเทียบ", "อันดับ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
     const [header, nursing, admin] = file.rows("เปรียบเทียบ");
-    expect(header.slice(0, 5)).toEqual(["ฝ่าย", "ยอดพิมพ์จริง (หน้า)", "สุทธิหลังหัก 2% (หน้า)", "ค่าใช้จ่าย (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)"]);
+    expect(header.slice(0, 5)).toEqual(["ฝ่าย", "หน้าที่พิมพ์", "หน้าที่คิดเงิน", "ค่าใช้จ่าย (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)"]);
     expect(nursing).toEqual(["ฝ่ายการพยาบาล", 4550, 4459, 2006.55, 3, 1500, 1600, 1450]);
     expect(admin).toEqual(["ฝ่ายบริหารทั่วไป", 1420, 1391.6, 626.22, 2, 300, 550, 570]);
     expect(file.chart()).toContain("<c:lineChart>");
@@ -166,7 +166,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     const conditions = conditionsOf(file);
     expect(conditions["ฝ่าย"]).toBe("ฝ่ายการพยาบาล, ฝ่ายบริหารทั่วไป");
     expect(conditions["เปรียบเทียบตาม"]).toBe("ฝ่าย");
-    expect(conditions["ตัวเลขที่ดู"]).toBe("ยอดพิมพ์จริง (หน้า)");
+    expect(conditions["ตัวเลขที่ดู"]).toBe("หน้าที่พิมพ์ (หน้า)");
     expect(conditions["สถานะราคา"]).toBeUndefined();
     expect(conditions["สร้างเมื่อ (Asia/Bangkok)"]).toBeTruthy();
   });
@@ -250,14 +250,14 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
       [1, "งานผู้ป่วยนอก", "ฝ่ายการพยาบาล"], [2, "งานการเงิน", "ฝ่ายบริหารทั่วไป"], [3, "งานผู้ป่วยใน", "ฝ่ายการพยาบาล"], [4, "งานคลังยา", "ฝ่ายเภสัชกรรม"],
     ]);
 
-    await card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true }).click();
+    await card.getByRole("radio", { name: "หน้าที่พิมพ์", exact: true }).click();
     const file = await download(page, async () => (await exportAs(page, "Excel")).click());
     expect(file.name).toBe("print-usage-report-fy2569-full-year-department-pages.xlsx");
     expect(file.rows("อันดับ").slice(1).map((line) => line.slice(0, 4))).toEqual([
       [1, "งานผู้ป่วยนอก", "ฝ่ายการพยาบาล", 3200], [2, "งานการเงิน", "ฝ่ายบริหารทั่วไป", 1420], [3, "งานผู้ป่วยใน", "ฝ่ายการพยาบาล", 1350], [4, "งานคลังยา", "ฝ่ายเภสัชกรรม", 0],
     ]);
     expect(file.rows("ข้อมูลรายละเอียด")).toHaveLength(16);
-    expect(conditionsOf(file)["อันดับ"]).toBe("ทุกแผนก 4 รายการ เรียงตามยอดพิมพ์จริงจากมากไปน้อย (แผ่น “อันดับ”)");
+    expect(conditionsOf(file)["อันดับ"]).toBe("ทุกแผนก 4 รายการ เรียงตามหน้าที่พิมพ์จากมากไปน้อย (แผ่น “อันดับ”)");
   });
 
   test("ส่งออก CSV ได้ข้อมูลรายละเอียดแบนตามตัวกรองเดียวกับ Excel", async ({ page }) => {
@@ -356,7 +356,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(table.getByRole("row")).toHaveCount(21);
 
     // กราฟวาดได้แค่ 8 กลุ่มแรก แต่ต้องบอกว่าอีก 17 กลุ่มอยู่ครบในตาราง
-    await expect(comparisonCard(page)).toContainText("อีก 17 รายการอยู่ครบในตารางด้านล่าง");
+    await expect(comparisonCard(page)).toContainText("อีก 17 รายการอยู่ในตารางและไฟล์ที่ส่งออก");
 
     await table.getByRole("button", { name: "ถัดไป" }).click();
     await expect(table).toContainText("แสดง 21–25 จาก 25");
@@ -370,9 +370,9 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     // เรียงจากหัวคอลัมน์ — น้อยไปมากแล้วกลับกัน
     const first = () => table.getByRole("row").nth(1);
     await expect(first()).toContainText("D25-SN");
-    await table.getByRole("button", { name: /ยอดพิมพ์จริง/ }).first().click();
+    await table.getByRole("button", { name: /หน้าที่พิมพ์/ }).first().click();
     await expect(first()).toContainText("D01-SN");
-    await table.getByRole("button", { name: /ยอดพิมพ์จริง/ }).first().click();
+    await table.getByRole("button", { name: /หน้าที่พิมพ์/ }).first().click();
     await expect(first()).toContainText("D25-SN");
   });
 
@@ -456,7 +456,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(page).toHaveURL(/division=1(?:%2C|,)2/);
     const card = comparisonCard(page);
     await expect(card.getByRole("radio", { name: "ฝ่าย", exact: true })).toBeChecked();
-    await expect(card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true })).toBeChecked();
+    await expect(card.getByRole("radio", { name: "หน้าที่พิมพ์", exact: true })).toBeChecked();
     await expect(detailTable(page).getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550/ })).toBeVisible();
   });
 
@@ -555,7 +555,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await card.getByRole("radio", { name: "ฝ่าย", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/by=division/);
-    await card.getByRole("radio", { name: "ยอดพิมพ์จริง", exact: true }).focus();
+    await card.getByRole("radio", { name: "หน้าที่พิมพ์", exact: true }).focus();
     await page.keyboard.press("Space");
     await expect(page).toHaveURL(/measure=pages/);
     await page.getByRole("button", { name: "ส่งออก", exact: true }).focus();
@@ -597,6 +597,6 @@ test("หน้าค่าใช้จ่ายได้รายชื่อ�
   const monthsLoaded = page.waitForResponse((response) => response.url().endsWith("/api/print-transactions/months"));
   await page.goto("/expense");
   await monthsLoaded;
-  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์", { exact: true })).toBeVisible();
   expect(kpiRequests.filter((search) => !new URLSearchParams(search).get("month"))).toEqual([]);
 });

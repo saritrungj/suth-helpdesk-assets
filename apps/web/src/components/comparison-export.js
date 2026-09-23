@@ -38,8 +38,8 @@ export function summarySheet(rows) {
     costPerDevice: averagePerDevice(summary, "cost"),
   };
   return sheetOf(t("สรุป"), [
-    { header: t("ยอดพิมพ์จริง (หน้า)"), format: FORMATS.count, value: (item) => item.rawPages },
-    { header: t("สุทธิหลังหัก 2% (หน้า)"), format: FORMATS.pages, value: (item) => item.netPages },
+    { header: t("หน้าที่พิมพ์"), format: FORMATS.count, value: (item) => item.rawPages },
+    { header: t("หน้าที่คิดเงิน"), format: FORMATS.pages, value: (item) => item.netPages },
     { header: t("ค่าใช้จ่าย (บาท)"), format: FORMATS.baht, value: (item) => item.cost },
     { header: t("เครื่องที่มีข้อมูล (เครื่อง)"), format: FORMATS.count, value: (item) => item.devices },
     { header: t("หน้าต่อเครื่อง"), format: FORMATS.pages, value: (item) => item.pagesPerDevice },
@@ -59,8 +59,8 @@ export function monthlySheet(rows) {
 /** คอลัมน์ยอดของหนึ่งรายการ — ไม่มีข้อมูลเป็นเซลล์ว่าง ไม่ใช่ศูนย์ */
 function measureColumns(summaryOf, suffix = "") {
   return [
-    { header: `${t("ยอดพิมพ์จริง (หน้า)")}${suffix}`, format: FORMATS.count, value: (record) => countOrNull(summaryOf(record), "rawPages") },
-    { header: `${t("สุทธิหลังหัก 2% (หน้า)")}${suffix}`, format: FORMATS.pages, value: (record) => countOrNull(summaryOf(record), "netPages") },
+    { header: `${t("หน้าที่พิมพ์")}${suffix}`, format: FORMATS.count, value: (record) => countOrNull(summaryOf(record), "rawPages") },
+    { header: `${t("หน้าที่คิดเงิน")}${suffix}`, format: FORMATS.pages, value: (record) => countOrNull(summaryOf(record), "netPages") },
     { header: `${t("ค่าใช้จ่าย (บาท)")}${suffix}`, format: FORMATS.baht, value: (record) => summaryOf(record)?.cost ?? null },
     { header: `${t("เครื่องที่มีข้อมูล (เครื่อง)")}${suffix}`, format: FORMATS.count, value: (record) => summaryOf(record)?.devices ?? 0 },
   ];
@@ -187,7 +187,7 @@ export function rankingSheet(model) {
   const dimension = dimensionLabel(model.dimension);
   const metric = metricLabel(model.metric);
   if (ranking.blocked) {
-    const reason = t("ยังไม่มียอดพิมพ์ในช่วงที่เลือก");
+    const reason = t("ยังไม่มีการพิมพ์ในช่วงที่เลือก");
     return { name, header: [t("หมายเหตุ")], rows: [[reason]], columns: [{ width: 90 }], filter: false };
   }
   const valueFormat = model.metric === "cost" ? FORMATS.baht : FORMATS.count;
@@ -210,8 +210,8 @@ const DETAIL_COLUMNS = () => [
   { header: t("แผนก"), value: (row) => row.department_name || t("ไม่ระบุแผนก") },
   { header: t("สัญญาที่คิดเงิน"), text: true, value: (row) => row.billing_contract_no || t("ไม่ผูกสัญญา") },
   { header: t("อาคาร"), value: (row) => row.building_name ?? "" },
-  { header: t("ยอดพิมพ์จริง (หน้า)"), format: FORMATS.count, value: (row) => Number(row.pages_printed || 0) },
-  { header: t("สุทธิหลังหัก 2% (หน้า)"), format: FORMATS.pages, value: (row) => Math.round(Number(row.net_pages || 0) * 100) / 100 },
+  { header: t("หน้าที่พิมพ์"), format: FORMATS.count, value: (row) => Number(row.pages_printed || 0) },
+  { header: t("หน้าที่คิดเงิน"), format: FORMATS.pages, value: (row) => Math.round(Number(row.net_pages || 0) * 100) / 100 },
   { header: t("ราคาต่อหน้า (บาท)"), format: FORMATS.price, value: (row) => (row.price_per_page == null ? null : Number(row.price_per_page)) },
   { header: t("ค่าใช้จ่าย (บาท)"), format: FORMATS.baht, value: (row) => (row.total_cost == null ? null : Number(row.total_cost)) },
 ];
@@ -240,10 +240,10 @@ export function conditionsSheet(filename, pairs) {
 /** นิยามและข้อควรระวังที่ทุกไฟล์เปรียบเทียบมีเหมือนกัน */
 export function standardNotes() {
   return [
-    [t("นิยามยอดพิมพ์"), t("ยอดพิมพ์จริง = จำนวนหน้าที่บันทึก (หน้าดิบ) · สุทธิหลังหัก 2% = หน้าดิบ × 0.98 ใช้เป็นฐานคิดเงิน")],
+    [t("ความหมายของตัวเลข"), t("หน้าที่พิมพ์ = จำนวนหน้าที่บันทึก · หน้าที่คิดเงิน = หน้าที่พิมพ์ × 0.98 (หัก 2%)")],
     [t("หน่วยงานและสัญญา"), t("ใช้ฝ่าย แผนก และสัญญาที่คิดเงินที่มีผลในแต่ละเดือน")],
-    [t("ไม่มีข้อมูลกับศูนย์"), t("เซลล์ว่าง = ไม่มีรายการยอดพิมพ์ ส่วน 0 = บันทึกยอดเป็นศูนย์จริง")],
-    [t("ข้อควรระวัง"), t("ยอดที่สูงกว่าไม่ได้แปลว่าสิ้นเปลือง และยอดที่ลดลงไม่ได้แปลว่าประหยัดเสมอ ให้อ่านคู่กับจำนวนเครื่องและลักษณะงานของหน่วยงาน")],
+    [t("ไม่มีข้อมูลกับศูนย์"), t("ช่องว่าง = ยังไม่ได้บันทึก ส่วน 0 = เดือนนั้นไม่มีการพิมพ์")],
+    [t("ข้อควรระวัง"), t("ใช้มากไม่ได้แปลว่าสิ้นเปลือง ให้ดูจำนวนเครื่องและลักษณะงานประกอบ")],
   ];
 }
 

@@ -97,8 +97,8 @@ test.describe("หน้ารายละเอียดเครื่อง �
       return route.fulfill(previous ? { status: 503, json: {} } : { json: [{ month: "2025-10", pages: 1000 }] });
     });
     await page.goto("/assets/1?fy=1&years=2568,2569");
-    const card = page.locator("section.card").filter({ hasText: "ยอดพิมพ์รายเดือน" });
-    await expect(card.getByRole("alert")).toContainText("โหลดยอดพิมพ์ของเครื่องนี้ไม่สำเร็จ");
+    const card = page.locator("section.card").filter({ hasText: "จำนวนพิมพ์รายเดือน" });
+    await expect(card.getByRole("alert")).toContainText("โหลดจำนวนพิมพ์ของเครื่องนี้ไม่สำเร็จ");
     await expect(card.getByRole("button", { name: "ลองใหม่", exact: true })).toBeVisible();
   });
 
@@ -115,7 +115,7 @@ test.describe("หน้ารายละเอียดเครื่อง �
         : [{ month: "2025-10", pages: 1000 }, { month: "2025-11", pages: 1200 }] });
     });
     await page.goto("/assets/1?fy=1");
-    const card = page.locator("section.card").filter({ hasText: "ยอดพิมพ์รายเดือน" });
+    const card = page.locator("section.card").filter({ hasText: "จำนวนพิมพ์รายเดือน" });
     await expect(card.getByRole("button", { name: /ปีงบที่เปรียบเทียบ/ })).toContainText("2568");
     await card.getByRole("radio", { name: "ตาราง", exact: true }).click();
     const values = card.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" });
@@ -139,7 +139,7 @@ test.describe("หน้ารายละเอียดเครื่อง �
           : [{ month: "2025-10", pages: 1000 }] });
     });
     await page.goto("/assets/1?fy=1&years=2567,2568,2569");
-    const card = page.locator("section.card").filter({ hasText: "ยอดพิมพ์รายเดือน" });
+    const card = page.locator("section.card").filter({ hasText: "จำนวนพิมพ์รายเดือน" });
     await card.getByRole("radio", { name: "ตาราง", exact: true }).click();
     const values = card.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" });
     await expect(values.getByRole("row", { name: /^ต\.ค\.\s+600\s+800\s+1,000$/ })).toBeVisible();
@@ -153,7 +153,7 @@ test.describe("หน้ารายละเอียดเครื่อง �
 });
 
 test.describe("จำมุมมองของแต่ละหน้าในแท็บนี้ (#115)", () => {
-  const GROUP = { "ภาพรวมการพิมพ์": "ภาพรวม", "ทะเบียนเครื่องพิมพ์": "งานประจำ", "รายงานสรุปยอดพิมพ์": "รายงาน", "ยี่ห้อ": "ตั้งค่าระบบ" };
+  const GROUP = { "ภาพรวมการพิมพ์": "ภาพรวม", "ทะเบียนเครื่องพิมพ์": "งานประจำ", "รายงานสรุปการพิมพ์": "รายงาน", "ยี่ห้อ": "ตั้งค่าระบบ" };
   /** กดเมนูเหมือนผู้ใช้ — กลุ่มเมนูพับได้ จึงกางกลุ่มก่อนถ้าลิงก์ยังไม่แสดง */
   async function openFromMenu(page, name) {
     const menu = page.getByRole("complementary", { name: "เมนูหลัก" });
@@ -167,7 +167,7 @@ test.describe("จำมุมมองของแต่ละหน้าใ�
     await page.goto("/dashboard?by=division&division=1,2&measure=pages");
     await expect(page.getByRole("region", { name: "สรุปตัวเลขสำคัญ" })).toContainText("5,970");
 
-    await openFromMenu(page, "รายงานสรุปยอดพิมพ์");
+    await openFromMenu(page, "รายงานสรุปการพิมพ์");
     await expect(page).toHaveURL(/\/report/);
     await openFromMenu(page, "ภาพรวมการพิมพ์");
     await expect(page).toHaveURL(/by=division/);
@@ -183,7 +183,7 @@ test.describe("จำมุมมองของแต่ละหน้าใ�
     await page.goto("/dashboard?by=division&division=1,2&measure=pages");
     await page.getByRole("region", { name: "ตัวกรองข้อมูล" }).getByRole("button", { name: "ล้างตัวกรอง", exact: true }).click();
     await expect(page).not.toHaveURL(/division=/);
-    await openFromMenu(page, "รายงานสรุปยอดพิมพ์");
+    await openFromMenu(page, "รายงานสรุปการพิมพ์");
     await openFromMenu(page, "ภาพรวมการพิมพ์");
     await expect(page).not.toHaveURL(/division=/);
   });
@@ -193,7 +193,7 @@ test.describe("จำมุมมองของแต่ละหน้าใ�
     await page.goto("/assets?building=1");
     const search = () => page.getByRole("textbox", { name: "ค้นหา Serial, รุ่น, ตำแหน่ง…" });
     await search().fill("0100");
-    await openFromMenu(page, "รายงานสรุปยอดพิมพ์");
+    await openFromMenu(page, "รายงานสรุปการพิมพ์");
     await openFromMenu(page, "ทะเบียนเครื่องพิมพ์");
     await expect(search()).toHaveValue("0100");
     await page.reload();

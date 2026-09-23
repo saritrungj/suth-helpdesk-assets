@@ -196,7 +196,7 @@ async function commit() {
   const s = registry.value?.summary ?? {};
   const r = validation.value?.readings?.counts ?? {};
   const ok = await askConfirm(
-    t("จะสร้างเครื่องใหม่ {0} เติมข้อมูล {1} เครื่อง ยอดใหม่ {2} และเขียนทับ {3} รายการ — บันทึกทั้งหมดพร้อมกัน ถ้ามีข้อผิดพลาดจะไม่บันทึกเลยสักรายการ",
+    t("จะสร้างเครื่องใหม่ {0} เติมข้อมูล {1} เครื่อง ตัวเลขใหม่ {2} และแทนที่ค่าเดิม {3} รายการ — บันทึกทั้งหมดพร้อมกัน ถ้าผิดพลาดจะไม่บันทึกเลยสักรายการ",
       [formatCount(s.create ?? 0), formatCount(s.fill ?? 0), formatCount(r.new ?? 0), formatCount(r.overwrite ?? 0)]),
     { title: t("บันทึกงานนำเข้านี้"), confirmText: t("บันทึก") }
   );
@@ -222,7 +222,7 @@ async function abandon() {
 /** ลบถาวร — เฉพาะงานที่ปิดแล้วและไม่เคยบันทึก (#192, ADR-0031) */
 const purgeable = computed(() => session.value?.status === "expired" && !session.value?.completed_at);
 async function purge() {
-  const ok = await askConfirm(t("ลบงานนำเข้านี้ถาวร? ไฟล์และประวัติของงานจะหายทั้งหมด งานนี้ไม่เคยบันทึกข้อมูลลงระบบ จึงไม่กระทบข้อมูลเครื่องหรือยอด"), {
+  const ok = await askConfirm(t("ลบงานนำเข้านี้ถาวร? ไฟล์และประวัติของงานจะหายทั้งหมด งานนี้ไม่เคยบันทึกข้อมูลลงระบบ จึงไม่กระทบข้อมูลเครื่องหรือจำนวนพิมพ์"), {
     title: t("ลบงานนำเข้าถาวร"),
     confirmText: t("ลบถาวร"),
     danger: true,
@@ -320,7 +320,7 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
       <UiCard v-if="session.status === 'completed' && session.result" class="mb-4" data-testid="import-result">
         <p class="inline-flex items-center gap-2 text-ink font-semibold"><CircleCheck :size="16" class="text-ok-ink" aria-hidden="true" />{{ t("บันทึกแล้วเมื่อ {0}", [formatDateTime(session.completed_at)]) }}</p>
         <p class="text-sm text-ink-soft mt-1">
-          {{ t("เครื่องใหม่ {0} · เติมข้อมูล {1} · ยอดใหม่ {2} · เขียนทับ {3}", [formatCount(session.result.devices_created), formatCount(session.result.devices_filled), formatCount(session.result.readings_new), formatCount(session.result.readings_overwritten)]) }}
+          {{ t("เครื่องใหม่ {0} · เติมข้อมูล {1} · ตัวเลขใหม่ {2} · แทนที่ {3}", [formatCount(session.result.devices_created), formatCount(session.result.devices_filled), formatCount(session.result.readings_new), formatCount(session.result.readings_overwritten)]) }}
         </p>
         <ImportAutoSummary v-if="session.result.auto" :auto="session.result.auto" class="mt-3" />
         <div class="flex flex-wrap gap-2 mt-3">
@@ -369,7 +369,7 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
         </section>
 
         <section v-if="validation.readings && validation.readings.status !== 'none'" class="mb-4">
-          <h2 class="text-base font-semibold text-ink mb-2">{{ t("ยอดมิเตอร์") }}</h2>
+          <h2 class="text-base font-semibold text-ink mb-2">{{ t("เลขมิเตอร์") }}</h2>
           <ImportReadings :readings="validation.readings" :reconciliation="validation.reconciliation" />
         </section>
       </template>

@@ -254,7 +254,7 @@ async function submit() {
   errors.value = {};
   confirming.value = true;
   const confirmed = await askConfirm(
-    t("ย้ายจาก\n{0}\n\nไปที่\n{1}\n\nยอดพิมพ์ที่บันทึกไว้ก่อนหน้านี้จะยังเป็นของหน่วยงานเดิม ระบบจะเปิดช่วงใหม่นับจากวันนี้", [origin.value, destination.value]),
+    t("ย้ายจาก\n{0}\n\nไปที่\n{1}\n\nจำนวนพิมพ์ที่บันทึกไว้แล้วยังเป็นของหน่วยงานเดิม ระบบจะเปิดช่วงใหม่นับจากวันนี้", [origin.value, destination.value]),
     { title: t("ยืนยันการย้ายเครื่อง"), confirmText: t("ย้ายเครื่อง"), danger: false }
   );
   confirming.value = false;
@@ -334,7 +334,7 @@ async function submit() {
         </UiAlert>
           <dl v-else-if="currentUsage" class="flex flex-wrap gap-x-6 gap-y-1 mt-3 pt-3 border-t border-line-soft text-xs">
             <div class="flex items-baseline gap-1.5">
-              <dt class="text-ink-mute"> {{ t("ยอดพิมพ์สะสม") }} </dt>
+              <dt class="text-ink-mute"> {{ t("พิมพ์สะสม") }} </dt>
               <dd class="numeral font-semibold text-ink">
                 {{ formatCount(currentUsage.total_pages ?? currentUsage.net_pages) }} {{ t("หน้า") }} </dd>
             </div>
@@ -345,7 +345,7 @@ async function submit() {
             </div>
           </dl>
 
-        <p v-else class="text-sm text-ink-mute mt-3"> {{ t("ยังไม่มียอดพิมพ์บันทึกไว้ในช่วงนี้") }} </p>
+        <p v-else class="text-sm text-ink-mute mt-3"> {{ t("ยังไม่มีการบันทึกในช่วงนี้") }} </p>
       </section>
 
       <!-- ที่ตั้งใหม่ -->

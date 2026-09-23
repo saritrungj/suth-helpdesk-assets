@@ -452,7 +452,7 @@ router.get(
         // ส่งเดือนที่ค้างไปด้วย เพื่อให้ปุ่มบนหน้าเว็บพาไปที่เดือนนั้นเลย
         // ไม่ใช่พาไปหน้าเปล่าแล้วให้ผู้ใช้ไล่หาเองว่าเดือนไหนขาด
         months: incompleteMonths,
-        action: { label: "ไปกรอกยอดพิมพ์", to: "/print-transactions", query: { month: oldest, building: building_name || undefined, fill: "empty", fy: fiscal_year_id || undefined } },
+        action: { label: "ไปกรอกจำนวนพิมพ์", to: "/print-transactions", query: { month: oldest, building: building_name || undefined, fill: "empty", fy: fiscal_year_id || undefined } },
       });
     }
 
