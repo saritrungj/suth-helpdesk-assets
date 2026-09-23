@@ -170,13 +170,18 @@ async function writeReadings(conn, items) {
 }
 
 // ============================================================
-// GET /api/print-transactions — รายการยอดพิมพ์ (กรองด้วย ?month=)
+// GET /api/print-transactions — ยอดของช่องกรอก (กรองด้วย ?month=)
+//
+// คืนเฉพาะมิเตอร์ขาวดำ หนึ่งแถวต่อเครื่องต่อเดือน — ตรงกับที่ช่องกรอกเขียน (writeReading →
+// primaryMeterId) และกับ /by-device เดิมคืนทุกมิเตอร์ หน้ากรอกจัดกลุ่มตามเครื่องแล้วเก็บแถวสุดท้าย
+// เครื่องมิเตอร์สีจึงแสดงยอดสีในช่องขาวดำ แล้วการล้างช่องนั้นลบยอดขาวดำทิ้ง (#145)
+// ยอดรวมทุกมิเตอร์ของรายงานอยู่ที่ /dashboard/monthly-kpi
 // ============================================================
 router.get(
   "/",
   validate({ query: z.object({ month: monthString.optional() }) }),
   asyncHandler(async (req, res) => {
-    const conditions = [];
+    const conditions = ["mc.is_color = 0"];
     const params = [];
 
     if (req.query.month) {
@@ -187,8 +192,10 @@ router.get(
     const [rows] = await db.query(
       `SELECT pt.id, pt.device_id, pt.month, pt.pages, d.serial_number
        FROM print_transactions pt
+       JOIN device_meter dm ON dm.id = pt.meter_id
+       JOIN meter_category mc ON mc.id = dm.category_id
        LEFT JOIN devices d ON pt.device_id = d.id
-       ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
+       WHERE ${conditions.join(" AND ")}
        ORDER BY pt.month DESC, d.serial_number`,
       params
     );
