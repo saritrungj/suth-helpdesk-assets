@@ -11,7 +11,7 @@ test.beforeEach(async ({ context }) => {
   await signIn(context);
 });
 
-test("shell ใช้ขนาดกลางและเปิดหมวดงานประจำตาม contract", async ({ page }) => {
+test("shell ใช้ขนาดกลางและเปิดทุกหมวดเป็นค่าเริ่มต้น", async ({ page }) => {
   await page.goto("/dashboard");
   await expect(page.locator("#main-content")).toBeVisible();
 
@@ -22,8 +22,46 @@ test("shell ใช้ขนาดกลางและเปิดหมวด�
   expect(sidebar.width).toBe(232);
   expect(topbar.height).toBe(56);
   expect(mainPadding).toBe("24px");
-  await expect(page.getByRole("button", { name: "งานประจำ" })).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByRole("button", { name: "ภาพรวม" })).toHaveAttribute("aria-expanded", "true");
+  for (const group of ["ภาพรวม", "งานประจำ", "รายงาน", "ตั้งค่าระบบ"]) {
+    await expect(page.getByRole("button", { name: group, exact: true })).toHaveAttribute("aria-expanded", "true");
+  }
+  await expect(page.getByRole("link", { name: "ปีงบประมาณ", exact: true })).toBeVisible();
+});
+
+test("จำการเปิด-ปิดหมวดข้ามการโหลดหน้าและการล็อกอินใหม่ โดย direct link ไม่ทับค่าที่จำ", async ({ context, page }) => {
+  await page.goto("/dashboard");
+  const menu = page.getByRole("complementary", { name: "เมนูหลัก" });
+  const reports = menu.getByRole("button", { name: "รายงาน", exact: true });
+
+  await reports.click();
+  await expect(reports).toHaveAttribute("aria-expanded", "false");
+  await expect(menu.getByRole("link", { name: "ค่าใช้จ่าย", exact: true })).toBeHidden();
+
+  await page.reload();
+  await expect(reports).toHaveAttribute("aria-expanded", "false");
+  await expect(menu.getByRole("button", { name: "งานประจำ", exact: true })).toHaveAttribute("aria-expanded", "true");
+
+  // ล็อกอินใหม่ในเบราว์เซอร์เดิม — ค่าที่จำอยู่ในเบราว์เซอร์ ไม่ผูกกับ session
+  await context.clearCookies();
+  await signIn(context);
+  await page.goto("/dashboard");
+  await expect(reports).toHaveAttribute("aria-expanded", "false");
+
+  // เข้าหน้าในหมวดที่ปิดไว้ผ่านลิงก์ตรง หมวดนั้นเปิดให้เห็นว่าอยู่ตรงไหน แต่ไม่จำลงไป
+  await page.goto("/expense");
+  await expect(reports).toHaveAttribute("aria-expanded", "true");
+  await page.goto("/dashboard");
+  await expect(reports).toHaveAttribute("aria-expanded", "false");
+
+  // กดหัวหมวดที่เปิดเพราะลิงก์ตรง = ปิดทันที ไม่ต้องกดสองครั้ง
+  await page.goto("/expense");
+  await reports.click();
+  await expect(reports).toHaveAttribute("aria-expanded", "false");
+
+  // กดเปิดกลับแล้วจำว่าเปิด
+  await reports.click();
+  await page.reload();
+  await expect(reports).toHaveAttribute("aria-expanded", "true");
 });
 
 test("direct link กางหมวดตั้งค่าและบอก active ได้มากกว่าสี", async ({ page }) => {

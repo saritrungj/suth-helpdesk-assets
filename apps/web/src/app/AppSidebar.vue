@@ -4,8 +4,9 @@ import { t } from "../lib/locale";
 /**
  * AppSidebar — แถบเมนูหลักด้านซ้าย
  *
- * แบ่งเมนูเป็นสี่หมวดตามจังหวะงานจริง งานประจำเปิดไว้เสมอ และหมวดของ route
- * ปัจจุบันจะเปิดอัตโนมัติเมื่อเข้าผ่าน direct link เมื่อย่อเป็น rail รายการทุกอันยังคงเห็น
+ * แบ่งเมนูเป็นสี่หมวดตามจังหวะงานจริง ทุกหมวดเปิดเป็นค่าเริ่มต้น และจำการเปิด-ปิดที่ผู้ใช้
+ * กดเองไว้ข้ามการโหลดหน้าและการล็อกอิน (store/ui.js) หมวดของ route ปัจจุบันจะเปิดอัตโนมัติ
+ * เมื่อเข้าผ่าน direct link โดยไม่ทับค่าที่จำไว้ เมื่อย่อเป็น rail รายการทุกอันยังคงเห็น
  * ผ่านไอคอน และมีทั้ง accessible name กับ tooltip ที่เปิดได้ด้วย hover/focus
  *
  * บนจอเล็กแถบนี้กลายเป็นลิ้นชักที่เลื่อนเข้ามาทับเนื้อหา และปิดเองทุกครั้งที่
@@ -14,30 +15,39 @@ import { t } from "../lib/locale";
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-vue-next";
-import { ALL_NAV_GROUPS, ADMIN_GROUPS, NAV_GROUPS, findActiveGroup, isActiveNav } from "./navigation";
+import { ADMIN_GROUPS, NAV_GROUPS, findActiveGroup, isActiveNav } from "./navigation";
 import { APP_NAME, APP_NAME_SHORT, BRAND_ASSETS, ORG_NAME_SHORT } from "./brand";
 import { authState } from "../store/auth";
-import { closeMobileNav, toggleNavCollapsed, uiState } from "../store/ui";
+import { closeMobileNav, isNavGroupOpen, toggleNavCollapsed, toggleNavGroup, uiState } from "../store/ui";
 import { UiTooltip } from "../ui";
 import AppNotifications from "./AppNotifications.vue";
 
 const route = useRoute();
 
-const openGroups = ref(
-  Object.fromEntries(ALL_NAV_GROUPS.filter((group) => group.defaultOpen).map((group) => [group.key, true]))
-);
 const visibleGroups = computed(() => [
   ...NAV_GROUPS,
   ...(authState.user?.role === "admin" ? ADMIN_GROUPS : []),
 ]);
 
+// หมวดที่เปิดเพราะเข้าหน้าในหมวดนั้น — เปิดไว้ตลอดรอบนี้แต่ไม่จำลง store เพื่อไม่ทับสิ่งที่ผู้ใช้เลือก
+const openedByRoute = ref({});
+const openGroups = computed(() =>
+  Object.fromEntries(
+    visibleGroups.value.map((group) => [group.key, Boolean(openedByRoute.value[group.key]) || isNavGroupOpen(group.key)])
+  )
+);
+
 function openActiveGroup() {
   const group = findActiveGroup(route);
-  if (group) openGroups.value[group.key] = true;
+  if (group) openedByRoute.value = { ...openedByRoute.value, [group.key]: true };
 }
 
+// กดหัวหมวดแล้วได้ตรงข้ามกับที่เห็นอยู่เสมอ และจำค่านั้นไว้
 function toggleGroup(key) {
-  openGroups.value[key] = !openGroups.value[key];
+  const shown = openGroups.value[key];
+  const { [key]: _opened, ...rest } = openedByRoute.value;
+  openedByRoute.value = rest;
+  if (isNavGroupOpen(key) === shown) toggleNavGroup(key);
 }
 
 // ปิดลิ้นชักทุกครั้งที่เปลี่ยนหน้า — กดเมนูแล้วลิ้นชักต้องหุบเอง
