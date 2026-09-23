@@ -34,9 +34,19 @@ const parseJson = (value) => {
 };
 const toJson = (value) => (value === undefined || value === null ? null : JSON.stringify(value));
 
+/**
+ * เวลาเป็น ISO (UTC) จาก epoch — TIMESTAMP ที่ mysql2 คืนเป็นข้อความตามเขตเวลาของ server ฐานบน Docker
+ * ตั้งเป็น UTC เวลาในประวัติ "ใครนำเข้าเมื่อไร" จะคลาดไป 7 ชั่วโมงถ้าส่งข้อความนั้นออกไปตรงๆ
+ */
+const iso = (epoch) => (epoch === null || epoch === undefined ? null : new Date(Number(epoch) * 1000).toISOString());
+const EPOCHS = ["created_at", "last_activity_at", "status_changed_at", "completed_at"];
+
 function rowToSession(row) {
+  const times = Object.fromEntries(EPOCHS.map((column) => [column, iso(row[`${column}_epoch`])]));
+  for (const column of EPOCHS) delete row[`${column}_epoch`];
   return {
     ...row,
+    ...times,
     decisions: parseJson(row.decisions) ?? {},
     validation: parseJson(row.validation),
     result: parseJson(row.result),
@@ -45,7 +55,9 @@ function rowToSession(row) {
 }
 
 const SELECT_SESSION = `
-  SELECT s.*, owner.username AS owner_username, last_user.username AS last_activity_username
+  SELECT s.*, owner.username AS owner_username, last_user.username AS last_activity_username,
+         UNIX_TIMESTAMP(s.created_at) AS created_at_epoch, UNIX_TIMESTAMP(s.last_activity_at) AS last_activity_at_epoch,
+         UNIX_TIMESTAMP(s.status_changed_at) AS status_changed_at_epoch, UNIX_TIMESTAMP(s.completed_at) AS completed_at_epoch
   FROM import_session s
   JOIN users owner ON owner.id = s.created_by
   LEFT JOIN users last_user ON last_user.id = s.last_activity_by`;
@@ -117,7 +129,7 @@ async function sameFileSessions(id, sha256) {
 
 async function listEvents(sessionId, limit = 500) {
   const [rows] = await db.query(
-    `SELECT e.id, e.event, e.detail, e.created_at, e.actor_id, u.username AS actor_username
+    `SELECT e.id, e.event, e.detail, UNIX_TIMESTAMP(e.created_at) AS created_at_epoch, e.actor_id, u.username AS actor_username
      FROM import_session_event e
      LEFT JOIN users u ON u.id = e.actor_id
      WHERE e.session_id = ?
@@ -125,7 +137,7 @@ async function listEvents(sessionId, limit = 500) {
      LIMIT ?`,
     [sessionId, limit]
   );
-  return rows.map((row) => ({ ...row, detail: parseJson(row.detail) }));
+  return rows.map(({ created_at_epoch, ...row }) => ({ ...row, created_at: iso(created_at_epoch), detail: parseJson(row.detail) }));
 }
 
 /**
