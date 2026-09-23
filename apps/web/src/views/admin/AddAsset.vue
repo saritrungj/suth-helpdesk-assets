@@ -14,7 +14,7 @@ import { t } from "../../lib/locale";
  *   เพิ่มทีละเครื่อง  — สำหรับเครื่องที่เพิ่งซื้อเข้ามาใหม่ทีละตัว
  *   นำเข้าจากไฟล์    — สำหรับตอนตั้งต้นระบบ หรือรับมอบเครื่องล็อตใหญ่
  */
-import { computed, ref, useTemplateRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, FileSpreadsheet, Plus } from "lucide-vue-next";
 import DeviceFormFields from "../../components/DeviceFormFields.vue";
@@ -38,6 +38,24 @@ const tab = computed({
 
 const fields = useTemplateRef("fields");
 const saving = ref(false);
+const dirty = ref(false);
+
+/*
+ * งานที่กรอกค้างไม่หายเมื่อออกจากหน้า (#177)
+ *
+ * ค่าในฟอร์มถูกเก็บเป็นร่างใน sessionStorage ทุกครั้งที่เปลี่ยน (draft-key ด้านล่าง) กดเมนู ย้อนกลับ
+ * หรือรีเฟรช แล้วกลับมาจึงได้ค่าเดิมพร้อมแถบบอกว่ากู้คืนมา — ไม่ต้องถามก่อนออกทุกครั้ง แท็บทั้งสอง
+ * mount ค้างไว้ (keep-mounted) สลับไปหน้านำเข้าแล้วกลับมาก็ไม่เริ่มใหม่ การปิดแท็บทิ้งร่างไปด้วย
+ * (sessionStorage) จึงยังเตือนก่อนปิดเหมือนแผงแก้ไขเครื่อง
+ */
+function beforeUnload(event) {
+  if (dirty.value) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
+}
+onMounted(() => window.addEventListener("beforeunload", beforeUnload));
+onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload));
 
 async function save(goBack) {
   saving.value = true;
@@ -62,10 +80,10 @@ async function save(goBack) {
       :description="t(&quot;กรอกทีละเครื่องสำหรับของที่เพิ่งรับเข้ามา หรือนำเข้าทั้งล็อตจากไฟล์ที่มีอยู่แล้ว&quot;)"
     />
 
-    <UiTabs v-model="tab" :tabs="TABS" :label="t(&quot;วิธีเพิ่มเครื่อง&quot;)">
+    <UiTabs v-model="tab" :tabs="TABS" :label="t(&quot;วิธีเพิ่มเครื่อง&quot;)" keep-mounted>
       <template #single>
         <UiCard>
-          <DeviceFormFields ref="fields" :asset-id="null" />
+          <DeviceFormFields ref="fields" :asset-id="null" draft-key="add-asset" @dirty="dirty = $event" />
 
           <template #footer>
             <div class="flex flex-wrap justify-end gap-2">

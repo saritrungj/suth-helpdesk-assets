@@ -1083,5 +1083,7 @@
   "— เลือก —": "— Choose —",
   "— เลือกหมวด —": "— Choose category —",
   "ชื่อที่จะใช้ในระบบสำหรับ {0}": "Name to use in the system for {0}",
-  "เลือก “สร้างใหม่” แล้วแก้ชื่อในช่องด้านล่างเป็นชื่อทางการได้ ชื่อในไฟล์จะถูกจำเป็นชื่อเรียกอื่นให้เอง": "After choosing “Create new”, you can edit the official name in the box below. The name in the file is remembered as an alias automatically."
+  "เลือก “สร้างใหม่” แล้วแก้ชื่อในช่องด้านล่างเป็นชื่อทางการได้ ชื่อในไฟล์จะถูกจำเป็นชื่อเรียกอื่นให้เอง": "After choosing “Create new”, you can edit the official name in the box below. The name in the file is remembered as an alias automatically.",
+  "กู้คืนข้อมูลที่กรอกค้างไว้ตั้งแต่ {0}": "Restored the unsaved entry from {0}",
+  "ล้างแล้วเริ่มใหม่": "Clear and start over"
 }

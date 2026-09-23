@@ -5,6 +5,9 @@ import { formatUnitPrice } from "../lib/format";
 import { errorMessage, fieldErrors } from "../lib/api-error";
 import { useDraftSnapshot } from "../lib/use-draft-snapshot";
 import { usePlacementFields } from "../lib/use-placement-fields";
+import { formDraft } from "../lib/form-draft";
+import { formatTime } from "../lib/locale-format";
+import { authState } from "../store/auth";
 
 /**
  * DeviceFormFields — ช่องกรอกข้อมูลเครื่องหนึ่งเครื่อง พร้อมการบันทึก
@@ -39,6 +42,11 @@ const props = defineProps({
   assetId: { type: [Number, String, null], default: null },
   /** วันที่แนะนำจากงานค้าง; ผู้ใช้ยังต้องตรวจเอกสารก่อนบันทึก */
   initialBillingFrom: { type: String, default: "" },
+  /**
+   * ชื่อร่างของฟอร์มเพิ่มเครื่อง — ใส่แล้วค่าที่กรอกค้างรอดการออกจากหน้า สลับแท็บ และรีเฟรช (#177)
+   * ใช้เฉพาะโหมดเพิ่ม การแก้ไขเครื่องเดิมมีด่านถามก่อนออกแทน (use-asset-draft-guard)
+   */
+  draftKey: { type: String, default: "" },
 });
 
 const emit = defineEmits(["saved", "dirty"]);
@@ -102,6 +110,31 @@ const formError = ref("");
 const errors = ref({});
 const { ready, dirty, capture } = useDraftSnapshot(form);
 watch(dirty, (value) => emit("dirty", value));
+
+// ---------- ร่างของฟอร์มเพิ่มเครื่อง (#177) ----------
+const draft = computed(() =>
+  props.draftKey && !isEdit.value ? formDraft(props.draftKey, authState.user?.id ?? null) : null
+);
+/** เวลาที่เก็บร่างที่เพิ่งกู้คืน — แสดงให้รู้ว่าค่าในฟอร์มไม่ได้เพิ่งกรอก และเริ่มใหม่ได้ */
+const restoredAt = ref("");
+
+// เก็บทุกครั้งที่ค่าเปลี่ยน ฟอร์มกลับไปว่างเท่าตอนเปิด = ไม่มีร่าง
+watch(
+  form,
+  () => {
+    if (!draft.value || !ready.value) return;
+    if (dirty.value) draft.value.write(form.value);
+    else draft.value.clear();
+  },
+  { deep: true }
+);
+
+/** ทิ้งร่างแล้วเริ่มฟอร์มว่าง */
+async function discardDraft() {
+  draft.value?.clear();
+  restoredAt.value = "";
+  await reset();
+}
 
 const brandOptions = computed(() => brands.value.map((b) => ({ value: b.id, label: b.name })));
 const { buildingOptions, floorOptions, divisionOptions, departmentOptions } = usePlacementFields({
@@ -211,6 +244,20 @@ async function reset() {
   else form.value = emptyForm();
   await nextTick();
   capture();
+
+  // กู้ร่างก่อนเปิด ready — ตัวล้างชั้น/แผนกเมื่ออาคาร/ฝ่ายเปลี่ยน (use-placement-fields) ทำงานเฉพาะ
+  // หลัง ready ค่าที่กู้คืนจึงไม่ถูกล้างทิ้ง และ baseline ยังเป็นฟอร์มว่าง ฟอร์มจึงนับว่ามีงานค้าง
+  const saved = draft.value?.read();
+  restoredAt.value = "";
+  if (saved) {
+    const blank = emptyForm();
+    const restored = Object.fromEntries(
+      Object.keys(blank).map((key) => [key, Object.hasOwn(saved.values, key) ? saved.values[key] : blank[key]])
+    );
+    form.value = restored;
+    restoredAt.value = saved.at;
+    await nextTick();
+  }
   ready.value = masterLoaded.value && !formError.value;
   loading.value = false;
 }
@@ -290,6 +337,8 @@ async function submit() {
 
     // ทะเบียนเครื่อง แดชบอร์ด และความครบถ้วนรายเดือนใช้ข้อมูลชุดนี้ทั้งหมด
     await invalidateAfterWrite(queryClient, "device");
+    draft.value?.clear();
+    restoredAt.value = "";
     capture();
     emit("saved", res.data);
     return true;
@@ -305,7 +354,7 @@ async function submit() {
   }
 }
 
-defineExpose({ reset, submit, saving, loading, ready });
+defineExpose({ reset, submit, saving, loading, ready, discardDraft });
 </script>
 
 <template>
@@ -319,6 +368,13 @@ defineExpose({ reset, submit, saving, loading, ready });
       <template #actions><UiButton variant="secondary" @click="reset">{{ t("ลองใหม่") }}</UiButton></template>
     </UiAlert>
     <form v-else :inert="saving" class="flex flex-col gap-5" @submit.prevent="submit">
+      <UiAlert v-if="restoredAt" tone="info" data-testid="draft-restored">
+        {{ t("กู้คืนข้อมูลที่กรอกค้างไว้ตั้งแต่ {0}", [formatTime(restoredAt)]) }}
+        <template #actions>
+          <UiButton size="sm" variant="secondary" @click="discardDraft">{{ t("ล้างแล้วเริ่มใหม่") }}</UiButton>
+        </template>
+      </UiAlert>
+
       <!-- ตัวเครื่อง -->
       <!-- grouped: กลุ่มเป็นการ์ดขาวบนพื้นแผงโทนอ่อน (M3 tonal, รอบที่ 3 ของ #51)
            legend ลอย (float) จึงอยู่ในการ์ดเป็นแถวแรกของ grid ไม่ทับเส้นขอบแบบ legend ปกติ -->

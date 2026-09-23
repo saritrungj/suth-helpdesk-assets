@@ -1,5 +1,6 @@
 import { reactive } from "vue";
 import { resetQueryCacheForNewIdentity } from "../api/query-client";
+import { clearFormDrafts } from "../lib/form-draft";
 
 // reactive state เดียวที่ทุก component (แถบเมนู, แถบบน, หน้าล็อกอิน) ใช้ร่วมกัน
 //
@@ -53,4 +54,6 @@ export function clearAuth() {
   authState.ready = true;
 
   if (changed) resetQueryCacheForNewIdentity();
+  // ร่างที่กรอกค้างเป็นของคนที่เพิ่งออกไป — เครื่องใช้ร่วมกัน คนถัดไปต้องไม่เห็น (#177)
+  clearFormDrafts();
 }
