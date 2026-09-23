@@ -24,7 +24,11 @@
     "db:logs": "docker compose --env-file database/docker/compose.env logs -f db",
     "db:bootstrap": "node scripts/dev-db/bootstrap-admin.cjs",
     "db:dump": "node scripts/dev-db/backup.cjs dump",
-    "db:restore": "node scripts/dev-db/backup.cjs restore"
+    "db:restore": "node scripts/dev-db/backup.cjs restore",
+    "db:dev:up": "docker compose --env-file database/docker/compose.env --profile dev up -d --wait db-dev",
+    "db:dev:down": "docker compose --env-file database/docker/compose.env --profile dev stop db-dev",
+    "db:dev:reset": "docker compose --env-file database/docker/compose.env --profile dev rm -sfv db-dev && docker volume rm -f suth_mysql-dev-data && npm run db:dev:up",
+    "db:dev:bootstrap": "node scripts/dev-db/bootstrap-admin.cjs --dev"
   },
   "engines": {
     "node": ">=20"

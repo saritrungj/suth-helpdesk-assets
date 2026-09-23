@@ -2,6 +2,8 @@
 #
 #   npm run db:up        เปิดฐานและ phpMyAdmin (ครั้งแรกสร้างฐานจาก database/schema.sql)
 #   npm run db:down      ปิด โดยเก็บข้อมูลไว้ใน volume
+#   npm run db:dev:up    ฐานพัฒนาแยก (db-dev) ข้อมูลตัวอย่างจาก seed_ci.sql — ADR-0032
+#   npm run db:dev:reset ลบฐานพัฒนาแล้วสร้างใหม่จากข้อมูลตัวอย่าง
 #
 # ค่าทั้งหมดอ่านจาก database/docker/compose.env (อยู่ใน .gitignore) — คัดลอกจาก
 # compose.env.example แล้วตั้งรหัสผ่านเอง วิธีใช้เต็มอยู่ที่ docs/how-to/run-docker-database.md
@@ -45,6 +47,38 @@ services:
       retries: 30
       start_period: 20s
 
+  # ฐานพัฒนา (ADR-0032) — เครื่องพัฒนาและ agent ใช้ฐานนี้ ไม่ใช่ฐานจริงข้างบน
+  # รหัสชุดของตัวเอง (SUTH_DEV_*) .env ที่ชี้พอร์ตผิดจึงเข้าฐานจริงไม่ได้ อยู่ใน profile "dev"
+  # npm run db:up จึงเปิดเฉพาะฐานจริงเหมือนเดิม
+  db-dev:
+    image: ${SUTH_DB_IMAGE:-mysql:8.4}
+    profiles: ["dev"]
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SUTH_DEV_DB_ROOT_PASSWORD:?ตั้ง SUTH_DEV_DB_ROOT_PASSWORD ใน database/docker/compose.env}
+      MYSQL_DATABASE: ${SUTH_DEV_DB_NAME:-hospital_it_asset_dev}
+      SUTH_APP_USER: ${SUTH_APP_USER:-suth_app}
+      SUTH_APP_PASSWORD: ${SUTH_DEV_APP_PASSWORD:?ตั้ง SUTH_DEV_APP_PASSWORD ใน database/docker/compose.env}
+      SUTH_READONLY_USER: ${SUTH_READONLY_USER:-suth_readonly}
+      SUTH_READONLY_PASSWORD: ${SUTH_DEV_READONLY_PASSWORD:?ตั้ง SUTH_DEV_READONLY_PASSWORD ใน database/docker/compose.env}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "127.0.0.1:${SUTH_DEV_DB_PORT:-3308}:3306"
+    volumes:
+      - mysql-dev-data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+      - ./database/docker/initdb/20-app-users.sh:/docker-entrypoint-initdb.d/20-app-users.sh:ro
+      # ข้อมูลตัวอย่างชุดเดียวกับชุดทดสอบ verify:db — ปีงบและเดือนคำนวณจากวันที่สร้างฐาน
+      - ./database/seed_ci.sql:/docker-entrypoint-initdb.d/30-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
   phpmyadmin:
     image: ${SUTH_PMA_IMAGE:-phpmyadmin:5.2}
     restart: unless-stopped
@@ -63,3 +97,4 @@ services:
 
 volumes:
   mysql-data:
+  mysql-dev-data:
