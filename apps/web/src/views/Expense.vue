@@ -165,8 +165,9 @@ const unassignedError = ref(false);
 
 async function loadMonths() {
   try {
-    const res = await api.get("/dashboard/monthly-kpi");
-    monthsWithData.value = [...new Set((res.data ?? []).map((r) => r.month))].sort();
+    // รายการเดือนล้วน ไม่ใช่ยอดรายมิเตอร์ทุกเดือนทุกปี (#149)
+    const res = await api.get("/print-transactions/months");
+    monthsWithData.value = [...(res.data ?? [])].sort();
     monthsError.value = false;
   } catch (err) {
     console.error("Load months error:", err);

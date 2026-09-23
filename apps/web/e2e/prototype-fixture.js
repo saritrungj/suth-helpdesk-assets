@@ -26,6 +26,7 @@ export async function prototypeFixture(page, role = "staff") {
       state.writes.push(route.request().postDataJSON());
       return state.failSave ? json({ title: "Unavailable" }, 503) : json({ success: true });
     }
+    if (key === "print-transactions/months") return state.failMonths ? json({}, 503) : json(["2026-09"]);
     if (key.startsWith("print-transactions/by-device/")) return state.failAnnual ? json({}, 503) : json([{ month: "2026-08", pages: 100 }]);
     if (key.startsWith("print-transactions")) return state.failMonth ? json({}, 503) : json([{ device_id: 1, pages: 100 }]);
     if (key === "expense/unassigned-devices") return state.failUnassigned ? json({}, 503) : json({ devices: state.unassigned });
