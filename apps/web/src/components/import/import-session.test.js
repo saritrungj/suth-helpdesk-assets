@@ -1,5 +1,6 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import {
+  autoMadeLines,
   blockingItems,
   contractBodyFromForm,
   contractFormFromPrefill,
@@ -73,5 +74,30 @@ describe("ป้ายและรายละเอียด", () => {
   test("รายการที่ยังกันการบันทึก รวมสิ่งที่รอขั้นก่อนหน้า", () => {
     const items = blockingItems({ checklist: [{ state: "ok" }, { state: "blocking" }, { state: "waiting" }, { state: "warning" }] });
     expect(items).toHaveLength(2);
+  });
+});
+
+describe("autoMadeLines (#190)", () => {
+  it("สรุปสิ่งที่ระบบสร้างให้เป็นบรรทัดที่คนอ่าน — สัญญา ปีงบ ชื่อ และหมวดของรุ่น", () => {
+    const lines = autoMadeLines({
+      contracts: [{ contract_no: "C1/2569", effective_from: "2026-02-24", effective_to: "2029-02-23" }],
+      fiscal_years: ["2569"],
+      names: [
+        { kind: "building", name: "อาคาร ก", decision: "create" },
+        { kind: "building", name: "อาคาร  ก.", decision: "alias", target: "อาคาร ก" },
+        { kind: "brand", name: "Brother", decision: "create" },
+      ],
+      models: [{ name: "Brother HL-L5210DN", category: "a4-laser-bw" }],
+    });
+    expect(lines[0]).toContain("C1/2569");
+    expect(lines).toContain("สร้างปีงบ 2569");
+    expect(lines.some((l) => l.includes("Brother") && l.includes("1 รายการ"))).toBe(true);
+    expect(lines.some((l) => l.includes("“อาคาร  ก.” คือ “อาคาร ก”"))).toBe(true);
+    expect(lines.at(-1)).toContain("a4-laser-bw");
+  });
+
+  it("ไม่มีอะไรสร้าง → ไม่มีบรรทัด", () => {
+    expect(autoMadeLines({})).toEqual([]);
+    expect(autoMadeLines(undefined)).toEqual([]);
   });
 });

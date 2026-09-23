@@ -6,12 +6,14 @@
  * งานอยู่บนเซิร์ฟเวอร์ (ADR-0027) — ออกจากหน้าแล้วกลับมาทำต่อจากรายการนี้ได้ ไม่ต้องอัปโหลดใหม่
  * ใช้ทั้งหน้า "นำเข้าไฟล์จากผู้ให้เช่า" และแท็บนำเข้าของหน้าเพิ่มเครื่อง
  */
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useQueryClient } from "@tanstack/vue-query";
 import { Download, FolderOpen } from "lucide-vue-next";
 import api from "../../services/api";
 import { keys, useImportSessions } from "../../api/queries";
+import { invalidateAfterWrites } from "../../api/invalidate";
+import { refreshFiscalYears } from "../../store/fiscalYear";
 import { errorMessage } from "../../lib/api-error";
 import { formatCount } from "../../lib/format";
 import { formatDateTime } from "../../lib/locale-format";
@@ -28,6 +30,16 @@ const showClosed = ref(false);
 const sessions = useImportSessions(showClosed);
 const rows = computed(() => sessions.data.value ?? []);
 
+// นำเข้าอัตโนมัติ (#190, ADR-0030) — ผู้ดูแลเลือกตอนอัปโหลดว่าให้ระบบสร้างและบันทึกให้เลยไหม จำค่าไว้ในเบราว์เซอร์นี้
+const AUTO_KEY = "suth.import.auto";
+function readAuto() {
+  try { return localStorage.getItem(AUTO_KEY) !== "off"; } catch { return true; }
+}
+const autoCommit = ref(readAuto());
+watch(autoCommit, (value) => {
+  try { localStorage.setItem(AUTO_KEY, value ? "on" : "off"); } catch { /* Storage may be disabled. */ }
+});
+
 const uploading = ref(false);
 const uploadError = ref("");
 
@@ -38,9 +50,14 @@ async function upload(file) {
   try {
     const body = new FormData();
     body.append("file", file);
+    if (autoCommit.value) body.append("auto", "commit");
     const { data } = await api.post("/import-sessions", body, { headers: { "Content-Type": "multipart/form-data" } });
     queryClient.setQueryData(keys.importSession(data.id), data);
     queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+    if (data.status === "completed") {
+      await refreshFiscalYears();
+      await invalidateAfterWrites(queryClient, ["device", "usage", "contracts", "fiscal-years", "buildings", "floors", "divisions", "departments", "brands"]);
+    }
     await router.push(`/admin/import/${data.id}`);
   } catch (err) {
     uploadError.value = errorMessage(err, t("อัปโหลดไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"));
@@ -77,7 +94,13 @@ function headline(row) {
     </UiAlert>
 
     <FileDropzone :model-value="null" :disabled="uploading" @update:model-value="upload" />
-    <p v-if="uploading" class="text-sm text-ink-soft" role="status">{{ t("กำลังอัปโหลดและตรวจไฟล์…") }}</p>
+    <div>
+      <UiCheckbox v-model="autoCommit" :disabled="uploading" :label="t('สร้างข้อมูลที่ขาดและบันทึกให้เลยเมื่อไม่มีอะไรต้องถาม')" data-testid="import-auto-toggle" />
+      <p class="text-xs text-ink-mute mt-1 pl-6">
+        {{ t("ระบบสร้างสัญญาจากหัวรายงาน ปีงบ ยี่ห้อ อาคาร ฝ่าย และเลือกหมวดของรุ่นที่รู้จักให้ แล้วบันทึกทันที — หยุดถามเฉพาะชื่อที่คล้ายของเดิม ยอดที่จะเขียนทับ หรือตัวเลขสัญญาที่ไม่ตรงกับไฟล์") }}
+      </p>
+    </div>
+    <p v-if="uploading" class="text-sm text-ink-soft" role="status">{{ autoCommit ? t("กำลังอัปโหลด ตรวจ และบันทึกให้… ไฟล์ใหญ่อาจใช้เวลาครึ่งนาที") : t("กำลังอัปโหลดและตรวจไฟล์…") }}</p>
     <UiAlert v-if="uploadError" tone="danger">{{ uploadError }}</UiAlert>
 
     <section class="rounded-lg border border-line-soft p-3" data-testid="import-sessions">

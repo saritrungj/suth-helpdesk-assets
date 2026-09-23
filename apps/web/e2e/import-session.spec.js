@@ -42,11 +42,13 @@ function syntheticFile(tag) {
   };
 }
 
-async function upload(page, name, buffer) {
+/** auto = ช่อง "บันทึกให้เลย" ของหน้าอัปโหลด (#190) — เทสที่ทำทีละขั้นปิดไว้ */
+async function upload(page, name, buffer, { auto = false } = {}) {
+  await page.addInitScript((value) => localStorage.setItem("suth.import.auto", value), auto ? "on" : "off");
   await page.goto("/admin/import");
   await page.locator('input[type="file"]').setInputFiles({ name, mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer });
-  await expect(page).toHaveURL(/\/admin\/import\/\d+$/, { timeout: 60000 });
-  await expect(page.getByTestId("import-checklist")).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/import\/\d+$/, { timeout: 90000 });
+  if (!auto) await expect(page.getByTestId("import-checklist")).toBeVisible();
   return Number(page.url().split("/").pop());
 }
 
@@ -150,4 +152,56 @@ test("ออกจากหน้ากลางงานแล้วกลั�
   } finally {
     await apiFetch(`/import-sessions/${id}/abandon`, { method: "POST", body: JSON.stringify({ reason: "e2e cleanup" }) });
   }
+});
+
+test("นำเข้าอัตโนมัติ (#190): ระบบว่างของสัญญานี้ → อัปโหลดครั้งเดียว ได้สัญญา ชื่อ เครื่อง และยอด โดยไม่ต้องกดอะไรต่อ", async ({ page }) => {
+  test.skip(process.env.SUTH_E2E_DISPOSABLE_DB !== "1", "สร้างสัญญาและเครื่องถาวร — รันเฉพาะฐานชั่วคราวของ verify:db");
+  test.setTimeout(180000);
+  const file = syntheticFile(`C${run}`);
+  const id = await upload(page, "meter-report-auto.xlsx", file.buffer, { auto: true });
+
+  await expect(page.getByTestId("import-status")).toHaveText("บันทึกแล้ว", { timeout: 60000 });
+  const auto = page.getByTestId("import-result").getByTestId("import-auto");
+  await expect(auto).toContainText(`สร้างสัญญา ${file.contractNo}`);
+  await expect(auto).toContainText(`อาคารทดสอบ C${run}`);
+  await expect(page.getByTestId("open-dashboard")).toBeVisible();
+
+  const detail = await apiFetch(`/import-sessions/${id}`);
+  expect(detail.result.devices_created).toBe(4);
+  expect(detail.result.readings_new).toBe(file.months.length * 4);
+  expect(detail.result.auto.stopped).toEqual([]);
+  // หมวดของรุ่นมาจากแคตตาล็อก หรือจากเครื่องที่เทสก่อนหน้าลงไว้แล้ว — ราคาของสัญญาที่สร้างต้องตรงกับไฟล์ทั้งสองทาง
+  const [contract] = detail.result.auto.made.contracts;
+  expect(contract.contract_no).toBe(file.contractNo);
+  expect(contract.price_lines.map((line) => Number(line.price_per_page)).sort()).toEqual([0.35, 0.365, 3.9]);
+  const events = (await apiFetch(`/import-sessions/${id}/events`)).map((e) => e.event);
+  expect(events).toEqual(expect.arrayContaining(["auto_decided", "contract_created", "auto_finished", "completed"]));
+});
+
+test("นำเข้าอัตโนมัติ (#190): ชื่อที่คล้ายของเดิม → หยุดถามเฉพาะชื่อนั้น ชื่ออื่นเลือกให้แล้ว และยังไม่บันทึก", async ({ page }) => {
+  test.skip(process.env.SUTH_E2E_DISPOSABLE_DB !== "1", "สร้างสัญญาและเครื่องถาวร — รันเฉพาะฐานชั่วคราวของ verify:db");
+  test.setTimeout(180000);
+  const first = syntheticFile(`D${run}`);
+  const firstId = await upload(page, "meter-report-d1.xlsx", first.buffer, { auto: true });
+  await expect(page.getByTestId("import-status")).toHaveText("บันทึกแล้ว", { timeout: 60000 });
+
+  // ไฟล์ที่สอง: อาคารเดิมแต่เว้นวรรคต่างกัน + ฝ่ายใหม่จริง
+  const months = lastCompletedMonths(2);
+  const second = meterReportWorkbook({
+    contractNo: first.contractNo,
+    months,
+    devices: [{
+      serial: `TX9-E${run}-01`, model: "Brother HL-L5210DN", place: "ห้อง 1", division: `ฝ่ายใหม่ E${run}`, department: "งานทดสอบ",
+      building: `อาคาร ทดสอบ D${run}`, floor: "3", price: 0.365, pages: [10, 20],
+    }],
+  });
+  const id = await upload(page, "meter-report-d2.xlsx", second.buffer, { auto: true });
+  await expect(page.getByTestId("import-auto-stopped")).toContainText(`อาคาร ทดสอบ D${run}`, { timeout: 60000 });
+  await expect(page.getByTestId("import-status")).not.toHaveText("บันทึกแล้ว");
+
+  const detail = await apiFetch(`/import-sessions/${id}`);
+  expect(detail.decisions.names.division[`ฝ่ายใหม่ E${run}`]).toEqual({ action: "create" });
+  expect(detail.decisions.names.building?.[`อาคาร ทดสอบ D${run}`]).toBeUndefined();
+  expect(firstId).toBeLessThan(id);
+  await apiFetch(`/import-sessions/${id}/abandon`, { method: "POST", body: JSON.stringify({ reason: "e2e cleanup" }) });
 });
