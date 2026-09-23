@@ -2,8 +2,8 @@ import { describe, expect, test } from "vitest";
 import * as XLSX from "xlsx";
 import { strFromU8, unzipSync } from "fflate";
 import { createWorkbook } from "../lib/export-xlsx";
-import { buildComparison, buildDifference } from "./comparison";
-import { comparisonSheet, conditionsSheet, departmentRankingSheet, detailSheet, differenceSheet, exportFilename, monthsSlug, rankingSheet } from "./comparison-export";
+import { buildComparison } from "./comparison";
+import { comparisonSheet, conditionsSheet, detailSheet, exportFilename, monthsSlug, rankingSheet, summarySheet } from "./comparison-export";
 
 const row = (overrides) => ({
   device_id: 1, serial_number: "00123", brand_name: "HP", model: "M404", month: "2025-10",
@@ -16,7 +16,7 @@ const rows = [
   row({}),
   row({ month: "2025-11", pages_printed: 200, net_pages: 196, total_cost: "83.79" }),
   row({ device_id: 2, serial_number: "SN-2", division_id: 2, division_name: "ฝ่าย B", department_id: 20, department_name: "แผนก B1", pages_printed: 0, net_pages: 0, total_cost: "0.00" }),
-  row({ device_id: 3, serial_number: "SN-3", month: "2025-11", division_id: 2, division_name: "ฝ่าย B", department_id: 21, department_name: "แผนก B2", pages_printed: 50, net_pages: 49, price_per_page: null, total_cost: null }),
+  row({ device_id: 3, serial_number: "SN-3", month: "2025-11", division_id: 2, division_name: "ฝ่าย B", department_id: 21, department_name: "แผนก B2", pages_printed: 50, net_pages: 49, total_cost: "20.95" }),
 ];
 
 async function open(sheets) {
@@ -26,25 +26,32 @@ async function open(sheets) {
 }
 
 describe("ไฟล์ Excel ของการเปรียบเทียบ — ไฟล์เดียวสามแผ่น", () => {
+  test("แผ่นสรุปมีค่าเฉลี่ยจากยอดที่บันทึกได้ทั้งหมด", () => {
+    const summary = summarySheet(rows);
+    expect(summary.header[5]).toBe("บาทต่อเครื่อง");
+    expect(summary.rows[0][5]).toBeCloseTo(146.64 / 3);
+    expect(summary.header).not.toContain("รายการรอยืนยันราคา");
+  });
+
   test("แผ่นเปรียบเทียบของรายการที่เลือกมีตัวเลขชุดเดียวกับบนจอ และกราฟเส้นหนึ่งเส้นต่อรายการ", async () => {
-    const model = buildComparison({ rows, dimension: "division", items: ["1", "2"], metric: "rawPages" });
+    const model = buildComparison({ rows, dimension: "division", include: ["1", "2"], metric: "rawPages" });
     const { workbook, files } = await open([comparisonSheet(model), detailSheet(model.scopeRows), conditionsSheet("test", [["ช่วงเวลา", "ต.ค. 2568 – พ.ย. 2568"]])]);
     expect(workbook.SheetNames).toEqual(["เปรียบเทียบ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
 
     const [header, first, second] = XLSX.utils.sheet_to_json(workbook.Sheets["เปรียบเทียบ"], { header: 1, defval: null });
-    expect(header).toEqual(["ฝ่าย", "ยอดพิมพ์จริง (หน้า)", "สุทธิหลังหัก 2% (หน้า)", "ค่าใช้จ่ายที่ยืนยันแล้ว (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)", "รายการรอยืนยันราคา", "สถานะข้อมูล", "ต.ค. 2568", "พ.ย. 2568"]);
-    expect(first).toEqual(["ฝ่าย A", 300, 294, 125.69, 1, 0, "ยืนยันราคาครบ", 100, 200]);
-    expect(second).toEqual(["ฝ่าย B", 50, 49, 0, 2, 1, "รอยืนยันราคา 1 รายการ", 0, 50]);
+    expect(header).toEqual(["ฝ่าย", "ยอดพิมพ์จริง (หน้า)", "สุทธิหลังหัก 2% (หน้า)", "ค่าใช้จ่าย (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)", "ต.ค. 2568", "พ.ย. 2568"]);
+    expect(first).toEqual(["ฝ่าย A", 300, 294, 125.69, 1, 100, 200]);
+    expect(second).toEqual(["ฝ่าย B", 50, 49, 20.95, 2, 0, 50]);
 
     const chart = strFromU8(files["xl/charts/chart1.xml"]);
     expect(chart).toContain("<c:lineChart>");
     expect(chart.match(/<c:ser>/g)).toHaveLength(2);
-    expect(chart).toContain("&apos;เปรียบเทียบ&apos;!$H$1:$I$1");
-    expect(chart).toContain("&apos;เปรียบเทียบ&apos;!$H$3:$I$3");
+    expect(chart).toContain("&apos;เปรียบเทียบ&apos;!$F$1:$G$1");
+    expect(chart).toContain("&apos;เปรียบเทียบ&apos;!$F$3:$G$3");
   });
 
   test("แผ่นอันดับ: ทุกหน่วยงานเรียงมาก→น้อยแม้เลือกไว้รายการเดียว พร้อมกราฟแท่งแนวนอนใบเดียว (#115)", async () => {
-    const model = buildComparison({ rows, dimension: "department", items: ["20"], metric: "rawPages" });
+    const model = buildComparison({ rows, dimension: "department", include: ["20"], metric: "rawPages" });
     const { workbook, files } = await open([comparisonSheet(model), rankingSheet(model), detailSheet(model.scopeRows)]);
     expect(workbook.SheetNames).toEqual(["เปรียบเทียบ", "อันดับ", "ข้อมูลรายละเอียด"]);
     const table = XLSX.utils.sheet_to_json(workbook.Sheets["อันดับ"], { header: 1, defval: null });
@@ -64,7 +71,7 @@ describe("ไฟล์ Excel ของการเปรียบเทียบ
     const many = Array.from({ length: 14 }, (_, index) => ({
       ...rows[0], device_id: 100 + index, division_id: 100 + index, division_name: `ฝ่าย ${String(index + 1).padStart(2, "0")}`, pages_printed: (index + 1) * 10,
     }));
-    const model = buildComparison({ rows: many, dimension: "division", items: [], metric: "rawPages" });
+    const model = buildComparison({ rows: many, dimension: "division", include: [], metric: "rawPages" });
     const { files } = await open([rankingSheet(model)]);
     const top = strFromU8(files["xl/charts/chart1.xml"]);
     const bottom = strFromU8(files["xl/charts/chart2.xml"]);
@@ -77,39 +84,15 @@ describe("ไฟล์ Excel ของการเปรียบเทียบ
     expect(strFromU8(files["xl/drawings/_rels/drawing1.xml.rels"])).toContain("chart2.xml");
   });
 
-  test("แผ่นอันดับค่าใช้จ่ายที่ราคาไม่ครบบอกเหตุผลแทนตาราง และภาพรวมรายเดือนไม่มีแผ่นอันดับ", async () => {
-    const model = buildComparison({ rows, dimension: "department", items: [], metric: "cost" });
+  test("แผ่นอันดับค่าใช้จ่ายมีตาราง และภาพรวมรายเดือนไม่มีแผ่นอันดับ", async () => {
+    const model = buildComparison({ rows, dimension: "department", include: [], metric: "cost" });
     const sheet = rankingSheet(model);
-    expect(sheet.rows[0][0]).toMatch(/ยังจัดอันดับแผนกตามค่าใช้จ่ายไม่ได้ เพราะราคายังยืนยันไม่ครบ 1 รายการ/);
-    expect(sheet.charts).toBeUndefined();
+    expect(sheet.rows).toHaveLength(3);
+    expect(sheet.rows[0][0]).toBe(1);
     expect(rankingSheet(buildComparison({ rows, dimension: "overall" }))).toBeNull();
   });
 
-  test("อันดับแผนกของหน้าค่าใช้จ่ายแยกแผนก: เรียงตามค่าใช้จ่าย ราคาไม่ครบเรียงตามหน้าสุทธิ แผนกที่ไม่มีรายการไม่ถูกจัด", async () => {
-    const device = (months) => ({ monthly: months.map((month) => ({ month })) });
-    const divisions = [
-      { name: "ฝ่าย A", departments: [
-        { name: "งานเดียวกัน", total_pages: 900, total_cost: 405, total_cost_satang: 40500, device_count: 1, unpriced_readings: 0, devices: [device(["2025-10"])] },
-        { name: "งานว่าง", total_pages: 0, total_cost: 0, total_cost_satang: 0, device_count: 0, unpriced_readings: 0, devices: [] },
-      ] },
-      { name: "ฝ่าย B", departments: [
-        { name: "งานเดียวกัน", total_pages: 100, total_cost: 900, total_cost_satang: 90000, device_count: 2, unpriced_readings: 0, devices: [device(["2025-10"]), device(["2025-11"])] },
-        { name: "งานศูนย์", total_pages: 0, total_cost: 0, total_cost_satang: 0, device_count: 1, unpriced_readings: 0, devices: [device(["2025-10"])] },
-      ] },
-    ];
-    const priced = departmentRankingSheet(divisions);
-    expect(priced).toMatchObject({ basis: "cost", count: 3 });
-    expect(priced.sheet.rows.map((line) => line.slice(0, 4))).toEqual([[1, "งานเดียวกัน", "ฝ่าย B", 900], [2, "งานเดียวกัน", "ฝ่าย A", 405], [3, "งานศูนย์", "ฝ่าย B", 0]]);
-    const { files } = await open([priced.sheet]);
-    expect(strFromU8(files["xl/charts/chart1.xml"])).toContain("&apos;อันดับ&apos;!$D$2:$D$4");
-
-    divisions[1].departments[0].unpriced_readings = 1;
-    const unpriced = departmentRankingSheet(divisions);
-    expect(unpriced.basis).toBe("netPages");
-    expect(unpriced.sheet.rows.map((line) => [line[0], line[2]])).toEqual([[1, "ฝ่าย A"], [2, "ฝ่าย B"], [3, "ฝ่าย B"]]);
-  });
-
-  test("ข้อมูลรายละเอียด: เดือนเป็นวันที่ ปีงบตามกฎ ต.ค.–ก.ย. รหัสไม่เสียเลขศูนย์ และราคาที่ไม่รู้เป็นเซลล์ว่าง", async () => {
+  test("ข้อมูลรายละเอียด: เดือนเป็นวันที่ ปีงบตามกฎ ต.ค.–ก.ย. และรหัสไม่เสียเลขศูนย์", async () => {
     const { workbook } = await open([detailSheet(rows)]);
     const sheet = workbook.Sheets["ข้อมูลรายละเอียด"];
     expect(sheet.A2).toMatchObject({ t: "n", v: 45931 });
@@ -117,41 +100,9 @@ describe("ไฟล์ Excel ของการเปรียบเทียบ
     expect(sheet.C2).toMatchObject({ t: "s", v: "00123" });
     expect(sheet.H2).toMatchObject({ t: "s", v: "0007/2569" });
     expect(sheet.L2).toMatchObject({ t: "n", v: 0.4275 });
-    const unpriced = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null }).find((line) => line[2] === "SN-3");
-    expect(unpriced.slice(9)).toEqual([50, 49, null, null, "ยังยืนยันราคาไม่ได้"]);
-    expect(sheet["!autofilter"]).toEqual({ ref: "A1:N5" });
-  });
-
-  test("ส่วนต่างในไฟล์ใช้ค่าเดียวกับหน้าจอ: เปอร์เซ็นต์เป็นสัดส่วนจริง ฐานศูนย์ไม่มีเปอร์เซ็นต์", async () => {
-    const model = buildDifference({
-      dimension: "department", basis: "units", items: ["20", "10", "21"], baseKey: "20", metric: "rawPages",
-      current: { months: ["2025-10", "2025-11"], rows },
-    });
-    const { workbook, files } = await open([differenceSheet(model, { title: "ส่วนต่าง" })]);
-    const table = XLSX.utils.sheet_to_json(workbook.Sheets["เปรียบเทียบ"], { header: 1, defval: null });
-    expect(table[0]).toEqual(["แผนก", "ฝ่าย", "บทบาทในการเทียบ", "ยอดพิมพ์จริง (หน้า)", "สุทธิหลังหัก 2% (หน้า)", "ส่วนต่าง (หน้า)", "ส่วนต่าง (%)", "หมายเหตุการเทียบ", "เครื่องที่มีข้อมูล (เครื่อง)", "สถานะข้อมูล"]);
-    expect(table[1].slice(2, 8)).toEqual(["ฐาน", 0, 0, null, null, "รายการฐาน"]);
-    expect(table[2].slice(2, 8)).toEqual(["เทียบกับฐาน", 300, 294, 300, null, "ฐานเป็นศูนย์ แสดงเฉพาะส่วนต่างจริง ไม่คิดเปอร์เซ็นต์"]);
-    expect(strFromU8(files["xl/charts/chart1.xml"])).toContain("&apos;เปรียบเทียบ&apos;!$D$2:$D$4");
-  });
-
-  test("ช่วง A/B ของยอดพิมพ์แสดงยอดจริงคู่กับยอดสุทธิทั้งสองช่วง", async () => {
-    const reference = { months: ["2024-10"], rows: [row({ month: "2024-10", pages_printed: 150, net_pages: 147 })] };
-    const model = buildDifference({ dimension: "division", basis: "periods", items: ["1"], metric: "rawPages", current: { months: ["2025-10", "2025-11"], rows }, reference });
-    const { workbook } = await open([differenceSheet(model, { title: "A/B", currentLabel: "ช่วงที่ดู", referenceLabel: "ช่วงฐาน" })]);
-    const table = XLSX.utils.sheet_to_json(workbook.Sheets["เปรียบเทียบ"], { header: 1, defval: null });
-    expect(table[0].slice(0, 5)).toEqual(["ฝ่าย", "ช่วงฐาน (หน้า)", "สุทธิหลังหัก 2% — ช่วงฐาน (หน้า)", "ช่วงที่ดู (หน้า)", "สุทธิหลังหัก 2% — ช่วงที่ดู (หน้า)"]);
-    expect(table[1].slice(0, 5)).toEqual(["ฝ่าย A", 150, 147, 300, 294]);
-  });
-
-  test("ช่วง A/B: สองคอลัมน์ค่าและกราฟสองชุด เปอร์เซ็นต์มีรูปแบบ %", async () => {
-    const reference = { months: ["2024-10"], rows: [row({ month: "2024-10", pages_printed: 150, net_pages: 147, total_cost: "62.84" })] };
-    const model = buildDifference({ dimension: "division", basis: "periods", items: ["1"], metric: "cost", current: { months: ["2025-10", "2025-11"], rows }, reference });
-    const { workbook, files } = await open([differenceSheet(model, { title: "A/B", currentLabel: "ช่วงที่ดู", referenceLabel: "ช่วงฐาน" })]);
-    const sheet = workbook.Sheets["เปรียบเทียบ"];
-    expect(XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null })[1].slice(0, 5)).toEqual(["ฝ่าย A", 62.84, 125.69, 62.85, 62.85 / 62.84]);
-    expect(sheet.E2.z).toBe("0.0%");
-    expect(strFromU8(files["xl/charts/chart1.xml"]).match(/<c:ser>/g)).toHaveLength(2);
+    const third = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null }).find((line) => line[2] === "SN-3");
+    expect(third.slice(9)).toEqual([50, 49, 0.4275, 20.95]);
+    expect(sheet["!autofilter"]).toEqual({ ref: "A1:M5" });
   });
 
   test("ชื่อไฟล์บอกขอบเขตเป็น ASCII", () => {

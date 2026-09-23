@@ -46,7 +46,8 @@ const db = require("./db");
  *                index?: [string, string], viewMentions?: [string, string] }>}
  */
 const REQUIREMENTS = [
-  { migration: "migration_unique_print_transactions.sql", index: ["print_transactions", "uq_device_month"] },
+  // uq_device_month ของ migration_unique_print_transactions.sql ถูกแทนด้วย uq_meter_month
+  // ใน migration_billing_lines_and_meters.sql จึงตรวจคีย์ใหม่แทน (ท้ายรายการ)
   { migration: "migration_add_fiscal_year_range.sql", column: ["fiscal_year", "start_month"] },
   { migration: "migration_add_fiscal_year_range.sql", column: ["fiscal_year", "end_month"] },
   { migration: "migration_add_device_location.sql", column: ["devices", "location"] },
@@ -58,7 +59,6 @@ const REQUIREMENTS = [
 
   { migration: "migration_add_effective_pricing.sql", column: ["contracts", "effective_from"] },
   { migration: "migration_add_effective_pricing.sql", column: ["contracts", "effective_to"] },
-  { migration: "migration_add_effective_pricing.sql", column: ["contracts", "price_verified_at"] },
   { migration: "migration_add_effective_pricing.sql", table: "device_contract_history" },
 
   // view ที่ยังไม่ถูกเขียนทับเป็นกรณีที่อันตรายกว่าตารางที่หายไป เพราะมันไม่พัง —
@@ -66,6 +66,23 @@ const REQUIREMENTS = [
   // ก็แสดงเงินผิดอย่างเงียบสนิท เกิดได้จริงเมื่อ migration ล้มกลางไฟล์ (ตาราง
   // สร้างเสร็จแล้วแต่ CREATE OR REPLACE VIEW ยังไม่ทำงาน)
   { migration: "migration_add_effective_pricing.sql", viewMentions: ["v_monthly_kpi", "device_contract_history"] },
+
+  // ADR-0021/0022/0023 — รายการราคา มิเตอร์ อายุสัญญา ค่าเช่า/VAT
+  { migration: "migration_billing_lines_and_meters.sql", table: "meter_category" },
+  { migration: "migration_billing_lines_and_meters.sql", table: "contract_price_line" },
+  { migration: "migration_billing_lines_and_meters.sql", table: "device_meter" },
+  { migration: "migration_billing_lines_and_meters.sql", column: ["print_transactions", "meter_id"] },
+  { migration: "migration_billing_lines_and_meters.sql", column: ["print_transactions", "meter_start"] },
+  { migration: "migration_billing_lines_and_meters.sql", column: ["contracts", "monthly_rental"] },
+  { migration: "migration_billing_lines_and_meters.sql", index: ["print_transactions", "uq_meter_month"] },
+  // view ที่ยังคิดราคาเดียวต่อสัญญาและปัดทีละแถว ให้ตัวเลขผิดโดยไม่พัง จึงต้องตรวจเนื้อ view
+  { migration: "migration_billing_lines_and_meters.sql", viewMentions: ["v_monthly_kpi", "contract_price_line"] },
+  { migration: "migration_billing_lines_and_meters.sql", viewMentions: ["v_contract_invoice", "monthly_rental"] },
+
+  // ADR-0025 — ชื่อเรียกอื่นของข้อมูลหลัก
+  { migration: "migration_add_master_aliases.sql", table: "brand_alias" },
+  { migration: "migration_add_master_aliases.sql", table: "building_alias" },
+  { migration: "migration_add_master_aliases.sql", table: "division_alias" },
 ];
 
 /**
@@ -116,13 +133,18 @@ async function findSchemaGaps() {
       // รัน migration ฉบับนั้นซ้ำให้ครบ
       if (body === undefined) {
         gaps.push({ what: `ไม่มี view ${view}`, migration: need.migration });
+      } else if (body === "") {
+        // view มีอยู่แต่ information_schema ให้นิยามว่างเปล่า = บัญชีนี้ไม่มีสิทธิ์ SHOW VIEW
+        // ไม่ใช่นิยามเดิม การบอกให้รัน migration ซ้ำจะพาคนไปแก้ผิดที่ (เจอจริงกับฐาน Docker)
+        gaps.push({ what: `อ่านนิยาม view ${view} ไม่ได้ — บัญชีฐานข้อมูลไม่มีสิทธิ์ SHOW VIEW`, migration: null });
       } else if (!body.includes(mention.toLowerCase())) {
         gaps.push({ what: `view ${view} ยังเป็นนิยามเดิม (ไม่อ้างถึง ${mention})`, migration: need.migration });
       }
     }
   }
 
-  return gaps;
+  // view หนึ่งตัวถูกตรวจหลายบรรทัด ช่องว่างเรื่องสิทธิ์จึงซ้ำกันได้ — เหลือบรรทัดเดียวต่อ view
+  return gaps.filter((gap, i) => gap.migration !== null || gaps.findIndex((other) => other.what === gap.what) === i);
 }
 
 /**
@@ -135,8 +157,22 @@ async function findSchemaGaps() {
  * @returns {string}
  */
 function describeGaps(gaps) {
+  const privilege = gaps.filter((gap) => gap.migration === null);
+  if (privilege.length > 0 && privilege.length === gaps.length) {
+    return [
+      "บัญชีฐานข้อมูลที่ API ใช้มีสิทธิ์ไม่พอตรวจโครงสร้าง:",
+      "",
+      ...privilege.map((gap) => `  - ${gap.what}`),
+      "",
+      "  ให้สิทธิ์ SHOW VIEW บนฐานนี้กับบัญชีของ API (อ่านนิยาม view เท่านั้น ไม่ได้แก้ข้อมูล):",
+      "",
+      "      GRANT SHOW VIEW ON `DBNAME`.* TO 'USER'@'HOST';",
+    ].join("\n");
+  }
+
   const byMigration = new Map();
   for (const gap of gaps) {
+    if (gap.migration === null) continue; // บอกเรื่องสิทธิ์หลังแก้ migration ครบแล้ว
     if (!byMigration.has(gap.migration)) byMigration.set(gap.migration, []);
     byMigration.get(gap.migration).push(gap.what);
   }

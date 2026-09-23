@@ -59,3 +59,14 @@ docs/reference/review-*.md
 
 # เครื่องมือ CLI ของ agent ที่ใช้ขับเบราว์เซอร์ระหว่างตรวจงาน ไม่ใช่ส่วนของระบบ
 .playwright-cli/
+
+# ใบแจ้งหนี้จริงของผู้ให้เช่า — ข้อมูลจริงของโรงพยาบาล ใช้ทดสอบบนเครื่องเท่านั้น (ADR-0023)
+# ไฟล์ Excel/CSV ใน docs/ คือไฟล์จริงของหน่วยงานเสมอ — repo เป็น public เก็บนอก repo (D:suth-dataaw)
+docs/**/*.xls
+docs/**/*.xlsx
+docs/**/*.xlsm
+docs/**/*.csv
+
+# ฐานพัฒนาบน Docker — รหัสผ่านของเครื่องนี้ (ADR-0024)
+database/docker/compose.env
+

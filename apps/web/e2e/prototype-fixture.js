@@ -30,7 +30,18 @@ export async function prototypeFixture(page, role = "staff") {
     if (key.startsWith("print-transactions")) return state.failMonth ? json({}, 503) : json([{ device_id: 1, pages: 100 }]);
     if (key === "expense/unassigned-devices") return state.failUnassigned ? json({}, 503) : json({ devices: state.unassigned });
     if (key.startsWith("expense/") && state.expenseDelay) await new Promise(resolve => setTimeout(resolve, state.expenseDelay));
-    if (key.startsWith("expense/")) return state.failExpense ? json({}, 503) : json({ contracts: [{ id: 1, contract_no: "SUTH-2569", price_per_page: 0.45, total_cost: state.expenseTotal, total_cost_satang: state.expenseTotal * 100, devices: [{ ...assets.rows[0], total_cost: 360, monthly: [{ month: "2026-09", pages: 1000, cost: 360 }] }] }] });
+    if (key.startsWith("expense/")) return state.failExpense ? json({}, 503) : json({
+      total_cost: state.expenseTotal,
+      invoice_total: state.expenseTotal,
+      contracts: [{
+        id: 1,
+        contract_no: "SUTH-2569",
+        total_cost: state.expenseTotal,
+        total_cost_satang: state.expenseTotal * 100,
+        invoice_total: state.expenseTotal,
+        devices: [{ ...assets.rows[0], effective_prices: [0.45], total_cost: 360, monthly: [{ month: "2026-09", pages: 1000, cost: 360 }] }],
+      }],
+    });
     if (key === "dashboard/by-department") return state.failExpense ? json({}, 503) : json(state.byDepartment ?? { divisions: [{ id: 1, name: "ฝ่ายการพยาบาล", total_cost: state.expenseTotal, total_cost_satang: state.expenseTotal * 100, total_pages: 800, departments: [{ id: 1, name: "หน่วยบริการผู้ป่วยนอก", total_cost: 360, total_pages: 800, devices: [{ ...assets.rows[0], total_cost: 360, total_pages: 800, monthly: [{ month: "2026-09", net_pages: 800, total_cost: 360 }] }] }] }], unassignedDevices: [] });
     if (key === "dashboard/monthly-kpi") return state.failMonths ? json({}, 503) : json([{ month: "2026-09", total_pages: 800, total_cost: 360 }]);
     return json([]);

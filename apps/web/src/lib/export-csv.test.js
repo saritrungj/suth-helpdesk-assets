@@ -34,6 +34,14 @@ test("สูตรสั่งงานผ่าน DDE ก็ถูกบัง
   expect(csvCell("=cmd|' /C calc'!A0")).toBe("\"'=cmd|' /C calc'!A0\"");
 });
 
+test("สูตรที่มีช่องว่างหรือ zero-width characters นำหน้า ต้องถูกบังคับให้เป็นข้อความ", () => {
+  expect(csvCell(" =1+1")).toBe("\"' =1+1\"");
+  expect(csvCell("   @SUM(A1)")).toBe("\"'   @SUM(A1)\"");
+  expect(csvCell("\u200B=cmd|' /C calc'!A0")).toBe("\"'\u200B=cmd|' /C calc'!A0\"");
+  expect(csvCell("＝1+1")).toBe("\"'＝1+1\"");
+  expect(csvCell("|calc")).toBe("\"'|calc\"");
+});
+
 test("ตัวเริ่มสูตรที่อยู่กลางข้อความไม่ถูกแตะ — เส้นแบ่งอยู่ที่ตัวอักษรแรกเท่านั้น", () => {
   expect(csvCell("SN=123")).toBe('"SN=123"');
   expect(csvCell("A+B")).toBe('"A+B"');

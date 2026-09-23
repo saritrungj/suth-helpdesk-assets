@@ -9,18 +9,18 @@ import { prototypeFixture } from "./prototype-fixture.js";
  * ทำให้เรื่องระดับต้องแก้ทันทีมองไม่ออกจากนอกลิ้นชัก
  */
 
-const CRITICAL = "มี 1 เครื่องที่ยังยืนยันราคาไม่ได้";
+const CRITICAL = "มี 1 เครื่องที่สัญญาไม่มีราคาครอบคลุม";
 const CRITICAL_BADGE = "รวมเรื่องที่ต้องแก้ทันที";
 
 const ATTENTION = [
   {
-    code: "unbilled_devices",
+    code: "unpriced_missing_price_line",
     severity: "critical",
     title: CRITICAL,
-    detail: "2 รายการ รวม 1,170 แผ่น ยังไม่ถูกนับในยอดเงิน เพราะยังหาราคาที่มีผลกับเดือนนั้นไม่ได้",
+    detail: "2 รายการ รวม 1,170 แผ่น ต้องเพิ่มช่วงราคาที่ครอบคลุมวันที่บันทึกยอด",
     count: 1,
     params: { readings: 2, pages: 1170 },
-    action: { label: "ไปตรวจช่วงที่สัญญามีผล", to: "/admin/contract-prices" },
+    action: { label: "ไปแก้ไขสัญญา", to: "/admin/contracts" },
   },
   {
     code: "unverified_installation",
@@ -41,8 +41,8 @@ const ATTENTION = [
 ];
 
 /** overview ของตัวเองต้องลงทะเบียนทีหลัง prototypeFixture — route ที่มาทีหลังถูกเรียกก่อน */
-async function attentionFixture(page, attention = ATTENTION) {
-  await prototypeFixture(page, "admin");
+async function attentionFixture(page, attention = ATTENTION, role = "admin") {
+  await prototypeFixture(page, role);
   await page.route("**/api/dashboard/overview**", (route) => route.fulfill({
     json: {
       attention,
@@ -90,16 +90,16 @@ test("ลิ้นชักจัดรายการเป็นกลุ่�
   const urgent = drawer.getByRole("region", { name: /ต้องแก้ทันที/ });
   await expect(urgent.getByText(CRITICAL)).toBeVisible();
   await expect(urgent.getByRole("link")).toHaveCount(1);
-  await expect(urgent.getByRole("link", { name: /ไปตรวจช่วงที่สัญญามีผล/ }))
-    .toHaveAttribute("href", /contract-prices/);
+  await expect(urgent.getByRole("link", { name: /ไปแก้ไขสัญญา/ }))
+    .toHaveAttribute("href", /admin\/contracts/);
 });
 
-test("กดรายการราคาที่ยังไม่ยืนยันแล้วไปยังหน้าที่แก้ไขได้", async ({ page }) => {
+test("กดรายการสัญญาที่ราคาไม่ครอบคลุมแล้วไปยังหน้าแก้ไขสัญญา", async ({ page }) => {
   const drawer = await openAttentionDrawer(page);
   const urgentItem = drawer.getByText(CRITICAL).locator("xpath=ancestor::li");
   await urgentItem.getByText(CRITICAL).click();
 
-  await expect(page).toHaveURL(/\/admin\/contract-prices$/);
+  await expect(page).toHaveURL(/\/admin\/contracts$/);
 });
 
 test("กดเครื่องที่ยังไม่ผูกสัญญาแล้วเปิดฟอร์มเครื่องนั้นในทะเบียนที่กรองไว้", async ({ page }) => {
@@ -166,15 +166,15 @@ test("กดประวัติสัญญาที่ขาดแล้ว�
   await expect(page.getByLabel("เริ่มคิดเงินตามสัญญานี้ตั้งแต่วันที่")).toHaveValue("");
 });
 
-test("ยอดนอกปีงบของสัญญาเป็นงานค้างที่พาไปดูสัญญาแต่ละปีงบ", async ({ page }) => {
+test("ยอดนอกช่วงสัญญาเป็นงานค้างที่พาไปดูสัญญา", async ({ page }) => {
   const item = {
-    code: "unpriced_outside_contract_year",
+    code: "unpriced_outside_term",
     severity: "warning",
-    title: "มี 44 เครื่องที่มียอดพิมพ์ในปีงบที่ยังไม่มีสัญญาครอบคลุม",
-    detail: "1,100 รายการ รวม 3,081,887 แผ่น อยู่นอกปีงบของสัญญาที่เครื่องผูกไว้ ต้องมีสัญญาของปีงบนั้นก่อนจึงคิดเงินได้",
+    title: "มี 44 เครื่องที่มียอดพิมพ์อยู่นอกช่วงสัญญา",
+    detail: "1,100 รายการ รวม 3,081,887 แผ่น ต้องแก้ช่วงวันที่ของสัญญาหรือผูกสัญญาที่ถูกต้อง",
     count: 44,
     params: { readings: 1100, pages: 3081887 },
-    action: { label: "ไปดูสัญญาของแต่ละปีงบ", to: "/admin/contracts" },
+    action: { label: "ไปแก้ไขสัญญา", to: "/admin/contracts" },
   };
   await attentionFixture(page, [item]);
   await page.goto("/dashboard");
@@ -184,49 +184,6 @@ test("ยอดนอกปีงบของสัญญาเป็นงา�
   await expect(drawer.getByRole("region", { name: /ต้องแก้ทันที/ })).toHaveCount(0);
   await drawer.getByText(item.title).click();
   await expect(page).toHaveURL(/\/admin\/contracts$/);
-});
-
-test("หน้าตรวจสัญญาแยกรายการนอกช่วงจากสถานะยืนยันราคา", async ({ page }) => {
-  await prototypeFixture(page, "admin");
-  await page.route("**/api/contracts/price-review", (route) => route.fulfill({
-    json: {
-      pending: 1,
-      contracts: [{
-        id: 1,
-        contract_no: "CT-001/2569",
-        fiscal_year: "2569",
-        price_per_page: "0.45",
-        device_count: 24,
-        price_confirmed: true,
-        unpriced_readings: 0,
-        outside_term_readings: 154,
-        effective_from: "2025-10-01",
-        effective_to: "2026-01-15",
-        proposed_effective_from: "2025-10-01",
-        proposed_effective_to: "2026-01-15",
-        price_verified_at: "2026-09-16 12:00:00",
-      }],
-    },
-  }));
-
-  await page.goto("/admin/contract-prices");
-  await expect(page.getByRole("table").getByText("มี 154 รายการอยู่นอกช่วงสัญญา")).toBeVisible();
-  await expect(page.getByText("ยังยืนยันราคาไม่ได้ 154 รายการ")).toHaveCount(0);
-  await page.getByRole("button", { name: "ตรวจช่วงสัญญา" }).click();
-  await expect(page.getByText(/154 รายการในปีงบนี้อยู่นอกช่วงวันที่/)).toBeVisible();
-
-  // ยืนยันวันเดิมซ้ำไม่ทำให้อะไรเปลี่ยน ผู้ใช้เคยกดแล้วเข้าใจว่าระบบไม่ทำงาน
-  const dialog = page.getByRole("dialog");
-  const confirm = dialog.getByRole("button", { name: "ยืนยันช่วงที่มีผล" });
-  await expect(confirm).toBeDisabled();
-  await expect(dialog.getByText(/การยืนยันซ้ำจะไม่ทำให้ยอดนอกช่วงมีราคา/)).toBeVisible();
-  await dialog.getByLabel("ถึงวันที่").fill("2026-09-30");
-  await expect(confirm).toBeEnabled();
-
-  // ช่วงถูกต้องแล้วก็ยังต้องมีทางแก้ — ย้ายเครื่องของสัญญานี้ไปสัญญาที่ครอบคลุมเดือนนั้น
-  await page.getByRole("link", { name: "ดูเครื่องในสัญญานี้" }).click();
-  await expect(page).toHaveURL(/\/assets\?contract_id=1$/);
-  await expect(page.getByRole("button", { name: /สัญญา: / })).toBeVisible();
 });
 
 test("ป้ายบนกระดิ่งบอกได้ว่ามีเรื่องต้องแก้ทันทีหรือไม่", async ({ page }) => {
@@ -242,4 +199,31 @@ test("ป้ายบนกระดิ่งบอกได้ว่ามี�
   await page.goto("/dashboard");
   await expect(bellOf(page)).toContainText("3");
   await expect(bellOf(page)).toContainText(CRITICAL_BADGE);
+});
+
+test("viewer เห็นบริบทงานค้างแต่ไม่เห็น action ที่ต้องใช้สิทธิ์ admin", async ({ page }) => {
+  await attentionFixture(page, ATTENTION, "viewer");
+  await page.goto("/dashboard");
+  await bellOf(page).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByText(CRITICAL)).toBeVisible();
+  await expect(drawer.getByRole("link", { name: /ตรวจช่วงที่สัญญามีผล/ })).toHaveCount(0);
+  await expect(drawer.getByRole("link", { name: /ตรวจยืนยันการติดตั้ง/ })).toHaveCount(0);
+  await expect(drawer.getByRole("link", { name: /ดูรายการเครื่อง/ })).toHaveAttribute("href", /\/assets/);
+});
+
+test("viewer ไม่ได้ CTA ไปหน้า admin เมื่อยังไม่มีปีงบหรือสัญญา", async ({ page }) => {
+  await prototypeFixture(page, "viewer");
+  await page.route(/\/api\/fiscal-years$/, (route) => route.fulfill({ json: [] }));
+  await page.route(/\/api\/expense\/\d+\b/, (route) => route.fulfill({ json: { contracts: [] } }));
+
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "ปีงบ ยังไม่มี" }).click();
+  await expect(page.getByRole("link", { name: "ไปสร้างปีงบใหม่" })).toHaveCount(0);
+  await expect(page.getByText("ติดต่อผู้ดูแลระบบเพื่อสร้างปีงบ")).toBeVisible();
+
+  await page.goto("/expense");
+  await expect(page.getByText("ยังไม่มีสัญญาในปีงบนี้")).toBeVisible();
+  await expect(page.getByRole("link", { name: "ไปหน้าจัดการสัญญา" })).toHaveCount(0);
 });

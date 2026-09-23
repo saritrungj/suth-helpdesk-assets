@@ -237,6 +237,10 @@ const sortedRows = computed(() => {
 
   const col = props.columns.find((c) => c.key === sortKey.value);
   if (!col) return searchedRows.value;
+  // คอลัมน์ที่เรียงไม่ได้แล้ว ต้องไม่เรียงต่อจากที่เคยเรียงไว้ — หน้าที่ปิด sortable ระหว่างทาง
+  // (เช่น ยอดเงินที่ราคายังไม่ครบ) จะเหลือหัวคอลัมน์ที่กดไม่ได้ แต่แถวยังเรียงตามค่าที่บอกว่า
+  // เทียบกันไม่ได้ ซึ่งอ่านเหมือนอันดับจริงทั้งที่ไม่ใช่
+  if (col.sortable === false) return searchedRows.value;
 
   const dir = sortDir.value === "asc" ? 1 : -1;
   const collator = new Intl.Collator("th", { numeric: true, sensitivity: "base" });

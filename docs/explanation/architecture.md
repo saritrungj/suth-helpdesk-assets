@@ -42,7 +42,7 @@ middleware ตรวจสิทธิ์อยู่ใต้ `auth/` เพร
 
 ## โค้ดฝั่งเว็บ
 
-- route และ navigation อยู่ใน `apps/web/src/router/`
+- route และ navigation อยู่ใน `apps/web/src/router/` — **มีแต่ `main.js` ที่ import โมดูลนี้ได้** โค้ดที่อยู่นอก component ต้องหยิบ router จาก `apps/web/src/lib/app-router.js` ส่วนหน้าเว็บใช้ `useRouter()` ตามปกติ เพราะวง import ที่วนกลับมาหา `router/index.js` ทำให้ hot reload พังเป็นจอขาวด้วย `Cannot access 'router' before initialization` (`lib/app-router.test.js` เฝ้ากฎนี้และเฝ้าไม่ให้มีวง import ใดๆ ในฝั่งเว็บ)
 - HTTP client กลางอยู่ที่ `apps/web/src/services/api.js` — จุดเดียวที่แนบ token และดัก 401
 - ชั้นดึงข้อมูลกลางอยู่ที่ `apps/web/src/api/queries.js` ผ่าน TanStack Query — เฉพาะข้อมูลอ่านที่ใช้ซ้ำข้ามหน้า การเขียนยังยิง `services/api.js` ตรงๆ ดู [ADR-0009](../decisions/0009-tanstack-query-as-the-data-layer.md)
 - state ที่ใช้ร่วมหลายหน้าอยู่ใน `apps/web/src/store/` เขียนด้วย reactive ของ Vue ตรงๆ ยังไม่มี state manager

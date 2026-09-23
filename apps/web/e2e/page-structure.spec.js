@@ -18,6 +18,7 @@
 
 import { expect, test } from "@playwright/test";
 import { reasonToSkip, resolveAssetDetailUrl, signIn } from "./fixtures.js";
+import { PAGES } from "./pages.js";
 
 /**
  * ทุกหน้าหลังล็อกอิน — ต้องเพิ่มที่นี่ทุกครั้งที่เพิ่มหน้าใหม่
@@ -28,18 +29,6 @@ import { reasonToSkip, resolveAssetDetailUrl, signIn } from "./fixtures.js";
  * ของ #63 มีแค่ไม่กี่เครื่อง) id ที่ตรึงไว้จะชี้ไปยังเครื่องที่ไม่มีอยู่แล้ว
  * รายงานเป็นบั๊กปลอม
  */
-const PAGES = [
-  { name: "แดชบอร์ด", url: "/dashboard" },
-  { name: "บันทึกยอดพิมพ์", url: "/print-transactions" },
-  { name: "ทะเบียนทรัพย์สิน", url: "/assets" },
-  { name: "รายละเอียดเครื่อง", url: "/assets/:fixture" },
-  { name: "ค่าใช้จ่าย", url: "/expense" },
-  { name: "เปรียบเทียบรายเดือน", url: "/compare" },
-  { name: "รายงานสรุป", url: "/report" },
-  { name: "สัญญา", url: "/admin/contracts" },
-  { name: "จัดการผู้ใช้งาน", url: "/admin/users" },
-];
-
 test.beforeAll(async () => {
   const skip = await reasonToSkip();
   test.skip(Boolean(skip), `ต้องมี API + ฐานข้อมูลทำงานอยู่ — ${skip}`);

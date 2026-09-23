@@ -1,0 +1,12 @@
+{
+  "api": "http://localhost:3000/api",
+  "brands": [
+    { "name": "HP", "aliases": [] }
+  ],
+  "buildings": [
+    { "name": "อาคารตัวอย่าง", "aliases": ["ตัวอย่าง (EX)", "อาคารตัวอย่าง 1"] }
+  ],
+  "divisions": [
+    { "name": "ฝ่ายตัวอย่าง", "aliases": ["ฝ่ายตัวอยาง"] }
+  ]
+}

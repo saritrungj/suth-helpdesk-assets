@@ -15,8 +15,7 @@
 // ต้นทางเสมอ ยิ่งตัวตรวจทำงานดี ค่าที่อันตรายก็ยิ่งถูกคัดมารวมกันไว้ในไฟล์ที่ผู้ใช้
 // จะกดเปิดอ่าน
 
-/** ตัวอักษรที่โปรแกรมตารางถือว่าเป็นจุดเริ่มของสูตร */
-const FORMULA_STARTERS = ["=", "+", "-", "@", "\t", "\r"];
+import { FORMULA_STARTER_REGEX } from "@suth/domain";
 
 /**
  * ค่าหนึ่งเซลล์ในรูปแบบ CSV — บังคับให้เป็นข้อความเสมอ
@@ -26,7 +25,7 @@ const FORMULA_STARTERS = ["=", "+", "-", "@", "\t", "\r"];
  */
 export function csvCell(value) {
   let text = String(value ?? "");
-  if (FORMULA_STARTERS.includes(text[0])) text = `'${text}`;
+  if (FORMULA_STARTER_REGEX.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 

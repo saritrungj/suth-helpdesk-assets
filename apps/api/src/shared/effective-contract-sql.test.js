@@ -19,7 +19,7 @@ test("effective contract join picks the same row as v_monthly_kpi", () => {
 
   // ถ้า view เปลี่ยนกติกา คิวงานต้องเปลี่ยนตาม ไม่งั้นจะชี้ไปคนละสัญญากับที่ราคามาจริง
   const schema = squash(fs.readFileSync(path.join(__dirname, "../../../../database/schema.sql"), "utf8"));
-  assert.match(schema, /ORDER BY h\.effective_from DESC, h\.id DESC LIMIT 1 \) LEFT JOIN contracts c ON c\.id = dch\.contract_id;/);
+  assert.match(schema, /ORDER BY h\.effective_from DESC, h\.id DESC LIMIT 1 \) LEFT JOIN contracts c ON c\.id = dch\.contract_id LEFT JOIN contract_price_line cpl/);
   assert.match(schema, /pt\.month <= DATE_FORMAT\(h\.effective_to, '%Y-%m'\)/);
 });
 

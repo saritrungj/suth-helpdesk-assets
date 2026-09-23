@@ -28,7 +28,8 @@ function effectiveContractJoin({ deviceIdExpression, monthExpression, historyAli
  *
  * A history row answers exactly, even when it says "no contract". Only a device
  * with no row for that month falls back to its current contract, because
- * confirming that contract's term is what opens the missing period.
+ * adding a billing period for that contract (billing_from on the device form)
+ * is what prices the missing month.
  */
 function effectiveContractId({ historyAlias = "contract_history", deviceAlias }) {
   return `CASE WHEN ${historyAlias}.id IS NOT NULL THEN ${historyAlias}.contract_id ELSE ${deviceAlias}.contract_id END`;

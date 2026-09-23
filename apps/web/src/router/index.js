@@ -4,21 +4,23 @@ import { createRouter, createWebHistory } from "vue-router";
 import { authState } from "../store/auth";
 import Login from "../views/Login.vue";
 import { installPageMemory } from "../lib/page-memory";
+import { setAppRouter } from "../lib/app-router";
 
 /**
  * router/index.js — เส้นทางทั้งหมดของเว็บ
  *
- * ทุกหน้ายกเว้น Login ถูกโหลดแบบ lazy (import ตอนเข้าหน้านั้นจริง) ด้วยเหตุผล
- * สองข้อ
- *
- *   1. ขนาดไฟล์ก้อนแรกที่ผู้ใช้ต้องดาวน์โหลดตอนเปิดเว็บเล็กลงมาก — สำคัญกับ
- *      เครื่องในโรงพยาบาลที่หลายเครื่องยังเป็นสเปกเก่าและเน็ตภายในไม่เร็ว
- *   2. ตัดวงจร import ที่วนกลับมาหาตัวเอง (router -> หน้า -> store/fiscalYear ->
- *      router) ซึ่งทำให้ hot reload ตอนพัฒนาพังด้วย "Cannot access before
- *      initialization" ทุกครั้งที่แก้ไฟล์หน้าแรก
+ * ทุกหน้ายกเว้น Login ถูกโหลดแบบ lazy (import ตอนเข้าหน้านั้นจริง) เพื่อให้ไฟล์ก้อนแรก
+ * ที่ผู้ใช้ต้องดาวน์โหลดตอนเปิดเว็บเล็กลงมาก — สำคัญกับเครื่องในโรงพยาบาลที่หลายเครื่อง
+ * ยังเป็นสเปกเก่าและเน็ตภายในไม่เร็ว
  *
  * Login ยังโหลดตรงๆ เพราะเป็นหน้าที่ผู้ใช้ที่ยังไม่ล็อกอินเห็นเป็นหน้าแรกเสมอ
  * การให้รอโหลดอีกก้อนก่อนเห็นช่องกรอกไม่คุ้ม
+ *
+ * **ห้ามให้โมดูลอื่น import ไฟล์นี้** (ยกเว้น main.js) — เคยมีวง
+ * `services/api.js → router/index.js → views/Login.vue → services/api.js` ซึ่งทำให้
+ * hot reload พังเป็นจอขาวด้วย "Cannot access 'router' before initialization" โค้ดที่อยู่
+ * นอก component ให้หยิบ router จาก `lib/app-router.js` แทน มีเทสบังคับกฎนี้ไว้ที่
+ * `lib/app-router.test.js` เพราะการโหลดหน้าแบบ lazy กันวงนี้ไม่ได้ (Login โหลดตรงๆ)
  */
 
 const routes = [
@@ -69,18 +71,48 @@ const routes = [
     path: "/expense",
     name: "Expense",
     component: () => import("../views/UsageReport.vue"),
+    beforeEnter: (to) => to.query.tab === "department"
+      ? { path: "/dashboard", query: { ...to.query, tab: undefined, by: "division" } }
+      : true,
   },
 
-  // path เดิมก่อนรวมสองหน้าเข้าด้วยกัน — เก็บไว้กันลิงก์เก่าและบุ๊กมาร์กพัง
+  // path เดิมก่อนรวมทุกหน้าวิเคราะห์เข้าหน้าภาพรวม — เก็บไว้กันลิงก์เก่าและบุ๊กมาร์กพัง
   {
     path: "/by-department",
-    redirect: (to) => ({ path: "/expense", query: { ...to.query, tab: "department" } }),
+    redirect: (to) => ({ path: "/dashboard", query: { ...to.query, by: "division" } }),
   },
 
+  // หน้าเปรียบเทียบเดิม (ดู ADR-0020) — "แบบการเทียบ + รายการที่เลือก" ของหน้านั้น
+  // กลายเป็น "เปรียบเทียบตาม + ตัวกรอง" ของหน้าภาพรวม ซึ่งเป็นความหมายเดียวกัน
+  // ค่าที่แปลงไม่ได้ถูกตัดทิ้ง แล้วหน้าภาพรวมเปิดด้วยค่าเริ่มต้นแทนการเดาให้เงียบๆ
   {
     path: "/compare",
-    name: "Compare",
-    component: () => import("../views/Compare.vue"),
+    redirect: (to) => {
+      const value = (key) => (Array.isArray(to.query[key]) ? to.query[key][0] : to.query[key]);
+      const type = value("type");
+      // ค้นด้วย Map ไม่ใช่ object เพราะ `type` มาจาก URL — `?type=constructor` จะได้
+      // ฟังก์ชันบน prototype กลับมาเป็น "ชื่อมิติ" แล้วหลุดเข้าไปอยู่ใน URL ปลายทาง
+      const by = new Map([["contract", "contract"], ["building", "building"], ["year", "fiscalYear"]]).get(type)
+        ?? (type === "department" ? (value("level") === "department" ? "department" : "division") : undefined);
+      // รายการที่เคยเลือกมาเทียบ = ตัวกรองของมิตินั้นในหน้าใหม่
+      const chosen = value("items") ?? (type === "year" ? undefined : value("groups"));
+      const scope = new Map([["contract", "contract"], ["building", "building"], ["department", "department"], ["division", "division"]]).get(by);
+      return {
+        path: "/dashboard",
+        query: {
+          fy: to.query.fy,
+          by,
+          months: value("months"),
+          years: type === "year" ? value("groups") ?? value("years") : value("years"),
+          measure: value("measure") ?? (value("metric") === "totalPages" || value("metric") === "netPages" ? "pages" : undefined),
+          // รายการที่เคยหยิบมาเทียบ และตัวกรองสัญญา/อาคารของหน้าเดิม มีความหมายเดียวกับตัวกรองชื่อเดียวกันในหน้าใหม่
+          contract: scope === "contract" ? chosen : value("contract"),
+          building: scope === "building" ? chosen : value("building"),
+          department: scope === "department" ? chosen : value("department"),
+          division: scope === "division" ? chosen : value("division"),
+        },
+      };
+    },
   },
 
   {
@@ -122,14 +154,6 @@ const routes = [
     component: () => import("../views/admin/InstallationReview.vue"),
   },
 
-  // ยืนยันช่วงที่สัญญาและราคามีผล (ADR-0019) — งานคู่กับหน้าตรวจยืนยันการติดตั้ง
-  // ด้านบน ทั้งคู่เป็นงานที่ทำครั้งเดียวแล้วจบ จึงไม่มีรายการในเมนูถาวร
-  {
-    path: "/admin/contract-prices",
-    name: "ContractPriceReview",
-    component: () => import("../views/admin/ContractPriceReview.vue"),
-  },
-
   // การนำเข้าไฟล์กลายเป็นแท็บในหน้าเพิ่มทรัพย์สินแล้ว — เก็บ path เดิมไว้ redirect
   {
     path: "/admin/import-devices",
@@ -145,14 +169,31 @@ const router = createRouter({
 
   routes,
 
-  // เปลี่ยนหน้าแล้วเลื่อนขึ้นบนสุดเสมอ ยกเว้นตอนกดปุ่มย้อนกลับ/ไปข้างหน้าของ
-  // เบราว์เซอร์ ซึ่งควรกลับไปตำแหน่งเดิมที่เคยอ่านค้างไว้
+  /**
+   * เปลี่ยนหน้าแล้วเลื่อนขึ้นบนสุด แต่ **เปลี่ยนตัวกรองไม่ใช่การเปลี่ยนหน้า**
+   *
+   * หน้าที่เก็บมุมมองไว้ใน URL เรียก `router.replace` ทุกครั้งที่ผู้ใช้แตะตัวกรอง
+   * และ vue-router เรียก scrollBehavior ทุกการนำทางรวมถึง replace ที่เปลี่ยนแค่
+   * query ผลคือกดตัวกรองที่อยู่กลางหน้าแล้วจอกระโดดขึ้นบนสุดทุกครั้ง จนรู้สึก
+   * เหมือนหน้าโหลดใหม่และหาที่ค้างไว้ไม่เจอ (#126)
+   *
+   * savedPosition มีค่าเฉพาะตอนกดย้อนกลับ/ไปข้างหน้าของเบราว์เซอร์ ซึ่งควรกลับไป
+   * ตำแหน่งเดิมที่เคยอ่านค้างไว้
+   */
   scrollBehavior(to, from, savedPosition) {
-    // The expense workspace restores the position of each retained tab itself.
-    if (to.path === "/expense") return false;
-    return savedPosition ?? { top: 0 };
+    if (savedPosition) return savedPosition;
+    if (to.path === from.path) return false;
+    return { top: 0 };
   },
 });
+
+/*
+ * ฝาก instance ไว้ให้โค้ดที่อยู่นอก component ทันทีที่สร้างเสร็จ
+ *
+ * โมดูลอย่าง services/api.js และ store/fiscalYear.js ต้องสั่งนำทางได้ แต่ห้าม import
+ * ไฟล์นี้กลับไป ไม่งั้นเกิดวง import ที่ทำให้ hot reload พังเป็นจอขาว (ดู lib/app-router.js)
+ */
+setAppRouter(router);
 
 // =======================
 // ด่านตรวจสิทธิ์

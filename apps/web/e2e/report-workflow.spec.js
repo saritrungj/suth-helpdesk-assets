@@ -25,12 +25,16 @@ for (const language of ["th", "en"]) {
     });
     await page.goto("/dashboard");
     await expect(page.locator("h1")).toContainText(language === "en" ? "Print overview" : "ภาพรวมการพิมพ์");
-    // ความครบถ้วนของปีงบยังมีให้ดูใต้กราฟหลัก และแปลตามภาษาที่เลือก
-    await expect(page.getByText(language === "en" ? "Complete months" : "เดือนที่บันทึกครบ")).toBeVisible();
+    // Dashboard แบบ single-scope ต้องแสดงพื้นที่เปรียบเทียบและตารางรายละเอียดชุดเดียวกัน
+    // ทั้งสองภาษาตาม ADR-0020 ส่วนกฎ coverage ถูกตรวจแยกด้วย API ด้านล่าง
+    await expect(page.getByRole("region", {
+      name: language === "en" ? "Comparison area" : "พื้นที่เปรียบเทียบ",
+    })).toBeVisible();
+    await expect(page.getByRole("heading", {
+      name: language === "en" ? "Detail table" : "ตารางรายละเอียด",
+      exact: true,
+    })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${language}.png`), fullPage: true });
-    await page.goto("/compare");
-    await expect(page.locator("h1")).toBeVisible();
-    await expect(page.getByRole("heading", { name: language === "en" ? "Comparison table" : "ตารางเปรียบเทียบ", exact: true })).toBeVisible();
     await page.goto("/assets");
     const searchName = language === "en" ? "Search serial, model, location…" : "ค้นหา Serial, รุ่น, ตำแหน่ง…";
     const search = page.getByRole("textbox", { name: searchName }).first();
@@ -47,7 +51,7 @@ for (const language of ["th", "en"]) {
     await page.getByRole("button", { name: language === "en" ? "Exit full screen" : "ย่อตาราง", exact: true }).click();
     await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(false);
     await expect(search).toHaveValue("HP");
-    for (const route of ["/expense", "/expense?tab=department", "/report", "/print-transactions", "/admin/users"]) {
+    for (const route of ["/expense", "/dashboard", "/report", "/print-transactions", "/admin/users"]) {
       await page.goto(route);
       await expect(page.locator("h1")).toBeVisible();
     }
@@ -107,13 +111,13 @@ test("report table uses the remaining viewport when expanded", async ({ page }) 
 });
 
 test("fullscreen is limited to long data tables", async ({ page }) => {
-  for (const route of ["/expense", "/compare", "/admin/users", "/admin/brands"]) {
+  for (const route of ["/expense", "/dashboard", "/admin/users", "/admin/brands"]) {
     await page.goto(route);
     await expect(page.locator("h1")).toBeVisible();
     await expect(page.getByRole("button", { name: "ขยายตาราง", exact: true })).toHaveCount(0);
   }
 
-  for (const route of ["/assets", "/report", "/print-transactions", "/expense?tab=department"]) {
+  for (const route of ["/assets", "/report", "/print-transactions"]) {
     await page.goto(route);
     await expect(page.locator("h1")).toBeVisible();
     const expand = page.getByRole("button", { name: "ขยายตาราง", exact: true });
@@ -148,9 +152,6 @@ test("fullscreen is limited to long data tables", async ({ page }) => {
 
 test("graph selection retains the filter and follow-up links retain their scope", async ({ page }) => {
   await page.goto("/dashboard");
-  // หัวข้อการ์ดเปลี่ยนตามสถานะราคาโดยตั้งใจ — เป็น "ค่าใช้จ่ายที่ยืนยันแล้วรายเดือน"
-  // เมื่อยังมีรายการที่ยืนยันราคาไม่ได้ (ADR-0019 Q27) จับด้วยรูปแบบ ไม่ใช่ข้อความตรงตัว
-  // ไม่งั้นเทสจะแดงเพราะข้อมูลในฐานเปลี่ยนสถานะ ไม่ใช่เพราะพฤติกรรมที่มันตรวจพัง
   const trend = page.locator("section").filter({ has: page.getByRole("heading", { name: /รายเดือน$/ }) });
   await trend.getByRole("radio", { name: "ตาราง", exact: true }).click();
   const months = trend.locator("tbody button");
@@ -182,8 +183,8 @@ test("graph selection retains the filter and follow-up links retain their scope"
 
 test("unavailable comparison month explains missing data", async ({ page }) => {
   await page.route("**/api/dashboard/monthly-kpi?**", (route) => route.fulfill({ json: [] }));
-  await page.goto("/compare?months=2026-09");
-  await expect(page.getByText("ยังไม่มีข้อมูลในช่วงที่เลือก", { exact: true })).toBeVisible();
+  await page.goto("/dashboard?months=2026-09");
+  await expect(page.getByText("ยังไม่มียอดพิมพ์ในขอบเขตที่เลือก", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/months=2026-09/);
 });
 
@@ -247,159 +248,15 @@ test("historical report views preserve row counts and financial totals", async (
   expect(Number(stats.total_transactions)).toBe(monthly.length);
 });
 
-test("readings outside a contract's fiscal year are not sent to that contract's review", async () => {
-  test.skip(!writesAllowed(), "This regression writes and restores one reading in an isolated test database");
-  const [contracts, fiscalYear] = await Promise.all([apiFetch("/contracts"), activeFiscalYear()]);
-  const contract = contracts.find(
-    (row) => row.price_confirmed && row.fiscal_start_month && Number(row.device_count) > 0
-  );
-  test.skip(!contract, "No confirmed contract with linked devices in the database under test");
-
-  const devices = await apiFetch(`/devices?contract_id=${contract.id}`);
-  const device = devices[0];
-  test.skip(!device, "No device linked to the confirmed contract");
-
-  // สิบปีก่อนปีงบของสัญญา — ไกลพอที่ไม่มีประวัติสัญญาใดครอบคลุม เครื่องจึงถูกโยง
-  // กับสัญญาปัจจุบัน ซึ่งเดิมทำให้ยอดนี้ไปโผล่เป็นยอดค้างของสัญญานั้น
-  const [year, month] = contract.fiscal_start_month.split("-").map(Number);
-  const outsideMonth = new Date(Date.UTC(year - 10, month - 1, 1)).toISOString().slice(0, 7);
-  const reviewSum = (rows) =>
-    rows.reduce((sum, row) => sum + Number(row.unpriced_readings) + Number(row.outside_term_readings), 0);
-  const contractReview = (review) => reviewSum(review.contracts.filter((row) => row.id === contract.id));
-  const readingsOf = (overview, code) =>
-    Number(overview.attention.find((item) => item.code === code)?.params.readings ?? 0);
-  const [before, overallBefore] = await Promise.all([
-    apiFetch("/contracts/price-review"),
-    apiFetch("/dashboard/overview"),
-  ]);
-  const snapshot = await snapshotMonth(outsideMonth, [device.id]);
-  test.skip(snapshot[0].pages !== null, "The device already has a reading in the probe month");
-
-  try {
-    await apiFetch("/print-transactions", {
-      method: "POST",
-      body: JSON.stringify({ device_id: device.id, month: outsideMonth, pages: 123 }),
-    });
-
-    const [review, overall, scoped] = await Promise.all([
-      apiFetch("/contracts/price-review"),
-      apiFetch("/dashboard/overview"),
-      apiFetch(`/dashboard/overview?fiscal_year_id=${fiscalYear.id}`),
-    ]);
-    expect(contractReview(review)).toBe(contractReview(before));
-
-    // ทุกยอดที่ลิงก์ "ไปตรวจช่วงที่สัญญามีผล" นับ ต้องเห็นได้บนหน้านั้น ทั้งแบบไม่กรอง
-    // และแบบเลือกปีงบ (= สัญญาของปีงบนั้น) ยอดนอกปีงบแยกไปอีกงาน (#96)
-    expect(readingsOf(overall, "unbilled_devices")).toBe(reviewSum(review.contracts));
-    expect(readingsOf(overall, "unpriced_outside_contract_year"))
-      .toBe(readingsOf(overallBefore, "unpriced_outside_contract_year") + 1);
-
-    // สัญญาที่ไม่ผูกปีงบถูกนับทุกเดือนบนหน้าตรวจ แต่แดชบอร์ดที่เลือกปีงบนับแค่เดือนใน
-    // ปีงบนั้น จึงเทียบเท่ากันพอดีได้เฉพาะเมื่อไม่มีสัญญาแบบนั้น
-    const inYear = review.contracts.filter((row) => Number(row.fiscal_year_id) === Number(fiscalYear.id));
-    const withoutYear = review.contracts.filter((row) => row.fiscal_year_id == null);
-    const scopedReadings = readingsOf(scoped, "unbilled_devices");
-    if (withoutYear.length) {
-      expect(scopedReadings).toBeGreaterThanOrEqual(reviewSum(inYear));
-      expect(scopedReadings).toBeLessThanOrEqual(reviewSum([...inYear, ...withoutYear]));
-    } else {
-      expect(scopedReadings).toBe(reviewSum(inYear));
-    }
-  } finally {
-    await restoreMonth(outsideMonth, snapshot);
-  }
-});
-
-test("reconfirming a longer term extends the billing periods the shorter one closed", async () => {
-  // ใช้สัญญาและเครื่องที่สร้างเองแล้วลบทิ้ง ไม่แก้ช่วงของสัญญาในฐาน เพราะเวลายืนยัน
-  // ถูกประทับใหม่ทุกครั้งและคืนค่าเดิมผ่าน API ไม่ได้
-  test.skip(!writesAllowed(), "This regression creates and removes a contract and a device in an isolated test database");
-  const [fiscalYear, devices] = await Promise.all([activeFiscalYear(), apiFetch("/devices")]);
-  const template = devices.find((row) => row.brand_id);
-  test.skip(!template, "No device to copy a brand from");
-
-  const [startYear, startMonth] = fiscalYear.start_month.split("-").map(Number);
-  const [endYear, endMonth] = fiscalYear.end_month.split("-").map(Number);
-  const monthAt = (offset) => new Date(Date.UTC(startYear, startMonth - 1 + offset, 1)).toISOString().slice(0, 7);
-  const termFrom = `${monthAt(0)}-01`;
-  const firstMonthEnd = new Date(Date.UTC(startYear, startMonth, 0)).toISOString().slice(0, 10);
-  const fiscalYearEnd = new Date(Date.UTC(endYear, endMonth, 0)).toISOString().slice(0, 10);
-  const readingMonth = monthAt(1);
-  // ช่วงเปิดที่เครื่องได้ตอนสร้าง เริ่มหลังเดือนที่ตรวจ การขยายต้องหยุดที่วันนี้
-  const laterBillingFrom = `${monthAt(3)}-01`;
-  const label = `E2E-TERM-${Date.now()}`;
-  let contractId = null;
-  let deviceId = null;
-
-  const confirm = (effective_to) =>
-    apiFetch(`/contracts/${contractId}/term`, {
-      method: "PUT",
-      body: JSON.stringify({ effective_from: termFrom, effective_to }),
-    });
-  const readingCost = async () => {
-    const rows = await apiFetch(`/dashboard/monthly-kpi?month=${readingMonth}&contract_id=${contractId}`);
-    return rows.find((row) => row.device_id === deviceId)?.total_cost;
-  };
-
-  try {
-    ({ id: contractId } = await apiFetch("/contracts", {
-      method: "POST",
-      body: JSON.stringify({ contract_no: label, fiscal_year_id: fiscalYear.id, price_per_page: 0.5 }),
-    }));
-    ({ id: deviceId } = await apiFetch("/devices", {
-      method: "POST",
-      body: JSON.stringify({
-        serial_number: label,
-        brand_id: template.brand_id,
-        contract_id: contractId,
-        // ราคาเฉพาะเครื่องไม่ขึ้นกับช่วงของสัญญา จึงเห็นได้ว่าการยืนยันช่วงสั้นซ้ำ
-        // ไปตัดช่วงของเครื่องหรือไม่
-        price_override: 0.3,
-        status: "active",
-        installation_status: "installed",
-        installed_on: termFrom,
-        billing_from: laterBillingFrom,
-      }),
-    }));
-
-    // ยังไม่มีช่วงที่ครอบวันเริ่มสัญญา การยืนยันช่วงสั้นจึงเปิดช่วงที่ปิดตรงวันสิ้นสุดนั้น
-    expect((await confirm(firstMonthEnd)).devices_linked).toBe(1);
-    await apiFetch("/print-transactions", {
-      method: "POST",
-      body: JSON.stringify({ device_id: deviceId, month: readingMonth, pages: 100 }),
-    });
-    expect(await readingCost()).toBeNull();
-
-    // ยืนยันช่วงเต็มปี: ช่วงที่ปิดไว้ต้องขยายไปถึงช่วงถัดไปของเครื่อง เดิมถูกข้ามเพราะ
-    // "มีช่วงครอบวันเริ่มแล้ว" เดือนระหว่างนั้นจึงไม่มีราคาทั้งที่ยืนยันครบ (#96)
-    expect((await confirm(fiscalYearEnd)).devices_linked).toBe(1);
-    expect(await readingCost()).not.toBeNull();
-
-    expect((await confirm(fiscalYearEnd)).devices_linked).toBe(0);
-
-    // ยืนยันช่วงสั้นซ้ำต้องไม่ตัดช่วงของเครื่อง — เคยทำให้ยอดที่มีราคาเฉพาะเครื่อง
-    // หายราคาหลังผู้ใช้กดยืนยัน CT-001/2569 ซ้ำด้วยวันเดิม
-    expect((await confirm(firstMonthEnd)).devices_linked).toBe(0);
-    expect(await readingCost()).not.toBeNull();
-  } finally {
-    if (deviceId) {
-      // FK ป้องกันการลบเครื่องที่ยังมียอดอยู่ จึงคืนเดือนเป็น null ก่อนลบเครื่องจำลอง
-      await restoreMonth(readingMonth, [{ device_id: deviceId, pages: null }]);
-      await apiFetch(`/devices/${deviceId}`, { method: "DELETE" });
-    }
-    if (contractId) await apiFetch(`/contracts/${contractId}`, { method: "DELETE" });
-  }
-});
-
-test("reviewing an earlier billing date repairs a current contract history gap", async () => {
+test("backdating a billing contract lets a previously rejected reading be saved", async () => {
   test.skip(!writesAllowed(), "This regression creates and removes one device in an isolated test database");
   const [contracts, devices] = await Promise.all([apiFetch("/contracts"), apiFetch("/devices")]);
   const contract = contracts.find((row) => {
-    if (!row.price_confirmed || !row.effective_from || !row.effective_to) return false;
+    if (!row.effective_from || !row.effective_to || !row.price_lines?.length) return false;
     return row.effective_from.slice(0, 7) < row.effective_to.slice(0, 7);
   });
   const template = devices.find((row) => row.brand_id);
-  test.skip(!contract || !template, "No confirmed multi-month contract or device template");
+  test.skip(!contract || !template, "No priced multi-month contract or device template");
 
   const readingMonth = contract.effective_from.slice(0, 7);
   const [year, month] = readingMonth.split("-").map(Number);
@@ -418,6 +275,7 @@ test("reviewing an earlier billing date repairs a current contract history gap",
         serial_number: serial,
         brand_id: template.brand_id,
         contract_id: null,
+        meter_category_id: contract.price_lines[0].category_id,
         price_override: null,
         status: "active",
         installation_status: "installed",
@@ -433,21 +291,16 @@ test("reviewing an earlier billing date repairs a current contract history gap",
         brand_id: template.brand_id,
         model: null,
         contract_id: contract.id,
+        meter_category_id: contract.price_lines[0].category_id,
         price_override: null,
         status: "active",
         billing_from: laterBillingFrom,
       }),
     });
-    await apiFetch("/print-transactions", {
+    await expect(apiFetch("/print-transactions", {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, month: readingMonth, pages: 100 }),
-    });
-
-    const before = await apiFetch(
-      `/dashboard/monthly-kpi?month=${readingMonth}&contract_id=${contract.id}`
-    );
-    expect(before.find((row) => row.device_id === deviceId)?.total_cost).toBeNull();
-
+    })).rejects.toThrow(/หาราคาไม่ได้/);
     await apiFetch(`/devices/${deviceId}`, {
       method: "PUT",
       body: JSON.stringify({
@@ -455,10 +308,16 @@ test("reviewing an earlier billing date repairs a current contract history gap",
         brand_id: template.brand_id,
         model: null,
         contract_id: contract.id,
+        meter_category_id: contract.price_lines[0].category_id,
         price_override: null,
         status: "active",
         billing_from: reviewedBillingFrom,
       }),
+    });
+
+    await apiFetch("/print-transactions", {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, month: readingMonth, pages: 100 }),
     });
 
     const after = await apiFetch(
@@ -519,9 +378,10 @@ test("filtered Excel export carries the search context", async ({ page }) => {
 
 test("monthly comparison keeps historical contracts after a device switches", async () => {
   test.skip(!writesAllowed(), "Creates disposable contracts and a device in the isolated test database");
-  const [fy, devices] = await Promise.all([activeFiscalYear(), apiFetch("/devices")]);
+  const [fy, devices, categories] = await Promise.all([activeFiscalYear(), apiFetch("/devices"), apiFetch("/contracts/meter-categories")]);
   const template = devices.find((row) => row.brand_id);
-  test.skip(!template, "No brand available");
+  const category = categories.find((row) => !row.is_color);
+  test.skip(!template || !category, "No brand or monochrome meter category available");
   const months = [fy.start_month, fy.end_month];
   const label = `E2E-COMPARE-${Date.now()}`;
   const contracts = [];
@@ -530,13 +390,18 @@ test("monthly comparison keeps historical contracts after a device switches", as
     for (const suffix of ["A", "B"]) {
       const created = await apiFetch("/contracts", {
         method: "POST",
-        body: JSON.stringify({ contract_no: `${label}-${suffix}`, fiscal_year_id: fy.id, price_per_page: 0.5 }),
+        body: JSON.stringify({
+          contract_no: `${label}-${suffix}`,
+          effective_from: `${fy.start_month}-01`,
+          effective_to: new Date(Date.UTC(Number(fy.end_month.slice(0, 4)), Number(fy.end_month.slice(5, 7)), 0)).toISOString().slice(0, 10),
+          price_lines: [{ category_id: category.id, price_per_page: 0.5 }],
+        }),
       });
       contracts.push(created.id);
     }
     const device = { serial_number: label, brand_id: template.brand_id, model: null,
       contract_id: contracts[0], price_override: 0.5, status: "active",
-      installation_status: "installed", installed_on: `${months[0]}-01`, billing_from: `${months[0]}-01` };
+      meter_category_id: category.id, installation_status: "installed", installed_on: `${months[0]}-01`, billing_from: `${months[0]}-01` };
     ({ id: deviceId } = await apiFetch("/devices", { method: "POST", body: JSON.stringify(device) }));
     await apiFetch(`/devices/${deviceId}`, {
       method: "PUT",
@@ -668,4 +533,80 @@ test("monthly KPI exposes the month-effective location IDs (#107)", async () => 
   expect(rows).toHaveLength(2);
   expect(rows[0]).toMatchObject({ building_id: 1, floor_id: 1, division_id: 1, department_id: 2, brand_id: 1 });
   expect(rows[1]).toMatchObject({ building_id: 2, floor_id: 2, division_id: 2, department_id: 3, brand_id: 1 });
+});
+
+/*
+ * ADR-0022 — ยอดเงินปัดครั้งเดียวที่ระดับรายการราคาต่องวด แล้วกระจายสตางค์ลงมิเตอร์แบบ
+ * largest remainder ตรวจกับ view ตัวจริง ไม่ใช่สูตรที่เขียนซ้ำในเทส
+ *
+ * สามเครื่อง 1 หน้าเท่ากัน ราคา 0.365: แต่ละเครื่อง 0.98 × 0.365 = 0.3577 บาท
+ *   ปัดรายเครื่องแบบเดิม = 0.36 × 3 = 1.08 — เกินใบแจ้งหนี้ 1 สตางค์
+ *   ใบแจ้งหนี้ = ROUND(0.365 × 2.94, 2) = ROUND(1.0731) = 1.07
+ *   ตัดทุกส่วนเหลือ 0.35 (รวม 1.05) สตางค์ที่เหลือ 2 สตางค์ เศษเท่ากันทุกเครื่อง
+ *   จึงตัดสินด้วยรหัสมิเตอร์ — สองมิเตอร์แรกได้ 0.36 มิเตอร์สุดท้ายได้ 0.35
+ */
+test("invoice line rounds once and hands the leftover cents out by largest remainder (ADR-0022)", async () => {
+  test.skip(!writesAllowed(), "This regression creates and removes one contract and three devices in an isolated test database");
+  const [fy, categories, devices] = await Promise.all([
+    activeFiscalYear(),
+    apiFetch("/contracts/meter-categories"),
+    apiFetch("/devices"),
+  ]);
+  const monochrome = categories.find((category) => !category.is_color);
+  const template = devices.find((row) => row.brand_id);
+  test.skip(!monochrome || !template, "No monochrome meter category or device template");
+
+  const [endYear, endMonth] = fy.end_month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(endYear, endMonth, 0)).toISOString().slice(0, 10);
+  const month = fy.start_month;
+  const stamp = Date.now();
+  let contractId = null;
+  const deviceIds = [];
+
+  try {
+    const contract = await apiFetch("/contracts", {
+      method: "POST",
+      body: JSON.stringify({
+        contract_no: `E2E-INVOICE-${stamp}`,
+        effective_from: `${fy.start_month}-01`,
+        effective_to: lastDay,
+        price_lines: [{ category_id: monochrome.id, price_per_page: "0.365" }],
+      }),
+    });
+    contractId = contract.id;
+
+    for (const suffix of ["A", "B", "C"]) {
+      const created = await apiFetch("/devices", {
+        method: "POST",
+        body: JSON.stringify({
+          serial_number: `E2E-INVOICE-${stamp}-${suffix}`,
+          brand_id: template.brand_id,
+          contract_id: contractId,
+          meter_category_id: monochrome.id,
+          price_override: null,
+          status: "active",
+          installation_status: "installed",
+          installed_on: `${fy.start_month}-01`,
+        }),
+      });
+      deviceIds.push(created.id);
+    }
+
+    await apiFetch("/print-transactions/bulk", {
+      method: "POST",
+      body: JSON.stringify({ month, items: deviceIds.map((device_id) => ({ device_id, pages: 1 })) }),
+    });
+
+    const rows = (await apiFetch(`/dashboard/monthly-kpi?month=${month}`))
+      .filter((row) => deviceIds.includes(row.device_id))
+      .sort((a, b) => a.meter_id - b.meter_id);
+    expect(rows.map((row) => Number(row.total_cost))).toEqual([0.36, 0.36, 0.35]);
+    expect(sumSatang(rows.map((row) => toSatang(row.total_cost)))).toBe(107);
+  } finally {
+    if (deviceIds.length) {
+      await restoreMonth(month, deviceIds.map((device_id) => ({ device_id, pages: null })));
+      for (const id of deviceIds) await apiFetch(`/devices/${id}`, { method: "DELETE" });
+    }
+    if (contractId) await apiFetch(`/contracts/${contractId}`, { method: "DELETE" });
+  }
 });

@@ -65,14 +65,25 @@ const readingsAndPages = ({ readings, pages }) =>
  * คงค่าที่หน้าเว็บใช้แปลภาษาอยู่ ลำดับในรายการนี้คือลำดับบนลิ้นชักแจ้งเตือน
  */
 const UNPRICED_CAUSES = [
+  // ทางเขียนทุกทางปฏิเสธยอดที่หาราคาไม่ได้แล้ว (ADR-0021) กลุ่มเหล่านี้จึงเหลือเฉพาะ
+  // ข้อมูลเก่าที่เข้ามาก่อนกฎนั้น และแสดงในลิ้นชักแจ้งเตือนของผู้ดูแลเท่านั้น
   {
-    // สัญญาที่ราคามาจริงครอบคลุมปีงบของยอดนั้น — หน้าตรวจสัญญาแสดงยอดกลุ่มนี้ครบทุกรายการ
-    cause: "contract_term",
-    code: "unbilled_devices",
+    // สัญญาที่คิดเงินเดือนนั้นมีอยู่ แต่เดือนนั้นอยู่นอกอายุสัญญา
+    cause: "outside_term",
+    code: "unpriced_outside_term",
     severity: "critical",
-    title: (count) => `มี ${count} เครื่องที่ยังยืนยันราคาไม่ได้`,
-    detail: (group) => `${readingsAndPages(group)} ยังไม่ถูกนับในยอดเงิน เพราะยังหาราคาที่มีผลกับเดือนนั้นไม่ได้`,
-    action: { label: "ไปตรวจช่วงที่สัญญามีผล", to: "/admin/contract-prices" },
+    title: (count) => `มี ${count} เครื่องที่มียอดพิมพ์นอกอายุสัญญา`,
+    detail: (group) => `${readingsAndPages(group)} ยังไม่ถูกนับในยอดเงิน — ตรวจวันเริ่ม/สิ้นสุดของสัญญา`,
+    action: { label: "ไปตรวจอายุสัญญา", to: "/admin/contracts" },
+  },
+  {
+    // สัญญาครอบคลุมเดือนนั้น แต่ไม่มีราคาของหมวดมิเตอร์นั้น
+    cause: "missing_price_line",
+    code: "unpriced_missing_price_line",
+    severity: "critical",
+    title: (count) => `มี ${count} เครื่องที่สัญญาไม่มีราคาของหมวดมิเตอร์`,
+    detail: (group) => `${readingsAndPages(group)} ยังไม่ถูกนับในยอดเงิน — เพิ่มรายการราคาในสัญญา หรือแก้หมวดมิเตอร์ของเครื่อง`,
+    action: { label: "ไปตรวจรายการราคาของสัญญา", to: "/admin/contracts" },
   },
   {
     cause: "unassigned",
@@ -92,16 +103,6 @@ const UNPRICED_CAUSES = [
     detail: (group) => `${readingsAndPages(group)} ต้องตรวจวันที่เริ่มคิดเงินของเครื่อง`,
     action: { label: "ไปตรวจประวัติสัญญาของเครื่อง", to: "/assets" },
     opensFirstDevice: true,
-  },
-  {
-    // ยังไม่มีหน้าจอผูกเครื่องกับสัญญาของปีงบที่ผ่านมาแล้ว (#97) จึงพาไปดูว่าปีงบไหน
-    // มีสัญญาบ้าง และเป็นเพียงงานค้าง ไม่ใช่เรื่องที่แก้ได้ทันทีจากลิงก์นี้
-    cause: "outside_contract_year",
-    code: "unpriced_outside_contract_year",
-    severity: "warning",
-    title: (count) => `มี ${count} เครื่องที่มียอดพิมพ์ในปีงบที่ยังไม่มีสัญญาครอบคลุม`,
-    detail: (group) => `${readingsAndPages(group)} อยู่นอกปีงบของสัญญาที่เครื่องผูกไว้ ต้องมีสัญญาของปีงบนั้นก่อนจึงคิดเงินได้`,
-    action: { label: "ไปดูสัญญาของแต่ละปีงบ", to: "/admin/contracts" },
   },
 ];
 
@@ -332,6 +333,7 @@ router.get(
                v.month,
                v.pages_printed,
                d.contract_id AS current_contract_id,
+               dch.id AS history_id,
                ${effectiveContractId({ historyAlias: "dch", deviceAlias: "d" })} AS effective_contract_id
              FROM v_monthly_kpi v
              JOIN devices d ON d.id = v.device_id
@@ -341,29 +343,21 @@ router.get(
                ${range ? "AND v.month BETWEEN ? AND ?" : ""}
                ${buildingClause} ${contractClause}
            ),
-           -- แยกตามหน้าที่แก้ได้จริง (UNPRICED_CAUSES): หน้าตรวจสัญญานับเฉพาะยอดในปีงบ
-           -- ของสัญญา (contracts/routes.js /price-review) ยอดนอกปีงบจึงห้ามถูกส่งไปที่นั่น
+           -- แยกตามหน้าที่แก้ได้จริง (UNPRICED_CAUSES) ด้วยกติกาเดียวกับ v_monthly_kpi
            unpriced_cause AS (
              SELECT
                s.device_id,
                s.month,
                s.pages_printed,
                CASE
-                 WHEN s.effective_contract_id IS NOT NULL THEN
-                   CASE WHEN (efy.start_month IS NULL OR s.month >= efy.start_month)
-                         AND (efy.end_month IS NULL OR s.month <= efy.end_month)
-                        THEN 'contract_term' ELSE 'outside_contract_year' END
-                 WHEN s.current_contract_id IS NULL THEN 'unassigned'
-                 WHEN (cfy.start_month IS NULL OR s.month >= cfy.start_month)
-                  AND (cfy.end_month IS NULL OR s.month <= cfy.end_month)
-                   THEN 'contract_history'
-                 ELSE 'outside_contract_year'
+                 WHEN s.history_id IS NULL AND s.current_contract_id IS NULL THEN 'unassigned'
+                 WHEN s.history_id IS NULL OR s.effective_contract_id IS NULL THEN 'contract_history'
+                 WHEN s.month < DATE_FORMAT(ec.effective_from + INTERVAL (DAY(ec.effective_from) > 1) MONTH, '%Y-%m')
+                   OR s.month > DATE_FORMAT(ec.effective_to, '%Y-%m') THEN 'outside_term'
+                 ELSE 'missing_price_line'
                END AS cause
              FROM unpriced_scope s
              LEFT JOIN contracts ec ON ec.id = s.effective_contract_id
-             LEFT JOIN fiscal_year efy ON efy.id = ec.fiscal_year_id
-             LEFT JOIN contracts cc ON cc.id = s.current_contract_id
-             LEFT JOIN fiscal_year cfy ON cfy.id = cc.fiscal_year_id
            )
            SELECT
              ${UNPRICED_CAUSES.map(({ cause }) => unpricedCauseColumns(cause)).join(",\n             ")},
@@ -541,9 +535,9 @@ router.get(
       series: series.map((row) => ({
         month: row.month,
         net_pages: Number(row.net_pages),
-        // เดือนที่ทุกรายการยังยืนยันราคาไม่ได้ ต้องเป็น null ไม่ใช่ 0 — จุดที่ค่า
-        // เป็นศูนย์บนกราฟแปลว่า "เดือนนั้นไม่มีค่าใช้จ่าย" ซึ่งคนละเรื่องกับ
-        // "ยังไม่รู้ว่าเท่าไหร่" (Q27)
+        // เดือนที่ทุกรายการหาราคาไม่ได้ (ยอดเก่าก่อน ADR-0021) ต้องเป็น null ไม่ใช่ 0 —
+        // จุดที่ค่าเป็นศูนย์บนกราฟแปลว่า "เดือนนั้นไม่มีค่าใช้จ่าย" ซึ่งคนละเรื่องกับ
+        // "ไม่รู้ว่าเท่าไหร่"
         total_cost: row.total_cost === null ? null : Number(row.total_cost),
         unpriced_readings: Number(row.unpriced_readings) || 0,
         device_count: Number(row.device_count),

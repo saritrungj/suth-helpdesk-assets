@@ -1,6 +1,6 @@
 import { t } from "../lib/locale";
 import axios from "axios";
-import router from "../router";
+import { appRouter } from "../lib/app-router";
 import { toastInfo } from "../store/toast";
 import { clearAuth } from "../store/auth";
 
@@ -42,10 +42,12 @@ api.interceptors.response.use(
         // ใช้ router แทน window.location.href เพื่อไม่ให้ reload ทั้งหน้า (คง SPA state)
         // หน่วงเล็กน้อยให้ผู้ใช้เห็น toast ก่อนเปลี่ยนหน้า
         setTimeout(() => {
-          router.push({
-            path: "/login",
-            query: { redirect: window.location.pathname },
-          });
+          const redirect = window.location.pathname;
+          const router = appRouter();
+          // ไม่มี router แปลว่าโมดูลนี้ถูกใช้นอกแอป (เช่นในเทส) — ยังต้องพาไปล็อกอินให้ได้
+          // ห้ามกลืนเงียบ เพราะผู้ใช้จะค้างอยู่หน้าที่เรียก API ไม่ผ่านโดยไม่รู้ว่าต้องทำอะไร
+          if (router) router.push({ path: "/login", query: { redirect } });
+          else window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`);
           isHandlingSessionExpiry = false;
         }, 800);
       }

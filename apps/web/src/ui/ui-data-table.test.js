@@ -63,3 +63,28 @@ test("export keeps a missing value as an empty cell and a recorded zero as 0", a
   expect(exportSheet.mock.calls[0][0].rows).toEqual([[0], [null]]);
   wrapper.unmount();
 });
+
+test("a column that stops being sortable stops sorting the rows", async () => {
+  // ยอดเงินเรียงได้เฉพาะตอนราคาครบ — หน้าที่เรียกใช้ปิด sortable เมื่อราคาไม่ครบ
+  // ตารางจึงต้องคืนลำดับเดิม ไม่ใช่เรียงต่อด้วยยอดที่ยังไม่ครบของการกดครั้งก่อน
+  const rows = [{ id: 1, cost: 300 }, { id: 2, cost: 100 }, { id: 3, cost: 200 }];
+  const wrapper = mount(UiDataTable, {
+    props: {
+      rows,
+      columns: [{ key: "cost", label: "Cost", sortable: true }],
+      maxHeight: "none",
+      showExport: false,
+    },
+  });
+  const order = () => wrapper.findAll("tbody tr td").map((cell) => cell.text());
+
+  await wrapper.get("thead button").trigger("click");
+  expect(order()).toEqual(["100", "200", "300"]);
+
+  await wrapper.setProps({ columns: [{ key: "cost", label: "Cost", sortable: false }] });
+  expect(order()).toEqual(["300", "100", "200"]);
+  expect(wrapper.find("thead button").exists()).toBe(false);
+  expect(wrapper.get("thead th").attributes("aria-sort")).toBe("none");
+
+  wrapper.unmount();
+});

@@ -355,20 +355,19 @@ router.get(
           `SELECT
              c.id,
              c.contract_no,
-             fy.year AS fiscal_year,
-             c.price_per_page,
+             DATE_FORMAT(c.effective_from, '%Y-%m-%d') AS effective_from,
+             DATE_FORMAT(c.effective_to, '%Y-%m-%d') AS effective_to,
              COUNT(DISTINCT d.id) AS device_count,
              COALESCE(SUM(v.net_pages), 0) AS total_pages,
              COALESCE(SUM(v.total_cost), 0) AS total_cost
            FROM contracts c
-           LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
            LEFT JOIN devices d ON d.contract_id = c.id
            LEFT JOIN building b ON d.building_id = b.id
            LEFT JOIN v_monthly_kpi v ON v.device_id = d.id ${monthJoin}
            ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
            LEFT JOIN building hb ON h.building_id = hb.id
            WHERE 1=1 ${usageBuildingClause} ${contractDeviceClause}
-           GROUP BY c.id, c.contract_no, fy.year, c.price_per_page
+           GROUP BY c.id, c.contract_no, c.effective_from, c.effective_to
            ORDER BY total_cost DESC`,
           [...monthParam, ...buildingParam, ...contractParam]
         )
