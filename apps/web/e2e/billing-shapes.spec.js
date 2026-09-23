@@ -74,3 +74,16 @@ test("ใบแจ้งหนี้ของสัญญากลางเด�
     expect(toSatang(invoice?.rental ?? "0"), startMonth).toBe(0);
   }
 });
+
+// ช่องกรอกรายเดือนคือมิเตอร์ขาวดำของเครื่อง (ที่ /bulk เขียน) — เส้นทางรายเดือนเคยคืนทุกมิเตอร์
+// หน้ากรอกจัดกลุ่มตามเครื่องแล้วเก็บแถวสุดท้าย เครื่องมิเตอร์สีจึงแสดงยอดสีในช่องขาวดำ (พบจริง:
+// ขาวดำ 200 สี 30 ช่องแสดง 30) และการล้างช่องนั้นลบยอดขาวดำทิ้ง (#145)
+test("ยอดรายเดือนสำหรับช่องกรอกคืนเฉพาะมิเตอร์ขาวดำ หนึ่งแถวต่อเครื่อง", async () => {
+  const { readings } = await seededShape();
+  for (const month of [...new Set(readings.map((row) => row.month))]) {
+    const bw = readings.find((row) => row.month === month && !row.is_color);
+    const rows = (await apiFetch(`/print-transactions?month=${month}`)).filter((row) => row.device_id === bw.device_id);
+    expect(rows, month).toHaveLength(1);
+    expect(Number(rows[0].pages), month).toBe(bw.pages_printed);
+  }
+});
