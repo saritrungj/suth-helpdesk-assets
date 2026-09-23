@@ -57,10 +57,15 @@ const localizedItems = computed(() => props.items.map((item) => {
       detail: t("เดือนที่ค้างนานที่สุด: {0} ยังขาดอีก {1} เครื่อง", [formatMonth(item.params?.month ?? item.months?.[0]), item.params?.missing_devices ?? "—"]),
       action: t("บันทึกยอดพิมพ์"),
     },
-    unbilled_devices: {
-      title: t("มี {0} เครื่องที่ยังยืนยันราคาไม่ได้", [item.count]),
+    unpriced_outside_term: {
+      title: t("มี {0} เครื่องที่มียอดพิมพ์นอกอายุสัญญา", [item.count]),
       detail: t("{0} รายการ รวม {1} หน้า ยังไม่ถูกนับในยอดเงิน", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
-      action: t("ตรวจช่วงที่สัญญามีผล"),
+      action: t("ตรวจอายุสัญญา"),
+    },
+    unpriced_missing_price_line: {
+      title: t("มี {0} เครื่องที่สัญญาไม่มีราคาของหมวดมิเตอร์", [item.count]),
+      detail: t("{0} รายการ รวม {1} หน้า ยังไม่ถูกนับในยอดเงิน", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
+      action: t("ตรวจรายการราคาของสัญญา"),
     },
     unassigned_unbilled_devices: {
       title: t("มี {0} เครื่องที่ยังไม่ได้ผูกสัญญา", [item.count]),
@@ -71,11 +76,6 @@ const localizedItems = computed(() => props.items.map((item) => {
       title: t("มี {0} เครื่องที่ประวัติสัญญาไม่ครอบคลุมยอดพิมพ์", [item.count]),
       detail: t("{0} รายการ รวม {1} หน้า ต้องตรวจวันที่เริ่มคิดเงินของเครื่อง", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
       action: t("ตรวจประวัติสัญญาของเครื่อง"),
-    },
-    unpriced_outside_contract_year: {
-      title: t("มี {0} เครื่องที่มียอดพิมพ์ในปีงบที่ยังไม่มีสัญญาครอบคลุม", [item.count]),
-      detail: t("{0} รายการ รวม {1} หน้า อยู่นอกปีงบของสัญญาที่เครื่องผูกไว้", [item.params?.readings ?? "—", item.params?.pages ?? "—"]),
-      action: t("ดูสัญญาของแต่ละปีงบ"),
     },
     unverified_installation: {
       title: t("มี {0} เครื่องที่ยังไม่ได้ตรวจยืนยันสถานะการติดตั้ง", [item.count]),

@@ -13,10 +13,8 @@ import { MONTH_NAMES, formatMonth, yearLabel } from "../lib/locale-format";
  *
  *   - **ไม่มีข้อมูล ≠ ศูนย์** กลุ่มที่ไม่มีรายการยอดพิมพ์เลยได้ค่า null ส่วนกลุ่มที่บันทึก
  *     0 หน้าไว้จริงได้ 0 และยังอยู่ในอันดับต่ำสุด
- *   - **ยอดเงินรวมเป็นสตางค์** ผ่าน `sumCostSatang` ของ domain ซึ่งนับรายการที่ยังไม่รู้
- *     ราคาแยกไว้เสมอ ไม่บวกเป็นศูนย์เงียบๆ (Q27)
- *   - **ราคาไม่ครบ = ยังไม่สรุป** ยอดเงินที่ยืนยันแล้วแสดงได้พร้อมสถานะ แต่ไม่จัดอันดับ
- *     ค่าใช้จ่ายและไม่คิดส่วนต่างค่าใช้จ่าย (Q30)
+ *   - **ยอดเงินรวมเป็นสตางค์** ผ่าน `sumCostSatang` ของ domain โดยทุกยอดที่บันทึกได้
+ *     ต้องมีราคาแล้วตั้งแต่ขาเข้า (ADR-0021)
  *   - **ฐานเป็นศูนย์ไม่มีเปอร์เซ็นต์** ส่วนต่างจริงยังแสดงได้ แต่ "เพิ่มขึ้นกี่ %" จากศูนย์
  *     ไม่มีความหมาย
  *   - **"ยอดพิมพ์" คือยอดพิมพ์จริง (จำนวนหน้าดิบ)** ส่วนหน้าสุทธิหลังหัก 2% เป็นฐานคิดเงิน
@@ -25,13 +23,7 @@ import { MONTH_NAMES, formatMonth, yearLabel } from "../lib/locale-format";
 
 /** ชุดสีของกราฟมี 8 สีที่แยกกันได้และไม่วนซ้ำ — เลือกรายการมาเทียบได้ไม่เกินนี้ */
 export const MAX_ITEMS = 8;
-/**
- * จำนวนที่อ่านกราฟได้สบาย ใช้เป็นคำแนะนำ และเป็นจำนวนที่ระบบเลือกให้เมื่อผู้ใช้ยังไม่ได้เลือกเอง
- */
-export const SUGGESTED_ITEMS = 5;
-
 export const DIMENSIONS = ["overall", "division", "department", "contract", "building", "device", "fiscalYear"];
-export const METRICS = ["cost", "rawPages"];
 
 const GROUPING = {
   division: { id: "division_id", name: "division_name" },
@@ -75,9 +67,8 @@ function emptyLabel(dimension) {
 }
 
 /** ชื่อตัวชี้วัดแบบเต็มที่ใช้ทั้งหัวกราฟ หัวตาราง และไฟล์ */
-export function metricLabel(metric, { incomplete = false } = {}) {
-  if (metric === "rawPages") return t("ยอดพิมพ์จริง");
-  return incomplete ? t("ค่าใช้จ่ายที่ยืนยันแล้ว") : t("ค่าใช้จ่ายสุทธิ");
+export function metricLabel(metric) {
+  return metric === "rawPages" ? t("ยอดพิมพ์จริง") : t("ค่าใช้จ่ายสุทธิ");
 }
 
 export function metricUnit(metric) {
@@ -116,6 +107,17 @@ export function summarize(rows = []) {
   };
 }
 
+/**
+ * ค่าเฉลี่ยต่อเครื่องของ summary เดียวกัน
+ *
+ * ทุกยอดที่บันทึกมีราคาเสมอ เพราะทางเขียนปฏิเสธยอดที่หาราคาไม่ได้ (ADR-0021)
+ */
+export function averagePerDevice(summary, field) {
+  if (!summary?.devices) return null;
+  const value = summary[field];
+  return value === null || value === undefined ? null : value / summary.devices;
+}
+
 /** ค่าที่แสดงของตัวชี้วัด — null = ไม่มีข้อมูล (หรือยังไม่รู้ยอดเงินเลยสักรายการ) */
 export function metricValue(summary, metric) {
   if (!summary?.readings) return null;
@@ -128,19 +130,7 @@ function sortValue(summary, metric) {
 }
 
 export function dataStatus(summary) {
-  if (!summary?.readings) return "no-data";
-  if (!summary.unpriced) return "complete";
-  return summary.unpriced === summary.readings ? "unpriced" : "partial";
-}
-
-/** สถานะข้อมูลเป็นข้อความ — ใช้ทั้งหน้าจอและคอลัมน์สถานะในไฟล์ */
-export function statusLabel(summary) {
-  switch (dataStatus(summary)) {
-    case "no-data": return t("ไม่มีข้อมูล");
-    case "complete": return t("ยืนยันราคาครบ");
-    case "unpriced": return t("ยังยืนยันราคาไม่ได้ {0} รายการ", [summary.unpriced]);
-    default: return t("รอยืนยันราคา {0} รายการ", [summary.unpriced]);
-  }
+  return summary?.readings ? "complete" : "no-data";
 }
 
 /**
@@ -154,7 +144,6 @@ export function statusLabel(summary) {
 export function difference(base, value, metric) {
   if (!base?.readings) return { diff: null, ratio: null, reason: "no-base-data" };
   if (!value?.readings) return { diff: null, ratio: null, reason: "no-data" };
-  if (metric === "cost" && (base.unpriced || value.unpriced)) return { diff: null, ratio: null, reason: "unpriced" };
   const from = sortValue(base, metric);
   const delta = sortValue(value, metric) - from;
   return {
@@ -162,17 +151,6 @@ export function difference(base, value, metric) {
     ratio: from === 0 ? null : delta / from,
     reason: from === 0 ? "zero-base" : null,
   };
-}
-
-export function differenceNote(result, { isBase = false } = {}) {
-  if (isBase) return t("รายการฐาน");
-  switch (result?.reason) {
-    case "no-base-data": return t("ฐานไม่มีข้อมูลในช่วงนี้ จึงยังเทียบไม่ได้");
-    case "no-data": return t("ไม่มีข้อมูลในช่วงนี้");
-    case "unpriced": return t("ราคายังยืนยันไม่ครบ จึงยังไม่คิดส่วนต่างค่าใช้จ่าย");
-    case "zero-base": return t("ฐานเป็นศูนย์ แสดงเฉพาะส่วนต่างจริง ไม่คิดเปอร์เซ็นต์");
-    default: return "";
-  }
 }
 
 /* --------------------------------------------------------------------------
@@ -276,13 +254,11 @@ function entryFor(key, dimension, groupRowsList, options, months) {
  * จัดอันดับมาก–น้อยของทุกรายการ — อันดับอยู่ในไฟล์ Excel เท่านั้น ไม่มีบนหน้าจอ (#115)
  *
  * คืนทุกรายการที่มีข้อมูลเรียงจากมากไปน้อย อันดับต้นและท้ายจึงอยู่ในรายการเดียวกัน
- * กลุ่มที่ไม่มีรายการเลยไม่ถูกจัดอันดับ (ไม่สร้างศูนย์ให้) และเมื่อกลุ่มใดในขอบเขตยัง
- * ยืนยันราคาไม่ครบ อันดับค่าใช้จ่ายคืน null — ให้ไฟล์บอกเหตุผลแทน (Q30)
+ * กลุ่มที่ไม่มีรายการเลยไม่ถูกจัดอันดับ (ไม่สร้างศูนย์ให้)
  * ค่าที่เท่ากันเรียงด้วยชื่อ เพื่อให้ผลเดิมทุกครั้งที่ส่งออก
  */
 export function rankEntries(entries, { metric }) {
   const recorded = (entries ?? []).filter((entry) => entry.summary.readings > 0);
-  if (metric === "cost" && recorded.some((entry) => entry.summary.unpriced > 0)) return null;
   return recorded
     .slice()
     .sort((a, b) => sortValue(b.summary, metric) - sortValue(a.summary, metric)
@@ -291,95 +267,69 @@ export function rankEntries(entries, { metric }) {
 }
 
 /**
- * รายการที่ระบบเลือกให้เมื่อผู้ใช้ยังไม่ได้เลือกเอง — ยอดสูงสุดตามตัวชี้วัดที่ดูอยู่
- * ถ้าค่าใช้จ่ายยังจัดลำดับไม่ได้เพราะราคาไม่ครบ ใช้ยอดพิมพ์จริงแทน ไม่งั้นหน้าเปิดมาว่าง
- */
-function suggestedKeys(entries, metric) {
-  const ranked = rankEntries(entries, { metric }) ?? rankEntries(entries, { metric: "rawPages" });
-  return ranked.slice(0, SUGGESTED_ITEMS).map((entry) => entry.key);
-}
-
-/**
- * แบบจำลองของพื้นที่เปรียบเทียบบนหน้าภาพรวม — กราฟ ตาราง และไฟล์อ่านจากที่นี่ชุดเดียว
+ * แบบจำลองของพื้นที่เปรียบเทียบ — กราฟ ตาราง และไฟล์ Excel อ่านจากที่นี่ชุดเดียว
+ *
+ * `rows` ผ่านตัวกรองของหน้ามาแล้ว ฟังก์ชันนี้จึง **ไม่คัดข้อมูลออกอีก** หน้าที่เดียว
+ * คือแบ่งแถวชุดนั้นตามมิติที่เลือกแล้วเรียงจากมากไปน้อย — ตัวเลขรวมของแบบจำลองจึง
+ * เท่ากับตัวเลขสำคัญบนหัวหน้าเสมอ ไม่ว่าผู้ใช้จะเทียบตามอะไร
+ *
+ * กราฟมีสีที่แยกกันออกจำกัด จึงวาดได้ `chartLimit` รายการแรก ส่วน `entries` มีครบทุก
+ * กลุ่มให้ตารางและไฟล์ — จำนวนที่ไม่ได้ขึ้นกราฟอยู่ที่ `hidden` เพื่อให้หน้าจอบอกผู้ใช้
+ * ตรงๆ แทนที่จะตัดทิ้งเงียบๆ
  *
  * @param {object} input
- * @param {object[]} input.rows แถวของช่วงเวลาที่เลือก (กรองเดือนแล้ว)
- * @param {"overall"|"division"|"department"|"contract"} input.dimension
- * @param {string[]} input.items key ของรายการที่ผู้ใช้เลือก — ว่าง = ระบบเลือกยอดสูงสุดให้
+ * @param {object[]} input.rows แถวรายเครื่องรายเดือนที่ผ่านตัวกรองของหน้าแล้ว
+ * @param {"overall"|"division"|"department"|"contract"|"building"|"device"|"fiscalYear"} input.dimension
  * @param {"cost"|"rawPages"} input.metric
- * @param {object[]} input.options ตัวเลือกจาก itemOptions() ใช้หาชื่อของรายการที่ไม่มีข้อมูล
- * @param {string[]} [input.months] เดือนที่ผู้ใช้เลือกแสดง — ใส่มาเมื่อเดือนที่ไม่มีข้อมูลต้อง
- *   ยังเป็นช่องว่างบนแกนและในไฟล์ (หน้าเปรียบเทียบ) ไม่ใส่ = เฉพาะเดือนที่มีแถว
+ * @param {object[]} [input.options] ตัวเลือกจาก itemOptions() ใช้หาชื่อของกลุ่มที่ไม่มีข้อมูล
+ * @param {string[]} [input.include] รหัสที่ผู้ใช้เลือกไว้ในตัวกรอง — กลุ่มที่เลือกแล้วไม่มียอด
+ *   ต้องยังอยู่ในตารางพร้อมคำว่า "ไม่มีข้อมูล"
+ * @param {string[]} [input.months] เดือนที่ต้องมีบนแกน — ใส่มาเมื่อเดือนที่ไม่มีข้อมูลต้อง
+ *   เป็นช่องว่าง ไม่ใช่หายไปจากแกน
+ * @param {number} [input.chartLimit] จำนวนเส้น/แท่งสูงสุดบนกราฟ
  */
-export function buildComparison({ rows = [], dimension = "overall", items = [], metric = "cost", options = [], months: shownMonths = null }) {
+export function buildComparison({ rows = [], dimension = "overall", metric = "cost", options = [], include = [], months: shownMonths = null, chartLimit = MAX_ITEMS }) {
   const months = shownMonths?.length ? [...shownMonths].sort() : [...new Set(rows.map((row) => row.month))].sort();
-  const total = summarize(rows);
-  const base = { dimension, metric, months, total };
+  const scope = summarize(rows);
+  const base = { dimension, metric, months, scope, scopeRows: rows };
 
   if (dimension === "overall") {
     const entries = months.map((month) => {
-      const monthRows = rows.filter((row) => row.month === month);
-      return { key: month, label: formatMonth(month), displayLabel: formatMonth(month), hint: "", summary: summarize(monthRows) };
+      const label = formatMonth(month);
+      return { key: month, label, displayLabel: label, hint: "", summary: summarize(rows.filter((row) => row.month === month)) };
     });
-    return { ...base, view: "overall", entries, scopeRows: rows, scope: total, ranking: null, blocked: rows.length ? null : "no-data" };
+    return { ...base, view: "overall", entries, chartEntries: entries, hidden: 0, ranking: null, blocked: rows.length ? null : "no-data" };
   }
 
   const groups = groupRows(rows, dimension);
-  const all = disambiguate([...groups.entries()].map(([key, list]) => entryFor(key, dimension, list, options)), dimension);
+  // กลุ่มที่มียอด บวกกลุ่มที่ผู้ใช้เลือกไว้แต่ยังไม่มียอดในช่วงนี้
+  const keys = [...new Set([...groups.keys(), ...include.map(String)])];
+  const all = disambiguate(keys.map((key) => entryFor(key, dimension, groups.get(key), options, months)), dimension);
   const ranked = rankEntries(all, { metric });
   const ranking = {
-    entries: ranked ?? [],
+    entries: ranked,
     from: all.filter((entry) => entry.summary.readings > 0).length,
-    blocked: !rows.length ? "no-data" : ranked === null ? "unpriced" : null,
+    blocked: !rows.length ? "no-data" : null,
   };
 
-  // ยังไม่ได้เลือกเอง = ระบบเลือกยอดสูงสุดให้ก่อน เปิดหน้ามาจึงเห็นกราฟทันที (#115)
-  // ขอบเขตของตัวเลขยังเป็นทุกแถว เพราะผู้ใช้ไม่ได้ตั้งใจจำกัดขอบเขตไว้ที่รายการเหล่านี้
-  const autoPicked = !items.length;
-  const chosen = autoPicked ? suggestedKeys(all, metric) : [...new Set(items.map(String))].slice(0, MAX_ITEMS);
-  const chosenSet = new Set(chosen);
-  const scopeRows = autoPicked ? rows : rows.filter((row) => chosenSet.has(groupKey(row, dimension)));
-  const entries = disambiguate(chosen.map((key) => entryFor(key, dimension, groups.get(key), options, months)), dimension);
+  // เรียงมาก→น้อยตามตัวชี้วัดที่ดูอยู่ แล้วต่อท้ายด้วยกลุ่มที่ยังไม่มียอดเลย
+  const order = ranked;
+  const seen = new Set(order.map((entry) => entry.key));
+  const rest = all.filter((entry) => !seen.has(entry.key)).sort((x, y) => String(x.label).localeCompare(String(y.label), "th"));
+  const entries = [...order.map(({ rank: _rank, ...entry }) => entry), ...rest];
+
   return {
     ...base,
-    view: "select",
-    autoPicked,
+    view: "group",
     entries,
-    scopeRows,
-    scope: summarize(scopeRows),
+    chartEntries: entries.slice(0, chartLimit),
+    hidden: Math.max(0, entries.length - chartLimit),
     ranking,
-    blocked: !chosen.length || !scopeRows.length ? "no-data" : null,
+    blocked: !rows.length ? "no-data" : null,
   };
 }
 
-/**
- * ขอบเขตของตัวเลขสำคัญ แผงรายละเอียด และช่วงก่อนหน้าบนหน้าภาพรวม
- *
- * ต้องเป็นชุดเดียวกับกราฟ ตาราง และไฟล์ Excel — เดิมการ์ดตัวเลขรวมทั้งองค์กรขณะที่
- * กราฟแสดงเฉพาะฝ่ายที่เลือก กดการ์ดแล้วแผงรายละเอียดกลับเห็นแค่บางฝ่าย และ
- * เปอร์เซ็นต์เทียบช่วงก่อนเอายอดที่เลือกไปเทียบกับยอดทั้งองค์กรของช่วงก่อน
- *
- * รายการที่ผู้ใช้เลือกเอง = เฉพาะรายการที่เลือก ส่วนภาพรวมและรายการที่ระบบเลือกให้
- * = ทุกแถว — ระบบเลือกให้เพื่อให้กราฟมีอะไรให้ดู ไม่ได้แปลว่าผู้ใช้จำกัดขอบเขตไว้
- */
-export function comparisonScope(model) {
-  if (model?.view !== "select" || model.autoPicked || !model.entries?.length) return { selected: false, dimension: model?.dimension, keys: null, label: "" };
-  return {
-    selected: true,
-    dimension: model.dimension,
-    keys: model.entries.map((entry) => entry.key),
-    label: model.entries.map((entry) => entry.displayLabel).join(", "),
-  };
-}
-
-/** แถวที่อยู่ในขอบเขต — ใช้กับแถวของช่วงก่อนหน้าได้ด้วย เพราะคัดด้วย key ชุดเดียวกัน */
-export function rowsInScope(rows, scope) {
-  if (!scope?.keys) return rows ?? [];
-  const keys = new Set(scope.keys);
-  return (rows ?? []).filter((row) => keys.has(groupKey(row, scope.dimension)));
-}
-
-/** เปลี่ยนแปลงจากช่วงก่อนหน้าเป็นเปอร์เซ็นต์ — กฎเดียวกับ difference() (ราคาไม่ครบ ฐานศูนย์ ไม่มีข้อมูล) */
+/** เปลี่ยนแปลงจากช่วงก่อนหน้าเป็นเปอร์เซ็นต์ — กฎเดียวกับ difference() */
 export function periodChange(previous, current, metric) {
   const result = difference(previous, current, metric);
   return { percent: result.ratio === null ? null : result.ratio * 100, reason: result.reason };
@@ -389,21 +339,22 @@ export function periodChange(previous, current, metric) {
 function chartLabel(entry, metric) {
   const status = dataStatus(entry.summary);
   if (status === "no-data") return `${entry.displayLabel} · ${t("ไม่มีข้อมูล")}`;
-  if (metric === "cost" && entry.summary.unpriced) return `${entry.displayLabel} · ${t("รอราคา {0}", [entry.summary.unpriced])}`;
   return entry.displayLabel;
 }
 
 /**
  * ข้อมูลของกราฟบนหน้าจอ — ชนิดกราฟเลือกตามคำถาม
  *
- *   ภาพรวม           แท่งตั้ง (ค่าใช้จ่ายแต่ละเดือน) หรือเส้น (แนวโน้มยอดพิมพ์)
- *   เลือกรายการ ≥ 2 เดือน เส้นหนึ่งเส้นต่อรายการ ดูแนวโน้มรายเดือน
- *   เลือกรายการ 1 เดือน  แท่งแนวนอน — เส้นที่มีจุดเดียวไม่บอกอะไร
+ *   ภาพรวม            แท่งตั้งของแต่ละเดือน (ค่าใช้จ่าย) หรือเส้น (ยอดพิมพ์)
+ *   แบ่งกลุ่ม ≥ 2 เดือน  เส้นหนึ่งเส้นต่อกลุ่ม เทียบกันตลอดช่วง
+ *   แบ่งกลุ่ม 1 เดือน    แท่งแนวนอน — เส้นที่มีจุดเดียวไม่บอกอะไร
+ *
+ * วาดเฉพาะ `chartEntries` ส่วนตารางและไฟล์ใช้ `entries` ที่มีครบทุกกลุ่ม
  */
 export function comparisonChart(model) {
-  const { metric, entries, months } = model;
-  const incomplete = metric === "cost" && model.scope.unpriced > 0;
-  const seriesLabel = metricLabel(metric, { incomplete });
+  const { metric, months } = model;
+  const entries = model.chartEntries ?? model.entries;
+  const seriesLabel = metricLabel(metric);
   if (model.view === "overall") {
     return {
       kind: metric === "cost" ? "bar" : "line",
@@ -413,7 +364,7 @@ export function comparisonChart(model) {
       series: [{ key: metric, label: seriesLabel, data: entries.map((entry) => metricValue(entry.summary, metric)) }],
     };
   }
-  if (model.view === "select" && months.length >= 2) {
+  if (model.view === "group" && months.length >= 2) {
     return {
       kind: "line",
       horizontal: false,
@@ -435,15 +386,26 @@ export function comparisonChart(model) {
   };
 }
 
+/**
+ * สถานะของพื้นที่กราฟ — บอกว่าจะวาดได้ไหม และถ้าไม่ได้ เพราะอะไร
+ *
+ *   "ready"          วาดได้ มีอย่างน้อยหนึ่งจุดที่เป็นตัวเลข
+ *   "no-data"        ไม่มียอดพิมพ์ในขอบเขตที่เลือก
+ */
+export function chartState(model) {
+  if (model.blocked) return model.blocked;
+  const drawable = comparisonChart(model).series.some((item) => item.data.some((value) => value !== null));
+  if (drawable) return "ready";
+
+  return "no-data";
+}
+
 /* --------------------------------------------------------------------------
    เทียบข้ามปีงบ (#115)
    -------------------------------------------------------------------------- */
 
 /** เลือกเทียบได้ไม่เกินสามปีงบ — เส้นมากกว่านั้นซ้อนกันจนอ่านไม่ออก */
 export const MAX_YEARS = 3;
-/** ขอบเขตของการเทียบข้ามปี — ไม่มีสัญญา เพราะสัญญาผูกกับปีงบเดียว เทียบข้ามปีไม่มีความหมาย */
-export const YEAR_SCOPES = ["overall", "division", "department", "building", "device"];
-
 const POSITION = /^P(\d{2})$/;
 /**
  * แกนเดือนของปีงบ "P01" (ต.ค.) ถึง "P12" (ก.ย.) — ที่เดียวที่สร้างลำดับนี้
@@ -524,17 +486,24 @@ export function yearRows(rows, years) {
  * @param {{dimension: string, key: string}|null} [input.scope] ขอบเขตเดียว เช่น ฝ่ายหนึ่งฝ่าย — ว่าง = ทั้งองค์กร
  * @param {string[]} [input.positions] ตำแหน่งเดือนที่ต้องแสดง (จากช่วงเวลาที่ผู้ใช้เลือก)
  */
-export function buildYearComparison({ rows = [], years = [], scope = null, metric = "cost", positions = null }) {
+export function buildYearComparison({ rows = [], years = [], metric = "cost", positions = null }) {
   const chosen = [...new Set((years ?? []).map(String))].sort().slice(-MAX_YEARS);
-  const scoped = scope?.key ? rows.filter((row) => groupKey(row, scope.dimension) === String(scope.key)) : rows;
-  const shifted = yearRows(scoped, chosen);
-  let months = positions?.length ? [...new Set(positions)].sort() : [];
-  if (!months.length) {
-    months = [...FISCAL_POSITIONS];
-  }
+  const shifted = yearRows(rows, chosen);
+  const months = positions?.length ? [...new Set(positions)].sort() : [...FISCAL_POSITIONS];
   const options = chosen.map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) }));
-  const model = buildComparison({ rows: shifted.filter(row => months.includes(row.month)), dimension: "fiscalYear", items: chosen, metric, options, months });
-  return { ...model, years: chosen, yearScope: scope?.key ? scope : null, ranking: null };
+  const model = buildComparison({
+    rows: shifted.filter((row) => months.includes(row.month)),
+    dimension: "fiscalYear", metric, options, months,
+    // ปีที่เลือกแล้วยังไม่มียอดต้องเป็นเส้นว่าง ไม่ใช่หายไปจากกราฟ
+    include: chosen,
+    chartLimit: MAX_YEARS,
+  });
+  // ปีงบเรียงตามเวลาเสมอ ไม่เรียงตามยอด — สีและลำดับในคำอธิบายกราฟต้องไม่สลับที่
+  // เมื่อปีหนึ่งแซงอีกปีระหว่างปี และอันดับของปีงบก็ไม่มีความหมาย เพราะปีที่ผ่านมา
+  // ครบปีย่อมมากกว่าปีที่เพิ่งเริ่มเสมอ
+  const byYear = new Map(model.entries.map((entry) => [entry.key, entry]));
+  const entries = chosen.map((year) => byYear.get(year)).filter(Boolean);
+  return { ...model, entries, chartEntries: entries, hidden: 0, years: chosen, ranking: null };
 }
 
 /**
@@ -561,95 +530,6 @@ export function stableSlots(previous, keys) {
   return next;
 }
 
-/* --------------------------------------------------------------------------
-   เปรียบเทียบความแตกต่าง (หน้าเปรียบเทียบ → ฝ่าย/แผนก)
-   -------------------------------------------------------------------------- */
-
-/**
- * @param {object} input
- * @param {"division"|"department"} input.dimension
- * @param {"units"|"periods"} input.basis
- *   units   = หน่วยงานเทียบกันในช่วงเดียวกัน ฐานคือรายการหนึ่งที่ผู้ใช้เลือก
- *   periods = หน่วยงานเดียวกันเทียบช่วงที่ดูกับช่วงฐาน — สองมิตินี้ไม่เปลี่ยนพร้อมกัน
- * @param {{months: string[], rows: object[]}} input.current ช่วงที่ดู
- * @param {{months: string[], rows: object[]}} [input.reference] ช่วงฐาน (เฉพาะ periods)
- */
-export function buildDifference({ dimension, basis = "units", items = [], baseKey = "", metric = "cost", current, reference = { months: [], rows: [] }, options = [] }) {
-  const chosen = [...new Set(items.map(String))].slice(0, MAX_ITEMS);
-  const chosenSet = new Set(chosen);
-  const inScope = (row) => chosenSet.has(groupKey(row, dimension));
-  const now = groupRows(current.rows, dimension);
-
-  if (basis === "periods") {
-    const before = groupRows(reference.rows, dimension);
-    const referenceRows = reference.rows.filter(inScope);
-    const currentRows = current.rows.filter(inScope);
-    const scope = summarize(currentRows);
-    const referenceScope = summarize(referenceRows);
-    const blockCostDifference = metric === "cost" && (scope.unpriced > 0 || referenceScope.unpriced > 0);
-    const entries = disambiguate(chosen.map((key) => {
-      const described = describe(key, dimension, now.get(key) ?? before.get(key), options);
-      const referenceSummary = summarize(before.get(key) ?? []);
-      const summary = summarize(now.get(key) ?? []);
-      return {
-        key, ...described, reference: referenceSummary, summary,
-        difference: blockCostDifference ? { diff: null, ratio: null, reason: "unpriced" } : difference(referenceSummary, summary, metric),
-      };
-    }));
-    return {
-      dimension, basis, metric, entries,
-      months: current.months,
-      referenceMonths: reference.months,
-      scopeRows: [...referenceRows, ...currentRows],
-      scope,
-      referenceScope,
-      blocked: !chosen.length ? "no-items" : !referenceRows.length && !currentRows.length ? "no-data" : null,
-    };
-  }
-
-  const scopeRows = current.rows.filter(inScope);
-  const scope = summarize(scopeRows);
-  const blockCostDifference = metric === "cost" && scope.unpriced > 0;
-  const entries = disambiguate(chosen.map((key) => ({ key, ...describe(key, dimension, now.get(key), options), summary: summarize(now.get(key) ?? []) })));
-  const baseEntry = entries.find((entry) => entry.key === String(baseKey)) ?? entries[0] ?? null;
-  return {
-    dimension, basis, metric,
-    months: current.months,
-    referenceMonths: [],
-    baseKey: baseEntry?.key ?? "",
-    baseEntry,
-    entries: entries.map((entry) => ({
-      ...entry,
-      isBase: entry === baseEntry,
-      difference: entry === baseEntry ? null : blockCostDifference
-        ? { diff: null, ratio: null, reason: "unpriced" }
-        : difference(baseEntry.summary, entry.summary, metric),
-    })),
-    scopeRows,
-    scope,
-    blocked: chosen.length < 2 ? "no-items" : !scopeRows.length ? "no-data" : null,
-  };
-}
-
-/** กราฟแท่งแนวนอนของหน้าเปรียบเทียบความแตกต่าง — ช่วง A/B ได้สองชุดวางคู่กันต่อรายการ */
-export function differenceChart(model, { currentLabel, referenceLabel }) {
-  const incomplete = model.metric === "cost" && (model.scope.unpriced > 0 || (model.referenceScope?.unpriced ?? 0) > 0);
-  const labelOf = (entry) => {
-    const unpriced = entry.summary.unpriced + (entry.reference?.unpriced ?? 0);
-    const parts = [entry.displayLabel];
-    if (entry.isBase) parts.push(t("ฐาน"));
-    if (model.metric === "cost" && unpriced) parts.push(t("รอราคา {0}", [unpriced]));
-    return parts.join(" · ");
-  };
-  const series = model.basis === "periods"
-    ? [
-      { key: "reference", label: referenceLabel, slot: 3, data: model.entries.map((entry) => metricValue(entry.reference, model.metric)) },
-      { key: "current", label: currentLabel, slot: 1, data: model.entries.map((entry) => metricValue(entry.summary, model.metric)) },
-    ]
-    : [{ key: "current", label: metricLabel(model.metric, { incomplete }), slot: 1, data: model.entries.map((entry) => metricValue(entry.summary, model.metric)) }];
-  return { kind: "bar", horizontal: true, labels: model.entries.map(labelOf), series };
-}
-
 /** ข้อสังเกตที่ต้องอ่านคู่กับตัวเลข — ไม่ใช่ข้อสรุป */
 export function deviceSpread(summaries) {
   const counts = summaries.filter((summary) => summary?.readings).map((summary) => summary.devices);
@@ -663,35 +543,6 @@ export function deviceSpread(summaries) {
    ช่วงเวลา
    -------------------------------------------------------------------------- */
 
-export const REFERENCE_MODES = ["previous-year", "previous-span"];
-
-/**
- * เดือนของช่วงฐานสำหรับการเทียบช่วง A/B
- *
- *   previous-year  ช่วงเดียวกันของปีงบก่อน (ต.ค.–ธ.ค. 2568 → ต.ค.–ธ.ค. 2567)
- *                  จับคู่ตามตำแหน่งในปีงบ ไม่ใช่ลบปีปฏิทิน
- *   previous-span  ช่วงก่อนหน้าที่ยาวเท่ากันติดกัน — ข้ามรอยต่อปีงบได้
- *
- * ลำดับเดือนของทั้งสองปีงบมาจาก `fiscalYearMonths`/`getFiscalYearRange` ของ domain
- * ไม่เขียนกฎ ต.ค.–ก.ย. ซ้ำที่นี่ (ADR-0001)
- *
- * @param {string[]} months เดือนของช่วงที่ดู — ว่าง = ทั้งปีงบ
- * @param {{year: string|number, start_month: string, end_month: string}} fiscalYear ปีงบที่ active
- */
-export function referenceMonths(months, mode, fiscalYear) {
-  if (!fiscalYear?.start_month) return [];
-  const current = fiscalYearMonths({ startMonth: fiscalYear.start_month, endMonth: fiscalYear.end_month });
-  const previous = fiscalYearMonths(getFiscalYearRange(Number(fiscalYear.year) - 1));
-  const selected = (months?.length ? months : current).filter((month) => current.includes(month)).sort();
-  if (!selected.length) return [];
-  if (mode === "previous-span") {
-    const timeline = [...previous, ...current];
-    const first = timeline.indexOf(selected[0]);
-    return timeline.slice(Math.max(0, first - selected.length), first);
-  }
-  return selected.map((month) => previous[current.indexOf(month)]);
-}
-
 /** ช่วงเวลาเป็นภาษาคน — "ต.ค. 2568 – ธ.ค. 2568" หรือรายการเดือนเมื่อไม่ต่อเนื่อง */
 export function periodLabel(months) {
   const list = [...(months ?? [])].sort();
@@ -699,89 +550,4 @@ export function periodLabel(months) {
   if (list.length === 1) return formatMonth(list[0]);
   const contiguous = list.every((month, index) => index === 0 || monthIndex(month) === monthIndex(list[index - 1]) + 1);
   return contiguous ? `${formatMonth(list[0])} – ${formatMonth(list.at(-1))}` : list.map((month) => formatMonth(month)).join(", ");
-}
-
-/* --------------------------------------------------------------------------
-   สถานะใน URL — เปิดลิงก์เดิมหรือกดย้อนกลับแล้วได้มุมมองเดิม
-   -------------------------------------------------------------------------- */
-
-const pick = (value, allowed, fallback) => {
-  const text = Array.isArray(value) ? value[0] : value;
-  return allowed.includes(text) ? text : fallback;
-};
-
-const listFrom = (value) => String(Array.isArray(value) ? value[0] ?? "" : value ?? "")
-  .split(",")
-  .map((item) => item.trim())
-  .filter((item) => /^(\d+|unassigned)$/.test(item));
-
-// URL ข้ามข้อจำกัดของ UiCombobox ได้ จึงต้องบังคับกฎเดียวกับหน้าจอตั้งแต่ตอนอ่าน
-// รวมทั้งตัดค่าซ้ำเพื่อให้จำนวนที่ URL แสดงตรงกับจำนวนชุดข้อมูลที่แบบจำลองใช้จริง
-const itemsFrom = (value) => [...new Set(listFrom(value))].slice(0, MAX_ITEMS);
-
-/**
- * อ่านสถานะจาก query — ค่าที่ไม่รู้จักตกไปที่ค่าเริ่มต้น เทียบกับรายการที่อนุญาตด้วย
- * includes() ไม่ใช่การมี property บน object ("constructor" ต้องไม่ผ่าน)
- *
- * `?contract=` เป็นตัวกรองสัญญาเดิมของหน้าภาพรวม — แปลงเป็น "เทียบตามสัญญา" ให้ลิงก์เก่ายังพาไปดูสัญญานั้น
- * `?view=` `?dir=` `?n=` ของมุมมองอันดับเดิมไม่มีความหมายแล้ว (อันดับอยู่ในไฟล์ Excel เท่านั้น
- * #115) ลิงก์เก่าที่มีค่าเหล่านี้จึงเปิดเป็นการเลือกรายการ และ URL ถูกล้างค่าเหล่านั้นออก
- */
-export function comparisonFromQuery(query = {}) {
-  const legacyContract = itemsFrom(query.contract);
-  const by = pick(query.by, DIMENSIONS, legacyContract.length ? "contract" : "overall");
-  const items = itemsFrom(query.items);
-  const scope = pick(query.scope, YEAR_SCOPES, "overall");
-  return {
-    by,
-    items: items.length ? items : !query.by ? legacyContract : [],
-    metric: pick(query.measure, ["cost", "pages"], "cost") === "pages" ? "rawPages" : "cost",
-    // เทียบข้ามปีงบ — ว่าง = ปีงบที่เลือกอยู่กับปีก่อนหน้า
-    years: [...new Set(String(Array.isArray(query.years) ? query.years[0] ?? "" : query.years ?? "")
-      .split(",").map((item) => item.trim()).filter((item) => /^\d{4}$/.test(item)))].sort().slice(-MAX_YEARS),
-    scope,
-    scopeItem: scope === "overall" ? "" : listFrom(query.scopeItem)[0] ?? "",
-  };
-}
-
-/** สถานะเป็น query — ค่าเริ่มต้นไม่ถูกเขียน ลิงก์ของมุมมองปกติจึงสั้นเหมือนเดิม */
-export function comparisonToQuery(state) {
-  const overall = state.by === "overall";
-  return {
-    by: overall ? undefined : state.by,
-    items: !overall && state.items.length ? state.items.join(",") : undefined,
-    measure: state.metric === "rawPages" ? "pages" : undefined,
-    years: state.by === "fiscalYear" && state.years?.length ? state.years.join(",") : undefined,
-    scope: state.by === "fiscalYear" && state.scope && state.scope !== "overall" ? state.scope : undefined,
-    scopeItem: state.by === "fiscalYear" && state.scope !== "overall" && state.scopeItem ? state.scopeItem : undefined,
-    view: undefined,
-    dir: undefined,
-    n: undefined,
-    contract: undefined,
-  };
-}
-
-/** สถานะของหน้าเปรียบเทียบความแตกต่างใน URL — ใช้ชื่อพารามิเตอร์ที่ไม่ชนกับโหมดอื่นของหน้า */
-export function differenceFromQuery(query = {}) {
-  const items = itemsFrom(query.items);
-  const requestedBase = listFrom(query.base)[0] ?? "";
-  return {
-    level: pick(query.level, ["division", "department"], "division"),
-    basis: pick(query.basis, ["units", "periods"], "units"),
-    reference: pick(query.ref, REFERENCE_MODES, "previous-year"),
-    items,
-    base: items.includes(requestedBase) ? requestedBase : items[0] ?? "",
-    metric: pick(query.measure, ["cost", "pages"], "cost") === "pages" ? "rawPages" : "cost",
-  };
-}
-
-export function differenceToQuery(state) {
-  return {
-    level: state.level === "division" ? undefined : state.level,
-    basis: state.basis === "units" ? undefined : state.basis,
-    ref: state.basis === "periods" && state.reference !== "previous-year" ? state.reference : undefined,
-    items: state.items.length ? state.items.join(",") : undefined,
-    base: state.basis === "units" && state.base ? state.base : undefined,
-    measure: state.metric === "rawPages" ? "pages" : undefined,
-  };
 }

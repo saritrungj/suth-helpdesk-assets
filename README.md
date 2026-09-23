@@ -17,7 +17,7 @@
 - จัดการทะเบียนอุปกรณ์ ตำแหน่ง หน่วยงาน สถานะ และประวัติการย้าย
 - จัดการข้อมูลอ้างอิง สัญญา และปีงบประมาณ
 - บันทึกหรือนำเข้ายอดพิมพ์รายเดือนจาก CSV/Excel
-- แสดง Dashboard ค่าใช้จ่าย รายงานตามอาคาร/ฝ่าย/แผนก และการเปรียบเทียบรายเดือน
+- หน้าภาพรวมการพิมพ์หน้าเดียวที่กรองตามปีงบ ช่วงเวลา ฝ่าย แผนก สัญญา อาคาร และเครื่อง แล้วเปรียบเทียบ เจาะรายละเอียด และส่งออกจากข้อมูลชุดเดียวกัน ดู [ADR-0020](docs/decisions/0020-single-scope-dashboard.md)
 - ติดตามความครบถ้วนของยอดรายเดือนและงานค้าง พร้อมส่งออก Excel ที่มีแผ่นบริบท (เวลาออกรายงานและตัวกรองที่ใช้) ดู [วิธีตรวจยอดและติดตามงาน](docs/how-to/use-report-workflow.md)
 - สลับภาษาไทย/อังกฤษจากเมนูบัญชี โดยชื่อข้อมูลและสกุลเงิน THB คงเดิม ดู [ADR-0013](docs/decisions/0013-localized-reporting.md)
 - ควบคุมการเข้าถึงด้วย JWT ที่ส่งผ่าน cookie แบบ httpOnly (ดู [ADR-0006](docs/decisions/0006-session-cookie-instead-of-localstorage.md)) และบทบาท `admin`, `staff`, `viewer`
@@ -26,7 +26,7 @@
 
 - Backend: Node.js (CommonJS), Express และ MySQL — ข้อผิดพลาดตามมาตรฐาน Problem Details (RFC 9457) และตรวจข้อมูลขาเข้าด้วย zod ทุกเส้นทาง (ดู [ADR-0010](docs/decisions/0010-problem-details-and-api-conventions.md))
 - Frontend: Vue 3, Vite, Tailwind CSS v4, TanStack Query และ Chart.js — หน้าตาทั้งระบบผ่าน design system กลาง (token + Reka UI + lucide-vue-next) ดู [ADR-0008](docs/decisions/0008-design-system-tokens-and-ui-kit.md) และ [ADR-0009](docs/decisions/0009-tanstack-query-as-the-data-layer.md)
-- Database: MySQL schema, ordered migrations และข้อมูลจำลอง
+- Database: MySQL 8.4 บน Docker ([ฐานข้อมูลบน Docker](docs/how-to/run-docker-database.md)) — schema, ordered migrations ส่วนข้อมูลจำลองมีเฉพาะในชุดทดสอบที่สร้างฐานชั่วคราว
 
 ## โครงสร้าง repository
 

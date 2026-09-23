@@ -98,7 +98,7 @@ for (const density of ["compact", "default", "relaxed"]) {
     await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
     const save = page.getByRole("button", { name: "บันทึก 1 รายการ", exact: true });
     await expect(save).toBeVisible();
-    await expect.poll(() => save.evaluate((el) => document.fullscreenElement.contains(el))).toBe(true);
+    await expect.poll(() => save.evaluate((el) => document.fullscreenElement?.contains(el) ?? false)).toBe(true);
     await expect(page.getByText(/ช่วงเวลา: .*2569/)).toBeVisible();
     await expect(page.locator(":fullscreen")).not.toContainText("month: 2026-");
     await expect(input).toHaveValue("250");
@@ -115,7 +115,7 @@ test("staff opens the API's pending month after coverage arrives", async ({ page
   await expect(page.getByRole("columnheader", { name: /ยอด ส\.ค\./ })).toBeVisible();
 });
 
-test("expense keeps search and expanded detail across tabs and browser back", async ({ page }) => {
+test("expense keeps search and expanded detail across browser back", async ({ page }) => {
   const state = await prototypeFixture(page);
   state.unassigned = [{ id: 99, serial_number: "UNASSIGNED-001", total_cost: 0 }];
   await page.goto("/expense");
@@ -124,8 +124,6 @@ test("expense keeps search and expanded detail across tabs and browser back", as
   await search.fill("SUTH-001");
   await page.getByRole("button", { name: "กางทั้งหมด", exact: true }).click();
   await page.getByRole("button", { name: /SUTH Printer Office 400/ }).click();
-  await page.getByRole("tab", { name: "ตามฝ่าย / แผนก", exact: true }).click();
-  await page.getByRole("tab", { name: "ตามสัญญา", exact: true }).click();
   await expect(search).toHaveValue("SUTH-001");
   await page.getByRole("link", { name: /เปิดรายละเอียดเครื่อง.*SUTH-001/ }).click();
   await expect(page).toHaveURL(/\/assets\/1/);
@@ -200,28 +198,6 @@ test("monthly failure preserves draft for retry and canceled mode navigation", a
   expect(state.writes).toEqual([{ month: "2026-08", items: [{ device_id: 1, pages: 250 }] }]);
 });
 
-test("expense retains each tab's scroll position", async ({ page }) => {
-  await prototypeFixture(page);
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto("/expense?tab=department");
-  await expect(page.getByText("เครื่องที่ใช้งานหนักที่สุด", { exact: true })).toBeVisible();
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  /* จำตำแหน่งที่เบราว์เซอร์หยุดให้จริง ไม่ยึด 420 เป๊ะ — Chromium ขยับตำแหน่งเลื่อนเอง
-     ได้เป็นพิกเซลจาก scroll anchoring เมื่อกราฟที่อยู่เหนือ viewport วาดเสร็จทีหลัง
-     สิ่งที่เทสนี้ต้องรับประกันคือ "กลับมาที่เดิม" ไม่ใช่ค่าตัวเลขค่าหนึ่ง (เคยทำ
-     pre-push ล้มด้วย 421 ทั้งที่พฤติกรรมถูก) ใช้ระยะเผื่อ 2px เท่ากับเทสตำแหน่งเลื่อน
-     ของทะเบียนใน asset-drawer.spec.js */
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
-  const parked = await page.evaluate(() => window.scrollY);
-  // Dispatch activation without the test runner scrolling the tab into view first.
-  await page.getByRole("tab", { name: "ตามสัญญา", exact: true }).dispatchEvent("mousedown", { button: 0, ctrlKey: false });
-  await expect(page.getByRole("tab", { name: "ตามสัญญา", exact: true })).toHaveAttribute("aria-selected", "true");
-  await page.getByRole("tab", { name: "ตามฝ่าย / แผนก", exact: true }).dispatchEvent("mousedown", { button: 0, ctrlKey: false });
-  await expect
-    .poll(() => page.evaluate((top) => Math.abs(window.scrollY - top), parked))
-    .toBeLessThanOrEqual(2);
-});
-
 test("annual draft survives canceling close", async ({ page }) => {
   await prototypeFixture(page);
   await page.goto("/print-transactions");
@@ -241,17 +217,12 @@ test("expense failures do not claim zero totals or empty data", async ({ page })
   state.failExpense = true;
   await page.goto("/expense");
   await expect(page.getByText("โหลดข้อมูลค่าใช้จ่ายไม่สำเร็จ", { exact: true })).toBeVisible();
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).not.toBeVisible();
   await expect(page.getByText("ยังไม่มีสัญญาในปีงบนี้", { exact: true })).not.toBeVisible();
   state.failExpense = false;
   await page.getByRole("button", { name: "ลองใหม่", exact: true }).click();
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).toBeVisible();
   await expect(page.getByText("360.00", { exact: true }).first()).toBeVisible();
-  state.failExpense = true;
-  await page.getByRole("tab", { name: "ตามฝ่าย / แผนก", exact: true }).click();
-  await expect(page.getByText("โหลดข้อมูลแยกตามฝ่าย/แผนกไม่สำเร็จ", { exact: true })).toBeVisible();
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).not.toBeVisible();
-  await expect(page.getByText("ยังไม่มีข้อมูลฝ่าย/แผนก", { exact: true })).not.toBeVisible();
 });
 
 test("explicit month survives late coverage and yearly detail keeps the draft", async ({ page }) => {
@@ -278,7 +249,7 @@ test("expense side data that fails to load is reported instead of silently disap
   state.failUnassigned = true;
   state.failMonths = true;
   await page.goto("/expense");
-  await expect(page.getByText("ค่าใช้จ่ายสุทธิ", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).toBeVisible();
   const unassigned = page.getByRole("status").filter({ hasText: "โหลดรายการเครื่องที่ยังไม่ผูกสัญญาไม่สำเร็จ" });
   const months = page.getByRole("status").filter({ hasText: "โหลดรายการเดือนที่มีข้อมูลไม่สำเร็จ" });
   await expect(unassigned).toBeVisible();
@@ -288,7 +259,6 @@ test("expense side data that fails to load is reported instead of silently disap
   await unassigned.getByRole("button", { name: "ลองใหม่", exact: true }).click();
   await expect(unassigned).not.toBeVisible();
   await expect(page.getByText("เครื่องที่ยังไม่ได้ผูกสัญญา", { exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "ตามฝ่าย / แผนก", exact: true }).click();
   await expect(months).toBeVisible();
   state.failMonths = false;
   await months.getByRole("button", { name: "ลองใหม่", exact: true }).click();
@@ -312,48 +282,20 @@ test("expense Excel export carries the search context and the on-screen amounts"
   const [header, ...rows] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
   expect(header).toContain("ค่าใช้จ่ายสุทธิ (หัก 2%)");
   expect(rows).toHaveLength(1);
-  expect([rows[0][0], rows[0][1], rows[0][4], rows[0][7], rows[0][8]]).toEqual(["SUTH-2569", 0.45, "SUTH-001", 1000, 360]);
-});
-
-test("department tab keeps its search and expanded device after returning from detail", async ({ page }) => {
-  await prototypeFixture(page);
-  await page.goto("/expense?tab=department");
-  const search = page.getByRole("textbox", { name: "ค้นหาฝ่าย แผนก หรือเครื่อง", exact: true });
-  await search.fill("SUTH-001");
-  // กางทีละชั้นด้วยการคลิกเอง ไม่ใช้ "กางทั้งหมด" — แถวในแท็บนี้เคยคลิกกางไม่ติดเลย
-  // ตั้งแต่ #22 เพราะเทมเพลตส่ง Set ที่ถูกแกะจาก ref เข้า toggle() (#50)
-  for (const name of [/^ฝ่ายการพยาบาล/, /^หน่วยบริการผู้ป่วยนอก/, /SUTH-001/]) {
-    const row = page.getByRole("button", { name }).first();
-    await row.click();
-    await expect(row).toHaveAttribute("aria-expanded", "true");
-  }
-  await page.getByRole("link", { name: /เปิดรายละเอียดเครื่อง.*SUTH-001/ }).click();
-  await expect(page).toHaveURL(/\/assets\/1/);
-  await page.goBack();
-  await expect(page).toHaveURL(/tab=department/);
-  await expect(search).toHaveValue("SUTH-001");
-  await expect(page.getByRole("link", { name: /เปิดรายละเอียดเครื่อง.*SUTH-001/ })).toBeVisible();
+  expect(rows[0]).toEqual(["SUTH-2569", "0.45", "ราคาตามสัญญา", "SUTH-001", "SUTH Printer", "Office 400", 1000, 360]);
 });
 
 test("expense price, discount and unit copy is translated while the amounts stay the same", async ({ page }) => {
   await prototypeFixture(page);
   await page.addInitScript(() => localStorage.setItem("suth-language", "en"));
   await page.goto("/expense");
-  // ป้ายยอดรวมใช้คำตามพจนานุกรมโดเมน (CONTEXT.md) แล้ว — "ค่าใช้จ่ายสุทธิ"
-  // และจะเปลี่ยนเป็น "ค่าใช้จ่ายที่ยืนยันแล้ว" เมื่อมีรายการที่ยังยืนยันราคาไม่ได้
-  await expect(page.getByText("Net cost", { exact: true })).toBeVisible();
-  // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือแค่ส่วนลด (รอบที่ 3 ของ #51)
-  // ยอดรวมของหน้านี้เป็นยอดของสัญญาที่ขึ้นทะเบียนกับปีงบนี้เท่านั้น ป้ายจึงต้องบอก
-  // ขอบเขตของตัวเองด้วย ไม่งั้นไปชนกับป้ายชื่อเดียวกันบนแดชบอร์ดที่คิดคนละขอบเขต
+  await expect(page.getByText("Net print charge", { exact: true })).toBeVisible();
+  // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือคำอธิบายส่วนลด
   await expect(page.getByText(/After 2% deduction/)).toBeVisible();
-  await expect(page.getByText(/Contracts registered to this fiscal year only/)).toBeVisible();
-  await expect(page.getByText(/0\.45\s+THB\/page/)).toBeVisible();
+  // ราคาต่อหน้าอยู่ในแถวเครื่อง ไม่ได้อยู่ที่หัวสัญญา จึงต้องกางสัญญาก่อน
+  await page.getByRole("button", { name: "Expand all", exact: true }).click();
+  await expect(page.getByText(/Effective price\s+0\.45\s+THB\/page/)).toBeVisible();
   await expect(page.getByText("360.00", { exact: true }).first()).toBeVisible();
-  await page.getByRole("tab", { name: "By division / department", exact: true }).click();
-  // แท็บสัญญายังอยู่ใน DOM แบบซ่อน จึงต้องหาเฉพาะในแผงของแท็บที่เลือกอยู่
-  const department = page.getByRole("tabpanel", { name: "By division / department" });
-  await expect(department.getByRole("paragraph").filter({ hasText: /^Net cost$/ })).toBeVisible();
-  await expect(department.getByText("360.00", { exact: true }).first()).toBeVisible();
 });
 
 /*
@@ -363,8 +305,8 @@ test("expense price, discount and unit copy is translated while the amounts stay
  */
 test("ค่าใช้จ่ายที่พิมพ์ออกกระดาษยังมีปีงบกำกับยอดรวม", async ({ page }) => {
   await prototypeFixture(page);
-  await page.goto("/expense?tab=department");
-  await expect(page.getByText("เครื่องที่ใช้งานหนักที่สุด", { exact: true })).toBeVisible();
+  await page.goto("/expense");
+  await expect(page.getByText("ค่าพิมพ์สุทธิ", { exact: true })).toBeVisible();
   const year = page.getByText("ปีงบ 2569", { exact: true });
   await expect(year).toBeHidden();
   await page.emulateMedia({ media: "print" });

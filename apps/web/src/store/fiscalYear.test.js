@@ -2,7 +2,8 @@ import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { ref, nextTick } from "vue";
 
 // mock HTTP client และ router ก่อน import store — store เรียก router.replace ทุกครั้งที่
-// เปลี่ยนปีงบ และ import ../router จริงจะลาก view ทั้งหมดเข้ามาด้วย
+// เปลี่ยนปีงบ ส่วน router ตัวจริงมาจาก lib/app-router ซึ่งเป็นที่เก็บ instance ที่ router/index.js
+// ฝากไว้ (ดูเหตุผลที่ต้องมีชั้นนี้ใน lib/app-router.js)
 const get = vi.fn();
 const replace = vi.fn();
 
@@ -14,16 +15,19 @@ vi.mock("../services/api", () => ({
   default: { get },
 }));
 
-vi.mock("../router", () => ({
-  default: {
-    replace: (...args) => replace(...args),
-    get currentRoute() {
-      return { value: { query: currentQuery.value } };
-    },
+const fakeRouter = {
+  replace: (...args) => replace(...args),
+  get currentRoute() {
+    return { value: { query: currentQuery.value } };
   },
+};
+
+vi.mock("../lib/app-router", () => ({
+  appRouter: () => fakeRouter,
+  setAppRouter: () => {},
 }));
 
-const { fiscalYearState, setActiveFiscalYear, registerFiscalYearGuard, startFiscalYearRouterSync } =
+const { fiscalYearState, loadFiscalYears, resetFiscalYearState, setActiveFiscalYear, registerFiscalYearGuard, startFiscalYearRouterSync } =
   await import("./fiscalYear");
 
 // registry ของด่านเป็น module singleton — ถ้า assertion ล้มกลาง test body แล้วเราถอด
@@ -59,6 +63,24 @@ describe("ด่านกันข้อมูลที่ยังไม่ไ�
     expect(changed).toBe(true);
     expect(fiscalYearState.activeId).toBe(2);
     expect(replace).toHaveBeenCalledOnce();
+  });
+
+  test("รอให้ URL เปลี่ยนเสร็จก่อนรายงานว่าปีงบเปลี่ยนแล้ว", async () => {
+    let finishNavigation;
+    replace.mockReturnValue(new Promise((resolve) => { finishNavigation = resolve; }));
+    let settled = false;
+
+    const changing = setActiveFiscalYear(2).then((result) => {
+      settled = true;
+      return result;
+    });
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledOnce());
+    await Promise.resolve();
+
+    expect(settled).toBe(false);
+    finishNavigation();
+    await expect(changing).resolves.toBe(true);
+    expect(fiscalYearState.activeId).toBe(2);
   });
 
   test("ด่านตอบ false — ปีงบต้องคงเดิมและไม่แตะ URL", async () => {
@@ -150,5 +172,42 @@ describe("เปลี่ยนปีงบผ่าน ?fy= (กด back/forwar
     await Promise.resolve();
 
     expect(fiscalYearState.activeId).toBe(2);
+  });
+});
+
+describe("สลับปีงบจากแถบบนขณะที่หน้าเลือกหลายปีไว้", () => {
+  test("ชุดปีที่เทียบและเดือนของปีเก่าต้องหายไปใน navigation เดียว ส่วนตัวกรองอื่นคงเดิม", async () => {
+    currentQuery.value = { fy: "1", years: "2567,2568", months: "2566-10", division: "3", by: "division" };
+
+    const changed = await setActiveFiscalYear(2);
+
+    expect(changed).toBe(true);
+    expect(replace).toHaveBeenCalledOnce();
+    expect(replace).toHaveBeenCalledWith({ query: { fy: 2, division: "3", by: "division" } });
+  });
+
+  test("หน้าที่ส่ง query ของตัวเองมา (เลือกหลายปีจากตัวกรอง) เป็นเจ้าของชุดปีเอง", async () => {
+    currentQuery.value = { fy: "1", years: "2567", months: "2566-10" };
+
+    await setActiveFiscalYear(2, { query: { years: "2567,2568", months: "2566-10" } });
+
+    expect(replace).toHaveBeenCalledWith({ query: { fy: 2, years: "2567,2568", months: "2566-10" } });
+  });
+});
+
+describe("เลือกปีงบตั้งต้นหลังโหลดรายการ", () => {
+  test("เลือกปีงบตั้งต้นหลังโหลดรายการ ไม่ใช่การสลับปี — เดือนที่มากับลิงก์ต้องอยู่ครบ", async () => {
+    // ลิงก์ที่แชร์กันมาไม่มี ?fy= — store เลือกปีงบล่าสุดให้เอง แต่ขอบเขตอื่นในลิงก์เป็นของผู้ส่ง
+    resetFiscalYearState();
+    currentQuery.value = { months: "2025-11", division: "2" };
+    get.mockResolvedValue({ data: [
+      { id: 1, year: "2567", start_month: "2566-10", end_month: "2567-09" },
+      { id: 2, year: "2568", start_month: "2567-10", end_month: "2568-09" },
+    ] });
+
+    await loadFiscalYears();
+
+    expect(fiscalYearState.activeId).toBe(2);
+    expect(replace).toHaveBeenCalledWith({ query: { months: "2025-11", division: "2", fy: 2 } });
   });
 });

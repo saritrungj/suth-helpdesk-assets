@@ -22,6 +22,10 @@ const {
   costSatang,
   effectivePriceSatang,
   sumSatang,
+  ZERO_WIDTH_CHARS,
+  formulaStarter,
+  FORMULA_STARTERS,
+  FORMULA_STARTER_REGEX,
 } = require("./index.cjs");
 
 let passed = 0;
@@ -222,6 +226,45 @@ test("รวมเงินหลายรายการต้องไม่�
 
 test("คำนวณเกินช่วงที่แม่นยำต้อง throw ไม่ใช่คืนค่าเพี้ยนเงียบๆ", () => {
   assert.throws(() => costSatang(Number.MAX_SAFE_INTEGER, "9999999.99"));
+});
+
+// ------------------------------------------------------------------
+// ตัวเริ่มสูตรคำนวณ (Formula Starters - CWE-1236) — #134
+// ------------------------------------------------------------------
+
+test("formulaStarter ตรวจพบตัวเริ่มสูตรและคืนตัวอักษรนั้น", () => {
+  assert.equal(formulaStarter("=1+1"), "=");
+  assert.equal(formulaStarter("+123"), "+");
+  assert.equal(formulaStarter("-cmd"), "-");
+  assert.equal(formulaStarter("@SUM"), "@");
+  assert.equal(formulaStarter("|calc"), "|");
+  assert.equal(formulaStarter("＝1+1"), "＝");
+});
+
+test("formulaStarter ตรวจพบสูตรแม้มีช่องว่างหรือ zero-width นำหน้า", () => {
+  assert.equal(formulaStarter(" =1+1"), "=");
+  assert.equal(formulaStarter("\t+123"), "+");
+  assert.equal(formulaStarter("\r-cmd"), "-");
+  assert.equal(formulaStarter("\n@SUM"), "@");
+  assert.equal(formulaStarter("\u200B=cmd"), "=");
+});
+
+test("formulaStarter คืน null เมื่อเป็นข้อความปกติหรือไม่มีตัวเริ่มสูตร", () => {
+  assert.equal(formulaStarter("PRN-001"), null);
+  assert.equal(formulaStarter("M404"), null);
+  assert.equal(formulaStarter("SN=123"), null);
+  assert.equal(formulaStarter(""), null);
+  assert.equal(formulaStarter(null), null);
+});
+
+test("ทุกตัวอักษรใน FORMULA_STARTERS ต้องถูกตรวจจับด้วย formulaStarter แม้มีช่องว่างหรือ zero-width นำหน้า", () => {
+  for (const char of FORMULA_STARTERS) {
+    assert.equal(formulaStarter(char), char);
+    assert.equal(formulaStarter(` ${char}`), char);
+  }
+  for (const zw of ZERO_WIDTH_CHARS) {
+    assert.equal(formulaStarter(`${zw}=`), "=");
+  }
 });
 
 // ------------------------------------------------------------------

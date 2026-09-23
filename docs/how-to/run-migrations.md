@@ -49,12 +49,8 @@ npm run dev:api
 | 7 | `migration_add_device_service_period.sql` | สถานะการติดตั้ง ช่วงความรับผิดชอบ และ index ของเดือน |
 | 8 | `migration_round_cost_per_reading.sql` | ให้ view ปัดค่าใช้จ่ายทีละรายการ ให้ตรงกับที่โค้ดคำนวณ (ต้องรันหลังข้อ 6) |
 | 9 | `migration_add_effective_pricing.sql` | ราคาผูกกับช่วงที่มีผลจริง และประวัติว่าเครื่องคิดเงินภายใต้สัญญาไหน (ต้องรันหลังข้อ 8) |
-
-> ⚠️ **หลังรันข้อ 9 รายงานทุกหน้าจะแสดงค่าใช้จ่ายว่า "ยังยืนยันราคาไม่ได้"**
->
-> เป็นพฤติกรรมที่ตั้งใจตาม [ADR-0019](../decisions/0019-effective-pricing-history.md) — ราคาที่เก็บไว้เฉยๆ ไม่ใช่หลักฐานว่ามีผลกับเดือนไหน
->
-> เข้าหน้า **ยืนยันช่วงที่สัญญามีผล** (`/admin/contract-prices`) แล้วกดยืนยันทีละฉบับ ระบบเสนอช่วงของปีงบให้แล้ว ยอดเงินจะกลับมาครบทันทีที่ยืนยันครบ
+| 10 | `migration_billing_lines_and_meters.sql` | อายุสัญญา รายการราคาต่อหมวด มิเตอร์ ราคา 4 ตำแหน่ง และการปัดยอดระดับรายการราคา (ต้องรันหลังข้อ 9) |
+| 11 | `migration_add_master_aliases.sql` | ชื่อเรียกอื่นของยี่ห้อ อาคาร และฝ่าย ([ADR-0025](../decisions/0025-master-data-aliases.md)) |
 
 ```sh
 mysql --default-character-set=utf8mb4 -u root -p your_database < database/migrations/migration_add_device_location.sql
@@ -75,10 +71,14 @@ mysql --default-character-set=utf8mb4 -u root -p your_database < database/migrat
 ## 4. ตรวจผล
 
 ```sh
-mysql -u root -p your_database -e "SELECT year, start_month, end_month FROM fiscal_year; SELECT MIN(month), MAX(month), COUNT(*) FROM print_transactions;"
+mysql -u root -p your_database -e "SELECT year, start_month, end_month FROM fiscal_year; SELECT MIN(month), MAX(month), COUNT(*) FROM print_transactions; SELECT COUNT(*) AS readings_without_meter FROM print_transactions WHERE meter_id IS NULL; SELECT COUNT(*) AS unpriced FROM v_monthly_kpi WHERE total_cost IS NULL;"
 ```
 
-`start_month` / `end_month` ต้องเป็น ค.ศ. เช่น ปีงบ 2569 ได้ `2025-10` ถึง `2026-09` และ `month` ใน `print_transactions` ต้องเป็น ค.ศ. ทั้งหมด จำนวนแถวต้องเท่าเดิม
+`start_month` / `end_month` และ `print_transactions.month` ต้องเป็น ค.ศ. จำนวนแถวต้องเท่าเดิม และ `readings_without_meter` ต้องเป็น `0`
+
+`unpriced` หลังข้อ 10 ต้อง**ไม่มากกว่าก่อนรัน** (นับก่อนรันด้วย `SELECT COUNT(*) FROM v_monthly_kpi WHERE total_cost IS NULL`) — ยอดที่หาราคาไม่ได้อยู่แล้วคือเดือนที่ไม่มีสัญญาคิดเงินหรืออยู่นอกอายุสัญญา migration ไม่เดาสัญญาให้ ดูรายการและสาเหตุได้ที่ลิ้นชักแจ้งเตือนบนหน้าภาพรวม แล้วแก้ที่ต้นเหตุ: แก้อายุสัญญาตามเอกสาร หรือผูกเครื่องกับสัญญาโดยระบุวันเริ่มคิดเงินย้อนหลังในหน้าแก้เครื่อง ยอดเงินในเดือนที่มีราคาอยู่แล้วอาจต่างจากเดิมไม่กี่สตางค์ เพราะปัดที่ระดับรายการราคาตาม [ADR-0022](../decisions/0022-round-at-invoice-line-and-allocate.md)
+
+ถ้าข้อ 10 หยุดทันทีพร้อมข้อความ "พบสัญญาที่มีวันเริ่มหรือวันสิ้นสุดเพียงค่าเดียว" หรือ "ไม่มีทั้งช่วงที่มีผลและปีงบ" ยังไม่มีอะไรถูกแก้ ให้กรอกวันเริ่มและวันสิ้นสุดของสัญญาเหล่านั้นตามเอกสารแล้วรันใหม่
 
 ## ถ้า migration ตัวที่ 5 หยุดกลางคัน
 

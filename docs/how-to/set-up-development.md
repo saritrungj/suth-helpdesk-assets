@@ -5,7 +5,7 @@
 ## สิ่งที่ต้องมีก่อน
 
 - Node.js 20 ขึ้นไป และ npm
-- MySQL หรือ MariaDB
+- Docker Desktop แล้วใช้ [ฐานข้อมูลบน Docker](run-docker-database.md) (MySQL 8.4) แทนข้อ 3–4 ซึ่งสร้างฐาน บัญชี และ phpMyAdmin ให้ในคำสั่งเดียว — หรือ MySQL 8.4 ที่ติดตั้งเอง
 - สิทธิ์สร้างฐานข้อมูลใหม่
 
 ## 1. ติดตั้ง dependency
@@ -69,6 +69,8 @@ npm run dev:web
 ```
 
 API อยู่ที่ `http://localhost:3000` เว็บอยู่ที่ `http://localhost:5173` และเรียก API ที่ `http://localhost:3000/api`
+
+เว็บผูกที่ `127.0.0.1` โดยตั้งใจ ([#124](https://github.com/saritrungj/suth-helpdesk-assets/issues/124)) ถ้าต้องให้เครื่องอื่นในเครือข่ายเข้าถึงได้ ให้สั่ง `npm run dev:web -- --host=0.0.0.0` เอง
 
 ## ตรวจว่าใช้ได้จริง
 

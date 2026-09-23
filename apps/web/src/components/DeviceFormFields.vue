@@ -1,5 +1,5 @@
 <script setup>
-import { yearLabel } from "../lib/locale-format";
+import { formatDate } from "../lib/locale-format";
 import { t } from "../lib/locale";
 import { formatUnitPrice } from "../lib/format";
 import { errorMessage, fieldErrors } from "../lib/api-error";
@@ -27,7 +27,7 @@ import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateAfterWrite } from "../api/invalidate";
 import { toastError, toastSuccess } from "../store/toast";
-import { UiAlert, UiButton, UiCombobox, UiField, UiInput, UiSegmented, UiSkeleton } from "../ui";
+import { UiAlert, UiButton, UiCheckbox, UiCombobox, UiField, UiInput, UiSegmented, UiSelect, UiSkeleton } from "../ui";
 
 const props = defineProps({
   /**
@@ -77,6 +77,8 @@ const emptyForm = () => ({
   department_id: "",
   contract_id: "",
   price_override: "",
+  meter_category_id: "",
+  has_color_meter: false,
   status: "active",
   installation_status: "",
   installed_on: "",
@@ -91,6 +93,7 @@ const floors = ref([]);
 const divisions = ref([]);
 const departments = ref([]);
 const contracts = ref([]);
+const meterCategories = ref([]);
 
 const masterLoaded = ref(false);
 const loading = ref(false);
@@ -114,9 +117,12 @@ const contractOptions = computed(() =>
   contracts.value.map((c) => ({
     value: c.id,
     label: c.contract_no,
-    hint: c.fiscal_year ? t("ปีงบ {0}", [yearLabel(c.fiscal_year)]) : "",
+    hint: t("{0} – {1}", [formatDate(c.effective_from), formatDate(c.effective_to)]),
   }))
 );
+
+/** หมวดมิเตอร์หลัก — ไม่รวมหมวดสี ซึ่งเป็นมิเตอร์ที่สองของเครื่อง */
+const primaryCategories = computed(() => meterCategories.value.filter((c) => !c.is_color));
 
 /** ราคาที่จะถูกใช้จริงถ้าบันทึกตามที่กรอกอยู่ตอนนี้ — แสดงให้เห็นก่อนกดบันทึก */
 const effectivePriceHint = computed(() => {
@@ -124,8 +130,12 @@ const effectivePriceHint = computed(() => {
     return t("จะใช้ราคาพิเศษเฉพาะเครื่อง {0} บาท/หน้า แทนราคาตามสัญญา", [formatUnitPrice(form.value.price_override)]);
   }
   const contract = contracts.value.find((c) => Number(c.id) === Number(form.value.contract_id));
-  if (contract?.price_per_page !== undefined && contract?.price_per_page !== null) {
-    return t("เว้นว่างไว้ = ใช้ราคาตามสัญญา {0} บาท/หน้า", [formatUnitPrice(contract.price_per_page)]);
+  const line = contract?.price_lines?.find((l) => Number(l.category_id) === Number(form.value.meter_category_id));
+  if (line) {
+    return t("เว้นว่างไว้ = ใช้ราคาตามสัญญา {0} บาท/หน้า", [formatUnitPrice(line.price_per_page)]);
+  }
+  if (contract && form.value.meter_category_id) {
+    return t("สัญญานี้ยังไม่มีราคาของหมวดที่เลือก — ยอดของเครื่องนี้จะบันทึกไม่ได้");
   }
   return t("เว้นว่างไว้ = ใช้ราคาตามสัญญาที่เลือก");
 });
@@ -134,13 +144,14 @@ async function loadMasterData() {
   if (masterLoaded.value) return;
 
   try {
-    const [brand, building, floor, division, department, contract] = await Promise.all([
+    const [brand, building, floor, division, department, contract, category] = await Promise.all([
       api.get("/brands"),
       api.get("/buildings"),
       api.get("/floors"),
       api.get("/divisions"),
       api.get("/departments"),
       api.get("/contracts"),
+      api.get("/contracts/meter-categories"),
     ]);
 
     brands.value = brand.data ?? [];
@@ -149,6 +160,7 @@ async function loadMasterData() {
     divisions.value = division.data ?? [];
     departments.value = department.data ?? [];
     contracts.value = contract.data ?? [];
+    meterCategories.value = category.data ?? [];
     masterLoaded.value = true;
   } catch (err) {
     console.error("Load master data error:", err);
@@ -175,6 +187,8 @@ async function loadAsset(id) {
       department_id: device.department_id ?? "",
       contract_id: device.contract_id ?? "",
       price_override: device.price_override ?? "",
+      meter_category_id: device.meter_category_id ?? "",
+      has_color_meter: Boolean(Number(device.has_color_meter)),
       status: device.status ?? "active",
       billing_from: props.initialBillingFrom,
     };
@@ -236,6 +250,8 @@ async function submit() {
       form.value.price_override !== "" && form.value.price_override !== null
         ? Number(form.value.price_override)
         : null,
+    meter_category_id: form.value.meter_category_id ? Number(form.value.meter_category_id) : null,
+    has_color_meter: Boolean(form.value.has_color_meter),
     status: form.value.status || "active",
     ...(isEdit.value && form.value.billing_from
       ? { billing_from: form.value.billing_from }
@@ -398,6 +414,18 @@ defineExpose({ reset, submit, saving, loading, ready });
             :placeholder="t(&quot;เลือกสัญญา&quot;)"
             :any-label="t(&quot;ไม่ผูกกับสัญญา&quot;)"
           />
+        </UiField>
+
+        <UiField
+          :label="t(&quot;หมวดมิเตอร์&quot;)"
+          :hint="t(&quot;ใช้เลือกราคาในสัญญา เช่น A4 เลเซอร์ หรือ A3 ขาวดำ&quot;)"
+          :error="errors.meter_category_id"
+        >
+          <UiSelect v-model="form.meter_category_id" :options="primaryCategories" :placeholder="t(&quot;เลือกหมวด&quot;)" />
+        </UiField>
+
+        <UiField :label="t(&quot;มิเตอร์สี&quot;)" :hint="t(&quot;เครื่องที่ใบแจ้งหนี้แยกยอดพิมพ์สีเป็นอีกแถว&quot;)">
+          <UiCheckbox v-model="form.has_color_meter" :label="t(&quot;เครื่องนี้มีมิเตอร์สี&quot;)" />
         </UiField>
 
         <UiField :label="t(&quot;ราคาพิเศษเฉพาะเครื่อง&quot;)" :hint="effectivePriceHint" :error="errors.price_override">

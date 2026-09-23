@@ -3,12 +3,24 @@
 -- Dummy Data
 -- ==============================================================================
 
+-- ข้อความไทยในไฟล์นี้เป็น UTF-8 — บอก server ตรงๆ ไม่พึ่ง charset ของ client ที่โหลดไฟล์
+-- client ของ image MySQL และ mysql บน Windows ใช้ latin1/cp874 เป็นค่าเริ่มต้น ถ้าไม่มีบรรทัดนี้
+-- ชื่อไทยจะถูกเข้ารหัสซ้อนลงฐานโดยไม่ error (พบจริงตอนย้ายฐานบน Docker ไป MySQL 8.4, #130)
+SET NAMES utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 0;
 
 DELETE FROM print_transactions;
+DELETE FROM device_meter;
+DELETE FROM contract_price_line;
 DELETE FROM devices;
 DELETE FROM contracts;
 DELETE FROM department;
+-- FOREIGN_KEY_CHECKS = 0 ปิด ON DELETE CASCADE ด้วย ต้องลบชื่อเรียกอื่นเอง ไม่งั้นมันค้าง
+-- แล้วชี้ไปข้อมูลหลักที่ seed ใส่ใหม่ด้วย id เดิม (ADR-0025)
+DELETE FROM brand_alias;
+DELETE FROM building_alias;
+DELETE FROM division_alias;
 DELETE FROM division;
 DELETE FROM floor;
 DELETE FROM building;
@@ -90,10 +102,14 @@ INSERT INTO department (id,division_id,name,status) VALUES
 -- ==============================================================================
 
 INSERT INTO contracts
-(id,contract_no,fiscal_year_id,price_per_page)
+(id,contract_no,effective_from,effective_to)
 VALUES
-(1,'CONT-67-001',2,0.34),
-(2,'CONT-66-009',1,0.40);
+(1,'CONT-67-001','2024-10-01','2025-09-30'),
+(2,'CONT-66-009','2024-10-01','2025-09-30');
+
+INSERT INTO contract_price_line (contract_id,category_id,price_per_page)
+SELECT 1,id,0.3400 FROM meter_category WHERE code='bw'
+UNION ALL SELECT 2,id,0.4000 FROM meter_category WHERE code='bw';
 
 -- ==============================================================================
 -- Devices
@@ -125,33 +141,36 @@ VALUES
 
 (5,'SN-HP-005',1,'LaserJet Enterprise',3,5,2,5,2,NULL,'retired');
 
+INSERT INTO device_meter (id,device_id,category_id)
+SELECT d.id,d.id,mc.id FROM devices d CROSS JOIN meter_category mc WHERE mc.code='bw';
+
 -- ==============================================================================
 -- Print Transactions
 -- ==============================================================================
 
 INSERT INTO print_transactions
-(device_id,month,pages)
+(device_id,meter_id,month,pages)
 VALUES
 
 -- January
-(1,'2025-01',5200),
-(2,'2025-01',1500),
-(3,'2025-01',800),
-(4,'2025-01',3200),
-(5,'2025-01',4100),
+(1,1,'2025-01',5200),
+(2,2,'2025-01',1500),
+(3,3,'2025-01',800),
+(4,4,'2025-01',3200),
+(5,5,'2025-01',4100),
 
 -- February
-(1,'2025-02',4800),
-(2,'2025-02',1200),
-(3,'2025-02',950),
-(4,'2025-02',500),
-(5,'2025-02',3800),
+(1,1,'2025-02',4800),
+(2,2,'2025-02',1200),
+(3,3,'2025-02',950),
+(4,4,'2025-02',500),
+(5,5,'2025-02',3800),
 
 -- March
-(1,'2025-03',5500),
-(2,'2025-03',1800),
-(3,'2025-03',1100),
-(4,'2025-03',0);
+(1,1,'2025-03',5500),
+(2,2,'2025-03',1800),
+(3,3,'2025-03',1100),
+(4,4,'2025-03',0);
 
 -- ==============================================================================
 -- Reset AUTO_INCREMENT
@@ -190,4 +209,3 @@ SELECT
     ),
     NULL
 FROM devices d;
-

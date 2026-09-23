@@ -69,7 +69,6 @@ const PAGES = [
   { name: "04-assets", url: "/assets" },
   { name: "05-asset-detail", url: "/assets/17" },
   { name: "06-expense", url: "/expense" },
-  { name: "07-compare", url: "/compare" },
   { name: "08-report", url: "/report" },
   { name: "09-admin-contracts", url: "/admin/contracts" },
   { name: "10-admin-users", url: "/admin/users" },

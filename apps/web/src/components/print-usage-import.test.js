@@ -63,4 +63,39 @@ describe("หน้าตรวจไฟล์", () => {
     await wrapper.get("[data-testid=show-all-overwrites]").trigger("click");
     expect(rows()).toHaveLength(12);
   });
+
+  test("ไฟล์ผู้ให้เช่าแสดงแผ่นงาน คำเตือน และยอดตามใบแจ้งหนี้ก่อนยืนยัน", async () => {
+    const wrapper = await previewWith({
+      valid: true,
+      preview_token: "t",
+      months_found: ["2026-03"],
+      new_rows: [{ device_id: 1 }],
+      overwrite_rows: [],
+      unchanged_rows: [],
+      errors: [],
+      sheets: [{ sheet: "งวด 24", month: "2026-03", period_start: "2026-02-24", period_end: "2026-03-23", contract_no: "SUTH192/2568" }],
+      warnings: [{ sheet: "งวด 24", row: 8, serial_number: "SN-1", month: "2026-03", reason: "เลขต้นงวดไม่ต่อเนื่อง" }],
+      invoice: [{ month: "2026-03", contract_no: "SUTH192/2568", category: "A3 สี", price_per_page: "3.9000", pages: 100, net_pages: "98.00", line_total: "382.20" }],
+    });
+
+    expect(wrapper.get("[data-testid=source-sheet]").text()).toContain("งวด 24");
+    expect(wrapper.get("[data-testid=source-sheet]").text()).toContain("SUTH192/2568");
+    expect(wrapper.get("[data-testid=import-warning]").text()).toContain("เลขต้นงวดไม่ต่อเนื่อง");
+    expect(wrapper.get("[data-testid=invoice-line]").text()).toContain("A3 สี");
+    expect(wrapper.get("[data-testid=invoice-line]").text()).toContain("382.20");
+  });
+
+  test("ข้อผิดพลาดระบุชื่อแผ่นงาน", async () => {
+    const wrapper = await previewWith({
+      valid: false,
+      preview_token: null,
+      months_found: [],
+      new_rows: [],
+      overwrite_rows: [],
+      unchanged_rows: [],
+      errors: [{ sheet: "งวด 25", row: 9, serial_number: "SN-2", reason: "ไม่พบเครื่อง" }],
+    });
+    expect(wrapper.text()).toContain("งวด 25");
+    expect(wrapper.text()).toContain("ไม่พบเครื่อง");
+  });
 });

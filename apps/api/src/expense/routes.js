@@ -28,8 +28,8 @@
 // เส้นที่สองของระบบ พอราคาผูกกับช่วงเวลาที่มีผลจริง (ADR-0019) เส้นทางนั้นจะตอบ
 // คนละคำตอบกับแดชบอร์ดทันที เพราะใช้ราคา ณ ปัจจุบันกับทุกเดือนย้อนหลัง
 //
-// ยอดที่เป็น `null` แปลว่า "ยังยืนยันราคาไม่ได้" ไม่ใช่ศูนย์บาท — ทุกยอดรวมจึงมา
-// พร้อม `unpriced_readings` เสมอ (ADR-0019 Q27)
+// ยอดที่เป็น `null` แปลว่า "หาราคาไม่ได้" ไม่ใช่ศูนย์บาท — ทางเขียนปฏิเสธยอดแบบนี้แล้ว
+// (ADR-0021) จึงเหลือเฉพาะยอดเก่า แต่ทุกยอดรวมยังมาพร้อม `unpriced_readings` เสมอ
 
 const express = require("express");
 const { z } = require("zod");
@@ -58,88 +58,60 @@ router.use(requireAuth);
  *
  * ตอนนี้อ่านยอดที่ view คำนวณไว้แล้วมาบวกกัน — จุดปัดเศษและกฎการหาราคาจึงมีชุดเดียว
  *
- * `cost` เป็น `null` แปลว่า "ยังยืนยันราคาไม่ได้" ไม่ใช่ศูนย์บาท และไม่ถูกนับรวม
- * ในยอดรวม ผู้เรียกต้องแสดง `unpriced_readings` ควบคู่เสมอ (Q27)
+ * `cost` เป็น `null` แปลว่า "หาราคาไม่ได้" (ยอดเก่าก่อน ADR-0021) ไม่ใช่ศูนย์บาท และ
+ * ไม่ถูกนับรวมในยอดรวม ผู้เรียกต้องแสดง `unpriced_readings` ควบคู่เสมอ
  *
  * @param {{ month: string, pages: number, total_cost: string|null }[]} transactions
  */
 function summarise(transactions) {
-  const monthly = transactions.map((row) => {
+  // เครื่องที่มีมิเตอร์สีมีสองแถวต่อเดือน รวมเป็นหนึ่งแถวต่อเดือนของเครื่อง
+  const byMonth = new Map();
+  for (const row of transactions) {
     const satang = row.total_cost === null || row.total_cost === undefined ? null : toSatang(row.total_cost);
-    return { ...row, cost_satang: satang, cost: satang === null ? null : fromSatang(satang) };
+    const entry = byMonth.get(row.month) ?? {
+      ...row,
+      pages: 0,
+      cost_satang: 0,
+      unpriced: 0,
+      prices: new Set(),
+    };
+    entry.pages += Number(row.pages || 0);
+    if (satang === null) entry.unpriced += 1;
+    else entry.cost_satang += satang;
+    if (row.price_per_page !== null && row.price_per_page !== undefined) entry.prices.add(String(row.price_per_page));
+    byMonth.set(row.month, entry);
+  }
+
+  const monthly = [...byMonth.values()].map(({ prices, unpriced, ...entry }) => {
+    const cost_satang = unpriced ? null : entry.cost_satang;
+    return {
+      ...entry,
+      price_per_page: prices.size === 1 ? [...prices][0] : null,
+      cost_satang,
+      cost: cost_satang === null ? null : fromSatang(cost_satang),
+      unpriced_readings: unpriced,
+    };
   });
 
-  const priced = monthly.filter((m) => m.cost_satang !== null);
-  const total_cost_satang = sumSatang(priced.map((m) => m.cost_satang));
-
-  // ราคาที่ใช้จริงในช่วงนี้ — มีได้หลายราคาถ้าสัญญาเปลี่ยนกลางปีงบ ส่งไปทั้งชุดเพื่อ
-  // ไม่ให้หน้าเว็บต้องเดาว่าตัวไหนคือ "ราคาของเครื่องนี้"
-  const prices = [...new Set(priced.map((m) => String(m.price_per_page)).filter(Boolean))];
+  const total_cost_satang = sumSatang(monthly.filter((m) => m.cost_satang !== null).map((m) => m.cost_satang));
+  const prices = [
+    ...new Set(
+      transactions
+        .map((m) => m.price_per_page)
+        .filter((price) => price !== null && price !== undefined)
+        .map(String)
+    ),
+  ];
 
   return {
     monthly,
-    total_pages: monthly.reduce((sum, m) => sum + Number(m.pages || 0), 0),
-    unpriced_readings: monthly.length - priced.length,
+    total_pages: monthly.reduce((sum, m) => sum + m.pages, 0),
+    unpriced_readings: monthly.reduce((sum, m) => sum + m.unpriced_readings, 0),
     effective_prices: prices,
     effective_price: prices.length === 1 ? Number(prices[0]) : null,
     total_cost_satang,
     total_cost: fromSatang(total_cost_satang),
   };
-}
-
-/**
- * ดึงยอดพิมพ์ของเครื่องหลายเครื่องพร้อมกันในคำสั่งเดียว แล้วจัดกลุ่มตามเครื่อง
- *
- * @param {number[]} deviceIds
- * @param {string} startMonth
- * @param {string} endMonth
- * @param {string[]} monthsFilter เดือนที่ผู้ใช้เลือก (ว่าง = ทั้งช่วงปีงบ)
- * @returns {Promise<Map<number, { month: string, pages: number }[]>>}
- */
-async function readingsByDevice(deviceIds, startMonth, endMonth, monthsFilter) {
-  if (!deviceIds.length) return new Map();
-
-  const params = [deviceIds, startMonth, endMonth];
-
-  // อ่านค่าใช้จ่ายจาก v_monthly_kpi ไม่คำนวณเอง — ราคาที่มีผลของแต่ละเดือนและ
-  // จุดปัดเศษอยู่ในนั้นที่เดียว (ดูหมายเหตุที่ summarise)
-  let sql = `
-    SELECT v.device_id, v.month, v.pages_printed AS pages, v.price_per_page, v.total_cost,
-      eb.name AS building_name, ef.name AS floor_name,
-      CASE WHEN h.id IS NOT NULL THEN h.location ELSE d.location END AS location
-    FROM v_monthly_kpi v
-    JOIN devices d ON d.id = v.device_id
-    ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
-    LEFT JOIN building eb ON eb.id = CASE WHEN h.id IS NOT NULL THEN h.building_id ELSE d.building_id END
-    LEFT JOIN floor ef ON ef.id = CASE WHEN h.id IS NOT NULL THEN h.floor_id ELSE d.floor_id END
-    WHERE v.device_id IN (?) AND v.month BETWEEN ? AND ?
-  `;
-
-  // ตัวกรองเดือนซ้อนอยู่ใน "ช่วงปีงบ" อีกชั้นเสมอ — เผื่อผู้ใช้ส่งเดือนนอกปีงบมา
-  // ยอดของปีอื่นจะได้ไม่หลุดเข้ามาปนในหน้าที่พาดหัวว่าเป็นปีงบนี้
-  if (monthsFilter.length) {
-    sql += " AND v.month IN (?)";
-    params.push(monthsFilter);
-  }
-
-  sql += " ORDER BY v.month";
-
-  const [rows] = await db.query(sql, params);
-
-  const grouped = new Map(deviceIds.map((id) => [id, []]));
-  for (const row of rows) {
-    grouped.get(row.device_id)?.push({
-      month: row.month,
-      pages: row.pages,
-      price_per_page: row.price_per_page,
-      total_cost: row.total_cost,
-      building_name: row.building_name,
-      floor_name: row.floor_name,
-      location: row.location,
-    });
-  }
-
-  return grouped;
 }
 
 // ============================================================
@@ -196,8 +168,15 @@ router.get(
 );
 
 // ============================================================
-// GET /api/expense/:fiscal_year_id
+// GET /api/expense/:fiscal_year_id — ค่าใช้จ่ายตามสัญญาที่คิดเงินจริงในแต่ละเดือน
 // ============================================================
+//
+// ยอดของเดือนหนึ่งอยู่ใต้สัญญาที่คิดเงินเครื่องนั้นในเดือนนั้น (v_monthly_kpi.billing_contract_id)
+// ไม่ใช่สัญญาปัจจุบันของเครื่อง — เครื่องที่ย้ายสัญญากลางปีจึงปรากฏใต้ทั้งสองสัญญา
+// ตามเดือนของมัน และยอดรวมของทุกสัญญา + กลุ่มที่ไม่มีสัญญา เท่ายอดของแดชบอร์ดเสมอ
+//
+// สัญญาในรายการคือทุกฉบับที่อายุสัญญาคร่อมปีงบนี้ (ADR-0023) แม้ยังไม่มียอด และแต่ละ
+// ฉบับมียอดตามใบแจ้งหนี้รวมค่าเช่าคงที่และ VAT จาก v_contract_invoice
 router.get(
   "/:fiscal_year_id",
   validate({
@@ -208,172 +187,137 @@ router.get(
     const fiscalYearId = req.params.fiscal_year_id;
     const monthsFilter = req.query.month;
 
-    // ---------- คำสั่งที่ 1: ช่วงเดือนของปีงบ ----------
     const [[fiscalYear]] = await db.query(
-      "SELECT start_month, end_month FROM fiscal_year WHERE id = ?",
+      `SELECT start_month, end_month,
+              STR_TO_DATE(CONCAT(start_month, '-01'), '%Y-%m-%d') AS start_date,
+              LAST_DAY(STR_TO_DATE(CONCAT(end_month, '-01'), '%Y-%m-%d')) AS end_date
+       FROM fiscal_year WHERE id = ?`,
       [fiscalYearId]
     );
     if (!fiscalYear) throw notFound("ไม่พบปีงบประมาณนี้");
 
-    // ---------- คำสั่งที่ 2: สัญญาทุกฉบับพร้อมเครื่องทุกเครื่องในคราวเดียว ----------
-    // LEFT JOIN เพื่อให้สัญญาที่ยังไม่มีเครื่องผูกอยู่เลยยังโผล่ในรายงาน (พร้อมยอด 0)
-    // แทนที่จะหายไปเงียบๆ — สัญญาที่เพิ่งสร้างแล้วลืมผูกเครื่องคือสิ่งที่ต้องเห็น
-    const [rows] = await db.query(
-      `
-      SELECT
-        c.id AS contract_id,
-        c.contract_no,
-        c.price_per_page,
-        d.id AS device_id,
-        d.serial_number,
-        d.model,
-        d.price_override,
-        d.status,
-        b.name AS brand_name
-      FROM contracts c
-      LEFT JOIN devices d ON d.contract_id = c.id
-      LEFT JOIN brand b ON d.brand_id = b.id
-      WHERE c.fiscal_year_id = ?
-      ORDER BY c.contract_no, d.serial_number
-      `,
-      [fiscalYearId]
+    const monthClause = monthsFilter.length ? " AND v.month IN (?)" : "";
+    const monthParams = monthsFilter.length ? [monthsFilter] : [];
+
+    const [contractRows] = await db.query(
+      `SELECT c.id, c.contract_no,
+              DATE_FORMAT(c.effective_from, '%Y-%m-%d') AS effective_from,
+              DATE_FORMAT(c.effective_to, '%Y-%m-%d') AS effective_to,
+              c.monthly_rental, c.vat_rate
+       FROM contracts c
+       WHERE c.effective_from <= ? AND c.effective_to >= ?
+       ORDER BY c.contract_no`,
+      [fiscalYear.end_date, fiscalYear.start_date]
     );
 
-    // ---------- คำสั่งที่ 3: ยอดพิมพ์ของทุกเครื่องพร้อมกัน ----------
-    const deviceIds = rows.filter((row) => row.device_id).map((row) => row.device_id);
-    const readings = await readingsByDevice(
-      deviceIds,
-      fiscalYear.start_month,
-      fiscalYear.end_month,
-      monthsFilter
+    const [readings] = await db.query(
+      `SELECT v.device_id, v.month, v.pages_printed AS pages, v.price_per_page, v.total_cost,
+              v.billing_contract_id, bc.contract_no AS billing_contract_no,
+              d.serial_number, d.model, d.status, d.price_override, br.name AS brand_name,
+              eb.name AS building_name, ef.name AS floor_name,
+              CASE WHEN h.id IS NOT NULL THEN h.location ELSE d.location END AS location
+       FROM v_monthly_kpi v
+       JOIN devices d ON d.id = v.device_id
+       LEFT JOIN contracts bc ON bc.id = v.billing_contract_id
+       LEFT JOIN brand br ON br.id = d.brand_id
+       ${effectiveLocationJoin({ deviceAlias: "d", monthExpression: "v.month", historyAlias: "h" })}
+       LEFT JOIN building eb ON eb.id = CASE WHEN h.id IS NOT NULL THEN h.building_id ELSE d.building_id END
+       LEFT JOIN floor ef ON ef.id = CASE WHEN h.id IS NOT NULL THEN h.floor_id ELSE d.floor_id END
+       WHERE v.month BETWEEN ? AND ?${monthClause}
+       ORDER BY v.month, d.serial_number`,
+      [fiscalYear.start_month, fiscalYear.end_month, ...monthParams]
     );
 
-    // ---------- ประกอบผลลัพธ์ฝั่ง JS ----------
-    const contracts = new Map();
+    const [invoiceRows] = await db.query(
+      `SELECT v.contract_id,
+              SUM(v.rental) AS rental, SUM(v.vat) AS vat, SUM(v.invoice_total) AS invoice_total
+       FROM v_contract_invoice v
+       WHERE v.month BETWEEN ? AND ?${monthClause}
+       GROUP BY v.contract_id`,
+      [fiscalYear.start_month, fiscalYear.end_month, ...monthParams]
+    );
+    const invoiceBy = new Map(invoiceRows.map((row) => [row.contract_id, row]));
 
-    for (const row of rows) {
-      if (!contracts.has(row.contract_id)) {
-        contracts.set(row.contract_id, {
-          id: row.contract_id,
-          contract_no: row.contract_no,
-          price_per_page: row.price_per_page,
-          devices: [],
+    // จัดยอดเป็น สัญญา → เครื่อง → เดือน
+    const groups = new Map();
+    for (const row of readings) {
+      const key = row.billing_contract_id ?? null;
+      if (!groups.has(key)) groups.set(key, new Map());
+      const devices = groups.get(key);
+      if (!devices.has(row.device_id)) {
+        devices.set(row.device_id, {
+          device: {
+            id: row.device_id,
+            serial_number: row.serial_number,
+            model: row.model,
+            status: row.status,
+            brand_name: row.brand_name,
+            price_override: row.price_override,
+          },
+          rows: [],
         });
       }
-
-      // แถวของสัญญาที่ไม่มีเครื่อง (จาก LEFT JOIN) — มีสัญญาแล้วแต่ไม่มีเครื่องให้เพิ่ม
-      if (!row.device_id) continue;
-
-      contracts.get(row.contract_id).devices.push({
-        id: row.device_id,
-        serial_number: row.serial_number,
-        model: row.model,
-        status: row.status,
-        brand_name: row.brand_name,
-        price_override: row.price_override,
-        price_source: row.price_override != null ? "device_override" : "contract",
-        // effective_price / effective_prices มาจาก summarise ซึ่งอ่านราคาที่มีผลจริง
-        // ของแต่ละเดือน — เครื่องที่ย้ายสัญญากลางปีจะมีมากกว่าหนึ่งราคา
-        ...summarise(readings.get(row.device_id) ?? []),
-      });
+      devices.get(row.device_id).rows.push(row);
     }
 
-    const contractList = [...contracts.values()].map((contract) => {
-      const total_cost_satang = sumSatang(contract.devices.map((d) => d.total_cost_satang));
+    const deviceList = (key) =>
+      [...(groups.get(key)?.values() ?? [])].map(({ device, rows }) => ({ ...device, ...summarise(rows) }));
 
+    const totals = (devices) => {
+      const total_cost_satang = sumSatang(devices.map((d) => d.total_cost_satang));
       return {
-        ...contract,
-        device_count: contract.devices.length,
-        total_pages: contract.devices.reduce((sum, d) => sum + d.total_pages, 0),
+        device_count: devices.length,
+        total_pages: devices.reduce((sum, d) => sum + d.total_pages, 0),
         total_cost_satang,
         total_cost: fromSatang(total_cost_satang),
-        // ยอดของสัญญาฉบับนี้ครบหรือยัง — ต้องเดินทางมาพร้อมยอดเสมอ ไม่ใช่ให้ผู้เรียก
-        // ไปไล่บวกจาก devices[] เอง ซึ่งแต่ละที่จะบวกครอบคลุมไม่เท่ากัน (Q27)
-        unpriced_readings: contract.devices.reduce((sum, d) => sum + d.unpriced_readings, 0),
+        unpriced_readings: devices.reduce((sum, d) => sum + d.unpriced_readings, 0),
       };
-    });
+    };
 
+    const withInvoice = (contract, devices) => {
+      const invoice = invoiceBy.get(contract.id);
+      return {
+        ...contract,
+        devices,
+        ...totals(devices),
+        rental: invoice ? String(invoice.rental) : "0.00",
+        vat: invoice ? String(invoice.vat) : "0.00",
+        invoice_total: invoice ? String(invoice.invoice_total) : "0.00",
+      };
+    };
 
-    // ---------- คำสั่งที่ 4: เครื่องที่พิมพ์ในปีงบนี้ แต่สัญญาอยู่คนละปีงบ ----------
-    //
-    // คิวรี่ข้างบนเริ่มจาก `contracts WHERE c.fiscal_year_id = ?` ยอดรวมของหน้านี้
-    // จึงเป็น "ยอดของสัญญาที่ขึ้นทะเบียนไว้กับปีงบนี้" ไม่ใช่ "ยอดที่พิมพ์ในปีงบนี้"
-    // สองอย่างนี้ต่างกันเมื่อเครื่องยังผูกกับสัญญาของปีก่อนอยู่แต่ยังพิมพ์ต่อ —
-    // ยอดของมันตกจากหน้านี้ไปทั้งก้อนโดยไม่มีอะไรบนจอบอก ขณะที่แท็บตามฝ่าย/แผนก
-    // กับแดชบอร์ดคิดจากเดือนของยอดพิมพ์ จึงนับรวมเข้าไป ผลคือตัวเลขเงินสองตัวที่
-    // ป้ายเขียนเหมือนกันต่างกันได้หลายเท่า
-    //
-    // ที่นี่ไม่เปลี่ยนความหมายของยอดรวม เพราะ "ตามสัญญา" ไว้ตรวจใบแจ้งหนี้ของ
-    // สัญญาฉบับนั้นจริงๆ แต่ต้องบอกให้เห็นว่ามีเท่าไหร่ที่ไม่ถูกนับ ด้วยเหตุผล
-    // เดียวกับกลุ่ม "เครื่องที่ยังไม่ผูกสัญญา" ข้างบน — ยอดที่หลุดจากงบต้องเห็น
-    // ไม่ใช่ซ่อนไว้
-    //
-    // ตอนนี้ราคาผูกกับช่วงที่มีผลจริงแล้ว (ADR-0019) การย้ายเครื่องกลุ่มนี้ไปสัญญา
-    // ของปีงบปัจจุบันจึงทำได้โดยไม่กระทบยอดเดือนเก่า ถ้าระบุวันที่มีผลตอนย้าย
-    const [outsideRows] = await db.query(
-      `
-      SELECT
-        d.id AS device_id,
-        d.serial_number,
-        d.model,
-        d.price_override,
-        c.contract_no,
-        c.price_per_page,
-        fy.year AS contract_fiscal_year
-      FROM devices d
-      JOIN contracts c ON d.contract_id = c.id
-      LEFT JOIN fiscal_year fy ON c.fiscal_year_id = fy.id
-      WHERE c.fiscal_year_id <> ?
-        AND EXISTS (
-          SELECT 1 FROM print_transactions pt
-          WHERE pt.device_id = d.id
-            AND pt.month BETWEEN ? AND ?
-            AND pt.pages > 0
-        )
-      ORDER BY d.serial_number
-      `,
-      [fiscalYearId, fiscalYear.start_month, fiscalYear.end_month]
-    );
+    const contracts = contractRows.map((contract) => withInvoice(contract, deviceList(contract.id)));
 
-    const outsideReadings = await readingsByDevice(
-      outsideRows.map((row) => row.device_id),
-      fiscalYear.start_month,
-      fiscalYear.end_month,
-      monthsFilter
-    );
+    // ยอดในปีงบที่คิดเงินใต้สัญญาซึ่งอายุไม่คร่อมปีงบนี้ — ทางเขียนทุกทางปฏิเสธยอดนอก
+    // อายุสัญญาแล้ว (ADR-0021) จึงไม่ควรเกิด แต่ถ้าเกิดต้องไม่หายจากยอดรวม
+    const listed = new Set(contractRows.map((c) => c.id));
+    for (const key of groups.keys()) {
+      if (key === null || listed.has(key)) continue;
+      const contract_no = readings.find((row) => row.billing_contract_id === key)?.billing_contract_no;
+      contracts.push(withInvoice({ id: key, contract_no }, deviceList(key)));
+    }
 
-    const outsideDevices = outsideRows.map((row) => ({
-      id: row.device_id,
-      serial_number: row.serial_number,
-      model: row.model,
-      contract_no: row.contract_no,
-      contract_fiscal_year: row.contract_fiscal_year,
-      ...summarise(outsideReadings.get(row.device_id) ?? []),
-    }));
-
-    const outside_total_satang = sumSatang(outsideDevices.map((d) => d.total_cost_satang));
-
-    const grand_total_satang = sumSatang(contractList.map((c) => c.total_cost_satang));
+    const noContractDevices = deviceList(null);
+    const noContract = totals(noContractDevices);
+    const grandSatang = sumSatang(contracts.map((c) => c.total_cost_satang)) + noContract.total_cost_satang;
+    const invoiceSatang = sumSatang(contracts.map((c) => toSatang(c.invoice_total)));
 
     cache.operationalData(res);
     res.json({
       fiscal_year_id: fiscalYearId,
       month: monthsFilter.length ? monthsFilter.join(",") : null,
-      contracts: contractList,
-      // ยอดรวมทั้งหน้า คำนวณฝั่งเซิร์ฟเวอร์ในหน่วยสตางค์ — เดิมฝั่งเว็บบวกเองจาก
-      // ตัวเลขบาทแบบทศนิยม ซึ่งคลาดเคลื่อนได้เมื่อรวมกันหลายร้อยรายการ
-      total_cost_satang: grand_total_satang,
-      total_cost: fromSatang(grand_total_satang),
-      // จำนวนรายการที่ยังยืนยันราคาไม่ได้ทั้งหน้า — รวมทั้งกลุ่มนอกปีงบด้านล่าง
-      // ซึ่งฝั่งเว็บเคยไล่บวกเองจาก contracts[].devices[] แล้วตกกลุ่มนี้ไปทั้งก้อน
+      contracts,
+      // ค่าพิมพ์รวมทุกสัญญาและกลุ่มที่ไม่มีสัญญา — เท่ายอดค่าใช้จ่ายบนแดชบอร์ด
+      total_cost_satang: grandSatang,
+      total_cost: fromSatang(grandSatang),
+      // ยอดตามใบแจ้งหนี้รวมค่าเช่าและ VAT ของทุกสัญญา
+      invoice_total_satang: invoiceSatang,
+      invoice_total: fromSatang(invoiceSatang),
       unpriced_readings:
-        contractList.reduce((sum, c) => sum + c.unpriced_readings, 0)
-        + outsideDevices.reduce((sum, d) => sum + d.unpriced_readings, 0),
-      // เครื่องที่พิมพ์ในปีงบนี้แต่สัญญาอยู่คนละปีงบ — ไม่ถูกนับใน total ด้านบน
-      outside_year_devices: outsideDevices,
-      outside_year_total_satang: outside_total_satang,
-      outside_year_total: fromSatang(outside_total_satang),
-      outside_year_unpriced_readings: outsideDevices.reduce((sum, d) => sum + d.unpriced_readings, 0),
+        contracts.reduce((sum, c) => sum + c.unpriced_readings, 0) + noContract.unpriced_readings,
+      no_contract_devices: noContractDevices,
+      no_contract_total: noContract.total_cost,
+      no_contract_unpriced_readings: noContract.unpriced_readings,
     });
   })
 );

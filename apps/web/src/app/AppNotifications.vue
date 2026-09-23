@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { Bell } from "lucide-vue-next";
 import { useOverview } from "../api/queries";
+import { authState } from "../store/auth";
 import { activeFiscalYear } from "../store/fiscalYear";
 import { uiState } from "../store/ui";
 import { t } from "../lib/locale";
@@ -16,7 +17,10 @@ const open = ref(false);
 const params = computed(() => ({ fiscal_year_id: activeFiscalYear.value?.id || undefined }));
 const { data, isPending, isPlaceholderData, isError, refetch } = useOverview(params);
 const loading = computed(() => isPending.value || isPlaceholderData.value);
-const items = computed(() => data.value?.attention ?? []);
+const items = computed(() => (data.value?.attention ?? []).map((item) => {
+  const adminOnly = item.action?.to?.startsWith("/admin/");
+  return adminOnly && authState.user?.role !== "admin" ? { ...item, action: null } : item;
+}));
 const label = computed(() => isError.value ? t("โหลดการแจ้งเตือนไม่สำเร็จ") : t("งานที่ต้องติดตาม"));
 
 /**
