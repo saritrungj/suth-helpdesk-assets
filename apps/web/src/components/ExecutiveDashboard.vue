@@ -14,6 +14,8 @@ import ExecutiveDetails from './ExecutiveDetails.vue';
 import ExportMenu from './ExportMenu.vue';
 import PrintComparison from './PrintComparison.vue';
 import ComparisonTable from './ComparisonTable.vue';
+import TopShareCard from './TopShareCard.vue';
+import { dashboardKpis, previousYearMonths, topShare } from './dashboard-kpi';
 import {
   MAX_YEARS, buildComparison, buildYearComparison, dimensionLabel, fiscalPosition,
   itemOptions, metricLabel, metricUnit, monthText, periodLabel, summarize,
@@ -243,16 +245,20 @@ const rawRows = computed(() => {
 const rows = computed(() => filterRows(rawRows.value, view.value));
 
 // รอคำตอบของช่วงใหม่ก่อนตรวจ; แถวของช่วงเก่าที่ cache ค้างอยู่ห้ามใช้ตัดตัวกรอง
-let yearChangePending = false;
+//
+// ผูกกับ "ปีที่รอตรวจ" ไม่ใช่ธงเปิด/ปิด และดู activeYear ด้วย — ถ้าข้อมูลของปีใหม่อยู่ใน cache แล้ว (เปิดปีนั้น
+// มาก่อน หรือการ์ดเทียบปีก่อนเพิ่งโหลดเดือนชุดเดียวกัน #197) ready กับแถวเปลี่ยนก่อนที่ธงจะถูกตั้ง
+// แล้วตัวกรองที่ไม่มีข้อมูลค้างอยู่เงียบๆ
+let pruneForYear = null;
 watch(activeYear, (year, previous) => {
   if (previous && year !== previous) {
-    yearChangePending = true;
+    pruneForYear = year;
     scopeNotice.value = '';
   }
 });
-watch([ready, rawRows], ([isReady, currentRows]) => {
-  if (!yearChangePending || !isReady) return;
-  yearChangePending = false;
+watch([ready, rawRows, activeYear], ([isReady, currentRows, year]) => {
+  if (pruneForYear === null || year !== pruneForYear || !isReady) return;
+  pruneForYear = null;
   const result = pruneUnavailableScopes(view.value, currentRows);
   if (!result.removed.length) return;
   view.value = result.view;
@@ -334,6 +340,29 @@ const settledStats = ref(null);
 watch([stats, ready], ([value, isReady]) => { if (isReady) settledStats.value = value; }, { immediate: true });
 const shownStats = computed(() => (loading.value && settledStats.value ? settledStats.value : stats.value));
 const statsReady = computed(() => ready.value || (loading.value && Boolean(settledStats.value)));
+
+/* --------------------------------------------------------------------------
+   การ์ดตัวเลขหลักและอันดับ (#197) — เทียบกับเดือนเดียวกันของปีงบก่อน ตัวกรองเดียวกัน
+   -------------------------------------------------------------------------- */
+// เทียบได้เมื่อดูปีงบเดียว — หลายปีงบในจอเดียวคือการเปรียบเทียบอยู่แล้ว (มุมมอง "ปีงบ")
+const previousMonths = computed(() => (selectedYears.value.length === 1 ? previousYearMonths(requestMonths.value) : []));
+const previousReport = useMonthlyKpi(computed(() => ({ month: previousMonths.value.join(',') || undefined })), { enabled: computed(() => previousMonths.value.length > 0) });
+const previousRows = computed(() => {
+  if (!previousMonths.value.length || previousReport.isPending.value || previousReport.isPlaceholderData.value || previousReport.isError.value) return null;
+  const wantedPrevious = new Set(previousMonths.value);
+  return filterRows((previousReport.data.value || []).filter((row) => wantedPrevious.has(row.month)), view.value);
+});
+const kpi = computed(() => dashboardKpis({ rows: rows.value, previousRows: previousRows.value, months: requestMonths.value }));
+const previousYearText = computed(() => (activeYear.value ? yearLabel(Number(activeYear.value) - 1) : ''));
+const compareHint = computed(() => {
+  if (selectedYears.value.length > 1) return '';
+  return kpi.value.comparable ? t('เทียบช่วงเดียวกันปีงบ {0}', [previousYearText.value]) : t('ยังไม่มีข้อมูลปีก่อนให้เทียบ');
+});
+const unitText = computed(() => (view.value.metric === 'cost' ? t('บาท') : t('หน้า')));
+const formatMetric = (value) => (view.value.metric === 'cost' ? money(value) : formatCount(value));
+const topDivisions = computed(() => topShare(buildComparison({ rows: rows.value, dimension: 'division', metric: view.value.metric, options: scopeOptions.value.divisions ?? [] }), { metric: view.value.metric }));
+const topDevices = computed(() => topShare(buildComparison({ rows: rows.value, dimension: 'device', metric: view.value.metric, options: scopeOptions.value.devices ?? [] }), { metric: view.value.metric }));
+function compareBy(dimension) { view.value = { ...view.value, by: dimension }; }
 
 const settledTable = ref(null);
 watch([model, periodText, ready], ([value, period, isReady]) => {
@@ -435,7 +464,7 @@ function runCsv() {
 
 <template>
   <div class="w-full min-w-0 max-w-[calc(100vw-2rem)] overflow-x-clip">
-    <UiPageHeader :title="t('ภาพรวมการพิมพ์')" :description="t('เลือกขอบเขตครั้งเดียว แล้วดูตัวเลข เปรียบเทียบ เจาะรายละเอียด และส่งออกจากข้อมูลชุดเดียวกัน')">
+    <UiPageHeader :title="t('ภาพรวมการพิมพ์')">
       <template #actions>
         <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value" @click="reload">
           <RefreshCw :size="16" />
@@ -461,12 +490,22 @@ function runCsv() {
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
     <p class="text-xs text-ink-mute mb-1.5">{{ shownStats.caption }}</p>
-    <section class="card grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
-      <UiStat plain tone="ink" :label="t('ยอดพิมพ์จริง')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
-      <UiStat plain tone="ink" :label="t('ส่วนลด 2%')" :value="statsReady ? formatNetPages(shownStats.totals.rawPages - shownStats.totals.netPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
-      <UiStat plain tone="ink" :label="t('ยอดพิมพ์สุทธิ')" :value="statsReady ? formatNetPages(shownStats.totals.netPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats" />
-      <UiStat plain :label="t('ค่าใช้จ่าย')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats" />
+    <section class="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
+      <UiStat emphasis :label="t('ค่าใช้จ่าย')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats"
+        :delta="kpi.cost.delta" delta-inverse :hint="compareHint" :trend="kpi.cost.trend" />
+      <UiStat tone="ink" :label="t('หน้าที่พิมพ์')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
+        :delta="kpi.pages.delta" delta-inverse :hint="statsReady ? t('คิดเงิน {0} หน้า (หัก 2%)', [formatNetPages(shownStats.totals.netPages)]) : ''" :trend="kpi.pages.trend" />
+      <UiStat tone="ink" :label="t('เฉลี่ยหน้าละ')" :value="kpi.perPage.value === null ? '—' : formatBahtValue(kpi.perPage.value)" :unit="t('บาท')" :loading="loading && !settledStats"
+        :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าใช้จ่าย ÷ หน้าที่คิดเงิน')" />
+      <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats" />
     </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 items-start gap-3 mb-4">
+      <TopShareCard :title="t('ฝ่ายที่ใช้มากที่สุด ({0})', [unitText])" :data="topDivisions" :format="formatMetric" :loading="loading && !settledStats"
+        :more-label="t('เทียบทุกฝ่าย')" @more="compareBy('division')" />
+      <TopShareCard :title="t('เครื่องที่ใช้มากที่สุด ({0})', [unitText])" :data="topDevices" :format="formatMetric" :loading="loading && !settledStats"
+        :more-label="t('เทียบทุกเครื่อง')" @more="compareBy('device')" />
+    </div>
 
     <PrintComparison v-model:state="view" :model="model" :loading="loading" :failed="failed" :scope-text="scopeText"
       @details="(entry) => openDetails('device', entry)" />
