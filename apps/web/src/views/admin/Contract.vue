@@ -337,7 +337,7 @@ onMounted(load);
         <div v-if="impact" class="flex flex-col gap-2">
           <p v-if="!impact.length" class="text-sm text-ink-soft">{{ t("ยอดเงินทุกงวดไม่เปลี่ยน") }}</p>
           <table v-else class="w-full text-sm tabular-nums">
-            <caption class="mb-1 text-left font-medium text-ink">{{ t("ยอดค่าพิมพ์ที่จะเปลี่ยน") }}</caption>
+            <caption class="mb-1 text-left font-medium text-ink">{{ t("ยอดตามใบแจ้งหนี้ที่จะเปลี่ยน (รวมค่าเช่าและ VAT)") }}</caption>
             <thead class="text-ink-mute">
               <tr>
                 <th class="text-left font-normal">{{ t("งวด") }}</th>
