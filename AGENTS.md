@@ -93,6 +93,8 @@ npm workspace เดียว ติดตั้งด้วย `npm install` �
 4. ตรวจ `git diff` และรัน checks ที่สัมพันธ์กับความเสี่ยงก่อนส่งมอบ
 5. สรุปไฟล์ที่เปลี่ยน ผลตรวจ และความเสี่ยงที่เหลือ
 
+**ถ้ามี session อื่นทำงานใน repo พร้อมกัน สร้าง branch ใน git worktree ของตัวเองเสมอ** ห้าม `checkout`/`switch` ในโฟลเดอร์ที่อีก session ใช้อยู่ เพราะจะสลับ branch ของเขาออกไปกลางงาน ขั้นตอนและพอร์ตที่ใช้ร่วมกันได้ทีละคนอยู่ที่ [ทำงานหลาย session พร้อมกัน](CONTRIBUTING.md#ทำงานหลาย-session-พร้อมกัน)
+
 **commit ที่ย้ายไฟล์ ห้ามเปลี่ยนพฤติกรรมไปด้วย** แยกเป็นคนละ commit เสมอ ไม่งั้น review และ bisect ไม่ได้จริง
 
 การสร้าง branch สำหรับงาน implementation เป็นขั้นตอนปกติที่ย้อนกลับได้ ไม่ต้องขออนุมัติแยก ส่วน commit, push, merge และลบ branch ต้องมีคำสั่งชัดเจน เว้นแต่ผู้ใช้สั่งให้ **ปิดงาน / finish end-to-end** หรือความหมายเทียบเท่า ซึ่งเป็น authorization ชุดเดียวหลัง checks และ review ผ่าน รายละเอียดลำดับ, exact-branch cleanup, failure handling และข้อยกเว้นทั้งหมดมี source of truth ที่หัวข้อ [Authority สำหรับ Git lifecycle](CONTRIBUTING.md#authority-สำหรับ-git-lifecycle) ข้อจำกัดล่าสุดของผู้ใช้ชนะเสมอ

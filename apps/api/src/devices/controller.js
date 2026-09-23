@@ -416,7 +416,9 @@ async function recordLocationHistory(conn, deviceId, loc, firstFrom) {
 
   if (sameAsLatest) return;
 
-  const today = new Date().toISOString().slice(0, 10);
+  // วันที่ตามเวลาไทย ตัวเดียวกับช่วงรับผิดชอบยอดและช่วงคิดเงิน — เดิมใช้วันที่ UTC ย้ายเครื่องช่วง
+  // 00:00–06:59 จึงได้วันที่เมื่อวาน วันที่ 1 ยอดทั้งเดือนก่อนย้ายไปหน่วยงานใหม่ (#151)
+  const today = servicePeriod.today();
 
   if (latest) {
     await conn.query("UPDATE device_location_history SET effective_to = ? WHERE id = ?", [today, latest.id]);

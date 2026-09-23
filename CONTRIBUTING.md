@@ -47,6 +47,30 @@ docs: simplify project documentation (#7)
 
 **กฎที่สำคัญที่สุดข้อเดียว:** commit ที่ย้ายไฟล์ ห้ามเปลี่ยนพฤติกรรมไปด้วย diff ที่ปนกันระหว่าง "ย้ายที่" กับ "แก้ตรรกะ" review ไม่ได้จริง และเวลามีบั๊กจะ bisect หาสาเหตุไม่ได้
 
+## ทำงานหลาย session พร้อมกัน
+
+เมื่อมีมากกว่าหนึ่ง session (คนหรือ AI agent) แก้ repo นี้พร้อมกัน ทุก session ใช้ [git worktree](https://git-scm.com/docs/git-worktree) ของตัวเอง เพราะ branch ที่ checkout อยู่เป็นของโฟลเดอร์ ไม่ใช่ของ session — การ `checkout` ในโฟลเดอร์ที่อีกคนใช้อยู่จะสลับ branch ของเขาออกไปทั้งที่เขายังทำงานไม่เสร็จ และไฟล์ที่ยังไม่ commit จะติดไปอยู่บน branch ผิด
+
+```powershell
+git fetch origin
+git worktree add -b fix/12-expense-fiscal-year-filter D:/suth-worktrees/12-expense origin/main
+cd D:/suth-worktrees/12-expense
+npm ci
+```
+
+- โฟลเดอร์หลักของ repo ใช้อยู่บน `main` เพื่อ `pull` ตามเท่านั้น ไม่สลับ branch และไม่แก้ไฟล์ในนั้น
+- หนึ่ง worktree ต่อหนึ่ง Issue แต่ละ worktree ต้อง `npm ci` ของตัวเอง
+- แบ่งงานให้แตะไฟล์ไม่ซ้ำกัน ถ้าต้องแตะไฟล์เดียวกัน ให้ทำทีละฝั่ง — รอฝั่งแรก merge แล้วอีกฝั่งเริ่มจาก `origin/main` ใหม่
+- ก่อนเริ่ม แจ้งอีก session ว่าจะทำ Issue ไหน branch อะไร แตะไฟล์ไหน
+- merge เข้า `main` ทีละ PR อีกฝั่ง rebase ตามก่อนเปิด PR ของตัวเอง
+- merge แล้วลบ worktree ด้วย `git worktree remove <path>` ก่อนลบ branch
+
+ของที่ใช้ร่วมกันข้าม worktree ได้ทีละคน:
+
+- **พอร์ตเว็บของ E2E (ค่าเริ่มต้น 5173)** — Playwright ใช้เซิร์ฟเวอร์ที่เปิดอยู่แล้วบนพอร์ตนั้นซ้ำ (`reuseExistingServer`) ถ้าอีก worktree เปิดค้างไว้ เทสจะตรวจ build ของอีกฝั่งโดยไม่มีอะไรเตือน รัน E2E พร้อมกันให้ตั้งพอร์ตแยกด้วย `SUTH_WEB_URL` เช่น `$env:SUTH_WEB_URL = "http://localhost:5174"`
+- **`npm run verify:db`** — ใช้พอร์ต 3317/3310/5310 ตายตัว และจะหยุดเองถ้ามีคนใช้อยู่ รันได้ทีละ worktree
+- **ฐานข้อมูลพัฒนาและ API ที่พอร์ต 3000** — ใช้ร่วมกันทุก worktree ชุดที่เขียนข้อมูล (`SUTH_E2E_ALLOW_WRITES=1`) ห้ามรันพร้อมกัน
+
 ## Pull request
 
 ระบุให้ครบ: Issue ต้นทาง, สิ่งที่เปลี่ยน, check ที่รันแล้วพร้อมผล, ลำดับ migration ถ้าเกี่ยวข้อง และ screenshot ถ้าเป็นงาน UI

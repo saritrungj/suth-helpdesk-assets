@@ -123,7 +123,7 @@ async function fiscalYearRange(id) {
  * ช่องบนหน้าจอคือมิเตอร์ขาวดำของเครื่อง (devices/meters.js) — มิเตอร์สีเข้าทาง
  * ไฟล์ของผู้ให้เช่าเท่านั้น การล้างช่องจึงลบเฉพาะยอดของมิเตอร์นั้น
  *
- * @returns {Promise<{ outcome: "saved"|"cleared"|"skipped", meterId: number }>}
+ * @returns {Promise<{ outcome: "saved"|"cleared"|"skipped", meterId: number, unchanged?: boolean }>}
  */
 async function writeReading(conn, deviceId, month, pages) {
   const meterId = await primaryMeterId(conn, deviceId);
@@ -136,22 +136,43 @@ async function writeReading(conn, deviceId, month, pages) {
     return { outcome: result.affectedRows > 0 ? "cleared" : "skipped", meterId };
   }
 
+  // ยอดเดิมที่ส่งมาซ้ำด้วยจำนวนหน้าเท่าเดิมไม่ใช่ยอดใหม่ — หน้าต่างกรอกทั้งปีส่งครบทุกเดือนเสมอ (#154)
+  const [[existing]] = await conn.query(
+    "SELECT pages FROM print_transactions WHERE meter_id = ? AND month = ?",
+    [meterId, month]
+  );
+  const unchanged = existing !== undefined && Number(existing.pages) === pages;
+
   // ON DUPLICATE KEY UPDATE พึ่ง UNIQUE KEY (meter_id, month) ใน schema.sql
   // ถ้าคีย์นั้นหายไป การกดบันทึกซ้ำเดือนเดิมจะเพิ่มแถวใหม่ทุกครั้งและยอดจะถูกนับซ้ำ
-  // เลขมิเตอร์ต้นงวด/สิ้นงวดถูกล้าง เพราะยอดที่กรอกมือไม่ได้มาจากสองค่านั้นแล้ว
+  //
+  // เลขมิเตอร์ต้นงวด/สิ้นงวด (จากไฟล์ผู้ให้เช่า) ถูกล้างเฉพาะเมื่อจำนวนหน้าเปลี่ยน เพราะยอดใหม่
+  // ไม่ได้มาจากสองค่านั้นแล้ว — หน้าต่างกรอกทั้งปีส่งครบ 12 เดือนเสมอ ถ้าล้างทุกครั้ง แก้เดือน
+  // เดียวก็ลบเลขมิเตอร์ของทุกเดือนที่ไม่ได้แก้ (#143) ใช้ <=> ให้ NULL เทียบได้
+  //
+  // ⚠️ ลำดับการกำหนดค่าสำคัญ: MySQL ประมวลผลซ้ายไปขวาและค่าด้านขวาเห็น pages ที่กำหนดแล้ว
+  // สองบรรทัดเลขมิเตอร์จึงต้องมาก่อน pages เสมอ
   await conn.query(
     `INSERT INTO print_transactions (device_id, meter_id, month, pages)
      VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE pages = VALUES(pages), meter_start = NULL, meter_end = NULL`,
+     ON DUPLICATE KEY UPDATE
+       meter_start = IF(pages <=> VALUES(pages), meter_start, NULL),
+       meter_end = IF(pages <=> VALUES(pages), meter_end, NULL),
+       pages = VALUES(pages)`,
     [deviceId, meterId, month, pages]
   );
 
-  return { outcome: "saved", meterId };
+  return { outcome: "saved", meterId, unchanged };
 }
 
 /**
  * บันทึกหลายช่องใน transaction เดียว แล้วตรวจว่าทุกยอดที่บันทึกหาราคาได้
  * ถ้าหาไม่ได้แม้รายการเดียว ทั้งชุดถูกย้อน (ADR-0021)
+ *
+ * ยอดที่ส่งซ้ำด้วยจำนวนหน้าเท่าเดิมไม่ถูกตรวจราคา — การเขียนค่าเดิมทำให้ราคาเปลี่ยนไม่ได้ ถ้าหา
+ * ราคาไม่ได้อยู่แล้ว (ยอดเก่าก่อน ADR-0021) ก็ไม่ใช่ความผิดของการบันทึกครั้งนี้ เดิมยอดเก่าหนึ่งเดือน
+ * ทำให้หน้าต่างกรอกทั้งปีบันทึกเดือนอื่นไม่ได้เลย (#154) — กฎเดียวกับด่านของการแก้เครื่อง
+ * (devices/meters.js unpricedDeviceReadingKeys) ส่วนยอดที่แก้ค่าหรือเพิ่มใหม่ยังต้องหาราคาได้เสมอ
  *
  * @param {Array<{ deviceId: number, month: string, pages: number|null }>} items
  */
@@ -160,9 +181,9 @@ async function writeReadings(conn, items) {
   const saved = [];
 
   for (const item of items) {
-    const { outcome, meterId } = await writeReading(conn, item.deviceId, item.month, item.pages);
+    const { outcome, meterId, unchanged } = await writeReading(conn, item.deviceId, item.month, item.pages);
     counts[outcome] += 1;
-    if (outcome === "saved") saved.push({ meterId, month: item.month });
+    if (outcome === "saved" && !unchanged) saved.push({ meterId, month: item.month });
   }
 
   await assertReadingsPriced(conn, saved);
@@ -170,13 +191,18 @@ async function writeReadings(conn, items) {
 }
 
 // ============================================================
-// GET /api/print-transactions — รายการยอดพิมพ์ (กรองด้วย ?month=)
+// GET /api/print-transactions — ยอดของช่องกรอก (กรองด้วย ?month=)
+//
+// คืนเฉพาะมิเตอร์ขาวดำ หนึ่งแถวต่อเครื่องต่อเดือน — ตรงกับที่ช่องกรอกเขียน (writeReading →
+// primaryMeterId) และกับ /by-device เดิมคืนทุกมิเตอร์ หน้ากรอกจัดกลุ่มตามเครื่องแล้วเก็บแถวสุดท้าย
+// เครื่องมิเตอร์สีจึงแสดงยอดสีในช่องขาวดำ แล้วการล้างช่องนั้นลบยอดขาวดำทิ้ง (#145)
+// ยอดรวมทุกมิเตอร์ของรายงานอยู่ที่ /dashboard/monthly-kpi
 // ============================================================
 router.get(
   "/",
   validate({ query: z.object({ month: monthString.optional() }) }),
   asyncHandler(async (req, res) => {
-    const conditions = [];
+    const conditions = ["mc.is_color = 0"];
     const params = [];
 
     if (req.query.month) {
@@ -187,8 +213,10 @@ router.get(
     const [rows] = await db.query(
       `SELECT pt.id, pt.device_id, pt.month, pt.pages, d.serial_number
        FROM print_transactions pt
+       JOIN device_meter dm ON dm.id = pt.meter_id
+       JOIN meter_category mc ON mc.id = dm.category_id
        LEFT JOIN devices d ON pt.device_id = d.id
-       ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
+       WHERE ${conditions.join(" AND ")}
        ORDER BY pt.month DESC, d.serial_number`,
       params
     );
@@ -488,3 +516,4 @@ module.exports = router;
 // เปิดให้เทสเรียกใช้ schema ตัวจริง ไม่ใช่ให้เทสสร้างสำเนาขึ้นมาเอง —
 // สำเนาจะผ่านเสมอแม้ของจริงจะพัง ซึ่งเป็นเทสที่ให้ความมั่นใจผิดๆ
 module.exports.pagesField = pagesField;
+module.exports.writeReadings = writeReadings;

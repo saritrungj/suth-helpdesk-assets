@@ -7,6 +7,8 @@ import { meterHeader, overwriteCsv, recentMonths, templateCsv } from "./print-us
 
 const post = vi.fn();
 vi.mock("../services/api", () => ({ default: { post: (...a) => post(...a) } }));
+// แผงนำเข้าล้างแคชยอดพิมพ์หลังยืนยัน (#144) — เทสนี้ตรวจหน้าตรวจไฟล์ ไม่ต้องมี QueryClient จริง
+vi.mock("@tanstack/vue-query", () => ({ useQueryClient: () => ({}) }));
 
 const { mount, flushPromises } = await import("@vue/test-utils");
 const PrintUsageImportPanel = (await import("./PrintUsageImportPanel.vue")).default;

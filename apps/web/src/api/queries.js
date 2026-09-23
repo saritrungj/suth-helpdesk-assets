@@ -61,6 +61,9 @@ export const keys = {
   // ยอดพิมพ์ของ "หนึ่งเดือน ทุกเครื่อง" — เดือนต้องอยู่ใน key
   // ไม่งั้นเปลี่ยนเดือนเร็วๆ แล้วคำตอบของเดือนเก่าจะทับเดือนใหม่
   monthPages: (month) => ["print-transactions", "month", month || null],
+
+  // เดือนที่มียอดบันทึกไว้แล้ว (ทุกปี) — ขึ้นต้นด้วย print-transactions ให้การล้างแคชหลังบันทึกยอดครอบถึง
+  readingMonths: () => ["print-transactions", "months"],
 };
 
 // ส่ง header บังคับ revalidate เฉพาะคำขอแรกหลังจากที่เพิ่งเขียนข้อมูลชนิดนั้น —
@@ -262,6 +265,17 @@ export function useMonthPages(month) {
     // ของ *เดือนอื่น* การคงไว้คือการโชว์ตัวเลขที่ไม่ใช่ของเดือนที่หัวข้อบอก
     ...OPERATIONAL,
   });
+}
+
+/**
+ * เดือนที่มียอดบันทึกไว้แล้ว — ใช้จำกัดตัวเลือกช่วงเวลา
+ *
+ * เดิมหน้าภาพรวมและหน้าค่าใช้จ่ายดึง /dashboard/monthly-kpi แบบไม่กรอง (ทุกมิเตอร์ ทุกเดือน ทุกปี)
+ * เพื่อเอาแค่รายชื่อเดือน ที่ 5 ปี 300 เครื่องคือ 11.6 MB และหน้าภาพรวมดึงซ้ำทุก 5 นาที (#149)
+ * /print-transactions/months ตอบคำถามเดียวกันด้วยรายการเดือนล้วน
+ */
+export function useReadingMonths() {
+  return useQuery({ queryKey: keys.readingMonths(), queryFn: () => get("/print-transactions/months"), ...OPERATIONAL });
 }
 
 export function useSummaryByBuilding(params) {

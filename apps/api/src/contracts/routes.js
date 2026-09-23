@@ -124,20 +124,29 @@ async function loadContracts(conn, id = null) {
   }));
 }
 
-/** ยอดเงินรายเดือนและจำนวนยอดที่หาราคาไม่ได้ ของยอดที่สัญญานี้คิดเงิน */
+/**
+ * ยอดตามใบแจ้งหนี้รายงวด (ค่าพิมพ์ + ค่าเช่าคงที่ + VAT) และจำนวนยอดที่หาราคาไม่ได้ ของสัญญานี้
+ *
+ * ยอดเงินอ่านจาก v_contract_invoice ตัวเดียวกับหน้าค่าใช้จ่าย — เดิมอ่านแค่ค่าพิมพ์จาก v_monthly_kpi
+ * การเพิ่มค่าเช่าหรือ VAT จึงแสดงว่า "ยอดเงินทุกงวดไม่เปลี่ยน" ทั้งที่ใบแจ้งหนี้เปลี่ยนหลายหมื่นบาท (#156)
+ */
 async function billingSnapshot(conn, contractId) {
-  const [rows] = await conn.query(
-    `SELECT v.month, SUM(v.total_cost) AS cost, SUM(v.total_cost IS NULL) AS unpriced
-     FROM v_monthly_kpi v
-     WHERE v.billing_contract_id = ?
-     GROUP BY v.month
-     ORDER BY v.month`,
-    [contractId]
-  );
-  return rows.map((row) => ({
-    month: row.month,
-    cost: row.cost === null ? null : String(row.cost),
-    unpriced: Number(row.unpriced),
+  const [[unpricedRows], [invoiceRows]] = await Promise.all([
+    conn.query(
+      `SELECT v.month, SUM(v.total_cost IS NULL) AS unpriced
+       FROM v_monthly_kpi v
+       WHERE v.billing_contract_id = ?
+       GROUP BY v.month`,
+      [contractId]
+    ),
+    conn.query("SELECT month, invoice_total FROM v_contract_invoice WHERE contract_id = ?", [contractId]),
+  ]);
+  const unpricedBy = new Map(unpricedRows.map((row) => [row.month, Number(row.unpriced)]));
+  const invoiceBy = new Map(invoiceRows.map((row) => [row.month, row.invoice_total === null ? null : String(row.invoice_total)]));
+  return [...new Set([...unpricedBy.keys(), ...invoiceBy.keys()])].sort().map((month) => ({
+    month,
+    cost: invoiceBy.get(month) ?? null,
+    unpriced: unpricedBy.get(month) ?? 0,
   }));
 }
 

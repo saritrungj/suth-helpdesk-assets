@@ -22,6 +22,9 @@ import { computed, onMounted, ref } from "vue";
 import { FileSignature, Plus, Trash2 } from "lucide-vue-next";
 import { fiscalYearOfMonth, fromSatang, toSatang } from "@suth/domain";
 import api from "../../services/api";
+import { useQueryClient } from "@tanstack/vue-query";
+import { invalidateAfterWrite } from "../../api/invalidate";
+import { takeRevalidationHeaders } from "../../api/http-cache";
 import { toastSuccess } from "../../store/toast";
 import { errorMessage } from "../../lib/api-error";
 import {
@@ -104,11 +107,19 @@ const columns = [
 const needsPreview = computed(() => Boolean(editing.value));
 const canSave = computed(() => !needsPreview.value || impact.value !== null);
 
+const queryClient = useQueryClient();
+
 async function load() {
   loading.value = true;
   loadError.value = "";
   try {
-    const [list, cats] = await Promise.all([api.get("/contracts"), api.get("/contracts/meter-categories")]);
+    // /contracts ตอบ max-age=60 — หลังบันทึก ต้องถามเซิร์ฟเวอร์ใหม่ ไม่งั้นเบราว์เซอร์คืนรายการเดิม
+    // (ราคาเก่า) ให้หน้านี้และหน้าอื่นที่อ่าน /contracts ต่อจากนี้ในหนึ่งนาที (#152)
+    const headers = takeRevalidationHeaders("/contracts");
+    const [list, cats] = await Promise.all([
+      api.get("/contracts", headers ? { headers } : undefined),
+      api.get("/contracts/meter-categories"),
+    ]);
     contracts.value = list.data;
     categories.value = cats.data;
   } catch (err) {
@@ -210,6 +221,8 @@ async function save() {
     }
     toastSuccess(t("บันทึกสัญญา {0} แล้ว", [form.value.contract_no]));
     dialogOpen.value = false;
+    // ราคาสัญญาอยู่ในทะเบียนเครื่อง ฟอร์มเครื่อง และทุกยอดเงินบนแดชบอร์ด — ล้างแคชทุกชั้นก่อนโหลดใหม่
+    await invalidateAfterWrite(queryClient, "contracts");
     await load();
   } catch (err) {
     console.error(err);
@@ -337,7 +350,7 @@ onMounted(load);
         <div v-if="impact" class="flex flex-col gap-2">
           <p v-if="!impact.length" class="text-sm text-ink-soft">{{ t("ยอดเงินทุกงวดไม่เปลี่ยน") }}</p>
           <table v-else class="w-full text-sm tabular-nums">
-            <caption class="mb-1 text-left font-medium text-ink">{{ t("ยอดค่าพิมพ์ที่จะเปลี่ยน") }}</caption>
+            <caption class="mb-1 text-left font-medium text-ink">{{ t("ยอดตามใบแจ้งหนี้ที่จะเปลี่ยน (รวมค่าเช่าและ VAT)") }}</caption>
             <thead class="text-ink-mute">
               <tr>
                 <th class="text-left font-normal">{{ t("งวด") }}</th>

@@ -32,6 +32,7 @@ const { logger, requestLogger } = require("./src/shared/logger");
 const { ApiError, PROBLEM_JSON, notFound, fromDatabaseError } = require("./src/shared/http-error");
 const { noStore } = require("./src/shared/cache");
 const { findSchemaGaps, describeGaps } = require("./src/shared/schema-check");
+const { jwtSecretProblem } = require("./src/auth/jwt-secret");
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -62,9 +63,10 @@ app.use(
   cors({
     origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    // Cache-Control ไม่ใช่ CORS-safelisted header — browser จะ preflight ตอนเว็บส่ง no-cache เพื่อ revalidate
-    // รายการหลัง mutation จึงต้อง allow ไว้ ไม่เช่นนั้น browser จะบล็อก GET ก่อนถึง route
-    allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "If-None-Match", "X-Request-Id"],
+    // Cache-Control: เว็บส่ง "no-cache" ในคำขอแรกหลังเขียนข้อมูล ให้เบราว์เซอร์ถามเซิร์ฟเวอร์ใหม่แทน
+    // การคืนรายการเก่าจาก max-age (apps/web/src/api/http-cache.js) — ถ้าไม่อยู่ในรายการนี้ preflight
+    // ของคำขอข้ามโดเมนไม่ผ่าน เบราว์เซอร์บล็อกคำขอทั้งคำขอ หน้าจึงค้างข้อมูลเก่าหลังบันทึก (#152)
+    allowedHeaders: ["Content-Type", "Authorization", "If-None-Match", "X-Request-Id", "Cache-Control"],
     // ให้เบราว์เซอร์อ่าน header เหล่านี้จากคำตอบข้ามโดเมนได้ — ปกติ CORS ซ่อนไว้
     // ทั้งหมด ทำให้ฝั่งเว็บอ่านจำนวนรายการทั้งหมด (สำหรับแบ่งหน้า) และ id ของคำขอ
     // (สำหรับแจ้งปัญหา) ไม่ได้เลย
@@ -212,6 +214,17 @@ app.use((err, req, res, next) => {
  * — ล้มแบบดังๆ ตั้งแต่ตอนบูตชัดเจนกว่าและซ่อมได้เร็วกว่า
  */
 async function start() {
+  // กุญแจเซ็น token ที่ใช้ไม่ได้ = ล็อกอินพังทุกครั้ง หรือใครก็ปลอม token ได้ — ดู src/auth/jwt-secret.js
+  const secretProblem = jwtSecretProblem(process.env.JWT_SECRET);
+  if (secretProblem) {
+    logger.error("JWT_SECRET ใช้ไม่ได้ ไม่เปิดเซิร์ฟเวอร์", { problem: secretProblem });
+    process.stderr.write(
+      `\n${secretProblem}\nสร้างค่าสุ่มด้วย: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"\n` +
+        "แล้วตั้งใน apps/api/.env — ดู docs/reference/environment.md\n\n"
+    );
+    process.exit(1);
+  }
+
   try {
     await db.verifyConnection();
   } catch (err) {

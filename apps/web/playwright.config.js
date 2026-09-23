@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const requiredReportFile = process.env.SUTH_E2E_REPORT_FILE;
 
 /**
  * playwright.config.js — เทสที่รันบนเบราว์เซอร์จริง
@@ -51,8 +52,12 @@ const apiUrl = process.env.SUTH_API_URL || "http://localhost:3000/api";
 const DB_SPECS = [
   "axe-pages.spec.js",
   "fiscal-year-cache.spec.js",
+  "billing-shapes.spec.js",
+  "contract-edit.spec.js",
+  "contract-preview.spec.js",
   "login-wcag.spec.js",
   "login.spec.js",
+  "meter-numbers.spec.js",
   "month-entry.spec.js",
   "page-structure.spec.js",
   "report-workflow.spec.js",
@@ -118,7 +123,11 @@ export default defineConfig({
   fullyParallel: false,
 
   // บน CI เก็บ HTML report ไว้เป็น artifact ด้วย เพราะ log อย่างเดียวไล่ไม่ออกว่าพังตรงไหน
-  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
+  reporter: [
+    ["list"],
+    ...(process.env.CI ? [["html", { open: "never" }]] : []),
+    ...(requiredReportFile ? [["json", { outputFile: requiredReportFile }]] : []),
+  ],
 
   use: {
     baseURL: webUrl,

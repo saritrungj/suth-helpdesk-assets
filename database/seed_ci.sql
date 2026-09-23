@@ -292,3 +292,62 @@ SELECT
   'ช่วงตั้งต้นของชุดทดสอบ'
 FROM devices d
 WHERE d.contract_id IS NOT NULL;
+
+-- ------------------------------------------------------------------------------
+-- รูปของสัญญาจริงที่ชุด db ต้องเจอ (#140)
+-- ------------------------------------------------------------------------------
+-- สัญญาจริงของโรงพยาบาลไม่ได้เริ่มวันที่ 1: งวดคือ 24 ถึง 23 และนับเป็นเดือนที่งวดสิ้นสุด
+-- (ADR-0023) มีค่าเช่าคงที่กับ VAT ในใบแจ้งหนี้ และเครื่อง A3 สีมีสองมิเตอร์ที่คิดราคาแยกกัน
+-- ยอดจากไฟล์ผู้ให้เช่ามีเลขมิเตอร์ต้นงวด/สิ้นงวดติดมาด้วย — ถ้า seed มีแต่สัญญาวันที่ 1 และ
+-- เครื่องมิเตอร์เดียว ชุด db จะจับบั๊กในรูปข้อมูลเหล่านี้ไม่ได้เลย
+--
+-- สัญญา 3 เริ่มวันที่ 24 ของสามเดือนก่อน จึงเริ่มคิดเงินเดือนถัดไป (สองเดือนก่อน)
+-- ช่วงรับผิดชอบยอดของเครื่อง 33 เริ่มเดือนแรกที่คิดเงินได้ และมียอดครบทุกเดือนตั้งแต่นั้น
+-- ความครบถ้วนของ seed จึงไม่เปลี่ยน — กฎว่าเดือนที่สัญญาเริ่มกลางเดือนต้องกรอกหรือไม่ยังรอ
+-- การตัดสิน (ดู audit N1) seed นี้ตั้งใจไม่เลือกแทน
+--
+-- อยู่ท้ายไฟล์โดยตั้งใจ — ชุดคำสั่งด้านบนเลือกเครื่องจากตาราง devices ทั้งตาราง
+-- (มิเตอร์ขาวดำ ช่วงคิดเงินตั้งต้น) ถ้าเครื่อง 33 มีอยู่ก่อนจะได้ข้อมูลซ้ำ
+
+SET @c3_start = STR_TO_DATE(CONCAT(DATE_FORMAT(DATE_SUB(@today, INTERVAL 3 MONTH), '%Y-%m'), '-24'), '%Y-%m-%d');
+SET @c3_end = DATE_SUB(DATE_ADD(@c3_start, INTERVAL 36 MONTH), INTERVAL 1 DAY);
+SET @c3_first_billing_day = STR_TO_DATE(CONCAT(DATE_FORMAT(DATE_ADD(@c3_start, INTERVAL 1 MONTH), '%Y-%m'), '-01'), '%Y-%m-%d');
+SET @month_prev2 = DATE_FORMAT(DATE_SUB(@today, INTERVAL 2 MONTH), '%Y-%m');
+
+INSERT INTO contracts (id, contract_no, effective_from, effective_to, monthly_rental, vat_rate) VALUES
+(3, CONCAT('SUTH-CI-24TH-', @fy_be_year), @c3_start, @c3_end, 1500.00, 7.00);
+
+INSERT INTO contract_price_line (contract_id, category_id, price_per_page)
+SELECT 3, id, 0.3650 FROM meter_category WHERE code = 'a3-bw'
+UNION ALL
+SELECT 3, id, 2.5000 FROM meter_category WHERE code = 'a3-color';
+
+INSERT INTO devices
+(id, serial_number, brand_id, model, building_id, floor_id, location, division_id, department_id, contract_id, price_override, status, installation_status, service_unverified_before)
+VALUES
+(33, 'CI-SN-033', 2, 'Color A3 5000', 1, 1, 'ห้องถ่ายเอกสาร', 1, 2, 3, NULL, 'active', 'installed', NULL);
+
+INSERT INTO device_meter (device_id, category_id)
+SELECT 33, id FROM meter_category WHERE code IN ('a3-bw', 'a3-color');
+
+INSERT INTO device_service_period (device_id, effective_from, effective_to, verified_by, verified_at) VALUES
+(33, @c3_first_billing_day, NULL, NULL, CURRENT_TIMESTAMP);
+
+INSERT INTO device_location_history
+(device_id, building_id, floor_id, location, division_id, department_id, effective_from, effective_to) VALUES
+(33, 1, 1, 'ห้องถ่ายเอกสาร', 1, 2, @c3_start, NULL);
+
+INSERT INTO device_contract_history (device_id, contract_id, price_override, effective_from, effective_to, note) VALUES
+(33, 3, NULL, @c3_start, NULL, 'สัญญาเริ่มกลางเดือนของชุดทดสอบ');
+
+SET @bw33 = (SELECT dm.id FROM device_meter dm JOIN meter_category mc ON mc.id = dm.category_id WHERE dm.device_id = 33 AND mc.code = 'a3-bw');
+SET @color33 = (SELECT dm.id FROM device_meter dm JOIN meter_category mc ON mc.id = dm.category_id WHERE dm.device_id = 33 AND mc.code = 'a3-color');
+
+-- เลขต้นงวดของงวดหนึ่งเท่ากับเลขสิ้นงวดของงวดก่อน เหมือนไฟล์ผู้ให้เช่าที่ถูกต้อง
+INSERT INTO print_transactions (device_id, meter_id, month, meter_start, meter_end, pages) VALUES
+(33, @bw33, @month_prev2, 10000, 10480, 480),
+(33, @color33, @month_prev2, 2000, 2090, 90),
+(33, @bw33, @month_prev, 10480, 11001, 521),
+(33, @color33, @month_prev, 2090, 2177, 87),
+(33, @bw33, @month_this, 11001, 11398, 397),
+(33, @color33, @month_this, 2177, 2240, 63);

@@ -367,3 +367,39 @@ test("เลขซีเรียลปกติที่มีขีดกล�
   assert.equal(result.rows[0].action, "create");
   assert.equal(result.rows[0].reasons.length, 0);
 });
+
+// ราคาพิเศษจากไฟล์ต้องผ่านเกณฑ์เดียวกับฟอร์ม (#148) — เดิมใช้ Number() "0x10" กลายเป็น 16 บาท/หน้า
+// "0.36549" ถูกฐานปัดเป็น 0.3655 ซึ่งไม่มีใครกรอก และ 1,000,000 ทำให้ฐานปฏิเสธเป็น 500 ตอนบันทึก
+test("ราคาพิเศษเฉพาะเครื่องในไฟล์ใช้เกณฑ์เดียวกับฟอร์ม", () => {
+  const cases = { "0.365": 0.365, " 0.4 ": 0.4, "0.36549": null, "0x10": null, "1e3": null, "1000000": null, "-1": null };
+  const serials = Object.keys(cases).map((_, i) => `TESTSN${String(i + 10).padStart(4, "0")}`);
+  const result = plan(Object.keys(cases).map((price, i) => row({ serial_number: serials[i], price_override: price })), { decisions: allCreate });
+  Object.entries(cases).forEach(([price, expected], i) => {
+    const planned = result.rows[i];
+    if (expected === null) {
+      assert.equal(planned.action, "skip", `ราคา ${JSON.stringify(price)} ต้องถูกปฏิเสธ`);
+      assert.match(planned.reasons.join(" "), /ราคาพิเศษเฉพาะเครื่อง/);
+    } else {
+      assert.equal(planned.action, "create", `ราคา ${JSON.stringify(price)} ต้องผ่าน`);
+      assert.equal(planned.values.price_override, expected);
+    }
+  });
+});
+
+// เครื่องที่มีอยู่แล้วแต่ยังไม่ผูกสัญญา: ไฟล์ระบุสัญญาแต่การนำเข้าไม่ผูกให้ (ต้องระบุวันเริ่มคิดเงินที่หน้าทะเบียน)
+// เดิมแผนตอบ "unchanged" เงียบๆ เครื่องจึงยังคิดเงินไม่ได้โดยไม่มีใครรู้ (#155)
+test("เครื่องเดิมที่ยังไม่ผูกสัญญา แต่ไฟล์ระบุสัญญา ต้องมีคำเตือน", () => {
+  const existing = {
+    id: 5, serial_number: "TESTSN0001", brand_id: null, model: null, building_id: null, floor_id: null,
+    location: null, division_id: null, department_id: null, contract_id: null,
+    meter_category_id: 2, has_color_meter: false, history_rows: 1,
+  };
+  const result = plan([row()], {
+    devices: [existing],
+    decisions: allCreate,
+  });
+  const warning = result.warnings.find((w) => w.serial_number === "TESTSN0001" && /สัญญา/.test(w.reason));
+  assert.ok(warning, `ต้องเตือนเรื่องสัญญา (ได้ ${JSON.stringify(result.warnings)})`);
+  assert.match(warning.reason, /TEST 9\/2567/);
+  assert.match(warning.reason, /หน้าทะเบียน/);
+});
