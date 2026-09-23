@@ -43,12 +43,12 @@ import {
   UiBadge,
   UiButton,
   UiCard,
-  UiChart,
   UiEmpty,
   UiField,
   UiSegmented,
   UiSkeleton,
 } from "../ui";
+import UiChart from "../ui/UiChart.vue";
 
 const route = useRoute();
 const router = useRouter();

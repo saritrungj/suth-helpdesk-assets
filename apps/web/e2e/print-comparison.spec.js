@@ -58,6 +58,24 @@ async function exportAs(page, format) {
 }
 
 test.describe("หน้าภาพรวมการพิมพ์", () => {
+  // chart.js เคยติดไปในไฟล์ที่ทุกหน้าโหลด (#169) — กราฟต้องโหลดเฉพาะหน้าที่วาดกราฟ และยังวาดได้จริง
+  test("กราฟโหลดเฉพาะหน้าที่ใช้: หน้าเข้าสู่ระบบไม่โหลด ส่วนหน้าภาพรวมโหลดแล้ววาดได้", async ({ page }) => {
+    const chartRequests = [];
+    page.on("request", (request) => {
+      if (/UiChart/.test(request.url())) chartRequests.push(request.url());
+    });
+
+    await page.goto("/login");
+    await expect(page.getByRole("button", { name: "เข้าสู่ระบบ" })).toBeVisible();
+    expect(chartRequests, "หน้าเข้าสู่ระบบต้องไม่โหลดโค้ดกราฟ").toEqual([]);
+
+    await comparisonFixture(page);
+    await page.goto("/dashboard");
+    await expect(page.getByRole("heading", { name: "ค่าใช้จ่ายสุทธิรายเดือน", exact: true })).toBeVisible();
+    await expect(page.locator("#main-content canvas").first()).toBeVisible();
+    expect(chartRequests.length, "หน้าภาพรวมต้องโหลดโค้ดกราฟเมื่อใช้").toBeGreaterThan(0);
+  });
+
   test("โครงหน้าเรียงตัวกรอง → ตัวเลขสำคัญ → เปรียบเทียบ → ตารางรายละเอียด และมีปุ่มส่งออกปุ่มเดียว", async ({ page }) => {
     await comparisonFixture(page);
     await page.goto("/dashboard");

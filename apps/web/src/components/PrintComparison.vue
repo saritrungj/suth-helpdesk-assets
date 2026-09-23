@@ -2,7 +2,8 @@
 import { computed, ref, watch } from "vue";
 import { t } from "../lib/locale";
 import { formatBahtValue, formatCompact, formatCount } from "../lib/format";
-import { UiCard, UiChart, UiEmpty, UiField, UiFilterBar, UiSegmented, UiSkeleton } from "../ui";
+import { UiCard, UiEmpty, UiField, UiFilterBar, UiSegmented, UiSkeleton } from "../ui";
+import UiChart from "../ui/UiChart.vue";
 import { chartState, comparisonChart, deviceSpread, dimensionLabel, stableSlots } from "./comparison";
 import { comparisonTitle } from "./comparison-export";
 
