@@ -105,6 +105,8 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
       validate({ params: idParam, body: aliasBody }),
       asyncHandler(async (req, res) => {
         const created = await lookupWrites.addAlias(db, alias.kind, req.params.id, req.body.alias);
+        cache.noStore(res);
+        res.set("Location", `${req.baseUrl}${path}/aliases`);
         res.status(201).json({ id: created.id, target_id: req.params.id, alias: created.alias });
       })
     );
@@ -116,6 +118,8 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
       asyncHandler(async (req, res) => {
         const [result] = await db.query(`DELETE FROM \`${alias.table}\` WHERE id = ?`, [req.params.id]);
         if (!result.affectedRows) throw notFound("ไม่พบชื่อเรียกอื่นที่ต้องการลบ");
+        cache.noStore(res);
+        res.set("Location", `${req.baseUrl}${path}/aliases`);
         res.json({ message: "ลบชื่อเรียกอื่นเรียบร้อยแล้ว" });
       })
     );
@@ -160,6 +164,8 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
         values
       );
 
+      cache.noStore(res);
+      res.set("Location", `${req.baseUrl}${path}/${result.insertId}`);
       res.status(201).json({ id: result.insertId, ...req.body });
     })
   );
@@ -179,6 +185,8 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
 
       if (!result.affectedRows) throw notFound(`ไม่พบ${label}ที่ต้องการแก้ไข`);
 
+      cache.noStore(res);
+      res.set("Location", `${req.baseUrl}${path}`);
       res.json({ id: req.params.id, ...req.body });
     })
   );
@@ -193,6 +201,8 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
       const [result] = await db.query(`DELETE FROM \`${table}\` WHERE id = ?`, [req.params.id]);
       if (!result.affectedRows) throw notFound(`ไม่พบ${label}ที่ต้องการลบ`);
 
+      cache.noStore(res);
+      res.set("Location", `${req.baseUrl}${path}`);
       res.json({ message: `ลบ${label}เรียบร้อยแล้ว` });
     })
   );
@@ -259,6 +269,8 @@ router.post(
       [year, startMonth, endMonth]
     );
 
+    cache.noStore(res);
+    res.set("Location", `${req.baseUrl}/fiscal-years/${result.insertId}`);
     res.status(201).json({ id: result.insertId, year, start_month: startMonth, end_month: endMonth });
   })
 );
@@ -279,6 +291,8 @@ router.put(
 
     if (!result.affectedRows) throw notFound("ไม่พบปีงบประมาณที่ต้องการแก้ไข");
 
+    cache.noStore(res);
+    res.set("Location", `${req.baseUrl}/fiscal-years`);
     res.json({ id: req.params.id, year, start_month: startMonth, end_month: endMonth });
   })
 );
@@ -291,6 +305,10 @@ router.delete(
     const [result] = await db.query("DELETE FROM fiscal_year WHERE id = ?", [req.params.id]);
     if (!result.affectedRows) throw notFound("ไม่พบปีงบประมาณที่ต้องการลบ");
 
+    cache.noStore(res);
+    // RFC 9111 §4.4 บังคับ invalidate target URI ของ DELETE อยู่แล้ว; Location นี้
+    // ชี้ไปยัง collection เพิ่มเติม เพื่อให้ cache ที่รองรับเลือก invalidate URI นั้นได้
+    res.set("Location", `${req.baseUrl}/fiscal-years`);
     res.json({ message: "ลบปีงบประมาณเรียบร้อยแล้ว" });
   })
 );

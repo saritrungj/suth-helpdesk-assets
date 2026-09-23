@@ -69,3 +69,29 @@ test("สัญญา 3 ปีตามจริงผ่านด่านต�
   assert.notEqual(res.status, 400, JSON.stringify(res.body));
   assert.ok(res.calls.length > 0);
 });
+
+test("DELETE /api/contracts/:id ส่ง Location: /api/contracts และ Cache-Control: no-store (#136)", async () => {
+  const originalQuery = db.query;
+  db.query = async (sql) => {
+    if (String(sql).includes("DELETE FROM contracts")) return [{ affectedRows: 1 }];
+    return [[]];
+  };
+
+  const app = express();
+  app.use(express.json());
+  app.use("/api/contracts", require("./routes"));
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  try {
+    const res = await fetch(`http://localhost:${server.address().port}/api/contracts/1`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("location"), "/api/contracts");
+    assert.equal(res.headers.get("cache-control"), "no-store");
+  } finally {
+    db.query = originalQuery;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

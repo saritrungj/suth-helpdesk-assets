@@ -44,7 +44,7 @@ async function call(method, route, body, { role = "admin", writeError } = {}) {
       headers: { authorization: `Bearer ${sign(role)}`, "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    return { status: res.status, body: await res.json(), writes };
+    return { status: res.status, headers: res.headers, body: await res.json(), writes };
   } finally {
     db.query = original;
     await new Promise((resolve) => server.close(resolve));
@@ -125,4 +125,40 @@ test("ชื่อยี่ห้อยาวเกินคอลัมน์ V
   const res = await call("POST", "/brands", { name: "ก".repeat(101) });
   assert.equal(res.status, 400);
   assert.deepEqual(res.writes, []);
+});
+
+test("DELETE /fiscal-years/:id ส่ง Location: /api/fiscal-years และ Cache-Control: no-store ตาม RFC 9111 §4.4 (#136)", async () => {
+  const res = await call("DELETE", "/fiscal-years/1");
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("location"), "/api/fiscal-years");
+  assert.equal(res.headers.get("cache-control"), "no-store");
+});
+
+test("POST และ PUT /fiscal-years ส่ง Location และ Cache-Control: no-store (#136)", async () => {
+  const postRes = await call("POST", "/fiscal-years", { year: "2568" });
+  assert.equal(postRes.status, 201);
+  assert.equal(postRes.headers.get("location"), "/api/fiscal-years/99");
+  assert.equal(postRes.headers.get("cache-control"), "no-store");
+
+  const putRes = await call("PUT", "/fiscal-years/1", { year: "2569" });
+  assert.equal(putRes.status, 200);
+  assert.equal(putRes.headers.get("location"), "/api/fiscal-years");
+  assert.equal(putRes.headers.get("cache-control"), "no-store");
+});
+
+test("POST, PUT และ DELETE ใน registerLookup ส่ง Location และ Cache-Control: no-store (#136)", async () => {
+  const postRes = await call("POST", "/buildings", { name: "อาคารใหม่" });
+  assert.equal(postRes.status, 201);
+  assert.equal(postRes.headers.get("location"), "/api/buildings/99");
+  assert.equal(postRes.headers.get("cache-control"), "no-store");
+
+  const delRes = await call("DELETE", "/buildings/1");
+  assert.equal(delRes.status, 200);
+  assert.equal(delRes.headers.get("location"), "/api/buildings");
+  assert.equal(delRes.headers.get("cache-control"), "no-store");
+
+  const putRes = await call("PUT", "/buildings/1", { name: "อาคารปรับปรุง" });
+  assert.equal(putRes.status, 200);
+  assert.equal(putRes.headers.get("location"), "/api/buildings");
+  assert.equal(putRes.headers.get("cache-control"), "no-store");
 });

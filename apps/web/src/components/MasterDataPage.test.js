@@ -7,13 +7,23 @@
 // ระบบไม่มีอาคารเลย
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { markForRevalidation, resetRevalidationMarks } from "../api/http-cache";
 
 const get = vi.fn();
 const post = vi.fn();
-vi.mock("../services/api", () => ({ default: { get: (...a) => get(...a), post: (...a) => post(...a) } }));
+const put = vi.fn();
+const del = vi.fn();
+vi.mock("../services/api", () => ({
+  default: {
+    get: (...a) => get(...a),
+    post: (...a) => post(...a),
+    put: (...a) => put(...a),
+    delete: (...a) => del(...a),
+  },
+}));
 vi.mock("../store/confirmDialog", () => ({ askConfirm: vi.fn(async () => true) }));
 vi.mock("../store/toast", () => ({ toastError: vi.fn(), toastSuccess: vi.fn() }));
-vi.mock("../api/invalidate", () => ({ invalidateAfterWrite: vi.fn(async () => {}), changeKindForEndpoint: () => null }));
+vi.mock("../api/invalidate", () => ({ invalidateAfterWrite: vi.fn(async () => {}), changeKindForEndpoint: (ep) => ep.replace(/^\//, "") }));
 vi.mock("@tanstack/vue-query", () => ({ useQueryClient: () => ({}) }));
 
 const { mount, flushPromises } = await import("@vue/test-utils");
@@ -26,8 +36,11 @@ let buildingsFail;
 
 beforeEach(() => {
   buildingsFail = true;
+  resetRevalidationMarks();
   get.mockReset();
   post.mockReset();
+  put.mockReset();
+  del.mockReset();
   get.mockImplementation(async (path) => {
     if (path === "/floors") return { data: FLOORS };
     if (path === "/buildings") {
@@ -104,5 +117,94 @@ describe("ข้อมูลอ้างอิงโหลดไม่สำเ�
     expect(wrapper.vm.form.name).toBe("ชั้น 5");
     const column = wrapper.vm.tableColumns.find((col) => col.key === "building_id");
     expect(column.value(FLOORS[0])).toBe("อาคารผู้ป่วยนอก");
+  });
+});
+
+describe("การดึงข้อมูลและ revalidation ข้าม HTTP cache (#136)", () => {
+  test("ดึงข้อมูลใหม่พร้อม Cache-Control: no-cache เมื่อมีเครื่องหมาย revalidate", async () => {
+    markForRevalidation(["/floors"]);
+    await mountFloors();
+    expect(get).toHaveBeenCalledWith("/floors", {
+      headers: { "Cache-Control": "no-cache" },
+    });
+  });
+
+  test("หลังล้างเครื่องหมายแล้ว การโหลดรอบถัดไปไม่ส่ง no-cache ซ้ำ", async () => {
+    markForRevalidation(["/floors"]);
+    const wrapper = await mountFloors();
+    expect(get).toHaveBeenCalledWith("/floors", {
+      headers: { "Cache-Control": "no-cache" },
+    });
+
+    get.mockClear();
+    await wrapper.vm.load();
+    expect(get).toHaveBeenCalledWith("/floors", undefined);
+  });
+
+  test("ลบรายการแล้วสั่ง invalidate แคชก่อนโหลดรายการใหม่ เพื่อให้ได้ revalidation mark", async () => {
+    const { invalidateAfterWrite } = await import("../api/invalidate");
+    const callOrder = [];
+    vi.mocked(invalidateAfterWrite).mockImplementation(async () => {
+      callOrder.push("invalidate");
+      markForRevalidation(["/floors"]);
+    });
+    get.mockImplementation(async (path, config) => {
+      if (path === "/floors") {
+        callOrder.push(config?.headers?.["Cache-Control"] === "no-cache" ? "get-nocache" : "get");
+        return { data: FLOORS };
+      }
+      return { data: BUILDINGS };
+    });
+
+    const wrapper = await mountFloors();
+    callOrder.length = 0;
+
+    await wrapper.vm.remove(FLOORS[0]);
+
+    expect(del).toHaveBeenCalledWith("/floors/1");
+    expect(callOrder).toEqual(["invalidate", "get-nocache"]);
+  });
+
+  test("ผลโหลดเก่าที่กลับมาทีหลังไม่เขียนทับรายการจากการโหลดล่าสุด", async () => {
+    let resolveInitialLoad;
+    let floorsRequests = 0;
+    get.mockImplementation(async (path) => {
+      if (path === "/floors") {
+        floorsRequests += 1;
+        if (floorsRequests === 1) {
+          return new Promise((resolve) => { resolveInitialLoad = resolve; });
+        }
+        return { data: [{ id: 2, building_id: 3, name: "ชั้นล่าสุด" }] };
+      }
+      if (path === "/buildings") return { data: BUILDINGS };
+      return { data: [] };
+    });
+
+    const wrapper = mount(MasterDataPage, {
+      props: {
+        title: "ชั้น",
+        endpoint: "/floors",
+        itemNoun: "ชั้น",
+        columns: [{ key: "name", label: "ชื่อชั้น" }],
+        fields: [{ key: "name", label: "ชื่อชั้น", required: true }],
+      },
+      global: {
+        stubs: {
+          UiDataTable: true,
+          UiModal: { template: "<div><slot /><slot name=\"footer\" /></div>" },
+        },
+      },
+    });
+    mounted.push(wrapper);
+    await flushPromises();
+
+    await wrapper.vm.load();
+    resolveInitialLoad({ data: FLOORS });
+    await flushPromises();
+
+    expect(get.mock.calls.filter(([path]) => path === "/floors")[1][1]).toEqual({
+      headers: { "Cache-Control": "no-cache" },
+    });
+    expect(wrapper.vm.rows).toEqual([{ id: 2, building_id: 3, name: "ชั้นล่าสุด" }]);
   });
 });

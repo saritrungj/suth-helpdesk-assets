@@ -26,6 +26,7 @@ import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { askConfirm } from "../store/confirmDialog";
 import { invalidateAfterWrite, changeKindForEndpoint } from "../api/invalidate";
+import { markForRevalidation, takeRevalidationHeaders } from "../api/http-cache";
 import { toastError, toastSuccess } from "../store/toast";
 import { errorMessage } from "../lib/api-error";
 import {
@@ -64,6 +65,8 @@ const cellSlots = computed(() => Object.keys(slots).filter((name) => name.starts
 const rows = ref([]);
 const loading = ref(true);
 const loadError = ref("");
+let loadRequest = 0;
+let listLoadsInFlight = 0;
 
 const queryClient = useQueryClient();
 
@@ -118,17 +121,24 @@ const tableColumns = computed(() =>
 );
 
 async function load() {
+  const request = ++loadRequest;
+  if (listLoadsInFlight > 0) markForRevalidation([props.endpoint]);
+  listLoadsInFlight += 1;
   loading.value = true;
   loadError.value = "";
 
   try {
-    const res = await api.get(props.endpoint);
+    const headers = takeRevalidationHeaders(props.endpoint);
+    const res = await api.get(props.endpoint, headers ? { headers } : undefined);
+    if (request !== loadRequest) return;
     rows.value = res.data ?? [];
   } catch (err) {
+    if (request !== loadRequest) return;
     console.error(`Load ${props.endpoint} error:`, err);
     loadError.value = t("โหลดรายการ{0}ไม่สำเร็จ", [props.itemNoun]);
   } finally {
-    loading.value = false;
+    listLoadsInFlight -= 1;
+    if (request === loadRequest) loading.value = false;
   }
 }
 
@@ -244,7 +254,8 @@ async function submit() {
     }
 
     dialogOpen.value = false;
-    await Promise.all([load(), invalidateRelatedCaches()]);
+    await invalidateRelatedCaches();
+    await load();
     await props.onChanged?.();
   } catch (err) {
     console.error(err);
@@ -285,7 +296,8 @@ async function remove(row) {
   try {
     await api.delete(`${props.endpoint}/${row.id}`);
     toastSuccess(t("ลบ{0}เรียบร้อย", [props.itemNoun]));
-    await Promise.all([load(), invalidateRelatedCaches()]);
+    await invalidateRelatedCaches();
+    await load();
     await props.onChanged?.();
   } catch (err) {
     console.error(err);

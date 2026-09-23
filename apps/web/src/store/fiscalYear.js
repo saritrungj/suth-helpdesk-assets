@@ -2,6 +2,7 @@ import { reactive, computed, watch } from "vue";
 import api from "../services/api";
 import { appRouter } from "../lib/app-router";
 import { fiscalYearMonths } from "@suth/domain";
+import { takeRevalidationHeaders, markForRevalidation } from "../api/http-cache";
 
 // state ปีงบกลาง ที่ทุกหน้า/ทุก component subscribe ร่วมกัน
 // ห้ามสร้าง fiscalYearId ซ้ำเป็น local state ในหน้าอื่นอีก ให้ import ตัวนี้ไปใช้แทน
@@ -34,13 +35,16 @@ export { fiscalYearMonths };
 
 let loaded = false;
 let loadingPromise = null;
+let refreshPromise = null;
+let refreshRequests = 0;
 
 async function fetchFiscalYears() {
   fiscalYearState.loading = true;
 
   loadingPromise = (async () => {
     try {
-      const res = await api.get("/fiscal-years");
+      const headers = takeRevalidationHeaders("/fiscal-years");
+      const res = await api.get("/fiscal-years", headers ? { headers } : undefined);
       fiscalYearState.list = res.data;
 
       // 1) ถ้า URL มี ?fy= อยู่แล้ว (เช่น refresh หน้า หรือ share link มา) ใช้ค่านั้นก่อน
@@ -85,13 +89,43 @@ export async function loadFiscalYears() {
 // เพื่อให้ตัวเลือกปีงบบนแถบบน (และทุกหน้าที่ subscribe fiscalYearState) เห็นข้อมูลล่าสุดทันที
 // โดยไม่ต้อง refresh หน้าเว็บเอง
 export async function refreshFiscalYears() {
-  if (loadingPromise) return loadingPromise;
-  return fetchFiscalYears();
+  markForRevalidation(["/fiscal-years"]);
+  refreshRequests += 1;
+  if (refreshPromise) return refreshPromise;
+
+  let sharedRefresh;
+  const currentRefresh = (async () => {
+    if (loadingPromise) {
+      try {
+        await loadingPromise;
+      } catch {}
+    }
+
+    // ถ้ามีคำขอ refresh ใหม่ระหว่าง fetch ต้องยิงซ้ำพร้อม no-cache; คำขอที่รอ initial load
+    // จะถูกรวมไว้ใน fetch แรกที่ตามมา เพราะมันเกิดก่อนเริ่ม revalidate
+    let handledRequests = refreshRequests;
+    while (true) {
+      await fetchFiscalYears();
+      if (handledRequests === refreshRequests) {
+        if (refreshPromise === sharedRefresh) refreshPromise = null;
+        return;
+      }
+      handledRequests = refreshRequests;
+    }
+  })();
+
+  sharedRefresh = currentRefresh.finally(() => {
+    if (refreshPromise === sharedRefresh) refreshPromise = null;
+  });
+  refreshPromise = sharedRefresh;
+  return sharedRefresh;
 }
 
 export function resetFiscalYearState() {
   loaded = false;
   loadingPromise = null;
+  refreshPromise = null;
+  refreshRequests = 0;
   fiscalYearState.list = [];
   fiscalYearState.activeId = null;
 }
