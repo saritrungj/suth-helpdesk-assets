@@ -42,6 +42,8 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   /** ปิดสวิตช์กราฟ/ตาราง เมื่อหน้ามีตารางของตัวเองอยู่แล้ว */
   showTableToggle: { type: Boolean, default: true },
+  /** ตัวเลขย่อเหนือทุกจุดของเส้นแรก — อ่านค่าได้โดยไม่ต้องชี้เมาส์ (#221) เหมาะกับกราฟที่มีไม่กี่เดือน */
+  pointLabels: { type: Boolean, default: false },
 });
 const emit = defineEmits(["select"]);
 
@@ -87,6 +89,8 @@ const indexOf = (time) => {
 };
 const fullLabel = (index) => (props.pointLabel ?? props.axisLabel)(props.domain[index]);
 const axisText = (value) => (props.formatAxis ?? props.formatValue)(value);
+/** ป้ายค่าล่าสุดและเส้นเล็งมีหน่วยด้วย ("2.75 แสนบาท") — ตัวเลขบนแกนไม่มี หน่วยอยู่หัวแกนแล้ว (#221) */
+const labelText = (value) => `${axisText(value)}${props.unit ? ` ${props.unit}` : ""}`;
 
 /* ---------------------------------------------------------------------------
    กราฟ
@@ -107,7 +111,7 @@ function chartOptions() {
       attributionLogo: true,
     },
     grid: { vertLines: { visible: false }, horzLines: { color: rgba(c.grid) } },
-    rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.14, bottom: 0.02 } },
+    rightPriceScale: { borderVisible: false, scaleMargins: { top: props.pointLabels ? 0.2 : 0.14, bottom: 0.02 } },
     timeScale: {
       borderVisible: false,
       fixLeftEdge: true,
@@ -123,7 +127,12 @@ function chartOptions() {
     // ข้อมูลรายเดือนไม่กี่สิบช่อง — ลาก/ซูมไม่ช่วยอะไรและทำให้หน้าเลื่อนไม่ได้บนมือถือ
     handleScroll: false,
     handleScale: false,
-    localization: { locale: "th-TH", priceFormatter: axisText, timeFormatter: (time) => fullLabel(indexOf(time)) },
+    localization: {
+      locale: "th-TH",
+      priceFormatter: labelText,
+      tickmarksPriceFormatter: (prices) => prices.map(axisText),
+      timeFormatter: (time) => fullLabel(indexOf(time)),
+    },
   };
 }
 
@@ -140,7 +149,7 @@ function seriesOptions(s) {
     lastValueVisible: true,
     priceLineVisible: false,
     title: "", // ชื่อเส้นอยู่ในคำอธิบายด้านบน — ป้ายยาวบนแกนราคาบังตัวเลข
-    priceFormat: { type: "custom", formatter: axisText, minMove: 0.01 },
+    priceFormat: { type: "custom", formatter: labelText, minMove: 0.01 },
     // แกนตัวเลขเริ่มที่ศูนย์เสมอ — ยอดใช้จ่ายและยอดพิมพ์อ่านเป็น "ปริมาณ" การตัดแกนทำให้เดือนที่ต่างกันนิดเดียวดูต่างมาก
     autoscaleInfoProvider: (original) => {
       const info = original();
@@ -184,6 +193,24 @@ function render() {
     })));
   }
   chart.value.timeScale().fitContent();
+  requestAnimationFrame(() => requestAnimationFrame(layoutPointTags));
+}
+
+/* ตัวเลขเหนือจุด — วางด้วยพิกัดจริงของตัววาดกราฟ คำนวณใหม่เมื่อขนาดเปลี่ยน */
+const pointTags = ref([]);
+function layoutPointTags() {
+  const s = painted.value[0];
+  if (!props.pointLabels || !chart.value || !handles[0] || !s) {
+    pointTags.value = [];
+    return;
+  }
+  const scale = chart.value.timeScale();
+  pointTags.value = s.values.flatMap((value, index) => {
+    if (value === null || value === undefined) return [];
+    const x = scale.timeToCoordinate(timeOf(index));
+    const y = handles[0].priceToCoordinate(Number(value));
+    return x === null || y === null ? [] : [{ index, x, y, text: axisText(value) }];
+  });
 }
 
 /* กล่องค่าตามเส้นเล็ง */
@@ -214,6 +241,7 @@ function mount() {
   chart.value = createChart(canvasHost.value, chartOptions());
   chart.value.subscribeCrosshairMove(onCrosshair);
   chart.value.subscribeClick(onClick);
+  chart.value.timeScale().subscribeSizeChange(layoutPointTags);
   render();
 }
 
@@ -221,7 +249,9 @@ function unmount() {
   if (!chart.value) return;
   chart.value.unsubscribeCrosshairMove(onCrosshair);
   chart.value.unsubscribeClick(onClick);
+  chart.value.timeScale().unsubscribeSizeChange(layoutPointTags);
   chart.value.remove();
+  pointTags.value = [];
   chart.value = null;
   handles = [];
 }
@@ -283,6 +313,17 @@ const ariaSummary = computed(() => {
     <!-- figure ไม่ใช่ img: ไลบรารีใส่ลิงก์ TradingView (เงื่อนไขสัญญาอนุญาต) ไว้ในกล่องนี้ และ img ห้ามมีลูกที่กดได้ -->
     <div v-show="view === 'chart'" class="relative" :style="{ height }" role="figure" :aria-label="ariaSummary">
       <div ref="canvasHost" class="absolute inset-0" :class="loading && 'opacity-45'"></div>
+      <!-- หน่วยของแกนตัวเลข (หัวแกนขวา) -->
+      <span v-if="unit" class="pointer-events-none absolute right-1 top-0 z-[1] text-2xs font-medium text-ink-mute" data-testid="stock-chart-unit">{{ unit }}</span>
+      <div v-if="pointTags.length" class="pointer-events-none absolute inset-0 z-[1]" :class="loading && 'opacity-45'" aria-hidden="true">
+        <span
+          v-for="tag in pointTags"
+          :key="tag.index"
+          class="absolute -translate-x-1/2 -translate-y-full px-1 rounded-xs bg-surface/85 text-2xs font-medium text-ink-soft numeral whitespace-nowrap"
+          :style="{ left: `${tag.x}px`, top: `${tag.y - 6}px` }"
+          data-testid="stock-chart-point"
+        >{{ tag.text }}</span>
+      </div>
       <div
         v-if="tip"
         class="pointer-events-none absolute z-10 w-[11.5rem] rounded-lg border border-line bg-surface-float shadow-e2 px-3 py-2 text-xs"
@@ -295,7 +336,7 @@ const ariaSummary = computed(() => {
             <span class="inline-block w-2 h-2 rounded-full shrink-0" :style="{ background: row.color }" aria-hidden="true"></span>
             <span class="truncate">{{ single ? t("ค่า") : row.label }}</span>
           </span>
-          <span class="numeral font-medium text-ink whitespace-nowrap">{{ show(row.value) }}</span>
+          <span class="numeral font-medium text-ink whitespace-nowrap">{{ show(row.value) }}<template v-if="unit && row.value !== null && row.value !== undefined"> {{ unit }}</template></span>
         </p>
         <p v-if="tip.note" class="mt-1 text-warn-ink">{{ tip.note }}</p>
       </div>

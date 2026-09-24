@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { t } from "../lib/locale";
 import { formatMonth } from "../lib/locale-format";
-import { UiCombobox, UiField, UiFilterBar, UiSegmented } from "../ui";
+import { UiCombobox, UiField, UiFilterBar } from "../ui";
 import PeriodPicker from "./PeriodPicker.vue";
 
 /**
@@ -95,15 +95,6 @@ const contracts = computed({
 });
 
 /** สัญญาไม่เกิน 4 ฉบับ — แสดงเป็นปุ่ม "ทุกสัญญา / แต่ละฉบับ" เลือกได้ทีละฉบับ */
-const contractButtons = computed(() => {
-  const list = props.options.contracts ?? [];
-  if (!list.length || list.length > 4) return null;
-  return [{ value: "", label: t("ทุกสัญญา") }, ...list.map((option) => ({ value: String(option.value), label: option.label }))];
-});
-const singleContract = computed({
-  get: () => (contracts.value.length === 1 ? String(contracts.value[0]) : ""),
-  set: (value) => { contracts.value = value ? [value] : []; },
-});
 
 const latestMonth = computed(() => (props.monthOptions.length ? formatMonth(props.monthOptions.at(-1)) : ""));
 </script>
@@ -115,10 +106,8 @@ const latestMonth = computed(() => (props.monthOptions.length ? formatMonth(prop
         <PeriodPicker v-model="months" :options="monthOptions" mode="multi" :all-label="t('ทั้งปีงบ')" />
       </UiField>
       <!-- สัญญาไม่กี่ฉบับ = ปุ่มเลือกตรงๆ กดครั้งเดียว ไม่ต้องเปิดรายการ (#212) -->
-      <UiField v-if="contractButtons" :label="t('สัญญา')">
-        <UiSegmented v-model="singleContract" :options="contractButtons" size="md" />
-      </UiField>
-      <UiField v-else :label="t('สัญญา')" class="flex-1 min-w-[13rem] sm:flex-none sm:w-72">
+      <!-- กล่องเลือกเสมอ ไม่ใช่ปุ่มเรียงทุกสัญญา — หลายสัญญาแล้วแถวยาวรก (#221 ผู้ใช้ขอ) -->
+      <UiField :label="t('สัญญา')" class="flex-1 min-w-[13rem] sm:flex-none sm:w-72">
         <UiCombobox v-model="contracts" :options="options.contracts ?? []" multiple :placeholder="t('ทุกสัญญา')" :search-placeholder="t('พิมพ์เพื่อค้นหา…')" />
       </UiField>
       <!-- ปีงบมีที่เลือกที่เดียวคือแถบบนสุด — บอกตรงนี้ เพราะคนมองหาช่องปีงบในแถบตัวกรองก่อนเสมอ -->

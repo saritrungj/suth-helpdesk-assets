@@ -438,17 +438,20 @@ const overviewParams = computed(() => ({
   contract_id: singleContract.value,
 }));
 const overviewQuery = useOverview(overviewParams);
-const overviewData = computed(() => (isOverview ? overviewQuery.data.value ?? null : null));
-const currentMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).format(new Date());
+const overviewData = computed(() => overviewQuery.data.value ?? null);
 const trendMonths = computed(() => (view.value.months.length ? [...view.value.months].sort() : primaryMonths.value));
 const trendInvoice = computed(() => (view.value.contracts.length <= 1 ? overviewData.value?.invoice_series ?? [] : []));
+/*
+ * "จาก N เครื่องที่ติดตั้งแล้ว" — บอกขนาดของทั้งหมด ไม่บอกปัญหา (#221: เครื่องที่ไม่มีการพิมพ์อยู่ในกระดิ่ง)
+ * ตัวเลขนี้มาจาก API ซึ่งกรองได้แค่สัญญาเดียว ถ้ากรองฝ่าย/แผนก/อาคาร/เครื่อง หรือหลายสัญญา จึงไม่แสดง แทนที่จะแสดงตัวเลขผิดขอบเขต
+ */
 const devicesHint = computed(() => {
   const o = overviewData.value;
-  if (!o) return '';
-  const active = o.totals?.active_devices ?? 0;
-  const idle = view.value.months.length ? 0 : o.idle_devices ?? 0;
-  return idle ? t('จาก {0} เครื่องที่ใช้งาน · ไม่มีการพิมพ์เลย {1}', [formatCount(active), formatCount(idle)]) : t('จาก {0} เครื่องที่ใช้งาน', [formatCount(active)]);
+  const scoped = ['divisions', 'departments', 'buildings', 'devices'].some((key) => view.value[key].length) || view.value.contracts.length > 1;
+  if (!o || scoped || !o.totals?.installed_active_devices) return '';
+  return t('จาก {0} เครื่องที่ติดตั้งแล้ว', [formatCount(o.totals.installed_active_devices)]);
 });
+const costHint = computed(() => [t('หลังหัก 2% · ไม่รวมค่าเช่าและ VAT'), compareHint.value].filter(Boolean).join(' · '));
 
 const settledTable = ref(null);
 watch([model, periodText, ready], ([value, period, isReady]) => {
@@ -581,24 +584,19 @@ function runCsv() {
 
     <p class="text-xs text-ink-mute mb-1.5">{{ shownStats.caption }}</p>
     <section class="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
-      <UiStat emphasis :label="t('ค่าใช้จ่าย')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats"
-        :delta="kpi.cost.delta" delta-inverse :hint="compareHint" :trend="kpi.cost.trend" />
-      <UiStat tone="ink" :label="t('ยอดพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
+      <UiStat emphasis :label="t('ค่าพิมพ์รวม')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats"
+        :delta="kpi.cost.delta" delta-inverse :hint="costHint" :trend="kpi.cost.trend" />
+      <UiStat tone="ink" :label="t('ยอดพิมพ์รวม')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
         :delta="kpi.pages.delta" delta-inverse :hint="statsReady ? t('หลังหัก 2% เหลือ {0} หน้า', [formatNetPages(shownStats.totals.netPages)]) : ''" :trend="kpi.pages.trend" />
-      <UiStat tone="ink" :label="t('เฉลี่ยหน้าละ')" :value="kpi.perPage.value === null ? '—' : formatBahtValue(kpi.perPage.value)" :unit="t('บาท')" :loading="loading && !settledStats"
-        :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าใช้จ่าย ÷ ยอดพิมพ์หลังหัก 2%')" />
+      <UiStat tone="ink" :label="t('ราคาเฉลี่ยต่อหน้า')" :value="kpi.perPage.value === null ? '—' : formatBahtValue(kpi.perPage.value)" :unit="t('บาท')" :loading="loading && !settledStats"
+        :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าพิมพ์รวม ÷ ยอดพิมพ์หลังหัก 2%')" />
       <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"
-        :hint="isOverview ? devicesHint : ''" />
+        :hint="devicesHint" />
     </section>
-    <!-- ค่าใช้จ่ายที่นี่ไม่เท่ายอดตามใบแจ้งหนี้โดยตั้งใจ — บอกส่วนที่ขาด ไม่ให้ดูเหมือนข้อมูลหลุดจากหน้าค่าใช้จ่าย (#208) -->
-    <p class="text-xs text-ink-mute -mt-2 mb-4" data-testid="cost-scope-note">
-      {{ t('ค่าใช้จ่าย = ค่าพิมพ์จากยอดพิมพ์หลังหัก 2% ยังไม่รวมค่าเช่าคงที่และ VAT') }}
-      · <RouterLink :to="{ path: '/expense', query: { fy: route.query.fy } }" class="underline hover:text-ink">{{ t('ดูยอดตามใบแจ้งหนี้') }}</RouterLink>
-    </p>
 
     <template v-if="isOverview">
-      <OverviewTrend :cost="costTrend" :pages="pagesTrend" :months="trendMonths" :coverage="overviewData?.coverage?.months ?? []"
-        :invoice="trendInvoice" :current-month="currentMonth" :loading="loading" :failed="failed" :scope-text="trendCaption"
+      <OverviewTrend :cost="costTrend" :pages="pagesTrend" :months="trendMonths"
+        :invoice="trendInvoice" :loading="loading" :failed="failed" :scope-text="trendCaption"
         @details="(entry) => openDetails('device', entry)" />
 
       <div class="grid grid-cols-1 lg:grid-cols-2 items-start gap-3 mb-4">

@@ -264,7 +264,8 @@ router.get(
       // ---------- 3) จำนวนเครื่องแยกตามสถานะ ----------
       db
         .query(
-          `SELECT d.status, COUNT(*) AS count
+          `SELECT d.status, COUNT(*) AS count,
+                  SUM(d.installation_status = 'installed') AS installed
            FROM devices d
            LEFT JOIN building b ON d.building_id = b.id
            WHERE 1=1 ${buildingClause} ${contractClause}
@@ -371,21 +372,30 @@ router.get(
 
       // ---------- 7) เครื่องที่ไม่มีใครใช้เลยตลอดปีงบ ----------
       // ผู้ที่ควรรู้คือคนที่ต่อสัญญา — เครื่องที่เช่าไว้แล้วไม่มีใครใช้คือเงินที่จ่ายทิ้ง
+      // นับเฉพาะเครื่องที่ติดตั้งแล้วและมีเดือนที่ต้องกรอกผ่านไปแล้วอย่างน้อยหนึ่งเดือน (#221) —
+      // เครื่อง "รอจุดติดตั้ง" กับเครื่องที่เพิ่งติดตั้งเดือนนี้ยังไม่มีทางมียอด ไม่ใช่เครื่องที่ไม่มีใครใช้
       range
         ? db
             .query(
               `SELECT COUNT(*) AS device_count
                FROM devices d
                LEFT JOIN building b ON d.building_id = b.id
-               WHERE d.status = 'active'
+               WHERE d.status = 'active' AND d.installation_status = 'installed'
                  ${buildingClause} ${contractClause}
+                 AND EXISTS (
+                   SELECT 1 FROM device_service_period sp
+                   WHERE sp.device_id = d.id
+                     AND DATE_FORMAT(sp.effective_from, '%Y-%m') < ?
+                     AND DATE_FORMAT(sp.effective_from, '%Y-%m') <= ?
+                     AND (sp.effective_to IS NULL OR DATE_FORMAT(sp.effective_to, '%Y-%m') >= ?)
+                 )
                  AND NOT EXISTS (
                    SELECT 1 FROM print_transactions pt
                    WHERE pt.device_id = d.id
                      AND pt.month BETWEEN ? AND ?
                      AND pt.pages > 0
                  )`,
-              [...buildingParam, ...contractParam, range.start_month, range.end_month]
+              [...buildingParam, ...contractParam, currentMonth(), range.end_month, range.start_month, range.start_month, range.end_month]
             )
             .then(([rows]) => rows[0])
         : Promise.resolve({ device_count: 0 }),
@@ -400,7 +410,8 @@ router.get(
                   SUM(d.building_id IS NULL) AS no_building
            FROM devices d
            LEFT JOIN building b ON d.building_id = b.id
-           WHERE d.status = 'active' AND (d.division_id IS NULL OR d.building_id IS NULL)
+           WHERE d.status = 'active' AND d.installation_status = 'installed'
+             AND (d.division_id IS NULL OR d.building_id IS NULL)
              ${buildingClause} ${contractClause}`,
           [...buildingParam, ...contractParam]
         )
@@ -431,6 +442,8 @@ router.get(
       count: statusMap.get(status) || 0,
     }));
     const activeDevices = statusMap.get("active") || 0;
+    // ตัวหารของ "เครื่องที่มีการพิมพ์" — เครื่องรอจุดติดตั้งยังพิมพ์ไม่ได้ ไม่นับ (#221)
+    const installedActiveDevices = Number(statusRows.find((row) => row.status === "active")?.installed) || 0;
 
     // ---------- ประกอบรายการที่ต้องลงมือทำ ----------
     const attention = [];
@@ -570,6 +583,7 @@ router.get(
         reporting_devices: Number(totals.reporting_devices),
         reporting_active_devices: Number(totals.reporting_active_devices),
         active_devices: activeDevices,
+        installed_active_devices: installedActiveDevices,
         total_devices: deviceStatus.reduce((sum, row) => sum + row.count, 0),
       },
 

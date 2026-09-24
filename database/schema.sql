@@ -189,10 +189,13 @@ CREATE TABLE contracts (
     -- NULL = สัญญานี้ไม่มีรายการนั้น ดู v_contract_invoice
     monthly_rental DECIMAL(12,2) NULL,
     vat_rate DECIMAL(5,2) NULL,
+    -- วันเริ่มรอบมิเตอร์ (1–28) ตามรายงานของผู้ให้เช่า NULL = ตัดรอบสิ้นเดือน (#221)
+    meter_cycle_day TINYINT UNSIGNED NULL,
 
     CONSTRAINT chk_contracts_term_order CHECK (effective_to >= effective_from),
     CONSTRAINT chk_contracts_rental CHECK (monthly_rental IS NULL OR monthly_rental >= 0),
-    CONSTRAINT chk_contracts_vat CHECK (vat_rate IS NULL OR vat_rate BETWEEN 0 AND 100)
+    CONSTRAINT chk_contracts_vat CHECK (vat_rate IS NULL OR vat_rate BETWEEN 0 AND 100),
+    CONSTRAINT chk_contracts_meter_cycle_day CHECK (meter_cycle_day IS NULL OR meter_cycle_day BETWEEN 1 AND 28)
 );
 
 -- หมวดมิเตอร์ — ใบแจ้งหนี้คิดเงินและปัดเศษแยกทีละหมวด แม้สองหมวดราคาเท่ากัน

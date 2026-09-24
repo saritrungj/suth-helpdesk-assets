@@ -222,11 +222,11 @@ test("expense failures do not claim zero totals or empty data", async ({ page })
   state.failExpense = true;
   await page.goto("/expense");
   await expect(page.getByText("โหลดข้อมูลค่าใช้จ่ายไม่สำเร็จ", { exact: true })).toBeVisible();
-  await expect(page.getByText("ค่าพิมพ์", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์รวม", { exact: true })).not.toBeVisible();
   await expect(page.getByText("ยังไม่มีสัญญาในปีงบนี้", { exact: true })).not.toBeVisible();
   state.failExpense = false;
   await page.getByRole("button", { name: "ลองใหม่", exact: true }).click();
-  await expect(page.getByText("ค่าพิมพ์", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์รวม", { exact: true })).toBeVisible();
   await expect(page.getByText("360.00", { exact: true }).first()).toBeVisible();
 });
 
@@ -254,7 +254,7 @@ test("expense side data that fails to load is reported instead of silently disap
   state.failUnassigned = true;
   state.failMonths = true;
   await page.goto("/expense");
-  await expect(page.getByText("ค่าพิมพ์", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์รวม", { exact: true })).toBeVisible();
   const unassigned = page.getByRole("status").filter({ hasText: "โหลดรายการเครื่องที่ยังไม่ผูกสัญญาไม่สำเร็จ" });
   const months = page.getByRole("status").filter({ hasText: "โหลดรายการเดือนที่มีข้อมูลไม่สำเร็จ" });
   await expect(unassigned).toBeVisible();
@@ -295,7 +295,7 @@ test("expense price, discount and unit copy is translated while the amounts stay
   await prototypeFixture(page);
   await page.addInitScript(() => localStorage.setItem("suth-language", "en"));
   await page.goto("/expense");
-  await expect(page.getByText("Print cost", { exact: true })).toBeVisible();
+  await expect(page.getByText("Total print cost", { exact: true })).toBeVisible();
   // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือคำอธิบายส่วนลด
   await expect(page.getByText(/After 2% deduction/)).toBeVisible();
   // ราคาต่อหน้าอยู่ในแถวเครื่อง ไม่ได้อยู่ที่หัวสัญญา จึงต้องกางสัญญาก่อน
@@ -312,7 +312,7 @@ test("expense price, discount and unit copy is translated while the amounts stay
 test("ค่าใช้จ่ายที่พิมพ์ออกกระดาษยังมีปีงบกำกับยอดรวม", async ({ page }) => {
   await prototypeFixture(page);
   await page.goto("/expense");
-  await expect(page.getByText("ค่าพิมพ์", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์รวม", { exact: true })).toBeVisible();
   const year = page.getByText("ปีงบ 2569", { exact: true });
   await expect(year).toBeHidden();
   await page.emulateMedia({ media: "print" });

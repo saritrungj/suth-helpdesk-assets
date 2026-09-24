@@ -102,4 +102,30 @@ function requiredDevicesByMonth(periods, months) {
   return new Map([...byMonth].map(([month, devices]) => [month, devices.size]));
 }
 
-module.exports = { monthOfDate, periodCoversMonth, requiredDevicesByMonth };
+/**
+ * วันเริ่มของ "เดือนที่ต้องบันทึกยอด" เดือนแรก ของเครื่องที่เริ่มใช้งานวันที่ `date` (#221)
+ *
+ * รายงานมิเตอร์ของผู้ให้เช่าไม่ได้ตัดรอบวันที่ 1 เสมอ — สัญญา SUTH192/2568 ตัดรอบวันที่ 24 ถึง 23
+ * แล้วเรียกรอบนั้นตามเดือนที่รอบจบ (24 ก.ค.–23 ส.ค. = "ส.ค.") เครื่องที่ติดตั้งวันที่ 24–31 จึงมียอดครั้งแรก
+ * ในรายงานของ **เดือนถัดไป** ถ้าเก็บวันติดตั้งตรงๆ เดือนนั้นจะถูกนับว่าต้องกรอกทั้งที่ไม่มีวันมียอด
+ * แล้วค้างเป็น "กรอกไม่ครบ" ตลอดไป (รายงานตรวจระบบ F03)
+ *
+ * @param {string} date วันที่เริ่มใช้งานจริง "YYYY-MM-DD"
+ * @param {number|null|undefined} cycleDay วันเริ่มรอบมิเตอร์ของสัญญา (1–28) ไม่รู้ = 1 (ตัดรอบสิ้นเดือน)
+ * @returns {string} "YYYY-MM-01" ของเดือนที่ต้องบันทึกยอดเดือนแรก
+ */
+function billingPeriodStart(date, cycleDay) {
+  const match = String(date ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) throw new Error(`billingPeriodStart: วันที่ไม่ถูกต้อง "${date}"`);
+  let year = Number(match[1]);
+  let month = Number(match[2]);
+  const day = Number(match[3]);
+  const cycle = Number(cycleDay) >= 2 && Number(cycleDay) <= 28 ? Number(cycleDay) : 1;
+  if (cycle > 1 && day >= cycle) {
+    month += 1;
+    if (month > 12) { month = 1; year += 1; }
+  }
+  return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
+module.exports = { monthOfDate, periodCoversMonth, requiredDevicesByMonth, billingPeriodStart };

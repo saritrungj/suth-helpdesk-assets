@@ -7,7 +7,7 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { monthOfDate, periodCoversMonth, requiredDevicesByMonth } = require("./index.cjs");
+const { monthOfDate, periodCoversMonth, requiredDevicesByMonth, billingPeriodStart } = require("./index.cjs");
 
 const period = (from, to = null, device_id = 1) => ({
   device_id,
@@ -83,4 +83,21 @@ test("เดือนที่ยังไม่มีเครื่องไ�
   const counts = requiredDevicesByMonth([], ["2025-10", "2025-11"]);
   assert.equal(counts.get("2025-10"), 0);
   assert.equal(counts.size, 2);
+});
+
+test("ติดตั้งตั้งแต่วันตัดรอบขึ้นไป = ยอดแรกอยู่ในรายงานเดือนถัดไป (#221)", () => {
+  // SUTH192/2568 ตัดรอบวันที่ 24: 24 ก.ย.–23 ต.ค. = รายงาน "ต.ค."
+  assert.equal(billingPeriodStart("2026-09-24", 24), "2026-10-01");
+  assert.equal(billingPeriodStart("2026-09-26", 24), "2026-10-01");
+  assert.equal(billingPeriodStart("2026-09-18", 24), "2026-09-01");
+  assert.equal(billingPeriodStart("2026-09-23", 24), "2026-09-01");
+  // ข้ามปี
+  assert.equal(billingPeriodStart("2026-12-30", 24), "2027-01-01");
+});
+
+test("สัญญาที่ตัดรอบสิ้นเดือน (หรือยังไม่รู้รอบ) ใช้เดือนของวันติดตั้ง", () => {
+  assert.equal(billingPeriodStart("2026-09-29", 1), "2026-09-01");
+  assert.equal(billingPeriodStart("2026-09-29", null), "2026-09-01");
+  assert.equal(billingPeriodStart("2026-09-29", 31), "2026-09-01"); // นอกช่วง 2–28 = ไม่รู้
+  assert.throws(() => billingPeriodStart("ก.ย. 69", 24));
 });

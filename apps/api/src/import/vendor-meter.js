@@ -96,6 +96,8 @@ function findColumns(rows) {
       end,
       price: header.findIndex((cell) => cell.includes("cost/click")),
       model: header.findIndex((cell) => cell === "model"),
+      // ลำดับเครื่องในสัญญา — ใช้ดูว่าผู้ให้เช่า "เปลี่ยนเครื่อง" ในลำดับเดิม (#221)
+      slot: header.findIndex((cell) => cell === "no." || cell === "no"),
     };
   }
   return null;
@@ -114,6 +116,8 @@ function parseVendorWorkbook(sheets) {
   const readings = [];
   const errors = [];
   const found = [];
+  // ลำดับ → เลขเครื่อง ของทุกแถวที่มีเลขเครื่อง (รวมแถวที่ยังไม่มียอด) ใช้หาการเปลี่ยนเครื่อง (#221)
+  const slots = [];
 
   for (const sheet of sheets) {
     const columns = findColumns(sheet.rows);
@@ -145,6 +149,11 @@ function parseVendorWorkbook(sheets) {
       // จึงไม่ตรงกัน เลขอย่าง "ABC  123" ทำให้นำเข้าทะเบียนจากรายงานมิเตอร์ล้ม 500 (#147)
       const serial = normalizeName(row[columns.serial]);
       if (!serial) continue; // แถวว่าง แถวสรุปท้ายแผ่น และแถวลายเซ็น
+
+      const slot = columns.slot === -1 ? null : Number(row[columns.slot]);
+      if (Number.isInteger(slot) && slot > 0 && !seenInSheet.has(serial.toUpperCase())) {
+        slots.push({ sheet: sheetName, month, contract_no: contractNo, slot, serial_number: serial });
+      }
 
       const occurrence = (seenInSheet.get(serial.toUpperCase()) ?? 0) + 1;
       seenInSheet.set(serial.toUpperCase(), occurrence);
@@ -217,7 +226,7 @@ function parseVendorWorkbook(sheets) {
   }
 
   if (!found.length && !errors.length) return null;
-  return { readings, errors, sheets: found };
+  return { readings, errors, sheets: found, slots };
 }
 
 module.exports = {

@@ -11,7 +11,6 @@ import {
   monthText,
   comparisonChart,
   deviceYearSelection,
-  deviceSpread,
   difference,
   itemOptions,
   periodChange,
