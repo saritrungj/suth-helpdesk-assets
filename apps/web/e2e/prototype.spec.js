@@ -62,7 +62,7 @@ test("print usage import refreshes the open month grid without a reload", async 
   await page.getByTestId("create-contract").click();
   await expect(page.getByTestId("import-commit")).toBeEnabled();
   await page.getByTestId("import-commit").click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "บันทึก", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "ยืนยันบันทึก", exact: true }).click();
   await expect(page.getByTestId("import-result")).toBeVisible();
 
   await page.goBack();

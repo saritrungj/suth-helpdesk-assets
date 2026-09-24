@@ -256,6 +256,42 @@ async function reconcile(conn, contracts, months) {
 // ============================================================
 
 /**
+ * เขียนสัญญาและปีงบที่วางแผนไว้ลง conn ก่อนวางแผนเครื่องและยอด (#207, ADR-0034)
+ *
+ * ตอนตรวจ transaction นี้ถูกย้อนเสมอ ผลตรวจจึงเห็นเครื่องผูกสัญญาใหม่และยอดหาราคาได้จริง โดยไม่มีอะไรค้าง
+ * ในระบบ ตอนยืนยันทุกอย่างเข้าไปพร้อมกันหรือไม่เข้าเลย สัญญาที่มีคนสร้างเลขเดียวกันไว้ระหว่างนั้นไม่เขียนซ้ำ —
+ * ใช้ของในระบบ แล้ว contractChecks เทียบกับไฟล์ตามปกติ
+ *
+ * @returns {{ contracts: Map<string, { id: number, body: object }>, fiscalYears: number[], ids: Map<number, string> }}
+ *   ids = id ชั่วคราวของสัญญาที่เพิ่งเขียน → คีย์ ใช้ทำลายนิ้วมือที่ไม่ขึ้นกับเลข auto-increment
+ */
+async function applyPlanned(conn, planned = {}) {
+  const contracts = new Map();
+  const ids = new Map();
+  const entries = Object.entries(planned.contracts ?? {});
+  if (entries.length) {
+    const [rows] = await conn.query("SELECT contract_no FROM contracts");
+    const existing = new Set(rows.map((row) => comparableContractNo(row.contract_no)));
+    for (const [key, body] of entries) {
+      if (existing.has(key)) continue;
+      const id = await writeContract(conn, null, body);
+      contracts.set(key, { id, body });
+      ids.set(id, `planned:${key}`);
+    }
+  }
+  const fiscalYears = [];
+  for (const year of planned.fiscal_years ?? []) {
+    const { startMonth, endMonth } = getFiscalYearRange(year);
+    const [result] = await conn.query(
+      "INSERT IGNORE INTO fiscal_year (year, start_month, end_month) VALUES (?, ?, ?)",
+      [year, startMonth, endMonth]
+    );
+    if (result.affectedRows) fiscalYears.push(Number(year));
+  }
+  return { contracts, fiscalYears, ids };
+}
+
+/**
  * วางแผนทั้งไฟล์ แล้วเขียนลง conn — ผู้เรียกเป็นคนเลือกว่าจะ commit หรือย้อนกลับ
  *
  * @param {import("mysql2/promise").PoolConnection} conn
@@ -265,12 +301,28 @@ async function reconcile(conn, contracts, months) {
  */
 async function analyse(conn, session, info, { actorId, importSessionId }) {
   const decisions = session.decisions ?? {};
+  const planned = await applyPlanned(conn, decisions.planned);
   const context = await loadRegistryContext(conn);
   const plan = info.hasRegistry
     ? planRegistryImport({ rows: info.registry.rows, ...context, decisions, today: today() })
     : null;
   const described = plan ? describeRegistryPlan(info.registry, plan, context) : null;
-  const contracts = await contractChecks(conn, info, plan, decisions, context);
+  // id จริงใน transaction นี้ใช้กระทบยอดด้านล่าง (v_contract_invoice) ส่วนชุดที่แสดงและทำลายนิ้วมือซ่อน id ของสัญญาในแผน
+  const checkedContracts = await contractChecks(conn, info, plan, decisions, context);
+  const contracts = checkedContracts.map((contract) => {
+    const mine = planned.contracts.get(contract.key);
+    if (!mine) return contract;
+    // สัญญาที่จะสร้างเมื่อยืนยัน — id ในผลตรวจเป็นของ transaction ที่ย้อนไปแล้ว ห้ามส่งออกไปให้ใครลิงก์
+    const planned_body = {
+      ...mine.body,
+      price_lines: mine.body.price_lines.map((line) => ({
+        ...line,
+        category_name: context.categories.find((c) => c.id === Number(line.category_id))?.name ?? "",
+      })),
+    };
+    return { ...contract, planned: true, planned_body, system: contract.system ? { ...contract.system, id: null } : null };
+  });
+  const stableId = (value) => planned.ids.get(value) ?? value;
 
   const registryBlocked = Boolean(plan?.blocking.length);
   const registryChanges = plan ? plan.summary.create + plan.summary.fill : 0;
@@ -294,7 +346,7 @@ async function analyse(conn, session, info, { actorId, importSessionId }) {
       const compared = await compareWithExisting(conn, mapped.candidates, mapped.months);
       await writeCandidates(conn, [...compared.newRows, ...compared.overwriteRows], { importSessionId });
       const checked = await checkWrittenReadings(conn, mapped.candidates, mapped.months);
-      reconciliation = await reconcile(conn, contracts, mapped.months);
+      reconciliation = await reconcile(conn, checkedContracts, mapped.months);
       const errors = [...mapped.errors, ...checked.errors];
       Object.assign(outcome, {
         readings_new: compared.newRows.length,
@@ -323,14 +375,15 @@ async function analyse(conn, session, info, { actorId, importSessionId }) {
     }
   }
 
-  const fiscalYears = await fiscalYearCheck(conn, months);
+  const fiscalYears = { ...(await fiscalYearCheck(conn, months)), planned: planned.fiscalYears.map(String) };
   const validation = buildValidation({ info, plan, described, contracts, readings, reconciliation, fiscalYears, registryChanges });
+  validation.preview = buildPreview({ plan, described, contracts, readings, reconciliation, fiscalYears });
   const fingerprint = sha256(JSON.stringify({
     file: session.file_sha256,
     decisions,
     registry: plan
       ? {
-          rows: plan.rows.map((r) => [r.serial_number, r.action, r.device_id, r.fill, r.values]),
+          rows: plan.rows.map((r) => [r.serial_number, r.action, r.device_id, r.fill, { ...r.values, contract_id: stableId(r.values?.contract_id) }]),
           unresolved: plan.unresolved,
           floors: plan.new_floors.map((f) => [f.ref, f.name]),
           departments: plan.new_departments.map((d) => [d.ref, d.name]),
@@ -339,7 +392,64 @@ async function analyse(conn, session, info, { actorId, importSessionId }) {
     readings: readingSignature,
     contracts: contracts.map((c) => [c.key, c.state, c.system, c.issues.map((i) => [i.field, i.severity])]),
   }));
-  return { validation, fingerprint, outcome: { ...outcome, reconciliation, invoice: readings.invoice ?? [] } };
+  return {
+    validation,
+    fingerprint,
+    outcome: {
+      ...outcome,
+      contracts_created: [...planned.contracts.values()].map(({ body }) => body.contract_no),
+      fiscal_years_created: planned.fiscalYears,
+      reconciliation,
+      invoice: readings.invoice ?? [],
+    },
+  };
+}
+
+/**
+ * "จะเกิดอะไรเมื่อกดยืนยัน" ทั้งก้อน (#207) — หน้าเว็บแสดงชุดนี้ก่อนให้กดยืนยัน และปุ่มยืนยันบอกจำนวนรายการจากที่นี่
+ * ตัวเลขทุกตัวมาจากการลองเขียนจริงใน transaction ที่ย้อนไป ไม่ใช่การประมาณ
+ */
+function buildPreview({ plan, described, contracts, readings, reconciliation, fiscalYears }) {
+  const names = { brand: 0, building: 0, division: 0 };
+  const aliases = { brand: 0, building: 0, division: 0 };
+  for (const kind of Object.keys(names)) {
+    for (const entry of plan?.unresolved?.[kind] ?? []) {
+      if (entry.decision?.action === "create") names[kind] += 1;
+      else if (entry.decision?.action === "alias") aliases[kind] += 1;
+    }
+  }
+  const s = plan?.summary ?? { create: 0, fill: 0, unchanged: 0, skip: 0 };
+  const counts = readings.status === "checked" ? readings.counts : { new: 0, overwrite: 0, unchanged: 0 };
+  const newContracts = contracts.filter((c) => c.planned).map((c) => ({
+    contract_no: c.planned_body.contract_no,
+    effective_from: c.planned_body.effective_from,
+    effective_to: c.planned_body.effective_to,
+    monthly_rental: c.planned_body.monthly_rental,
+    vat_rate: c.planned_body.vat_rate,
+    price_lines: c.planned_body.price_lines,
+  }));
+  const invoiceTotal = reconciliation.reduce((sum, line) => sum + Number(line.system_total), 0);
+  const writes = newContracts.length + fiscalYears.planned.length
+    + Object.values(names).reduce((a, b) => a + b, 0) + Object.values(aliases).reduce((a, b) => a + b, 0)
+    + (plan?.new_floors.length ?? 0) + (plan?.new_departments.length ?? 0)
+    + s.create + s.fill + counts.new + counts.overwrite;
+  return {
+    writes,
+    contracts: newContracts,
+    fiscal_years: fiscalYears.planned,
+    names,
+    aliases,
+    floors: plan?.new_floors.length ?? 0,
+    departments: plan?.new_departments.length ?? 0,
+    devices: { create: s.create, fill: s.fill, unchanged: s.unchanged, skip: s.skip },
+    readings: counts,
+    months: readings.months ?? fiscalYears.months,
+    look_alike: described ? described.warnings.filter((w) => /เลขซีเรียลคล้าย/.test(w.reason)).length : 0,
+    warnings: described?.warnings.length ?? 0,
+    // ยอดตามใบแจ้งหนี้ของระบบหลังเขียนยอดชุดนี้ (รวมทุกงวดในไฟล์ที่กระทบยอดได้)
+    invoice_total: reconciliation.length ? invoiceTotal.toFixed(2) : null,
+    invoice_months: reconciliation.length,
+  };
 }
 
 /** สรุปผลตรวจเป็นสิ่งที่หน้าเว็บแสดง — checklist เรียงตามลำดับที่ผู้ใช้ต้องทำ */
@@ -353,7 +463,12 @@ function buildValidation({ info, plan, described, contracts, readings, reconcili
     fiscalYears.months.length ? `งวด ${fiscalYears.months[0]} ถึง ${fiscalYears.months.at(-1)}` : null);
 
   for (const contract of contracts) {
-    if (contract.state === "missing") {
+    if (contract.planned && contract.state === "ok") {
+      const body = contract.planned_body;
+      add(`contract:${contract.key}`, "ok", `จะสร้างสัญญา ${contract.contract_no} เมื่อกดยืนยัน`,
+        `${body.effective_from} ถึง ${body.effective_to} · ราคา ${body.price_lines.length} หมวด — ยกเลิกงานนี้แล้วสัญญาจะไม่ถูกสร้าง`,
+        { type: "resolve_contract", contract_key: contract.key, contract_id: null });
+    } else if (contract.state === "missing") {
       add(`contract:${contract.key}`, "blocking", `ยังไม่มีสัญญา ${contract.contract_no} ในระบบ`,
         contract.file ? "สร้างจากหัวไฟล์ได้เลย — ตรวจวันที่ ค่าเช่า VAT และราคาก่อนบันทึก" : "สร้างสัญญาจากเอกสารสัญญา แล้วตรวจไฟล์อีกครั้ง",
         { type: "create_contract", contract_key: contract.key });
@@ -422,6 +537,9 @@ function buildValidation({ info, plan, described, contracts, readings, reconcili
     }
   }
 
+  if (fiscalYears.planned?.length) {
+    add("fiscal_years_planned", "ok", `จะสร้างปีงบ ${fiscalYears.planned.join(", ")} เมื่อกดยืนยัน`);
+  }
   if (fiscalYears.missing.length) {
     add("fiscal_years", "warning", `ยังไม่มีปีงบ ${fiscalYears.missing.join(", ")} ที่ครอบเดือนในไฟล์`,
       "บันทึกได้ แต่รายงานของปีงบนั้นจะเปิดไม่ได้จนกว่าจะสร้างปีงบ", { type: "create_fiscal_years", years: fiscalYears.missing });
@@ -562,7 +680,7 @@ async function validateSession(id, actor, reason = "manual") {
 }
 
 /**
- * @param {{ auto?: "commit"|"resolve"|null }} [options] ADR-0030 — commit = ตัดสินแทนแล้วบันทึกถ้าไม่เหลืออะไรต้องถาม,
+ * @param {{ auto?: "commit"|"resolve"|null }} [options] ADR-0030/0034 — ทั้งสองค่า = ให้ระบบเตรียมให้ แล้วรอผู้ดูแลกดยืนยัน,
  *   resolve = ตัดสินแทนอย่างเดียว, ไม่ส่ง = ผู้ดูแลทำเองทุกขั้น (#180)
  */
 async function createFromUpload(file, actor, { auto = null } = {}) {
@@ -570,7 +688,8 @@ async function createFromUpload(file, actor, { auto = null } = {}) {
   const id = await store.createSession(file, digest, actorId(actor));
   const detail = await validateSession(id, actor, "uploaded");
   if (!auto || detail.status === "failed") return detail;
-  return autoProcess(id, actor, { commit: auto === "commit" });
+  // "commit" ของเว็บรุ่นเก่ายังรับ แต่ความหมายเหลือแค่ "เตรียมให้" — การบันทึกมีทางเดียวคือผู้ดูแลกดยืนยัน (#207)
+  return autoProcess(id, actor);
 }
 
 const OPEN_FOR_CHANGES = ["draft", "ready", "failed"];
@@ -583,9 +702,11 @@ async function assertOpenForChanges(session) {
 
 /** เก็บการตัดสินใจชุดใหม่ทั้งชุด แล้วตรวจใหม่ — ประวัติเก็บเฉพาะสิ่งที่เปลี่ยน */
 async function saveDecisions(id, actor, rawDecisions) {
-  const decisions = validateDecisions(rawDecisions);
   const session = await store.getSession(id);
   await assertOpenForChanges(session);
+  // แผนสัญญา/ปีงบเปลี่ยนได้เฉพาะทาง endpoint ของมัน — หน้าเว็บส่งชื่อ หมวด และการยอมรับมาทั้งชุด ห้ามล้างแผนทิ้ง
+  const { planned: _ignored, ...incoming } = rawDecisions ?? {};
+  const decisions = validateDecisions({ ...incoming, ...(session.decisions?.planned ? { planned: session.decisions.planned } : {}) });
   const changes = diffDecisions(session.decisions ?? {}, decisions);
   await store.saveOutcome(db, id, actorId(actor), { decisions });
   if (changes.length) await store.addEvent(db, id, "decisions_changed", actorId(actor), { changes: changes.slice(0, 200) });
@@ -608,7 +729,19 @@ function diffDecisions(before, after) {
     .map((p) => ({ path: p, before: a.get(p) ?? null, after: b.get(p) ?? null }));
 }
 
-/** สร้างสัญญาที่ไฟล์อ้างถึงจากหน้านำเข้า — กฎเดียวกับหน้าสัญญา (contract-write.js) */
+/** เก็บแผนชุดใหม่ลงการตัดสินใจของ session — ผ่านกฎเดียวกับการตัดสินใจอื่น */
+async function savePlanned(id, actor, session, planned) {
+  const decisions = validateDecisions({ ...(session.decisions ?? {}), planned });
+  await store.saveOutcome(db, id, actorId(actor), { decisions });
+  return decisions;
+}
+
+/**
+ * สัญญาที่ไฟล์อ้างถึง → แผน "สร้างเมื่อยืนยัน" (#207, ADR-0034) — กฎเดียวกับหน้าสัญญา (contract-write.js)
+ *
+ * เดิมเขียนสัญญาลงระบบทันทีที่กด ยกเลิกงานแล้วสัญญายังค้าง ตอนนี้เก็บเป็นแผน แล้ว analyse() เขียนพร้อมเครื่องและยอด
+ * ส่งซ้ำด้วยเลขเดิม = แก้แผน
+ */
 async function createContract(id, actor, body) {
   const session = await store.getSession(id);
   await assertOpenForChanges(session);
@@ -619,49 +752,49 @@ async function createContract(id, actor, body) {
       errors: parsed.error.issues.map((issue) => ({ field: issue.path.join("."), message: issue.message })),
     });
   }
-  const referenced = (session.validation?.contracts ?? []).some(
-    (c) => c.state === "missing" && c.key === comparableContractNo(parsed.data.contract_no)
-  );
+  const key = comparableContractNo(parsed.data.contract_no);
+  const referenced = (session.validation?.contracts ?? []).some((c) => c.key === key && (c.state === "missing" || c.planned));
   if (!referenced) {
     throw badRequest("สร้างได้เฉพาะสัญญาที่ไฟล์อ้างถึงและยังไม่มีในระบบ", { code: "contract_not_referenced" });
   }
-  const contractId = await db.withTransaction((conn) => writeContract(conn, null, parsed.data));
-  await store.addEvent(db, id, "contract_created", actorId(actor), {
-    contract_id: contractId,
-    contract_no: parsed.data.contract_no,
-    effective_from: parsed.data.effective_from,
-    effective_to: parsed.data.effective_to,
-    monthly_rental: parsed.data.monthly_rental,
-    vat_rate: parsed.data.vat_rate,
-    price_lines: parsed.data.price_lines,
+  const { preview: _preview, ...contract } = parsed.data;
+  const current = session.decisions?.planned ?? {};
+  await savePlanned(id, actor, session, { ...current, contracts: { ...(current.contracts ?? {}), [key]: contract } });
+  await store.addEvent(db, id, "contract_planned", actorId(actor), {
+    contract_no: contract.contract_no,
+    effective_from: contract.effective_from,
+    effective_to: contract.effective_to,
+    monthly_rental: contract.monthly_rental,
+    vat_rate: contract.vat_rate,
+    price_lines: contract.price_lines,
   });
-  return validateSession(id, actor, "contract_created");
+  return validateSession(id, actor, "contract_planned");
 }
 
-/** ปีงบที่ยังไม่มี → สร้าง คืนเฉพาะปีที่สร้างจริง */
-async function insertFiscalYears(years) {
-  const created = [];
-  for (const year of years) {
-    const { startMonth, endMonth } = getFiscalYearRange(year);
-    const [result] = await db.query(
-      "INSERT IGNORE INTO fiscal_year (year, start_month, end_month) VALUES (?, ?, ?)",
-      [year, startMonth, endMonth]
-    );
-    if (result.affectedRows) created.push(year);
-  }
-  return created;
+/** เอาสัญญาออกจากแผน — กลับไปเป็น "ยังไม่มีสัญญา" ให้กรอกใหม่หรือสร้างที่หน้าสัญญา */
+async function unplanContract(id, actor, key) {
+  const session = await store.getSession(id);
+  await assertOpenForChanges(session);
+  const current = session.decisions?.planned ?? {};
+  if (!current.contracts?.[key]) throw badRequest("ไม่มีสัญญานี้ในแผนของงานนี้", { code: "contract_not_planned" });
+  const { [key]: removed, ...rest } = current.contracts;
+  await savePlanned(id, actor, session, { ...current, contracts: rest });
+  await store.addEvent(db, id, "contract_unplanned", actorId(actor), { contract_no: removed.contract_no });
+  return validateSession(id, actor, "contract_unplanned");
 }
 
-/** สร้างปีงบที่ครอบเดือนในไฟล์ แต่ยังไม่มี */
+/** ปีงบที่ครอบเดือนในไฟล์แต่ยังไม่มี → แผน "สร้างเมื่อยืนยัน" */
 async function createFiscalYears(id, actor, years) {
   const session = await store.getSession(id);
   await assertOpenForChanges(session);
   const missing = new Set(session.validation?.fiscal_years?.missing ?? []);
   const wanted = [...new Set((years ?? []).map(String))].filter((year) => missing.has(year));
   if (!wanted.length) throw badRequest("ไม่มีปีงบที่ต้องสร้างสำหรับไฟล์นี้", { code: "nothing_to_create" });
-  const created = await insertFiscalYears(wanted);
-  await store.addEvent(db, id, "fiscal_years_created", actorId(actor), { years: created });
-  return validateSession(id, actor, "fiscal_years_created");
+  const current = session.decisions?.planned ?? {};
+  const planned = [...new Set([...(current.fiscal_years ?? []), ...wanted.map(Number)])].sort();
+  await savePlanned(id, actor, session, { ...current, fiscal_years: planned });
+  await store.addEvent(db, id, "fiscal_years_planned", actorId(actor), { years: wanted.map(Number) });
+  return validateSession(id, actor, "fiscal_years_planned");
 }
 
 async function abandonSession(id, actor, reason) {
@@ -742,16 +875,15 @@ const mergeKinds = (base = {}, extra = {}) => {
 };
 
 /**
- * ตัดสินแทนผู้ดูแลเท่าที่ไม่มีทางเลือกอื่นที่สมเหตุสมผล (auto-resolve.js) ทีละชั้น แล้วบันทึกถ้าไม่เหลืออะไรต้องถาม
+ * ตัดสินแทนผู้ดูแลเท่าที่ไม่มีทางเลือกอื่นที่สมเหตุสมผล (auto-resolve.js) ทีละชั้น — **ไม่บันทึกอะไรลงระบบ** (#207, ADR-0034)
  *
- *   ชื่อและหมวดของรุ่น → สัญญาจากหัวไฟล์ → ปีงบ → ตรวจ → (บันทึก)
+ *   ชื่อและหมวดของรุ่น → สัญญาจากหัวไฟล์ (แผน) → ปีงบ (แผน) → ตรวจ → หยุดรอผู้ดูแลดูสิ่งที่จะเกิดแล้วกดยืนยัน
  *
  * ชื่อและรุ่นต้องมาก่อนสัญญา เพราะราคาต่อหน้าที่เติมจากไฟล์ผูกกับหมวดของรุ่น ทุกขั้นตรวจไฟล์ใหม่แบบเดียวกับ
- * ที่คนกดเอง และเขียนประวัติว่าระบบทำอะไรให้ — ผลที่ได้ต่างจากทำเองแค่ไม่ต้องกด
- *
- * @param {{ commit: boolean }} options
+ * ที่คนกดเอง และเขียนประวัติว่าระบบเลือกอะไรให้ — เดิม (ADR-0030) สร้างสัญญาและปีงบจริงทันทีแล้วบันทึกต่อเอง
+ * ผู้ใช้เห็นข้อมูลหลังจากที่มันเข้าระบบไปแล้ว และยกเลิกงานแล้วสัญญายังค้าง
  */
-async function autoProcess(id, actor, { commit }) {
+async function autoProcess(id, actor) {
   const who = actorId(actor);
   const made = { names: [], models: [], contracts: [], fiscal_years: [] };
   let questions = [];
@@ -783,7 +915,8 @@ async function autoProcess(id, actor, { commit }) {
       }
     }
 
-    let contractCreated = false;
+    const plannedContracts = { ...(decisions.planned?.contracts ?? {}) };
+    const newlyPlanned = [];
     for (const contract of (validation.contracts ?? []).filter((c) => c.state === "missing")) {
       const { body, reason } = contractFromPrefill(contract);
       const parsed = body ? contractBody.safeParse(body) : null;
@@ -791,36 +924,33 @@ async function autoProcess(id, actor, { commit }) {
         questions.push({
           kind: "contract",
           name: contract.contract_no,
-          reason: reason ?? `สร้างสัญญา ${contract.contract_no} ให้เองไม่ได้: ${parsed.error.issues.map((issue) => issue.message).join(" · ")}`,
+          reason: reason ?? `เติมสัญญา ${contract.contract_no} ให้เองไม่ได้: ${parsed.error.issues.map((issue) => issue.message).join(" · ")}`,
         });
         continue;
       }
-      const contractId = await db.withTransaction((conn) => writeContract(conn, null, parsed.data));
-      const summary = {
-        contract_id: contractId,
-        contract_no: parsed.data.contract_no,
-        effective_from: parsed.data.effective_from,
-        effective_to: parsed.data.effective_to,
-        monthly_rental: parsed.data.monthly_rental,
-        vat_rate: parsed.data.vat_rate,
-        price_lines: parsed.data.price_lines,
-      };
-      await store.addEvent(db, id, "contract_created", who, { auto: true, ...summary });
-      made.contracts.push(summary);
-      contractCreated = true;
+      const { preview: _preview, ...planned } = parsed.data;
+      plannedContracts[contract.key] = planned;
+      newlyPlanned.push({
+        contract_no: planned.contract_no,
+        effective_from: planned.effective_from,
+        effective_to: planned.effective_to,
+        monthly_rental: planned.monthly_rental,
+        vat_rate: planned.vat_rate,
+        price_lines: planned.price_lines,
+      });
     }
-    if (contractCreated) {
+    const missingYears = (validation.fiscal_years?.missing ?? []).map(Number);
+    if (newlyPlanned.length || missingYears.length) {
+      const fiscalYears = [...new Set([...(decisions.planned?.fiscal_years ?? []), ...missingYears])].sort();
+      await store.saveOutcome(db, id, who, {
+        decisions: validateDecisions({ ...decisions, planned: { contracts: plannedContracts, fiscal_years: fiscalYears } }),
+      });
+      if (newlyPlanned.length) await store.addEvent(db, id, "contract_planned", who, { auto: true, contracts: newlyPlanned });
+      if (missingYears.length) await store.addEvent(db, id, "fiscal_years_planned", who, { auto: true, years: missingYears });
+      made.contracts.push(...newlyPlanned);
+      made.fiscal_years.push(...missingYears);
       await validateSession(id, actor, "auto");
       continue;
-    }
-
-    const missingYears = validation.fiscal_years?.missing ?? [];
-    if (missingYears.length) {
-      const years = await insertFiscalYears(missingYears);
-      await store.addEvent(db, id, "fiscal_years_created", who, { auto: true, years });
-      made.fiscal_years.push(...years);
-      await validateSession(id, actor, "auto");
-      if (years.length) continue;
     }
     break;
   }
@@ -829,9 +959,8 @@ async function autoProcess(id, actor, { commit }) {
   const stopped = session.status === "failed"
     ? [session.error?.message ?? "ตรวจไฟล์ไม่สำเร็จ"]
     : [...new Set([...questions.map((q) => q.reason), ...autoCommitBlockers(session.validation)])];
-  const auto = { commit, made, stopped, finished_at: new Date().toISOString() };
+  const auto = { made, stopped, finished_at: new Date().toISOString() };
   await store.addEvent(db, id, "auto_finished", who, {
-    commit,
     made: {
       names: made.names.length,
       models: made.models.length,
@@ -841,19 +970,15 @@ async function autoProcess(id, actor, { commit }) {
     stopped,
   });
   if (session.validation) await store.saveOutcome(db, id, who, { validation: { ...session.validation, auto } });
-
-  if (!commit || stopped.length || session.status !== "ready") return detail(id);
-  const committed = await commitSession(id, actor);
-  if (committed.status === "completed") await store.saveOutcome(db, id, who, { result: { ...committed.result, auto } });
   return detail(id);
 }
 
-/** ให้ระบบตัดสินส่วนที่เหลือของงานที่เปิดอยู่ (ปุ่มในหน้างาน) */
-async function autoResolveSession(id, actor, { commit }) {
+/** ให้ระบบตัดสินส่วนที่เหลือของงานที่เปิดอยู่ (ปุ่มในหน้างาน) — ไม่บันทึก คนกดยืนยันเอง */
+async function autoResolveSession(id, actor) {
   const session = await store.getSession(id);
   await assertOpenForChanges(session);
   if (session.status === "failed") await validateSession(id, actor, "auto");
-  return autoProcess(id, actor, { commit });
+  return autoProcess(id, actor);
 }
 
 /**
@@ -916,6 +1041,7 @@ module.exports = {
   validateSession,
   saveDecisions,
   createContract,
+  unplanContract,
   createFiscalYears,
   abandonSession,
   purgeSession,

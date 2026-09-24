@@ -5,16 +5,17 @@
 // เฉพาะ admin ทุก endpoint admin ทุกคนเห็นและทำต่องานของกันได้ ทุกการกระทำเขียนลงประวัติพร้อมผู้ทำ
 //
 //   GET    /import-sessions                     งานที่ยังเปิดอยู่ (?all=1 = รวมที่ปิดแล้ว)
-//   POST   /import-sessions                     อัปโหลดไฟล์ → session ใหม่ที่ตรวจแล้ว (auto=commit|resolve → ADR-0030)
+//   POST   /import-sessions                     อัปโหลดไฟล์ → session ใหม่ที่ตรวจแล้ว (auto=resolve → ระบบเตรียมให้ ไม่บันทึก, ADR-0034)
 //   GET    /import-sessions/:id                 สถานะ ผลตรวจ การตัดสินใจ ประวัติล่าสุด
 //   GET    /import-sessions/:id/events          ประวัติทั้งหมด
 //   GET    /import-sessions/:id/file            ดาวน์โหลดไฟล์ต้นฉบับ
 //   PUT    /import-sessions/:id/decisions       เก็บการตัดสินใจชุดใหม่ แล้วตรวจใหม่
 //   POST   /import-sessions/:id/validate        ตรวจใหม่ (เช่น หลังแก้สัญญาที่หน้าสัญญา)
-//   POST   /import-sessions/:id/contracts       สร้างสัญญาที่ไฟล์อ้างถึง (เติมจากหัวไฟล์ได้)
-//   POST   /import-sessions/:id/fiscal-years    สร้างปีงบที่ครอบเดือนในไฟล์
-//   POST   /import-sessions/:id/auto            ให้ระบบตัดสินส่วนที่เหลือ ({ commit } = บันทึกด้วยถ้าไม่เหลืออะไรต้องถาม)
-//   POST   /import-sessions/:id/commit          บันทึก
+//   POST   /import-sessions/:id/contracts       วางแผนสัญญาที่ไฟล์อ้างถึง — สร้างจริงตอนยืนยัน (ADR-0034)
+//   DELETE /import-sessions/:id/contracts/:key  เอาสัญญาออกจากแผน
+//   POST   /import-sessions/:id/fiscal-years    วางแผนปีงบที่ครอบเดือนในไฟล์ — สร้างจริงตอนยืนยัน
+//   POST   /import-sessions/:id/auto            ให้ระบบตัดสินส่วนที่เหลือ — ไม่บันทึก
+//   POST   /import-sessions/:id/commit          ยืนยัน: บันทึกแผน เครื่อง และยอดใน transaction เดียว
 //   POST   /import-sessions/:id/abandon         ยกเลิก (กลายเป็น expired ประวัติยังอยู่)
 //   DELETE /import-sessions/:id                 ลบถาวร — เฉพาะงาน expired ที่ไม่เคยบันทึกข้อมูล (ADR-0031)
 
@@ -116,6 +117,14 @@ router.post(
   })
 );
 
+router.delete(
+  "/import-sessions/:id/contracts/:key",
+  validate({ params: idParam.extend({ key: z.string().min(1).max(200) }) }),
+  noStore(async (req, res) => {
+    res.json(await sessions.unplanContract(req.params.id, req.user, req.params.key));
+  })
+);
+
 router.post(
   "/import-sessions/:id/fiscal-years",
   validate({ params: idParam, body: z.object({ years: z.array(z.coerce.string().max(10)).min(1).max(10) }) }),
@@ -126,9 +135,10 @@ router.post(
 
 router.post(
   "/import-sessions/:id/auto",
+  // { commit } ของเว็บรุ่นเก่ายังรับได้แต่ไม่มีผล — การบันทึกมีทางเดียวคือ /commit ที่ผู้ดูแลกดยืนยัน (#207)
   validate({ params: idParam, body: z.object({ commit: z.boolean().optional() }) }),
   noStore(async (req, res) => {
-    res.json(await sessions.autoResolveSession(req.params.id, req.user, { commit: Boolean(req.body.commit) }));
+    res.json(await sessions.autoResolveSession(req.params.id, req.user));
   })
 );
 

@@ -90,7 +90,7 @@ describe("autoMadeLines (#190)", () => {
       models: [{ name: "Brother HL-L5210DN", category: "a4-laser-bw" }],
     });
     expect(lines[0]).toContain("C1/2569");
-    expect(lines).toContain("สร้างปีงบ 2569");
+    expect(lines).toContain("จะสร้างปีงบ 2569"); // เตรียมไว้ — สร้างจริงเมื่อกดยืนยัน (#207)
     expect(lines.some((l) => l.includes("Brother") && l.includes("1 รายการ"))).toBe(true);
     expect(lines.some((l) => l.includes("“อาคาร  ก.” คือ “อาคาร ก”"))).toBe(true);
     expect(lines.at(-1)).toContain("a4-laser-bw");
