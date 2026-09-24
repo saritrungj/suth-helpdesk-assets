@@ -162,3 +162,24 @@
    ตัวช่วยเฉพาะทาง
    --------------------------------------------------------------------------- */
 
+/* พื้นที่ทำงานพร้อมไล่สีรุ้งจางๆ (#204) — fixed เพื่อให้สีอยู่กับที่ขณะเลื่อนหน้า ไม่ยืดตามความยาวหน้า
+   พิมพ์และโหมดสีบังคับ (forced-colors) ใช้พื้นเรียบ */
+.canvas-wash {
+  background-color: var(--canvas);
+  background-image: var(--canvas-wash);
+  background-attachment: fixed;
+}
+@media print, (forced-colors: active) {
+  .canvas-wash { background-image: none; }
+}
+
+/* แถบบนแบบกระจกฝ้า (#204) — เนื้อหาเลื่อนผ่านใต้แถบนี้ จึงต้องมีพื้นกึ่งทึบให้ตัวหนังสืออ่านได้
+   แต่ยังเห็นสีรุ้งของพื้นหลังผ่านมา */
+.chrome-glass {
+  background-color: color-mix(in oklch, var(--canvas) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+@media (forced-colors: active) {
+  .chrome-glass { background-color: Canvas; backdrop-filter: none; }
+}

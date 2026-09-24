@@ -193,3 +193,30 @@ test("theme/density preference คงเดิมและที่ 200% ไม�
   }));
   expect(overflow.scroll).toBeLessThanOrEqual(overflow.client + 1);
 });
+
+test("ลากขอบแถบเมนูปรับความกว้าง จำค่าข้ามการโหลด ลากแคบสุดพับ และ Ctrl+B พับ/กาง (#204)", async ({ page }) => {
+  await page.goto("/dashboard");
+  const sidebar = page.getByRole("complementary", { name: "เมนูหลัก" });
+  const width = async () => Math.round((await sidebar.boundingBox()).width);
+  const drag = async (toX) => {
+    const handle = await page.getByRole("separator", { name: "ปรับความกว้างแถบเมนู" }).boundingBox();
+    await page.mouse.move(handle.x + 2, handle.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(toX, handle.y + 200, { steps: 6 });
+    await page.mouse.up();
+  };
+  await drag(320);
+  await expect.poll(width).toBe(320);
+  await page.reload();
+  await expect.poll(width).toBe(320);
+  await drag(80);
+  await expect.poll(width).toBe(64);
+  await page.keyboard.press("Control+b");
+  await expect.poll(width).toBe(320);
+  await page.keyboard.press("Control+b");
+  await expect.poll(width).toBe(64);
+  // คืนค่าเริ่มต้นให้เทสอื่น (สถานะอยู่ใน localStorage ของ context นี้)
+  await page.keyboard.press("Control+b");
+  await page.getByRole("separator", { name: "ปรับความกว้างแถบเมนู" }).dblclick();
+  await expect.poll(width).toBe(232);
+});

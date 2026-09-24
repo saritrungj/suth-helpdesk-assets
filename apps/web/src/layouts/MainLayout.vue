@@ -23,7 +23,8 @@ import AppTopbar from "../app/AppTopbar.vue";
 </script>
 
 <template>
-  <div class="flex min-h-dvh bg-chrome">
+  <!-- ไล่สีรุ้งจางๆ ผืนเดียวใต้ทั้งแอป — แถบเมนู แถบบน และพื้นที่ทำงานใช้พื้นเดียวกัน (#204) -->
+  <div class="flex min-h-dvh canvas-wash">
     <a
       href="#main-content"
       class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200]
@@ -38,7 +39,7 @@ import AppTopbar from "../app/AppTopbar.vue";
 
       <main
         id="main-content"
-        class="flex-1 min-w-0 p-[var(--shell-content-padding)] bg-canvas
+        class="flex-1 min-w-0 p-[var(--shell-content-padding)] bg-transparent
                lg:border-t lg:border-l lg:border-chrome-line lg:rounded-tl-[var(--radius-xl)]
                print:border-0 print:rounded-none"
         tabindex="-1"

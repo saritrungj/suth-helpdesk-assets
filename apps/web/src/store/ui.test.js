@@ -71,3 +71,35 @@ describe("หมวดเมนูเปิด-ปิดและจำค่า
     expect(store.isNavGroupOpen("reports")).toBe(false);
   });
 });
+
+describe("ความกว้างแถบเมนูที่ลากปรับได้ (#204)", () => {
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("ค่าเริ่มต้น 232 และค่าที่จำไว้ถูกจำกัดในช่วงที่อนุญาต", async () => {
+    expect((await loadStore()).store.uiState.navWidth).toBe(232);
+    expect((await loadStore({ "suth-ui-nav-width": "999" })).store.uiState.navWidth).toBe(360);
+    expect((await loadStore({ "suth-ui-nav-width": "abc" })).store.uiState.navWidth).toBe(232);
+  });
+
+  test("ลากกว้าง = จำ; ลากแคบกว่าเกณฑ์ = พับ ไม่เปลี่ยนความกว้างที่จำ; ลากกลับ = กาง", async () => {
+    const { store, storage } = await loadStore();
+    store.setNavWidth(300);
+    expect(store.uiState.navWidth).toBe(300);
+    expect(storage.data.get("suth-ui-nav-width")).toBe("300");
+    store.setNavWidth(100);
+    expect(store.uiState.navCollapsed).toBe(true);
+    expect(store.uiState.navWidth).toBe(300);
+    store.setNavWidth(170);
+    expect(store.uiState.navCollapsed).toBe(false);
+    expect(store.uiState.navWidth).toBe(200);
+  });
+
+  test("ระหว่างลากไม่เขียน storage และ reset คืน 232", async () => {
+    const { store, storage } = await loadStore();
+    store.setNavWidth(280, { persist: false });
+    expect(storage.data.has("suth-ui-nav-width")).toBe(false);
+    store.resetNavWidth();
+    expect(store.uiState.navWidth).toBe(232);
+  });
+});

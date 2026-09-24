@@ -15,6 +15,21 @@ import { reactive } from "vue";
 
 const RAIL_KEY = "suth-ui-nav-collapsed";
 const GROUPS_KEY = "suth-ui-nav-groups";
+const WIDTH_KEY = "suth-ui-nav-width";
+
+/** ความกว้างแถบเมนูที่ผู้ใช้ลากได้ (#204) — ค่าเริ่มต้นเท่า --shell-sidebar-width (232px) */
+export const NAV_WIDTH = { min: 200, max: 360, default: 232, collapseBelow: 150 };
+
+const clampWidth = (px) => Math.min(NAV_WIDTH.max, Math.max(NAV_WIDTH.min, Math.round(px)));
+
+function readWidth() {
+  try {
+    const saved = Number(localStorage.getItem(WIDTH_KEY));
+    return Number.isFinite(saved) && saved > 0 ? clampWidth(saved) : NAV_WIDTH.default;
+  } catch {
+    return NAV_WIDTH.default;
+  }
+}
 
 function readCollapsed() {
   try {
@@ -40,6 +55,8 @@ export const uiState = reactive({
   mobileNavOpen: false,
   /** พับแถบเมนูบนจอใหญ่ให้เหลือเฉพาะไอคอน */
   navCollapsed: readCollapsed(),
+  /** ความกว้างของแถบเมนูตอนกาง (px) — ลากที่ขอบขวาของแถบเมนู */
+  navWidth: readWidth(),
   /** หมวดเมนูที่ผู้ใช้เปิด-ปิดเอง — หมวดที่ไม่อยู่ในนี้เปิดตามค่าเริ่มต้น */
   navGroups: readNavGroups(),
   /** ช่องค้นหาคำสั่ง (Ctrl+K) */
@@ -54,13 +71,37 @@ export function closeMobileNav() {
   uiState.mobileNavOpen = false;
 }
 
-export function toggleNavCollapsed() {
-  uiState.navCollapsed = !uiState.navCollapsed;
+export function setNavCollapsed(collapsed) {
+  uiState.navCollapsed = Boolean(collapsed);
   try {
     localStorage.setItem(RAIL_KEY, uiState.navCollapsed ? "1" : "0");
   } catch {
     // จำข้ามเซสชันไม่ได้ แต่ยังพับได้ในรอบนี้
   }
+}
+
+export function toggleNavCollapsed() {
+  setNavCollapsed(!uiState.navCollapsed);
+}
+
+/** ตั้งความกว้างจากการลาก — แคบกว่าเกณฑ์ = พับเหลือไอคอน กว้างกลับ = กางด้วยความกว้างนั้น */
+export function setNavWidth(px, { persist = true } = {}) {
+  if (px < NAV_WIDTH.collapseBelow) {
+    setNavCollapsed(true);
+    return;
+  }
+  if (uiState.navCollapsed) setNavCollapsed(false);
+  uiState.navWidth = clampWidth(px);
+  if (!persist) return;
+  try {
+    localStorage.setItem(WIDTH_KEY, String(uiState.navWidth));
+  } catch {
+    // จำข้ามเซสชันไม่ได้
+  }
+}
+
+export function resetNavWidth() {
+  setNavWidth(NAV_WIDTH.default);
 }
 
 /** หมวดเปิดอยู่ไหม — ยังไม่เคยกด = เปิด */

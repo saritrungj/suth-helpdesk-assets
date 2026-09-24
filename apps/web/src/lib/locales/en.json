@@ -1055,5 +1055,8 @@
   "เทียบช่วงเดียวกันปีงบ {0}": "vs same period FY {0}",
   "เทียบทุกฝ่าย": "Compare all divisions",
   "เทียบทุกเครื่อง": "Compare all devices",
-  "และอีก {0} รายการ": "and {0} more"
+  "และอีก {0} รายการ": "and {0} more",
+  "กางแถบเมนู (Ctrl+B)": "Expand sidebar (Ctrl+B)",
+  "ปรับความกว้างแถบเมนู": "Resize sidebar",
+  "พับแถบเมนูให้เหลือไอคอน (Ctrl+B)": "Collapse sidebar to icons (Ctrl+B)"
 }

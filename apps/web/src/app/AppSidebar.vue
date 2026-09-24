@@ -12,13 +12,13 @@ import { t } from "../lib/locale";
  * บนจอเล็กแถบนี้กลายเป็นลิ้นชักที่เลื่อนเข้ามาทับเนื้อหา และปิดเองทุกครั้งที่
  * เปลี่ยนหน้า
  */
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-vue-next";
 import { ADMIN_GROUPS, NAV_GROUPS, findActiveGroup, isActiveNav } from "./navigation";
 import { APP_NAME, APP_NAME_SHORT, BRAND_ASSETS, ORG_NAME_SHORT } from "./brand";
 import { authState } from "../store/auth";
-import { closeMobileNav, isNavGroupOpen, toggleNavCollapsed, toggleNavGroup, uiState } from "../store/ui";
+import { NAV_WIDTH, closeMobileNav, isNavGroupOpen, resetNavWidth, setNavWidth, toggleNavCollapsed, toggleNavGroup, uiState } from "../store/ui";
 import { UiTooltip } from "../ui";
 
 const route = useRoute();
@@ -71,6 +71,54 @@ const GROUP_TONE = {
   reports: "bg-nav-reports-soft text-nav-reports-ink",
   settings: "bg-nav-settings-soft text-nav-settings-ink",
 };
+
+/* ---------- ปรับความกว้างและซ่อนแถบเมนู (#204) ---------- */
+const asideEl = ref(null);
+const dragging = ref(false);
+
+function startDrag(event) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  dragging.value = true;
+  const left = asideEl.value?.getBoundingClientRect().left ?? 0;
+  const startWidth = uiState.navWidth;
+  const move = (e) => setNavWidth(e.clientX - left, { persist: false });
+  const up = (e) => {
+    dragging.value = false;
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    setNavWidth(e.clientX - left); // จำความกว้างสุดท้ายครั้งเดียวตอนปล่อย
+    // ลากจนพับ = กางกลับมาที่ความกว้างก่อนลาก ไม่ใช่ความกว้างขั้นต่ำที่ผ่านระหว่างทาง
+    if (uiState.navCollapsed) uiState.navWidth = startWidth;
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+function onResizeKey(event) {
+  const step = event.shiftKey ? 48 : 16;
+  if (event.key === "ArrowLeft") {
+    // แคบกว่าขั้นต่ำ = พับเหลือไอคอน
+    if (!uiState.navCollapsed) setNavWidth(uiState.navWidth - step < NAV_WIDTH.min ? 0 : uiState.navWidth - step);
+  } else if (event.key === "ArrowRight") {
+    setNavWidth(uiState.navCollapsed ? NAV_WIDTH.min : uiState.navWidth + step);
+  } else if (event.key === "Enter" || event.key === " ") {
+    toggleNavCollapsed();
+  } else {
+    return;
+  }
+  event.preventDefault();
+}
+
+/** Ctrl+B (⌘B บน Mac) พับ/กางแถบเมนูจากทุกหน้า — ปุ่มลัดเดียวกับ VS Code และแอปทั่วไป */
+function onShortcut(event) {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "b") {
+    event.preventDefault();
+    toggleNavCollapsed();
+  }
+}
+onMounted(() => window.addEventListener("keydown", onShortcut));
+onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
 </script>
 
 <template>
@@ -84,14 +132,17 @@ const GROUP_TONE = {
   </Transition>
 
   <aside
+    ref="asideEl"
     class="fixed lg:sticky top-0 z-50 h-dvh shrink-0 flex flex-col
-           bg-chrome border-r border-chrome-line lg:border-r-0
-           transition-[width,transform] duration-200 ease-out-quart
+           bg-chrome lg:bg-transparent border-r border-chrome-line lg:border-r-0
+           duration-200 ease-out-quart
            lg:translate-x-0"
     :class="[
-      uiState.navCollapsed ? 'w-[var(--shell-sidebar-rail-width)]' : 'w-[var(--shell-sidebar-width)]',
+      uiState.navCollapsed ? 'w-[var(--shell-sidebar-rail-width)]' : 'w-[var(--shell-sidebar-width)] lg:w-[var(--nav-width)]',
       uiState.mobileNavOpen ? 'translate-x-0 shadow-e3' : '-translate-x-full',
+      dragging ? 'transition-none select-none' : 'transition-[width,transform]',
     ]"
+    :style="{ '--nav-width': `${uiState.navWidth}px` }"
     :aria-label="t(&quot;เมนูหลัก&quot;)"
   >
     <!-- ตราสัญลักษณ์ -->
@@ -208,7 +259,7 @@ const GROUP_TONE = {
     <!-- ปุ่มพับ — เฉพาะจอใหญ่ที่แถบเมนูอยู่ประจำที่ -->
     <div class="hidden lg:block shrink-0 border-t border-chrome-line p-2">
       <UiTooltip
-        :content="uiState.navCollapsed ? t(&quot;กางแถบเมนู&quot;) : t(&quot;พับแถบเมนูให้เหลือไอคอน&quot;)"
+        :content="uiState.navCollapsed ? t(&quot;กางแถบเมนู (Ctrl+B)&quot;) : t(&quot;พับแถบเมนูให้เหลือไอคอน (Ctrl+B)&quot;)"
         side="right"
       >
         <button
@@ -229,6 +280,23 @@ const GROUP_TONE = {
         </button>
       </UiTooltip>
     </div>
+    <!-- ลากเพื่อปรับความกว้าง (#204) — ลากแคบสุดพับเหลือไอคอน ดับเบิลคลิกคืนค่าเริ่มต้น ลูกศรซ้าย/ขวาปรับทีละ 16px -->
+    <div
+      class="hidden lg:block absolute top-0 right-0 h-full w-1.5 -mr-0.5 cursor-col-resize z-10
+             hover:bg-brand-line focus-visible:bg-brand-line outline-none transition-colors"
+      :class="dragging && 'bg-brand-line'"
+      role="separator"
+      aria-orientation="vertical"
+      tabindex="0"
+      :aria-label="t(&quot;ปรับความกว้างแถบเมนู&quot;)"
+      :aria-valuemin="NAV_WIDTH.min"
+      :aria-valuemax="NAV_WIDTH.max"
+      :aria-valuenow="uiState.navCollapsed ? NAV_WIDTH.min : uiState.navWidth"
+      data-testid="nav-resize"
+      @pointerdown="startDrag"
+      @dblclick="resetNavWidth"
+      @keydown="onResizeKey"
+    ></div>
   </aside>
 </template>
 

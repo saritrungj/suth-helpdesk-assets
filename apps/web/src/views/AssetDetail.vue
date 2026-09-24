@@ -201,8 +201,9 @@ const selectedYears = computed({
   set: (years) => {
     const allowed = new Set(yearOptions.value.map((item) => item.value));
     const next = [...new Set((years ?? []).map(String).filter((year) => allowed.has(year)))].sort().slice(-3);
-    if (next.length < 2) return;
-    router.replace({ query: { ...route.query, compare: undefined, years: next.join(",") } });
+    // เทียบได้ 2–3 ปี — เหลือน้อยกว่านั้น ("ล้างทั้งหมด" หรือเอาปีออกจนเหลือปีเดียว) กลับไปคู่ปีเริ่มต้น
+    // (ปีนี้กับปีก่อน) เดิม return เฉยๆ จนปุ่มล้างและการเอาปีออกดูเหมือนเสีย (#204)
+    router.replace({ query: { ...route.query, compare: undefined, years: next.length < 2 ? undefined : next.join(",") } });
   },
 });
 watch(() => activeFiscalYear.value?.year, (year, previous) => {
