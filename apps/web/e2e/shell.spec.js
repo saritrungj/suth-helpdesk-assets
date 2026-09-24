@@ -105,7 +105,8 @@ test("accordion, rail tooltip และ command search ใช้คีย์บ�
   await page.mouse.move(800, 700);
   await expect(entry).not.toHaveAttribute("aria-describedby", /.+/);
 
-  await page.getByRole("link", { name: "ภาพรวมการพิมพ์" }).focus();
+  // รายการสุดท้ายของหมวดภาพรวม — Tab ถัดไปคือรายการแรกของงานประจำ
+  await page.getByRole("link", { name: "เปรียบเทียบการพิมพ์" }).focus();
   await page.keyboard.press("Tab");
   await expect(entry).toBeFocused();
   await expectTooltip(page, entry, "บันทึกจำนวนพิมพ์");

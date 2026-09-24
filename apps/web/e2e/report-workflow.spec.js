@@ -25,8 +25,13 @@ for (const language of ["th", "en"]) {
     });
     await page.goto("/dashboard");
     await expect(page.locator("h1")).toContainText(language === "en" ? "Print overview" : "ภาพรวมการพิมพ์");
-    // Dashboard แบบ single-scope ต้องแสดงพื้นที่เปรียบเทียบและตารางรายละเอียดชุดเดียวกัน
-    // ทั้งสองภาษาตาม ADR-0020 ส่วนกฎ coverage ถูกตรวจแยกด้วย API ด้านล่าง
+    // ภาพรวมมีกราฟรายเดือนสองกราฟ ส่วนพื้นที่เปรียบเทียบและตารางรายละเอียดอยู่หน้าเปรียบเทียบ (ADR-0033)
+    // ทั้งสองภาษา ส่วนกฎ coverage ถูกตรวจแยกด้วย API ด้านล่าง
+    await expect(page.getByRole("region", {
+      name: language === "en" ? "Monthly trend" : "แนวโน้มรายเดือน",
+    })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`dashboard-${language}.png`), fullPage: true });
+    await page.goto("/compare");
     await expect(page.getByRole("region", {
       name: language === "en" ? "Comparison area" : "พื้นที่เปรียบเทียบ",
     })).toBeVisible();
@@ -34,7 +39,6 @@ for (const language of ["th", "en"]) {
       name: language === "en" ? "Detail table" : "ตารางรายละเอียด",
       exact: true,
     })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`dashboard-${language}.png`), fullPage: true });
     await page.goto("/assets");
     const searchName = language === "en" ? "Search serial, model, location…" : "ค้นหา Serial, รุ่น, ตำแหน่ง…";
     const search = page.getByRole("textbox", { name: searchName }).first();
@@ -152,7 +156,7 @@ test("fullscreen is limited to long data tables", async ({ page }) => {
 
 test("graph selection retains the filter and follow-up links retain their scope", async ({ page }) => {
   await page.goto("/dashboard");
-  const trend = page.locator("section").filter({ has: page.getByRole("heading", { name: /รายเดือน$/ }) });
+  const trend = page.getByTestId("overview-trend-pages");
   await trend.getByRole("radio", { name: "ตาราง", exact: true }).click();
   const months = trend.locator("tbody button");
   await expect(trend.locator("canvas")).toHaveCount(1);
@@ -184,7 +188,8 @@ test("graph selection retains the filter and follow-up links retain their scope"
 test("unavailable comparison month explains missing data", async ({ page }) => {
   await page.route("**/api/dashboard/monthly-kpi?**", (route) => route.fulfill({ json: [] }));
   await page.goto("/dashboard?months=2026-09");
-  await expect(page.getByText("ยังไม่มีการพิมพ์ในขอบเขตที่เลือก", { exact: true })).toBeVisible();
+  // ทั้งกราฟค่าใช้จ่ายและกราฟยอดพิมพ์บอกเหตุผลเดียวกัน (#206)
+  await expect(page.getByText("ยังไม่มีการพิมพ์ในขอบเขตที่เลือก", { exact: true })).toHaveCount(2);
   await expect(page).toHaveURL(/months=2026-09/);
 });
 
