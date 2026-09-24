@@ -291,7 +291,7 @@ test("drawer in fullscreen traps focus and returns to the row without losing scr
   const search = page.getByRole("textbox", { name: "ค้นหา Serial, รุ่น, ตำแหน่ง…" });
   await search.fill("SUTH");
   await page.getByRole("button", { name: "ขยายตาราง", exact: true }).click();
-  await expect.poll(() => page.getByRole("table").evaluate((el) => document.fullscreenElement.contains(el))).toBe(true);
+  await expect.poll(() => page.getByRole("table").evaluate((el) => document.fullscreenElement?.contains(el) ?? false)).toBe(true);
   await expect(page.getByRole("button", { name: "Excel", exact: true })).toBeEnabled();
   const edit = page.getByRole("button", { name: "แก้ไข SUTH-005", exact: true });
   await edit.click();
