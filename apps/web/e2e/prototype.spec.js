@@ -273,7 +273,8 @@ test("expense Excel export carries the search context and the on-screen amounts"
   await prototypeFixture(page);
   await page.goto("/expense");
   await page.getByRole("textbox", { name: "ค้นหาสัญญาหรือเครื่อง", exact: true }).fill("SUTH-001");
-  const exportButton = page.getByRole("button", { name: "Excel", exact: true });
+  // ค้นหาอยู่ = ปุ่มบอกว่าส่งออกเฉพาะผลค้นหา (#208)
+  const exportButton = page.getByRole("button", { name: "Excel เฉพาะผลค้นหา (1 เครื่อง)", exact: true });
   await expect(exportButton).toBeEnabled();
   const downloadPromise = page.waitForEvent("download");
   await exportButton.click();

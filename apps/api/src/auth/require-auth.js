@@ -10,6 +10,7 @@
 const jwt = require("jsonwebtoken");
 const { SESSION_COOKIE } = require("./session-cookie");
 const { unauthorized } = require("../shared/http-error");
+const { currentUser } = require("./current-user");
 
 /**
  * อ่าน token จากคำขอ
@@ -49,21 +50,31 @@ module.exports = (req, res, next) => {
     );
   }
 
+  let claims;
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
+    claims = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
     // แยกเหตุผลออกจากกันเพราะฝั่งเว็บทำสองอย่างต่างกัน — token หมดอายุคือเรื่อง
     // ปกติของคนที่เปิดหน้าทิ้งไว้ข้ามวัน ควรพากลับไปล็อกอินเงียบๆ ส่วน token ที่
     // ผิดรูปหรือเซ็นด้วยกุญแจอื่นคือสัญญาณของการปลอมแปลง ควรถูกบันทึกไว้
     const expired = err.name === "TokenExpiredError";
 
-    next(
+    return next(
       unauthorized(expired ? "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่" : "ข้อมูลการเข้าสู่ระบบไม่ถูกต้อง", {
         code: expired ? "token_expired" : "invalid_token",
       })
     );
   }
+
+  // บทบาทและสถานะบัญชีปัจจุบันจากฐาน — ลดสิทธิ์/ลบบัญชี/เปลี่ยนรหัสผ่านมีผลทันที (#208, current-user.js)
+  // then สองอาร์กิวเมนต์: error ที่โยนจาก route ถัดไปต้องไม่ย้อนมาเรียก next ซ้ำ
+  currentUser(claims).then((user) => {
+    if (user.revoked) {
+      return next(unauthorized("บัญชีนี้ถูกเปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่", { code: user.revoked }));
+    }
+    req.user = { ...claims, ...user };
+    return next();
+  }, next);
 };
 
 module.exports.readToken = readToken;

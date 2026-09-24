@@ -1107,5 +1107,12 @@
   "สร้างปีงบเมื่อยืนยัน": "Create fiscal year on confirm",
   "เตรียมสัญญา — สร้างเมื่อยืนยัน": "Contract prepared — created on confirm",
   "เอาสัญญาออกจากแผน": "Contract removed from plan",
-  "เตรียมปีงบ — สร้างเมื่อยืนยัน": "Fiscal year prepared — created on confirm"
+  "เตรียมปีงบ — สร้างเมื่อยืนยัน": "Fiscal year prepared — created on confirm",
+  "{0} — ไม่มีข้อมูลพิมพ์": "{0} — no print data",
+  "Excel เฉพาะผลค้นหา ({0} เครื่อง)": "Excel of search results ({0} devices)",
+  "ตามใบแจ้งหนี้ = ค่าพิมพ์ {0} + ค่าเช่าคงที่ {1} + VAT {2} = {3} บาท": "Invoice = printing {0} + fixed rent {1} + VAT {2} = {3} baht",
+  "พบ {0} จาก {1} เครื่อง": "{0} of {1} devices found",
+  "ยอดเงินและยอดพิมพ์ด้านบน รวมทั้งยอดของแต่ละสัญญา เป็นยอดทั้งสัญญา ไม่ใช่เฉพาะเครื่องที่ค้นเจอ — Excel ส่งออกเฉพาะเครื่องที่ค้นเจอ": "The amounts and pages above, and each contract total, cover the whole contract, not only the devices found — Excel exports only the devices found",
+  "ค่าใช้จ่าย = ค่าพิมพ์จากยอดพิมพ์หลังหัก 2% ยังไม่รวมค่าเช่าคงที่และ VAT": "Cost = printing charge on pages after the 2% deduction, excluding fixed rent and VAT",
+  "ดูยอดตามใบแจ้งหนี้": "See invoice totals"
 }

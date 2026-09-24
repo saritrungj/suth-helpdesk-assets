@@ -533,6 +533,11 @@ function runCsv() {
         :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าใช้จ่าย ÷ ยอดพิมพ์หลังหัก 2%')" />
       <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats" />
     </section>
+    <!-- ค่าใช้จ่ายที่นี่ไม่เท่ายอดตามใบแจ้งหนี้โดยตั้งใจ — บอกส่วนที่ขาด ไม่ให้ดูเหมือนข้อมูลหลุดจากหน้าค่าใช้จ่าย (#208) -->
+    <p class="text-xs text-ink-mute -mt-2 mb-4" data-testid="cost-scope-note">
+      {{ t('ค่าใช้จ่าย = ค่าพิมพ์จากยอดพิมพ์หลังหัก 2% ยังไม่รวมค่าเช่าคงที่และ VAT') }}
+      · <RouterLink :to="{ path: '/expense', query: { fy: route.query.fy } }" class="underline hover:text-ink">{{ t('ดูยอดตามใบแจ้งหนี้') }}</RouterLink>
+    </p>
 
     <template v-if="isOverview">
       <OverviewTrend :cost="costTrend" :pages="pagesTrend" :loading="loading" :failed="failed" :scope-text="trendCaption"
