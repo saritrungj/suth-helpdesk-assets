@@ -44,7 +44,7 @@ defineProps({
       <p v-if="eyebrow" class="eyebrow mb-1">{{ eyebrow }}</p>
 
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 class="text-2xl sm:text-3xl font-bold text-ink tracking-tight">
+        <h1 class="text-2xl sm:text-3xl font-semibold text-ink tracking-tight">
           {{ title }}
         </h1>
         <slot name="badge" />

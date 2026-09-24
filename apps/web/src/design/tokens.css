@@ -668,12 +668,10 @@
     "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Cascadia Code", monospace;
 
-  /* น้ำหนักตัวอักษร (#213) — Anuphan เป็น variable font (300–700) บน Windows น้ำหนัก 400 ที่ 13–14px
-     เส้นบางจนทุกอย่าง "จางเท่ากันหมด" จึงขยับทั้งชุดขึ้นครึ่งขั้น ลำดับชั้นยังห่างกันเท่าเดิม
-     ปกติ 450 · เน้น 550 · หัวข้อ 650 · ตัวเลขสำคัญและชื่อหน้า 700 */
-  --font-weight-normal: 450;
-  --font-weight-medium: 550;
-  --font-weight-semibold: 650;
+  /* น้ำหนักตัวอักษรตามมาตรฐาน 400/500/600/700 — ผู้ใช้เลือกกลับมาใช้แบบเดิมหลังลองชุดที่หนาขึ้นครึ่งขั้น (#213) */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
   --text-2xs: 0.6875rem;              /* 11px — eyebrow, ป้ายกำกับเล็กสุด */
