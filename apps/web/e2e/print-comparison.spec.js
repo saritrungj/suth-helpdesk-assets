@@ -76,13 +76,57 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     expect(chartRequests.length, "หน้าภาพรวมต้องโหลดโค้ดกราฟเมื่อใช้").toBeGreaterThan(0);
   });
 
-  test("โครงหน้าเรียงตัวกรอง → ตัวเลขสำคัญ → เปรียบเทียบ → ตารางรายละเอียด และมีปุ่มส่งออกปุ่มเดียว", async ({ page }) => {
+  test("หน้าภาพรวม: ตัวกรองแค่ช่วงเวลากับสัญญา ปีงบเปลี่ยนที่แถบบน กราฟค่าใช้จ่ายกับยอดพิมพ์ซ้ายขวา (#206)", async ({ page }) => {
     await comparisonFixture(page);
     await page.goto("/dashboard");
+    const filters = page.getByRole("region", { name: "ตัวกรองข้อมูล" });
+    await expect(filters.getByLabel(/^ช่วงเวลา/)).toBeVisible();
+    await expect(filters.getByLabel(/^สัญญา/)).toBeVisible();
+    for (const gone of [/^ปีงบประมาณ/, /^ฝ่าย /, /^แผนก /, /^อาคาร /, /^เครื่อง /]) await expect(filters.getByLabel(gone)).toHaveCount(0);
+    await expect(filters.getByRole("button", { name: /^ตัวกรองเพิ่มเติม/ })).toHaveCount(0);
+    await expect(page.getByTestId("overview-fy-note")).toContainText("เปลี่ยนปีงบได้ที่แถบเมนูด้านบน");
+    await expect(page.getByText("เปรียบเทียบตาม", { exact: true })).toHaveCount(0);
+
+    const cost = page.getByTestId("overview-trend-cost");
+    const pages = page.getByTestId("overview-trend-pages");
+    await expect(cost.getByRole("heading", { name: "ค่าใช้จ่ายรายเดือน" })).toBeVisible();
+    await expect(pages.getByRole("heading", { name: "ยอดพิมพ์รายเดือน" })).toBeVisible();
+    const [left, right] = await Promise.all([cost.boundingBox(), pages.boundingBox()]);
+    expect(Math.abs(left.y - right.y)).toBeLessThan(2);
+    expect(left.x).toBeLessThan(right.x);
+    await pages.getByRole("radio", { name: "ตาราง", exact: true }).click();
+    await expect(pages.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" }).getByRole("row", { name: /ต\.ค\. 2568\s+1,800/ })).toBeVisible();
+    await expect(pages).toContainText("แสดง 3 เดือนที่มีข้อมูล");
+
+    // ปุ่ม "เทียบทุกฝ่าย" พาไปหน้าเปรียบเทียบด้วยขอบเขตเดิม
+    await filters.getByLabel(/^สัญญา/).click();
+    await page.getByRole("option", { name: /^CT-001\/2569/ }).click();
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/contract=7/);
+    await page.getByRole("button", { name: "เทียบทุกฝ่าย" }).click();
+    await expect(page).toHaveURL(/\/compare\?/);
+    await expect(page).toHaveURL(/contract=7/);
+    await expect(page.getByRole("heading", { level: 1, name: "เปรียบเทียบการพิมพ์" })).toBeVisible();
+    await expect(comparisonCard(page).getByRole("radio", { name: "ฝ่าย", exact: true })).toBeChecked();
+    await expect(comparisonCard(page).getByRole("radio", { name: "ภาพรวม", exact: true })).toHaveCount(0);
+  });
+
+  test("ลิงก์ภาพรวมที่เป็นการเปรียบเทียบย้ายไปหน้าเปรียบเทียบพร้อมค่าเดิม (#206)", async ({ page }) => {
+    await comparisonFixture(page);
+    await page.goto("/dashboard?by=fiscalYear");
+    await expect(page).toHaveURL(/\/compare\?by=fiscalYear/);
+    await page.goto("/dashboard?division=2");
+    await expect(page).toHaveURL(/\/compare\?division=2/);
+    await expect(kpiOf(page)).toContainText("1,420");
+  });
+
+  test("โครงหน้าเรียงตัวกรอง → ตัวเลขสำคัญ → เปรียบเทียบ → ตารางรายละเอียด และมีปุ่มส่งออกปุ่มเดียว", async ({ page }) => {
+    await comparisonFixture(page);
+    await page.goto("/compare");
 
     const filter = page.getByLabel(/^ช่วงเวลา/);
     const kpi = kpiOf(page);
-    const chart = page.getByRole("heading", { name: "ค่าใช้จ่ายรายเดือน", exact: true });
+    const chart = comparisonCard(page);
     const table = page.getByRole("heading", { name: "ตารางรายละเอียด", exact: true });
     await expect(table).toBeVisible();
     const tops = await Promise.all([filter, kpi, chart, table].map(async (item) => (await item.boundingBox()).y));
@@ -100,8 +144,8 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(page.getByText("เปรียบเทียบตาม", { exact: true })).toBeVisible();
 
     await expect(kpi).toContainText("5,970");
-    // หน้าที่คิดเงิน (หลังหัก 2%) เป็นคำอธิบายของการ์ดหน้าที่พิมพ์ ไม่ใช่การ์ดแยก (#197)
-    await expect(kpi).toContainText("คิดเงิน 5,850.6 หน้า (หัก 2%)");
+    // ยอดพิมพ์หลังหัก 2% (หลังหัก 2%) เป็นคำอธิบายของการ์ดยอดพิมพ์ ไม่ใช่การ์ดแยก (#197)
+    await expect(kpi).toContainText("หลังหัก 2% เหลือ 5,850.6 หน้า");
     await expect(kpi).toContainText("เฉลี่ยหน้าละ");
     await expect(kpi).toContainText("2,632.77");
     await expect(kpi.locator(":scope > div")).toHaveCount(4);
@@ -110,11 +154,12 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
   test("เปรียบเทียบตามฝ่าย: ตารางมีทุกฝ่ายในขอบเขต และตัวเลขสำคัญไม่เปลี่ยนตามการแบ่ง", async ({ page }) => {
     await comparisonFixture(page);
-    await page.goto("/dashboard");
+    await page.goto("/compare?by=contract");
     const card = comparisonCard(page);
     await card.getByRole("radio", { name: "ฝ่าย", exact: true }).click();
-    await card.getByRole("radio", { name: "หน้าที่พิมพ์", exact: true }).click();
-    await expect(page).toHaveURL(/by=division/);
+    await card.getByRole("radio", { name: "ยอดพิมพ์", exact: true }).click();
+    // ฝ่ายคือค่าเริ่มต้นของหน้าเปรียบเทียบ จึงไม่ถูกเขียนลง URL
+    await expect(page).not.toHaveURL(/by=/);
     await expect(page).toHaveURL(/measure=pages/);
     // การแบ่งข้อมูลไม่ใช่การกรอง — ยอดรวมยังเป็นของทั้งองค์กร
     await expect(kpiOf(page)).toContainText("5,970");
@@ -150,7 +195,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     expect(file.name).toBe("print-usage-report-fy2569-full-year-division-pages.xlsx");
     expect(file.workbook.SheetNames).toEqual(["สรุป", "รายเดือน", "เปรียบเทียบ", "อันดับ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
     const [header, nursing, admin] = file.rows("เปรียบเทียบ");
-    expect(header.slice(0, 5)).toEqual(["ฝ่าย", "หน้าที่พิมพ์", "หน้าที่คิดเงิน", "ค่าใช้จ่าย (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)"]);
+    expect(header.slice(0, 5)).toEqual(["ฝ่าย", "ยอดพิมพ์", "ยอดพิมพ์หลังหัก 2%", "ค่าใช้จ่าย (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)"]);
     expect(nursing).toEqual(["ฝ่ายการพยาบาล", 4550, 4459, 2006.55, 3, 1500, 1600, 1450]);
     expect(admin).toEqual(["ฝ่ายบริหารทั่วไป", 1420, 1391.6, 626.22, 2, 300, 550, 570]);
     expect(file.chart()).toContain("<c:lineChart>");
@@ -166,7 +211,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     const conditions = conditionsOf(file);
     expect(conditions["ฝ่าย"]).toBe("ฝ่ายการพยาบาล, ฝ่ายบริหารทั่วไป");
     expect(conditions["เปรียบเทียบตาม"]).toBe("ฝ่าย");
-    expect(conditions["ตัวเลขที่ดู"]).toBe("หน้าที่พิมพ์ (หน้า)");
+    expect(conditions["ตัวเลขที่ดู"]).toBe("ยอดพิมพ์ (หน้า)");
     expect(conditions["สถานะราคา"]).toBeUndefined();
     expect(conditions["สร้างเมื่อ (Asia/Bangkok)"]).toBeTruthy();
   });
@@ -199,7 +244,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
       const kpi = kpiOf(page);
       await expect(kpi).toContainText(parity.pages);
-      await expect(kpi).toContainText(`คิดเงิน ${parity.net} หน้า`);
+      await expect(kpi).toContainText(`หลังหัก 2% เหลือ ${parity.net} หน้า`);
       await expect(kpi).toContainText(parity.cost);
 
       // ตารางรายละเอียดอ่านจากแถวชุดเดียวกับตัวเลขสำคัญ — กลุ่มที่มียอดสูงสุดต้องมีอยู่จริง
@@ -250,21 +295,21 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
       [1, "งานผู้ป่วยนอก", "ฝ่ายการพยาบาล"], [2, "งานการเงิน", "ฝ่ายบริหารทั่วไป"], [3, "งานผู้ป่วยใน", "ฝ่ายการพยาบาล"], [4, "งานคลังยา", "ฝ่ายเภสัชกรรม"],
     ]);
 
-    await card.getByRole("radio", { name: "หน้าที่พิมพ์", exact: true }).click();
+    await card.getByRole("radio", { name: "ยอดพิมพ์", exact: true }).click();
     const file = await download(page, async () => (await exportAs(page, "Excel")).click());
     expect(file.name).toBe("print-usage-report-fy2569-full-year-department-pages.xlsx");
     expect(file.rows("อันดับ").slice(1).map((line) => line.slice(0, 4))).toEqual([
       [1, "งานผู้ป่วยนอก", "ฝ่ายการพยาบาล", 3200], [2, "งานการเงิน", "ฝ่ายบริหารทั่วไป", 1420], [3, "งานผู้ป่วยใน", "ฝ่ายการพยาบาล", 1350], [4, "งานคลังยา", "ฝ่ายเภสัชกรรม", 0],
     ]);
     expect(file.rows("ข้อมูลรายละเอียด")).toHaveLength(16);
-    expect(conditionsOf(file)["อันดับ"]).toBe("ทุกแผนก 4 รายการ เรียงตามหน้าที่พิมพ์จากมากไปน้อย (แผ่น “อันดับ”)");
+    expect(conditionsOf(file)["อันดับ"]).toBe("ทุกแผนก 4 รายการ เรียงตามยอดพิมพ์จากมากไปน้อย (แผ่น “อันดับ”)");
   });
 
   test("ส่งออก CSV ได้ข้อมูลรายละเอียดแบนตามตัวกรองเดียวกับ Excel", async ({ page }) => {
     await comparisonFixture(page);
-    await page.goto("/dashboard?division=2");
+    await page.goto("/compare?division=2");
     const file = await downloadText(page, async () => (await exportAs(page, "CSV")).click());
-    expect(file.name).toBe("print-usage-data-fy2569-full-year-overall-cost.csv");
+    expect(file.name).toBe("print-usage-data-fy2569-full-year-division-cost.csv");
     const lines = file.text.trim().split("\r\n");
     expect(lines[0]).toContain('"ปีงบประมาณ"');
     // ฝ่ายบริหารทั่วไปมี 5 รายการในปีงบนี้ (ต.ค. 1, พ.ย. 2, ธ.ค. 2)
@@ -301,7 +346,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
       { id: 7, year: 2568, start_month: "2024-10", end_month: "2025-09" },
       { id: 1, year: 2569, start_month: "2025-10", end_month: "2026-09" },
     ] }));
-    await page.goto("/dashboard?fy=1&measure=pages");
+    await page.goto("/compare?fy=1&measure=pages");
     const years = page.getByRole("region", { name: "ตัวกรองข้อมูล" }).getByRole("button", { name: /^ปีงบประมาณ / });
 
     await years.click();
@@ -327,7 +372,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
       { id: 7, year: 2568, start_month: "2024-10", end_month: "2025-09" },
       { id: 1, year: 2569, start_month: "2025-10", end_month: "2026-09" },
     ] }));
-    await page.goto("/dashboard?fy=1&months=2025-10,2025-11&measure=pages");
+    await page.goto("/compare?fy=1&months=2025-10,2025-11&measure=pages");
     await expect(kpiOf(page)).toContainText("3,950");
     await comparisonCard(page).getByRole("radio", { name: "ปีงบ", exact: true }).click();
     await expect(page).toHaveURL(/by=fiscalYear/);
@@ -370,9 +415,9 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     // เรียงจากหัวคอลัมน์ — น้อยไปมากแล้วกลับกัน
     const first = () => table.getByRole("row").nth(1);
     await expect(first()).toContainText("D25-SN");
-    await table.getByRole("button", { name: /หน้าที่พิมพ์/ }).first().click();
+    await table.getByRole("button", { name: /ยอดพิมพ์/ }).first().click();
     await expect(first()).toContainText("D01-SN");
-    await table.getByRole("button", { name: /หน้าที่พิมพ์/ }).first().click();
+    await table.getByRole("button", { name: /ยอดพิมพ์/ }).first().click();
     await expect(first()).toContainText("D25-SN");
   });
 
@@ -431,7 +476,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
   test("ตัวกรองหลายตัวเขียน URL ครบ ไม่มีตัวไหนทับกันหาย", async ({ page }) => {
     await comparisonFixture(page);
-    await page.goto("/dashboard");
+    await page.goto("/compare");
     await filterBy(page, "ฝ่าย", ["ฝ่ายการพยาบาล"]);
     await filterBy(page, "สัญญา", ["CT-001/2569"]);
     await page.getByLabel(/^ช่วงเวลา/).click();
@@ -456,7 +501,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(page).toHaveURL(/division=1(?:%2C|,)2/);
     const card = comparisonCard(page);
     await expect(card.getByRole("radio", { name: "ฝ่าย", exact: true })).toBeChecked();
-    await expect(card.getByRole("radio", { name: "หน้าที่พิมพ์", exact: true })).toBeChecked();
+    await expect(card.getByRole("radio", { name: "ยอดพิมพ์", exact: true })).toBeChecked();
     await expect(detailTable(page).getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550/ })).toBeVisible();
   });
 
@@ -466,13 +511,11 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await comparisonFixture(page);
 
     await page.goto("/by-department?measure=pages");
-    await expect(page).toHaveURL(/\/dashboard/);
-    await expect(page).toHaveURL(/by=division/);
+    await expect(page).toHaveURL(/\/compare/);
     await expect(detailTable(page).getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550/ })).toBeVisible();
 
     await page.goto("/expense?tab=department");
-    await expect(page).toHaveURL(/\/dashboard/);
-    await expect(page).toHaveURL(/by=division/);
+    await expect(page).toHaveURL(/\/compare/);
     await expect(page).not.toHaveURL(/tab=/);
     await expect(kpiOf(page)).toContainText("5,970");
   });
@@ -484,7 +527,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(page.getByTestId("import-sessions")).toBeVisible();
   });
 
-  test("ลิงก์เก่าของหน้าเปรียบเทียบเปิดหน้าภาพรวมด้วยขอบเขตเดิม", async ({ page }) => {
+  test("ลิงก์เก่าของหน้าเปรียบเทียบเปิดหน้าเปรียบเทียบด้วยขอบเขตเดิม", async ({ page }) => {
     await comparisonFixture(page);
     // รายการที่เคยหยิบมาเทียบ กลายเป็นตัวกรองของมิตินั้น
     await page.goto("/dashboard?by=division&items=1,2&measure=pages");
@@ -493,7 +536,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(detailTable(page)).not.toContainText("ฝ่ายเภสัชกรรม");
 
     await page.goto("/compare?type=contract&groups=7&metric=totalPages");
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).not.toHaveURL(/type=|groups=/);
     await expect(page).toHaveURL(/by=contract/);
     await expect(page).toHaveURL(/contract=7/);
     await expect(page).toHaveURL(/measure=pages/);
@@ -504,9 +547,9 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await comparisonFixture(page);
     // ?type= มาจาก URL — ค่าอย่าง constructor ต้องไม่กลายเป็นชื่อมิติที่หลุดเข้า URL ปลายทาง
     await page.goto("/compare?type=constructor&groups=7");
-    await expect(page).toHaveURL(/\/dashboard/);
-    await expect(page).not.toHaveURL(/by=/);
-    await expect(comparisonCard(page).getByRole("radio", { name: "ภาพรวม", exact: true })).toBeChecked();
+    await expect(page).toHaveURL(/\/compare/);
+    await expect(page).not.toHaveURL(/by=|type=/);
+    await expect(comparisonCard(page).getByRole("radio", { name: "ฝ่าย", exact: true })).toBeChecked();
   });
 
   test("ลิงก์ตรงที่ระบุเดือนนอกปีงบถูกปรับเป็นทั้งปีงบก่อนโหลดและส่งออก", async ({ page }) => {
@@ -550,12 +593,12 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
   test("ใช้ได้ด้วยคีย์บอร์ดและบนจอ 320px โดยไม่เลื่อนแนวนอน", async ({ page }, testInfo) => {
     await comparisonFixture(page);
-    await page.goto("/dashboard");
+    await page.goto("/compare");
     const card = comparisonCard(page);
-    await card.getByRole("radio", { name: "ฝ่าย", exact: true }).focus();
+    await card.getByRole("radio", { name: "สัญญา", exact: true }).focus();
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/by=division/);
-    await card.getByRole("radio", { name: "หน้าที่พิมพ์", exact: true }).focus();
+    await expect(page).toHaveURL(/by=contract/);
+    await card.getByRole("radio", { name: "ยอดพิมพ์", exact: true }).focus();
     await page.keyboard.press("Space");
     await expect(page).toHaveURL(/measure=pages/);
     await page.getByRole("button", { name: "ส่งออก", exact: true }).focus();
@@ -564,7 +607,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await page.keyboard.press("Escape");
 
     await page.setViewportSize({ width: 320, height: 740 });
-    for (const url of ["/dashboard?by=division&division=1,2", "/dashboard?by=department&measure=pages", "/dashboard?by=device"]) {
+    for (const url of ["/dashboard", "/dashboard?by=division&division=1,2", "/dashboard?by=department&measure=pages", "/dashboard?by=device"]) {
       await page.goto(url);
       await expect(page.locator("#main-content h1")).toBeVisible();
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(321);

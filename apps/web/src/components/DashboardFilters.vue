@@ -31,6 +31,14 @@ const props = defineProps({
   selectedYears: { type: Array, default: () => [] },
   /** เดือนของปีงบหลักที่มีข้อมูลจริง — เดือนนอกรายการนี้เลือกไม่ได้ */
   monthOptions: { type: Array, default: () => [] },
+  /**
+   * "compare" = ตัวกรองครบทุกมิติ (หน้าเปรียบเทียบ)
+   * "overview" = ช่วงเวลากับสัญญาเท่านั้น ปีงบมาจากแถบบนสุด (#206) — หน้าภาพรวมตอบว่า
+   *   "ทั้งหมดเป็นอย่างไร" การเจาะฝ่าย แผนก อาคาร เครื่อง คือการเปรียบเทียบ จึงอยู่อีกหน้า
+   */
+  variant: { type: String, default: "compare" },
+  /** ปีงบของทั้งแอป (ชื่อที่แสดง) — ใช้บอกในหน้าภาพรวมว่ากำลังดูปีไหนและเปลี่ยนที่ไหน */
+  fiscalYearLabel: { type: String, default: "" },
 });
 const emit = defineEmits(["update:modelValue", "update:years"]);
 
@@ -78,11 +86,33 @@ const chips = computed(() => DIMENSIONS.flatMap(([key, label]) => {
 const remove = (key) => patch({ [key]: [] });
 const clearAll = () => patch(Object.fromEntries(DIMENSIONS.map(([key]) => [key, []])));
 
+const overview = computed(() => props.variant === "overview");
+const contracts = computed({
+  get: () => props.modelValue.contracts ?? [],
+  set: (value) => patch({ contracts: value ?? [] }),
+});
+
 const latestMonth = computed(() => (props.monthOptions.length ? formatMonth(props.monthOptions.at(-1)) : ""));
 </script>
 
 <template>
-  <UiFilterBar role="region" :aria-label="t('ตัวกรองข้อมูล')" :chips="chips" :toggle-label="t('ตัวกรองเพิ่มเติม')" @remove="remove" @clear="clearAll">
+  <UiFilterBar v-if="overview" role="region" :aria-label="t('ตัวกรองข้อมูล')" :collapsible="false">
+    <template #primary>
+      <UiField :label="t('ช่วงเวลา')" class="flex-1 min-w-[13rem] sm:flex-none sm:w-72">
+        <PeriodPicker v-model="months" :options="monthOptions" mode="multi" :all-label="t('ทั้งปีงบ')" />
+      </UiField>
+      <UiField :label="t('สัญญา')" class="flex-1 min-w-[13rem] sm:flex-none sm:w-72">
+        <UiCombobox v-model="contracts" :options="options.contracts ?? []" multiple :placeholder="t('ทุกสัญญา')" :search-placeholder="t('พิมพ์เพื่อค้นหา…')" />
+      </UiField>
+      <!-- ปีงบมีที่เลือกที่เดียวคือแถบบนสุด — บอกตรงนี้ เพราะคนมองหาช่องปีงบในแถบตัวกรองก่อนเสมอ -->
+      <p class="pb-2 text-xs text-ink-mute" data-testid="overview-fy-note">
+        <template v-if="fiscalYearLabel">{{ t("ปีงบ {0}", [fiscalYearLabel]) }} · </template>{{ t("เปลี่ยนปีงบได้ที่แถบเมนูด้านบน") }}<template v-if="latestMonth"> · {{ t("ข้อมูลล่าสุด {0}", [latestMonth]) }}</template>
+      </p>
+    </template>
+    <template #actions><slot name="actions" /></template>
+  </UiFilterBar>
+
+  <UiFilterBar v-else role="region" :aria-label="t('ตัวกรองข้อมูล')" :chips="chips" :toggle-label="t('ตัวกรองเพิ่มเติม')" @remove="remove" @clear="clearAll">
     <template #primary>
       <!-- บนจอแคบให้สองช่องนี้ยืดเต็มบรรทัดแทนการหดจนอ่านค่าที่เลือกอยู่ไม่ออก -->
       <UiField :label="t('ปีงบประมาณ')" class="flex-1 min-w-[11rem] sm:flex-none sm:w-56">

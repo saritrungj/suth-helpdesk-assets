@@ -238,7 +238,7 @@ async function exportExcel() {
     "Serial",
     t("ยี่ห้อ"),
     t("รุ่น"),
-    t("จำนวนหน้าดิบ"),
+    t("ยอดพิมพ์"),
     t("ค่าใช้จ่าย (หัก 2%)"),
   ];
 
@@ -341,7 +341,7 @@ onMounted(() => {
         {{ formatBahtValue(invoiceTotal) }}
       </UiStat>
 
-      <UiStat plain :label="t(&quot;จำนวนหน้าดิบ&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ตามที่กรอก ยังไม่หัก 2%&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;ยอดพิมพ์&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ตามที่กรอก ยังไม่หัก 2%&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 

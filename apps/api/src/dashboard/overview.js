@@ -206,7 +206,7 @@ router.get(
     const monthClause = months.length ? " AND v.month IN (?) " : "";
     const monthParam = months.length ? [months] : [];
 
-    const [totals, series, statusRows, byDepartment, coverageScope, unbilled, idle] = await Promise.all([
+    const [totals, series, statusRows, byDepartment, coverageScope, unbilled, idle, noLocation] = await Promise.all([
       // ---------- 1) ยอดรวมของช่วงที่เลือก ----------
       db
         .query(
@@ -389,6 +389,22 @@ router.get(
             )
             .then(([rows]) => rows[0])
         : Promise.resolve({ device_count: 0 }),
+
+      // ---------- 8) เครื่องที่ยังไม่รู้ว่าอยู่ฝ่าย/อาคารไหน ----------
+      // รายงานมิเตอร์ของผู้ให้เช่าบางฉบับไม่มีคอลัมน์ฝ่ายกับอาคาร เครื่องที่ลงจากไฟล์นั้นจึงว่าง
+      // แล้วค่าใช้จ่ายทั้งก้อนไปกองที่ "ไม่ระบุฝ่าย" บนหน้ารายงาน — ต้องบอกว่าแก้ที่ไหน ไม่ใช่ปล่อยเงียบ
+      db
+        .query(
+          `SELECT COUNT(*) AS device_count,
+                  SUM(d.division_id IS NULL) AS no_division,
+                  SUM(d.building_id IS NULL) AS no_building
+           FROM devices d
+           LEFT JOIN building b ON d.building_id = b.id
+           WHERE d.status = 'active' AND (d.division_id IS NULL OR d.building_id IS NULL)
+             ${buildingClause} ${contractClause}`,
+          [...buildingParam, ...contractParam]
+        )
+        .then(([rows]) => rows[0]),
     ]);
 
     // ---------- ประกอบสถานะเครื่อง ----------
@@ -468,6 +484,20 @@ router.get(
         detail: "อาจย้ายไปหน่วยงานที่ต้องใช้ หรือพิจารณาไม่ต่อสัญญาในปีถัดไป",
         count: Number(idle.device_count),
         action: { label: "ดูรายการเครื่อง", to: "/assets", query: { status: "active" } },
+      });
+    }
+
+    if (Number(noLocation?.device_count) > 0) {
+      const count = Number(noLocation.device_count);
+      attention.push({
+        code: "missing_location",
+        severity: "warning",
+        title: `มี ${count} เครื่องที่ยังไม่ระบุฝ่ายหรืออาคาร`,
+        detail:
+          "ค่าใช้จ่ายของเครื่องกลุ่มนี้ไปรวมอยู่ที่ \"ไม่ระบุฝ่าย\" ในรายงาน — นำเข้ารายงานสถานะเครื่องของผู้ให้เช่า (มีคอลัมน์ฝ่าย อาคาร) ระบบจะเติมเฉพาะช่องที่ว่าง หรือแก้ทีละเครื่องที่ทะเบียนเครื่อง",
+        count,
+        params: { no_division: Number(noLocation.no_division) || 0, no_building: Number(noLocation.no_building) || 0 },
+        action: { label: "ดูเครื่องที่ยังไม่ระบุ", to: "/assets", query: { missing: "location", status: "active" } },
       });
     }
 

@@ -281,7 +281,13 @@ function invalidateRelatedCaches() {
 }
 
 async function remove(row) {
-  const label = row[props.fields[0].key] ?? row.id;
+  // ชื่อของรายการเอง + รายการแม่เป็นชื่อ ("2 · อาคาร ก") — เดิมหยิบช่องแรกของฟอร์ม ซึ่งหน้าชั้น/แผนก
+  // คือ id ของอาคาร/ฝ่าย กล่องยืนยันจึงขึ้น "22" แทนชื่อชั้นที่กำลังจะลบ (#206)
+  const own = row.name ?? row.username ?? row[props.fields.find((field) => !field.optionKey && field.type !== "select")?.key] ?? row.id;
+  const parents = tableColumns.value
+    .filter((column) => column.optionKey && typeof column.value === "function")
+    .map((column) => `${column.label} ${column.value(row)}`);
+  const label = [own, ...parents].join(" · ");
 
   const confirmed = await askConfirm(
     t("“{0}” จะถูกลบออกจากระบบ และรายการที่อ้างถึงอยู่อาจแสดงผลไม่ครบ", [label]),

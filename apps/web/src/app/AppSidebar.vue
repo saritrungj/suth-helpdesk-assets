@@ -146,7 +146,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
     :aria-label="t(&quot;เมนูหลัก&quot;)"
   >
     <!-- ตราสัญลักษณ์ -->
-    <div class="flex items-center gap-2 h-[var(--shell-topbar-height)] px-2.5 shrink-0">
+    <!-- พับแล้วจัดทุกอย่างให้อยู่แนวกลางเดียวกับไอคอนเมนู (เดิมโลโก้กับปุ่มกางเยื้องซ้าย) -->
+    <div
+      class="flex items-center gap-2 h-[var(--shell-topbar-height)] px-2.5 shrink-0"
+      :class="uiState.navCollapsed && 'lg:justify-center'"
+    >
       <UiTooltip
         :content="uiState.navCollapsed ? `${APP_NAME} · ${ORG_NAME_SHORT}` : ''"
         side="right"
@@ -257,15 +261,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
     </nav>
 
     <!-- ปุ่มพับ — เฉพาะจอใหญ่ที่แถบเมนูอยู่ประจำที่ -->
-    <div class="hidden lg:block shrink-0 border-t border-chrome-line p-2">
+    <div class="hidden lg:block shrink-0 border-t border-chrome-line px-2.5 py-2">
       <UiTooltip
         :content="uiState.navCollapsed ? t(&quot;กางแถบเมนู (Ctrl+B)&quot;) : t(&quot;พับแถบเมนูให้เหลือไอคอน (Ctrl+B)&quot;)"
         side="right"
       >
         <button
           type="button"
-          class="flex items-center gap-2.5 w-full h-9 px-2.5 rounded-lg text-sm text-ink-mute
+          class="flex items-center gap-2.5 w-full h-9 rounded-lg text-sm text-ink-mute
                  hover:bg-chrome-hover hover:text-ink transition-colors"
+          :class="uiState.navCollapsed ? 'justify-center' : 'px-2.5'"
           :aria-pressed="uiState.navCollapsed"
           :aria-label="uiState.navCollapsed ? t(&quot;กางแถบเมนู&quot;) : undefined"
           @click="toggleNavCollapsed"

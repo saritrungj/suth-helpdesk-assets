@@ -165,6 +165,14 @@ describe("การดึงข้อมูลและ revalidation ข้า�
     expect(callOrder).toEqual(["invalidate", "get-nocache"]);
   });
 
+  test("กล่องยืนยันลบบอกชื่อชั้นพร้อมอาคาร ไม่ใช่รหัสอาคาร (#206)", async () => {
+    const { askConfirm } = await import("../store/confirmDialog");
+    get.mockImplementation(async (path) => ({ data: path === "/floors" ? FLOORS : BUILDINGS }));
+    const wrapper = await mountFloors();
+    await wrapper.vm.remove(FLOORS[0]);
+    expect(vi.mocked(askConfirm).mock.calls.at(-1)[0]).toContain("“ชั้น 2 · อาคาร อาคารผู้ป่วยนอก”");
+  });
+
   test("ผลโหลดเก่าที่กลับมาทีหลังไม่เขียนทับรายการจากการโหลดล่าสุด", async () => {
     let resolveInitialLoad;
     let floorsRequests = 0;

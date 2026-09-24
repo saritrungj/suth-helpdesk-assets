@@ -15,7 +15,7 @@ describe("dashboard-kpi (#197)", () => {
     expect(monthlyTrend([], months, (s) => s.rawPages)).toEqual([]);
   });
 
-  it("เทียบกับปีก่อนเป็นเปอร์เซ็นต์ และเฉลี่ยหน้าละคิดจากหน้าที่คิดเงิน", () => {
+  it("เทียบกับปีก่อนเป็นเปอร์เซ็นต์ และเฉลี่ยหน้าละคิดจากยอดพิมพ์หลังหัก 2%", () => {
     const rows = [row("2026-03", 1, 1000, "490.00"), row("2026-03", 2, 1000, "490.00")];
     const previous = [row("2025-03", 1, 1000, "490.00")];
     const k = dashboardKpis({ rows, previousRows: previous, months: ["2026-03"] });

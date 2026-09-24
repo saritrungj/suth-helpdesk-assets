@@ -17,13 +17,13 @@ import { MONTH_NAMES, formatMonth, yearLabel } from "../lib/locale-format";
  *     ต้องมีราคาแล้วตั้งแต่ขาเข้า (ADR-0021)
  *   - **ฐานเป็นศูนย์ไม่มีเปอร์เซ็นต์** ส่วนต่างจริงยังแสดงได้ แต่ "เพิ่มขึ้นกี่ %" จากศูนย์
  *     ไม่มีความหมาย
- *   - **"จำนวนพิมพ์" คือยอดพิมพ์จริง (จำนวนหน้าดิบ)** ส่วนหน้าสุทธิหลังหัก 2% เป็นฐานคิดเงิน
+ *   - **"จำนวนพิมพ์" คือยอดพิมพ์จริง (ยอดพิมพ์)** ส่วนหน้าสุทธิหลังหัก 2% เป็นฐานคิดเงิน
  *     และแสดงคู่กันเสมอภายใต้ชื่อของมันเอง
  */
 
 /** ชุดสีของกราฟมี 8 สีที่แยกกันได้และไม่วนซ้ำ — เลือกรายการมาเทียบได้ไม่เกินนี้ */
 export const MAX_ITEMS = 8;
-export const DIMENSIONS = ["overall", "division", "department", "contract", "building", "device", "fiscalYear"];
+export { DIMENSIONS } from "./dimensions";
 
 const GROUPING = {
   division: { id: "division_id", name: "division_name" },
@@ -68,7 +68,7 @@ function emptyLabel(dimension) {
 
 /** ชื่อตัวชี้วัดแบบเต็มที่ใช้ทั้งหัวกราฟ หัวตาราง และไฟล์ */
 export function metricLabel(metric) {
-  return metric === "rawPages" ? t("หน้าที่พิมพ์") : t("ค่าใช้จ่าย");
+  return metric === "rawPages" ? t("ยอดพิมพ์") : t("ค่าใช้จ่าย");
 }
 
 export function metricUnit(metric) {
@@ -447,10 +447,28 @@ export function defaultYearPair(currentYear) {
  * @param {Array<{year: number|string}>} fiscalYears ปีงบที่มีในระบบ
  * @param {number|string|null|undefined} currentYear ปีงบ พ.ศ. ที่เลือกอยู่
  */
-export function yearComparisonOptions(fiscalYears, currentYear) {
+export function yearComparisonOptions(fiscalYears, currentYear, { dataMonths = null } = {}) {
+  // ปีที่ยังไม่มียอดสักเดือนบอกไว้ในชื่อ — เดิมปีก่อนถูกเสนอให้เทียบเหมือนปีที่มีข้อมูล เลือกแล้วได้เส้นว่าง (#206)
+  const withData = dataMonths ? new Set([...dataMonths].map((month) => String(fiscalYearOfMonth(month)))) : null;
   return [...new Set([...(fiscalYears ?? []).map((year) => String(year.year)), ...defaultYearPair(currentYear)])]
     .sort((a, b) => Number(b) - Number(a))
-    .map((year) => ({ value: year, label: t("ปีงบ {0}", [yearLabel(year)]) }));
+    .map((year) => ({
+      value: year,
+      label: withData && !withData.has(year)
+        ? t("ปีงบ {0} — ยังไม่มีข้อมูล", [yearLabel(year)])
+        : t("ปีงบ {0}", [yearLabel(year)]),
+    }));
+}
+
+/**
+ * จำนวนเดือนบนแกนที่มีการบันทึกจริง — "12 เดือนบนแกน" กับ "มีข้อมูล 6 เดือน" เป็นคนละเรื่อง
+ * เดือนที่ไม่มีข้อมูลต่างจากเดือนที่ยอดเป็นศูนย์ จึงนับจากจำนวนรายการ ไม่ใช่จากยอด
+ */
+export function monthsWithData(model) {
+  if (!model?.months?.length) return 0;
+  if (model.view === "overall") return model.entries.filter((entry) => entry.summary.readings > 0).length;
+  const entries = model.entries ?? [];
+  return model.months.filter((_, index) => entries.some((entry) => entry.monthly?.[index]?.readings > 0)).length;
 }
 
 /** ปีงบของกราฟรายเครื่องจาก URL — ลิงก์เสีย/ค่าซ้ำกลับไปคู่ปีตั้งต้น */

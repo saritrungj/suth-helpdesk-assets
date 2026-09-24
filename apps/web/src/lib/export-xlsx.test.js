@@ -72,7 +72,7 @@ describe("ไฟล์ Excel ที่พร้อมใช้ต่อ", () => 
   test("หลายแผ่นงาน: ตัวเลขเป็นตัวเลขพร้อมรูปแบบ เดือนเป็นวันที่ และกราฟอยู่บนแผ่นของมัน", async () => {
     const bytes = await createWorkbook({
       sheets: [
-        { name: "เปรียบเทียบ", header: ["ฝ่าย", "หน้าที่พิมพ์"], rows: [["ฝ่าย A", 120], ["ฝ่าย B", 0]],
+        { name: "เปรียบเทียบ", header: ["ฝ่าย", "ยอดพิมพ์"], rows: [["ฝ่าย A", 120], ["ฝ่าย B", 0]],
           columns: [{}, { format: FORMATS.count }],
           chart: { type: "bar", title: "อันดับยอดพิมพ์", valueFormat: FORMATS.count, valueTitle: "หน้า",
             series: [{ name: { c1: 1, r1: 0 }, categories: { c1: 0, r1: 1, r2: 2 }, values: { c1: 1, r1: 1, r2: 2 } }] } },

@@ -4,7 +4,7 @@ import { t } from "../lib/locale";
 import { formatBahtValue, formatCompact, formatCount } from "../lib/format";
 import { UiCard, UiEmpty, UiField, UiFilterBar, UiSegmented, UiSkeleton } from "../ui";
 import UiChart from "../ui/UiChart.vue";
-import { chartState, comparisonChart, deviceSpread, dimensionLabel, stableSlots } from "./comparison";
+import { chartState, comparisonChart, deviceSpread, dimensionLabel, monthsWithData, stableSlots } from "./comparison";
 import { comparisonTitle } from "./comparison-export";
 
 /**
@@ -27,11 +27,13 @@ const props = defineProps({
   failed: { type: Boolean, default: false },
   /** บรรทัดบอกขอบเขตที่ตัวเลขชุดนี้มาจาก */
   scopeText: { type: String, default: "" },
+  /** มิติที่หน้านี้ให้เลือก — หน้าเปรียบเทียบไม่มี "ภาพรวม" เพราะหน้าภาพรวมทำหน้าที่นั้นแล้ว (#206) */
+  dimensions: { type: Array, default: null },
 });
 const state = defineModel("state", { type: Object, required: true });
 const emit = defineEmits(["details"]);
 
-const DIMENSION_OPTIONS = [
+const ALL_DIMENSION_OPTIONS = [
   { value: "overall", label: t("ภาพรวม") },
   { value: "division", label: t("ฝ่าย") },
   { value: "department", label: t("แผนก") },
@@ -40,9 +42,12 @@ const DIMENSION_OPTIONS = [
   { value: "device", label: t("เครื่อง") },
   { value: "fiscalYear", label: t("ปีงบ") },
 ];
+const DIMENSION_OPTIONS = computed(() => (props.dimensions
+  ? ALL_DIMENSION_OPTIONS.filter((option) => props.dimensions.includes(option.value))
+  : ALL_DIMENSION_OPTIONS));
 const METRIC_OPTIONS = [
   { value: "cost", label: t("ค่าใช้จ่าย") },
-  { value: "rawPages", label: t("หน้าที่พิมพ์") },
+  { value: "rawPages", label: t("ยอดพิมพ์") },
 ];
 
 const update = (patch) => { state.value = { ...state.value, ...patch }; };
@@ -125,7 +130,8 @@ function select({ index }) {
         <div class="flex flex-wrap justify-between gap-2 text-xs text-ink-mute">
           <span v-if="displayModel.view === 'overall'">{{ t("กดแท่งกราฟหรือชื่อเดือนในตารางเพื่อเจาะรายละเอียด") }}</span>
           <span v-else>{{ t("ดูรายละเอียดของแต่ละรายการได้จากตารางด้านล่าง") }}</span>
-          <span>{{ t("แสดง {0} เดือนที่มีข้อมูล", [formatCount(displayModel.months.length)]) }}</span>
+          <span v-if="displayModel.dimension === 'fiscalYear'">{{ t("แสดง {0} เดือนของปีงบ · มีข้อมูล {1} เดือน", [formatCount(displayModel.months.length), formatCount(monthsWithData(displayModel))]) }}</span>
+          <span v-else>{{ t("แสดง {0} เดือนที่มีข้อมูล", [formatCount(monthsWithData(displayModel))]) }}</span>
         </div>
       </template>
     </UiCard>

@@ -215,6 +215,14 @@ test("ลากขอบแถบเมนูปรับความกว้�
   await expect.poll(width).toBe(320);
   await page.keyboard.press("Control+b");
   await expect.poll(width).toBe(64);
+  // พับแล้ว โลโก้ ไอคอนเมนู และปุ่มกาง อยู่แนวกลางเดียวกัน (เดิมโลโก้กับปุ่มกางเยื้องซ้าย)
+  await page.waitForTimeout(300);
+  const centres = await sidebar.evaluate((aside) => {
+    const mid = (el) => { const r = el.getBoundingClientRect(); return Math.round((r.left + r.width / 2) * 2) / 2; };
+    return [aside.querySelector("a[href='/dashboard'] > span"), ...aside.querySelectorAll("nav a > span:last-child"),
+      aside.querySelector("button[aria-pressed] svg")].map(mid);
+  });
+  expect(new Set(centres).size, `centres ${centres.join(", ")}`).toBe(1);
   // คืนค่าเริ่มต้นให้เทสอื่น (สถานะอยู่ใน localStorage ของ context นี้)
   await page.keyboard.press("Control+b");
   await page.getByRole("separator", { name: "ปรับความกว้างแถบเมนู" }).dblclick();

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
+  DEFAULT_BY,
+  PAGE_DIMENSIONS,
+  comparePageQuery,
   emptyView,
   filterRows,
   pruneUnavailableScopes,
@@ -147,5 +150,25 @@ describe("เดือนที่ต้องขอจาก API", () => {
 
   test("ยังไม่รู้ปีงบ = ยังไม่ต้องขอเดือนไหน", () => {
     expect(requestedMonths({ months: [] }, [])).toEqual([]);
+  });
+});
+
+describe("หน้าภาพรวม ↔ หน้าเปรียบเทียบ (#206)", () => {
+  test("ลิงก์ที่เป็นการเปรียบเทียบย้ายไปหน้าเปรียบเทียบพร้อมค่าเดิม", () => {
+    expect(comparePageQuery({ by: "fiscalYear", fy: "1" })).toEqual({ by: "fiscalYear", fy: "1" });
+    expect(comparePageQuery({ years: "2568,2569" })).toMatchObject({ by: "fiscalYear", years: "2568,2569" });
+    expect(comparePageQuery({ division: "3" })).toMatchObject({ division: "3", by: undefined });
+  });
+  test("ภาพรวมที่มีแค่ช่วงเวลา สัญญา หรือปีเดียว ไม่ถูกย้าย", () => {
+    expect(comparePageQuery({ months: "2026-03", contract: "2", fy: "1" })).toBeNull();
+    expect(comparePageQuery({ by: "overall", years: "2569" })).toBeNull();
+    expect(comparePageQuery({ by: "constructor" })).toBeNull();
+  });
+  test("ค่าเริ่มต้นของเปรียบเทียบตามต่างกันตามหน้า และไม่ถูกเขียนลง URL", () => {
+    const compare = { defaultBy: DEFAULT_BY.compare, dimensions: PAGE_DIMENSIONS.compare };
+    expect(viewFromQuery({}, compare).by).toBe("division");
+    expect(viewFromQuery({ by: "overall" }, compare).by).toBe("division");
+    expect(viewToQuery(viewFromQuery({}, compare), compare).by).toBeUndefined();
+    expect(viewToQuery(viewFromQuery({ by: "contract" }, compare), compare).by).toBe("contract");
   });
 });

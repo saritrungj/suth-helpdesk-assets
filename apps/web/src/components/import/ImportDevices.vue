@@ -35,7 +35,7 @@ const rows = computed(() => props.registry.attention_rows ?? []);
     <UiAlert v-if="warnings.length" tone="warn" data-testid="registry-warnings">
       <strong class="block">{{ t("คำเตือน {0} รายการ — บันทึกได้ แต่ควรตรวจ", [formatCount(registry.warning_count ?? warnings.length)]) }}</strong>
       <ul class="mt-2 list-disc pl-5 text-sm">
-        <li v-for="(warning, index) in (showAll ? warnings : warnings.slice(0, 10))" :key="index">{{ warning.sheet }} · {{ t("แถว {0}", [warning.row]) }} · {{ warning.serial_number }} — {{ warning.reason }}</li>
+        <li v-for="(warning, index) in (showAll ? warnings : warnings.slice(0, 10))" :key="index">{{ [warning.sheet, warning.row && t("แถว {0}", [warning.row]), warning.serial_number].filter(Boolean).join(" · ") }} — {{ warning.reason }}</li>
       </ul>
       <UiButton v-if="warnings.length > 10" size="sm" variant="ghost" class="mt-2" @click="showAll = !showAll">
         {{ showAll ? t("ย่อ") : t("แสดงทั้งหมด") }}

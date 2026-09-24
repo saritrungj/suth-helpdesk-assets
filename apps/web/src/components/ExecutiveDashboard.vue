@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { PanelRightOpen, RefreshCw } from 'lucide-vue-next';
+import { GitCompareArrows, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
 import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useReadingMonths } from '../api/queries';
 import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState, setActiveFiscalYear } from '../store/fiscalYear';
 import { t } from '../lib/locale';
@@ -13,6 +13,7 @@ import DashboardFilters from './DashboardFilters.vue';
 import ExecutiveDetails from './ExecutiveDetails.vue';
 import ExportMenu from './ExportMenu.vue';
 import PrintComparison from './PrintComparison.vue';
+import OverviewTrend from './OverviewTrend.vue';
 import ComparisonTable from './ComparisonTable.vue';
 import TopShareCard from './TopShareCard.vue';
 import { dashboardKpis, previousYearMonths, topShare } from './dashboard-kpi';
@@ -26,7 +27,7 @@ import {
   monthsSlug, rankingSheet, saveWorkbook, standardNotes, summarySheet,
 } from './comparison-export';
 import {
-  SCOPE_KEYS, VIEW_QUERY_KEYS, filterRows, pruneUnavailableScopes, requestedMonths, selectedKeysFor, viewFromQuery, viewToQuery,
+  DEFAULT_BY, PAGE_DIMENSIONS, SCOPE_KEYS, VIEW_QUERY_KEYS, filterRows, pruneUnavailableScopes, requestedMonths, selectedKeysFor, viewFromQuery, viewToQuery,
 } from './dashboard-view';
 import { dashboardCsv, downloadCsv } from './dashboard-csv';
 
@@ -49,10 +50,23 @@ import { dashboardCsv, downloadCsv } from './dashboard-csv';
  * ที่เรียก router.replace พร้อมกัน แต่ละจุดอ่าน route.query ของตัวเอง ตัวที่เขียนทีหลัง
  * จึงทับตัวกรองที่เพิ่งเลือกไปเงียบๆ
  */
+const props = defineProps({
+  /**
+   * "overview" (/dashboard) ภาพรวมทั้งหมด: ปีงบจากแถบบนสุด ตัวกรองช่วงเวลากับสัญญา กราฟค่าใช้จ่ายกับยอดพิมพ์
+   * "compare" (/compare) ตัวกรองครบ หลายปีงบ และเปรียบเทียบตามมิติ (#206)
+   *
+   * โค้ดชุดเดียวกัน เพราะตัวเลขทั้งสองหน้าต้องมาจากแถวชุดเดียวกันด้วยกฎเดียวกัน — สองหน้าที่คำนวณ
+   * แยกกันคือที่มาของ "ภาพรวมบอกอย่าง หน้าเทียบบอกอีกอย่าง"
+   */
+  mode: { type: String, default: 'overview' },
+});
+const isOverview = props.mode === 'overview';
+const viewOptions = { defaultBy: DEFAULT_BY[props.mode], dimensions: PAGE_DIMENSIONS[props.mode] };
+
 const route = useRoute();
 const router = useRouter();
 
-const view = ref(viewFromQuery(route.query));
+const view = ref(viewFromQuery(route.query, viewOptions));
 const detailOpen = ref(false);
 const detailScope = ref(null);
 const detailGroup = ref('department');
@@ -72,7 +86,7 @@ const externalQuery = (query) => Object.fromEntries(Object.entries(query).filter
 
 let applyingFromRoute = false;
 function writeQuery(value) {
-  router.replace({ query: { ...externalQuery(route.query), ...viewToQuery(value) } });
+  router.replace({ query: { ...externalQuery(route.query), ...viewToQuery(value, viewOptions) } });
 }
 // flush 'sync' เพราะ watcher ของอีกฝั่งต้องไม่รันหลังธงถูกปลดไปแล้ว
 watch(view, (value) => {
@@ -81,7 +95,7 @@ watch(view, (value) => {
 }, { deep: true, flush: 'sync' });
 
 watch(() => route.query, (query) => {
-  const next = viewFromQuery(query);
+  const next = viewFromQuery(query, viewOptions);
   if (JSON.stringify(next) !== JSON.stringify(view.value)) {
     applyingFromRoute = true;
     view.value = next;
@@ -92,7 +106,7 @@ watch(() => route.query, (query) => {
 
 /** ลิงก์เก่า ค่าที่ไม่รู้จัก และค่าซ้ำ ถูกเขียนกลับให้ URL ตรงกับสิ่งที่หน้าใช้จริง */
 function canonicalize(query, value) {
-  const wanted = viewToQuery(value);
+  const wanted = viewToQuery(value, viewOptions);
   const drifted = VIEW_QUERY_KEYS.some((key) => String(query[key] ?? '') !== String(wanted[key] ?? ''))
     || LEGACY_QUERY_KEYS.some((key) => query[key] !== undefined);
   if (drifted) writeQuery(value);
@@ -114,7 +128,8 @@ const selectedYears = computed(() => {
   const years = view.value.years.length ? view.value.years : [activeYear.value].filter(Boolean);
   return [...new Set(years)].sort();
 });
-const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, activeFiscalYear.value?.year));
+const { data: readingMonths } = useReadingMonths();
+const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, activeFiscalYear.value?.year, { dataMonths: readingMonths.value }));
 
 let reconcilingYears = false;
 async function chooseYears(years) {
@@ -140,13 +155,13 @@ async function chooseYears(years) {
   if (record && record.id !== fiscalYearState.activeId) {
     // ด่านของปีงบยับยั้งได้ (เช่นมีฟอร์มที่ยังไม่บันทึกค้างอยู่) — ถูกยับยั้งแล้วตัวกรองต้องไม่เปลี่ยนตาม
     // เขียน fy + มุมมองเป็น navigation เดียว ไม่เปิดช่องให้ watcher อีกตัวหยิบ fy เก่ามาทับ
-    const query = { ...externalQuery(route.query), ...viewToQuery(nextView), fy: record.id };
+    const query = { ...externalQuery(route.query), ...viewToQuery(nextView, viewOptions), fy: record.id };
     if (!(await setActiveFiscalYear(record.id, { query }))) return;
   }
   // vue-router คืน NavigationFailure แบบ resolved promise ได้เมื่อ navigation ก่อนหน้าถูกแทนที่
   // ยืนยัน URL หลัง state เปลี่ยนแล้วอีกครั้ง เพื่อไม่ให้แถบบนเป็นปีใหม่แต่ลิงก์ยังเก็บ fy เก่า
   if (record && String(route.query.fy ?? '') !== String(record.id)) {
-    await router.replace({ query: { ...externalQuery(route.query), ...viewToQuery(nextView), fy: record.id } });
+    await router.replace({ query: { ...externalQuery(route.query), ...viewToQuery(nextView, viewOptions), fy: record.id } });
   }
   view.value = nextView;
 }
@@ -174,7 +189,6 @@ const primaryMonths = computed(() => (activeFiscalYearRange.value ? fiscalYearMo
  * เฉพาะปีที่เอามาเทียบ (ไม่ใช่ปีหลัก) จึงยังเลือกไม่ได้ — เป็นข้อจำกัดที่ยอมรับไว้
  * แทนการทำช่องเลือกเดือนที่ต้องอธิบายว่าเดือนนี้มีข้อมูลของปีไหนบ้าง
  */
-const { data: readingMonths } = useReadingMonths();
 const monthOptions = computed(() => {
   const months = new Set(readingMonths.value ?? []);
   return primaryMonths.value.filter((month) => months.has(month));
@@ -365,7 +379,20 @@ const unitText = computed(() => (view.value.metric === 'cost' ? t('บาท') :
 const formatMetric = (value) => (view.value.metric === 'cost' ? money(value) : formatCount(value));
 const topDivisions = computed(() => topShare(buildComparison({ rows: rows.value, dimension: 'division', metric: view.value.metric, options: scopeOptions.value.divisions ?? [] }), { metric: view.value.metric }));
 const topDevices = computed(() => topShare(buildComparison({ rows: rows.value, dimension: 'device', metric: view.value.metric, options: scopeOptions.value.devices ?? [] }), { metric: view.value.metric }));
-function compareBy(dimension) { view.value = { ...view.value, by: dimension }; }
+/** ไปหน้าเปรียบเทียบด้วยขอบเขตเดียวกับที่ดูอยู่ (ปีงบ ช่วงเวลา สัญญา) */
+function compareQuery(dimension) {
+  return { ...externalQuery(route.query), ...viewToQuery({ ...view.value, by: dimension }, { defaultBy: DEFAULT_BY.compare }) };
+}
+function compareBy(dimension) {
+  if (isOverview) router.push({ path: '/compare', query: compareQuery(dimension) });
+  else view.value = { ...view.value, by: dimension };
+}
+
+/* กราฟสองกราฟของหน้าภาพรวม (#206) — แถวชุดเดียวกับการ์ดตัวเลข */
+const costTrend = computed(() => buildComparison({ rows: rows.value, dimension: 'overall', metric: 'cost' }));
+const pagesTrend = computed(() => buildComparison({ rows: rows.value, dimension: 'overall', metric: 'rawPages' }));
+const trendCaption = computed(() => [yearsText.value, periodText.value, scopeCaption.value].join(' · '));
+const fiscalYearLabel = computed(() => (activeYear.value ? yearLabel(activeYear.value) : ''));
 
 const settledTable = ref(null);
 watch([model, periodText, ready], ([value, period, isReady]) => {
@@ -467,10 +494,13 @@ function runCsv() {
 
 <template>
   <div class="w-full min-w-0 max-w-[calc(100vw-2rem)] overflow-x-clip">
-    <UiPageHeader :title="t('ภาพรวมการพิมพ์')">
+    <UiPageHeader :title="isOverview ? t('ภาพรวมการพิมพ์') : t('เปรียบเทียบการพิมพ์')">
       <template #actions>
         <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value" @click="reload">
           <RefreshCw :size="16" />
+        </UiButton>
+        <UiButton v-if="isOverview" variant="secondary" :to="{ path: '/compare', query: compareQuery(DEFAULT_BY.compare) }">
+          <template #icon><GitCompareArrows :size="16" /></template>{{ t('เปรียบเทียบ') }}
         </UiButton>
         <UiButton variant="secondary" :disabled="!ready || !rows.length" @click="openDetails()">
           <template #icon><PanelRightOpen :size="16" /></template>{{ t('ดูรายละเอียด') }}
@@ -483,6 +513,7 @@ function runCsv() {
 
     <DashboardFilters
       :model-value="view" :options="scopeOptions" :year-options="yearOptions" :selected-years="selectedYears" :month-options="monthOptions"
+      :variant="mode" :fiscal-year-label="fiscalYearLabel"
       @update:model-value="(next) => (view = next)" @update:years="chooseYears" />
 
     <UiAlert v-if="failed" tone="danger" class="mb-4">
@@ -496,26 +527,32 @@ function runCsv() {
     <section class="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
       <UiStat emphasis :label="t('ค่าใช้จ่าย')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats"
         :delta="kpi.cost.delta" delta-inverse :hint="compareHint" :trend="kpi.cost.trend" />
-      <UiStat tone="ink" :label="t('หน้าที่พิมพ์')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
-        :delta="kpi.pages.delta" delta-inverse :hint="statsReady ? t('คิดเงิน {0} หน้า (หัก 2%)', [formatNetPages(shownStats.totals.netPages)]) : ''" :trend="kpi.pages.trend" />
+      <UiStat tone="ink" :label="t('ยอดพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
+        :delta="kpi.pages.delta" delta-inverse :hint="statsReady ? t('หลังหัก 2% เหลือ {0} หน้า', [formatNetPages(shownStats.totals.netPages)]) : ''" :trend="kpi.pages.trend" />
       <UiStat tone="ink" :label="t('เฉลี่ยหน้าละ')" :value="kpi.perPage.value === null ? '—' : formatBahtValue(kpi.perPage.value)" :unit="t('บาท')" :loading="loading && !settledStats"
-        :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าใช้จ่าย ÷ หน้าที่คิดเงิน')" />
+        :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าใช้จ่าย ÷ ยอดพิมพ์หลังหัก 2%')" />
       <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats" />
     </section>
 
+    <template v-if="isOverview">
+      <OverviewTrend :cost="costTrend" :pages="pagesTrend" :loading="loading" :failed="failed" :scope-text="trendCaption"
+        @details="(entry) => openDetails('device', entry)" />
 
-    <PrintComparison v-model:state="view" :model="model" :loading="loading" :failed="failed" :scope-text="scopeText"
-      @details="(entry) => openDetails('device', entry)" />
+      <div class="grid grid-cols-1 lg:grid-cols-2 items-start gap-3 mb-4">
+        <TopShareCard :title="t('ฝ่ายที่ใช้มากที่สุด ({0})', [unitText])" :data="topDivisions" :format="formatMetric" :loading="loading && !settledStats"
+          :more-label="t('เทียบทุกฝ่าย')" @more="compareBy('division')" />
+        <TopShareCard :title="t('เครื่องที่ใช้มากที่สุด ({0})', [unitText])" :data="topDevices" :format="formatMetric" :loading="loading && !settledStats"
+          :more-label="t('เทียบทุกเครื่อง')" @more="compareBy('device')" />
+      </div>
+    </template>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 items-start gap-3 mb-4">
-      <TopShareCard :title="t('ฝ่ายที่ใช้มากที่สุด ({0})', [unitText])" :data="topDivisions" :format="formatMetric" :loading="loading && !settledStats"
-        :more-label="t('เทียบทุกฝ่าย')" @more="compareBy('division')" />
-      <TopShareCard :title="t('เครื่องที่ใช้มากที่สุด ({0})', [unitText])" :data="topDevices" :format="formatMetric" :loading="loading && !settledStats"
-        :more-label="t('เทียบทุกเครื่อง')" @more="compareBy('device')" />
-    </div>
+    <template v-else>
+      <PrintComparison v-model:state="view" :model="model" :loading="loading" :failed="failed" :scope-text="scopeText"
+        :dimensions="PAGE_DIMENSIONS.compare" @details="(entry) => openDetails('device', entry)" />
 
-    <ComparisonTable class="mb-4" :model="tableView.model" :loading="loading" :description="tableView.description"
-      @details="(entry) => openDetails('device', entry)" />
+      <ComparisonTable class="mb-4" :model="tableView.model" :loading="loading" :description="tableView.description"
+        @details="(entry) => openDetails('device', entry)" />
+    </template>
 
     <ExecutiveDetails v-model:open="detailOpen" :rows="detailRows" :scope="detailScope" :context="`${yearsText} · ${periodText}`" :initial-group="detailGroup" />
   </div>

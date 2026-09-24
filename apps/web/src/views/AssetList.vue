@@ -90,6 +90,8 @@ function emptyFilters() {
     // "ยังไม่ผูกสัญญา" — เครื่องกลุ่มนี้คิดค่าใช้จ่ายไม่ได้เลยถ้าไม่มีราคาพิเศษเฉพาะเครื่อง
     // ยอดพิมพ์ของมันจึงหายไปจากงบเงียบๆ แดชบอร์ดเตือนเรื่องนี้แล้วลิงก์มาที่นี่
     contract: "",
+    // "location" = ยังไม่ระบุฝ่ายหรืออาคาร — ลิงก์จากคำเตือน missing_location บนหน้าภาพรวม
+    missing: "",
   };
 }
 
@@ -136,6 +138,7 @@ const FILTER_LABELS = {
   fiscalYear: t("ปีงบ"),
   status: t("สถานะ"),
   contract: t("สัญญา"),
+  missing: t("ที่ตั้ง"),
 };
 
 const activeFilters = computed(() =>
@@ -147,6 +150,8 @@ const activeFilters = computed(() =>
       value:
         key === "status"
           ? (STATUS_META[value]?.label ?? value)
+          : key === "missing"
+            ? t("ยังไม่ระบุฝ่ายหรืออาคาร")
           : key === "contract" && value === "__unassigned__"
             ? t("ยังไม่ผูกสัญญา")
             : key === "contract"
@@ -197,7 +202,8 @@ const filteredAssets = computed(() =>
       (!filters.value.fiscalYear || contractCoversFiscalYear(a, filters.value.fiscalYear)) &&
       (!filters.value.status || a.status === filters.value.status) &&
       (!filters.value.contract ||
-        (filters.value.contract === "__unassigned__" ? !a.contract_id : String(a.contract_id) === filters.value.contract))
+        (filters.value.contract === "__unassigned__" ? !a.contract_id : String(a.contract_id) === filters.value.contract)) &&
+      (filters.value.missing !== "location" || !a.division_id || !a.building_id)
   )
 );
 
@@ -233,6 +239,8 @@ onMounted(() => {
   if (route.query.status && STATUS_META[route.query.status]) {
     filters.value.status = route.query.status;
   }
+
+  if (route.query.missing === "location") filters.value.missing = "location";
 
   if (route.query.unassigned) {
     filters.value.contract = "__unassigned__";

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
+  monthsWithData,
+  yearComparisonOptions,
   MAX_ITEMS,
   buildComparison,
   chartState,
@@ -302,5 +304,21 @@ describe("สถานะของพื้นที่กราฟ", () => {
   test("ไม่มีแถวเลย = no-data ส่วนราคาครบ = ready", () => {
     expect(chartState(buildComparison({ rows: [], dimension: "division", metric: "cost" }))).toBe("no-data");
     expect(chartState(buildComparison({ rows: [division(1, 100, "49.00")], dimension: "division", metric: "cost" }))).toBe("ready");
+  });
+});
+
+describe("เดือนที่มีข้อมูล และปีงบที่ยังไม่มีข้อมูล (#206)", () => {
+  test("นับเดือนที่มีรายการจริง ไม่ใช่จำนวนช่องบนแกน", () => {
+    const model = { view: "group", months: ["P01", "P02", "P03"], entries: [
+      { monthly: [{ readings: 0 }, { readings: 2 }, { readings: 0 }] },
+      { monthly: [{ readings: 0 }, { readings: 1 }, { readings: 3 }] },
+    ] };
+    expect(monthsWithData(model)).toBe(2);
+    expect(monthsWithData({ view: "overall", months: ["2026-03"], entries: [{ summary: { readings: 0 } }] })).toBe(0);
+  });
+  test("ปีงบที่ไม่มียอดสักเดือนบอกไว้ในชื่อ", () => {
+    const options = yearComparisonOptions([{ year: 2569 }], 2569, { dataMonths: ["2026-03"] });
+    expect(options.find((o) => o.value === "2569").label).toBe("ปีงบ 2569");
+    expect(options.find((o) => o.value === "2568").label).toBe("ปีงบ 2568 — ยังไม่มีข้อมูล");
   });
 });
