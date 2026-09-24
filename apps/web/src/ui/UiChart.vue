@@ -127,7 +127,10 @@ const chartData = computed(() => ({
     return {
       ...base,
       borderWidth: 2,
+      // monotone: โค้งนุ่มแต่ไม่แกว่งเกินจุดจริง — spline ธรรมดา (tension อย่างเดียว) ทำให้เส้นระหว่าง
+      // เดือนที่ยอดกระโดดจุ่มต่ำกว่าทั้งสองเดือน ดูเหมือนมีเดือนที่ยอดตกซึ่งไม่มีอยู่จริง
       tension: 0.3,
+      cubicInterpolationMode: "monotone",
       pointRadius: s.data.map((_, i) => i === props.selectedIndex ? 7 : 4),
       pointHoverRadius: 6,
       pointBackgroundColor: s.color,
@@ -151,7 +154,10 @@ const chartOptions = computed(() => {
     // แท่งต้องเริ่มจากศูนย์เสมอ เพราะ "ความยาว" คือค่า การตัดแกนทำให้แท่งที่ต่างกัน
     // 5% ดูเหมือนต่างกันเท่าตัว — ส่วนกราฟเส้นอ่านจาก "ความชัน" ไม่ใช่ระยะจากฐาน
     // การบังคับให้เริ่มที่ศูนย์จึงอัดเส้นไปกองอยู่แถบบนจนมองไม่เห็นว่าขึ้นหรือลง
-    beginAtZero: props.kind === "bar",
+    //
+    // ยกเว้นเส้นเดียวที่ระบายพื้นใต้เส้น — พื้นที่ระบายอ่านเป็น "ปริมาณ" เหมือนแท่ง ถ้าแกนไม่เริ่มที่ศูนย์
+    // เดือนที่ยอดต่ำกว่านิดเดียวจะดูเหมือนแทบไม่มีการพิมพ์ (พบกับข้อมูลจริง)
+    beginAtZero: props.kind === "bar" || painted.value.length === 1,
     ticks: {
       ...base.scales.y.ticks,
       autoSkip: true,

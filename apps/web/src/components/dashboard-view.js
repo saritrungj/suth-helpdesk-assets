@@ -1,5 +1,8 @@
 import { fiscalYearMonths, getFiscalYearRange } from "@suth/domain";
 import { DIMENSIONS, MAX_YEARS, fiscalPosition } from "./comparison";
+import { ID_PATTERN, YEAR_PATTERN, first, listFrom } from "./dashboard-route";
+
+export { comparePageQuery } from "./dashboard-route";
 
 /**
  * dashboard-view.js — สถานะทั้งหมดของหน้าภาพรวมการพิมพ์ อยู่ที่เดียว
@@ -59,17 +62,24 @@ const COMPARE_SCOPE = new Map([
 ]);
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
-const ID_PATTERN = /^(\d+|unassigned)$/;
-/**
- * ปีงบเป็น พ.ศ. สี่หลักในช่วงที่เป็นไปได้จริง
- *
- * `\d{4}` เฉยๆ ยอมให้ `?years=0000` ผ่าน แล้วช่วงเดือนที่คำนวณได้จะกลายเป็นปี ค.ศ.
- * ติดลบ ซึ่งถูกส่งไปให้ API แล้วเด้งกลับเป็น 400 โดยหน้าจอบอกได้แค่ "โหลดไม่สำเร็จ"
- */
-const YEAR_PATTERN = /^2[3-9]\d{2}$/;
 
-const first = (value) => String(Array.isArray(value) ? value[0] ?? "" : value ?? "");
-const listFrom = (value, pattern) => [...new Set(first(value).split(",").map((item) => item.trim()).filter((item) => pattern.test(item)))];
+
+/**
+ * สองหน้าที่ใช้สถานะชุดนี้ (#206)
+ *
+ *   ภาพรวม (/dashboard)      ปีงบจากแถบบนสุด ช่วงเวลา สัญญา — ดูทั้งหมดเป็นภาพรวมเท่านั้น
+ *   เปรียบเทียบ (/compare)    ตัวกรองครบทุกมิติ หลายปีงบ และ "เปรียบเทียบตาม"
+ *
+ * ค่าเริ่มต้นของ "เปรียบเทียบตาม" ต่างกันตามหน้า — หน้าเปรียบเทียบที่เปิดมาแล้วเห็นภาพรวม
+ * ซ้ำกับอีกหน้าคือหน้าที่ไม่มีเหตุผลให้เปิด จึงเริ่มที่ฝ่าย
+ */
+export const DEFAULT_BY = { overview: "overall", compare: "division" };
+
+/** "เปรียบเทียบตาม" ที่แต่ละหน้ามี — ภาพรวมไม่ซ้ำอยู่ในหน้าเปรียบเทียบ */
+export const PAGE_DIMENSIONS = {
+  overview: ["overall"],
+  compare: DIMENSIONS.filter((dimension) => dimension !== "overall"),
+};
 
 export function emptyView() {
   return {
@@ -87,12 +97,13 @@ export function emptyView() {
  * ค่าที่ไม่รู้จักตกไปที่ค่าเริ่มต้นเสมอ และเทียบกับรายการที่อนุญาตด้วย `includes()`
  * ไม่ใช่การมี property บน object — ไม่งั้น `?by=constructor` ผ่านด่านได้ทาง prototype
  */
-export function viewFromQuery(query = {}) {
+export function viewFromQuery(query = {}, { defaultBy = "overall", dimensions = DIMENSIONS } = {}) {
+  const requestedBy = first(query.by);
   const view = {
     years: listFrom(query.years, YEAR_PATTERN).sort().slice(-MAX_YEARS),
     months: listFrom(query.months, MONTH_PATTERN).sort(),
     ...Object.fromEntries(SCOPE_KEYS.map((key) => [key, listFrom(query[SCOPE_QUERY[key]], ID_PATTERN)])),
-    by: DIMENSIONS.includes(first(query.by)) ? first(query.by) : "overall",
+    by: dimensions.includes(requestedBy) ? requestedBy : defaultBy,
     metric: first(query.measure) === "pages" ? "rawPages" : "cost",
   };
 
@@ -111,12 +122,12 @@ export function viewFromQuery(query = {}) {
 }
 
 /** สถานะ → query — ค่าเริ่มต้นไม่ถูกเขียน ลิงก์ของมุมมองปกติจึงยังสั้น */
-export function viewToQuery(view) {
+export function viewToQuery(view, { defaultBy = "overall" } = {}) {
   return {
     years: view.years.length ? view.years.join(",") : undefined,
     months: view.months.length ? view.months.join(",") : undefined,
     ...Object.fromEntries(SCOPE_KEYS.map((key) => [SCOPE_QUERY[key], view[key]?.length ? view[key].join(",") : undefined])),
-    by: view.by === "overall" ? undefined : view.by,
+    by: view.by === defaultBy ? undefined : view.by,
     measure: view.metric === "rawPages" ? "pages" : undefined,
   };
 }

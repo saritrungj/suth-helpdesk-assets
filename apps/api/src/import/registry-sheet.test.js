@@ -151,14 +151,30 @@ test("รายงานมิเตอร์ใช้ลงทะเบีย�
   assert.equal(bySerial.TESTB001.department, "งาน ก"); // ไม่ใช่คอลัมน์ "location" ซึ่งคือหน่วยย่อย
   assert.equal(bySerial.TESTB001.installation, "installed");
   // มียอด = ติดตั้งแล้วอย่างน้อยตั้งแต่งวดแรกที่มียอด ก่อนหน้านั้นยืนยันไม่ได้ (ADR-0018 Q21)
-  assert.equal(bySerial.TESTB001.installed_on, "2026-02-24");
+  // เริ่มที่วันที่ 1 ของเดือนสิ้นงวด (เดือนที่ยอดงวดนั้นลง) — เดือน ก.พ. ไม่มียอดให้กรอกจึงต้องไม่ถูกนับว่าค้าง
+  assert.equal(bySerial.TESTB001.installed_on, "2026-03-01");
   assert.equal(bySerial.TESTB001.installed_on_known, false);
   assert.equal(bySerial.TESTB002.installation, "not_installed"); // "รอจุดติดตั้ง" = หลักฐาน
   assert.equal(bySerial.TESTB002.location, "");
   assert.equal(bySerial.TESTC003.has_color_meter, true);
-  assert.equal(bySerial.TESTC003.installed_on, "2026-03-24"); // เริ่มมียอดงวดที่สอง
+  assert.equal(bySerial.TESTC003.installed_on, "2026-04-01"); // เริ่มมียอดงวดที่สอง (สิ้นงวด เม.ย.)
   assert.equal(bySerial.TESTC003.brand, "HP");
   assert.equal(bySerial.TESTC003.contract_no, "TEST192/2568");
+  assert.deepEqual(parsed.warnings, []); // มีคอลัมน์ฝ่ายและอาคารครบ
+});
+
+test("รายงานมิเตอร์ที่ไม่มีคอลัมน์ฝ่าย/อาคาร เตือนว่าเครื่องจะไปอยู่ที่ \"ไม่ระบุฝ่าย\" และบอกทางแก้", () => {
+  const head = ["No.", "Model", "SN.", "Printer Name", " Meter Start (B&W) ", " Meter End (B&W) ", " B&W Cost/Click (THB) "];
+  const parsed = parseRegistryWorkbook([{ name: "5-May", rows: [
+    ["Meter Reading Report from Installation Date; April 1, 2569 to April 30, 2569 : Contract No. TEST86/2567"],
+    head,
+    ["1", "OKI ES5112", "TESTO001", "ห้องยา", 10, 20, 0.29],
+  ] }]);
+  assert.equal(parsed.rows[0].division, "");
+  assert.equal(parsed.warnings.length, 1);
+  assert.equal(parsed.warnings[0].sheet, "5-May");
+  assert.match(parsed.warnings[0].reason, /ไม่มีคอลัมน์ฝ่ายและอาคาร/);
+  assert.match(parsed.warnings[0].reason, /รายงานสถานะเครื่อง/);
 });
 
 test("splitBrandModel รู้จักยี่ห้อที่เขียนติดกับรุ่น แต่ไม่ตัดคำที่แค่ขึ้นต้นเหมือน", () => {

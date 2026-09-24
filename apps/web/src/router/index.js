@@ -5,6 +5,7 @@ import { authState } from "../store/auth";
 import Login from "../views/Login.vue";
 import { installPageMemory } from "../lib/page-memory";
 import { setAppRouter } from "../lib/app-router";
+import { comparePageQuery } from "../components/dashboard-route";
 
 /**
  * router/index.js — เส้นทางทั้งหมดของเว็บ
@@ -23,6 +24,36 @@ import { setAppRouter } from "../lib/app-router";
  * `lib/app-router.test.js` เพราะการโหลดหน้าแบบ lazy กันวงนี้ไม่ได้ (Login โหลดตรงๆ)
  */
 
+// หน้าเปรียบเทียบรุ่นแรก (ดู ADR-0020) — "แบบการเทียบ + รายการที่เลือก" ของหน้านั้น
+// คือ "เปรียบเทียบตาม + ตัวกรอง" ของหน้าเปรียบเทียบปัจจุบัน ซึ่งเป็นความหมายเดียวกัน
+// ค่าที่แปลงไม่ได้ถูกตัดทิ้ง แล้วหน้าเปิดด้วยค่าเริ่มต้นแทนการเดาให้เงียบๆ
+function legacyCompareRedirect(to) {
+  const value = (key) => (Array.isArray(to.query[key]) ? to.query[key][0] : to.query[key]);
+  const type = value("type");
+  // ค้นด้วย Map ไม่ใช่ object เพราะ `type` มาจาก URL — `?type=constructor` จะได้
+  // ฟังก์ชันบน prototype กลับมาเป็น "ชื่อมิติ" แล้วหลุดเข้าไปอยู่ใน URL ปลายทาง
+  const by = new Map([["contract", "contract"], ["building", "building"], ["year", "fiscalYear"]]).get(type)
+    ?? (type === "department" ? (value("level") === "department" ? "department" : "division") : undefined);
+  // รายการที่เคยเลือกมาเทียบ = ตัวกรองของมิตินั้นในหน้าใหม่
+  const chosen = value("items") ?? (type === "year" ? undefined : value("groups"));
+  const scope = new Map([["contract", "contract"], ["building", "building"], ["department", "department"], ["division", "division"]]).get(by);
+  return {
+    path: "/compare",
+    query: {
+      fy: to.query.fy,
+      by,
+      months: value("months"),
+      years: type === "year" ? value("groups") ?? value("years") : value("years"),
+      measure: value("measure") ?? (value("metric") === "totalPages" || value("metric") === "netPages" ? "pages" : undefined),
+      // รายการที่เคยหยิบมาเทียบ และตัวกรองสัญญา/อาคารของหน้าเดิม มีความหมายเดียวกับตัวกรองชื่อเดียวกันในหน้าใหม่
+      contract: scope === "contract" ? chosen : value("contract"),
+      building: scope === "building" ? chosen : value("building"),
+      department: scope === "department" ? chosen : value("department"),
+      division: scope === "division" ? chosen : value("division"),
+    },
+  };
+}
+
 const routes = [
   {
     path: "/login",
@@ -34,10 +65,25 @@ const routes = [
 
   { path: "/", redirect: "/dashboard" },
 
+  // ภาพรวม = ทั้งหมดของปีงบบนแถบบนสุด ลิงก์ที่เป็นการเปรียบเทียบ (บุ๊กมาร์กเดิม ?by=, หลายปีงบ,
+  // ตัวกรองฝ่าย/แผนก/อาคาร/เครื่อง) ย้ายไปหน้าเปรียบเทียบพร้อมค่าเดิม ไม่เปิดบนภาพรวมแบบตัดทิ้งเงียบๆ (#206)
   {
     path: "/dashboard",
     name: "Dashboard",
     component: () => import("../views/Dashboard.vue"),
+    beforeEnter: (to) => {
+      const query = comparePageQuery(to.query);
+      return query ? { path: "/compare", query } : true;
+    },
+  },
+
+  // เปรียบเทียบการพิมพ์ — ตัวกรองครบทุกมิติ หลายปีงบ และเปรียบเทียบตาม (#206)
+  {
+    path: "/compare",
+    name: "Compare",
+    component: () => import("../views/Compare.vue"),
+    // ลิงก์ของหน้าเปรียบเทียบรุ่นแรก (ADR-0020) ใช้ ?type=&groups= — แปลงเป็นตัวกรองของหน้านี้
+    beforeEnter: (to) => (to.query.type !== undefined || to.query.groups !== undefined ? legacyCompareRedirect(to) : true),
   },
 
   // ทะเบียนทรัพย์สิน — เปิดให้ทุกคนที่ล็อกอินแล้วดูได้เหมือนหน้ารายงาน
@@ -72,47 +118,14 @@ const routes = [
     name: "Expense",
     component: () => import("../views/UsageReport.vue"),
     beforeEnter: (to) => to.query.tab === "department"
-      ? { path: "/dashboard", query: { ...to.query, tab: undefined, by: "division" } }
+      ? { path: "/compare", query: { ...to.query, tab: undefined, by: "division" } }
       : true,
   },
 
   // path เดิมก่อนรวมทุกหน้าวิเคราะห์เข้าหน้าภาพรวม — เก็บไว้กันลิงก์เก่าและบุ๊กมาร์กพัง
   {
     path: "/by-department",
-    redirect: (to) => ({ path: "/dashboard", query: { ...to.query, by: "division" } }),
-  },
-
-  // หน้าเปรียบเทียบเดิม (ดู ADR-0020) — "แบบการเทียบ + รายการที่เลือก" ของหน้านั้น
-  // กลายเป็น "เปรียบเทียบตาม + ตัวกรอง" ของหน้าภาพรวม ซึ่งเป็นความหมายเดียวกัน
-  // ค่าที่แปลงไม่ได้ถูกตัดทิ้ง แล้วหน้าภาพรวมเปิดด้วยค่าเริ่มต้นแทนการเดาให้เงียบๆ
-  {
-    path: "/compare",
-    redirect: (to) => {
-      const value = (key) => (Array.isArray(to.query[key]) ? to.query[key][0] : to.query[key]);
-      const type = value("type");
-      // ค้นด้วย Map ไม่ใช่ object เพราะ `type` มาจาก URL — `?type=constructor` จะได้
-      // ฟังก์ชันบน prototype กลับมาเป็น "ชื่อมิติ" แล้วหลุดเข้าไปอยู่ใน URL ปลายทาง
-      const by = new Map([["contract", "contract"], ["building", "building"], ["year", "fiscalYear"]]).get(type)
-        ?? (type === "department" ? (value("level") === "department" ? "department" : "division") : undefined);
-      // รายการที่เคยเลือกมาเทียบ = ตัวกรองของมิตินั้นในหน้าใหม่
-      const chosen = value("items") ?? (type === "year" ? undefined : value("groups"));
-      const scope = new Map([["contract", "contract"], ["building", "building"], ["department", "department"], ["division", "division"]]).get(by);
-      return {
-        path: "/dashboard",
-        query: {
-          fy: to.query.fy,
-          by,
-          months: value("months"),
-          years: type === "year" ? value("groups") ?? value("years") : value("years"),
-          measure: value("measure") ?? (value("metric") === "totalPages" || value("metric") === "netPages" ? "pages" : undefined),
-          // รายการที่เคยหยิบมาเทียบ และตัวกรองสัญญา/อาคารของหน้าเดิม มีความหมายเดียวกับตัวกรองชื่อเดียวกันในหน้าใหม่
-          contract: scope === "contract" ? chosen : value("contract"),
-          building: scope === "building" ? chosen : value("building"),
-          department: scope === "department" ? chosen : value("department"),
-          division: scope === "division" ? chosen : value("division"),
-        },
-      };
-    },
+    redirect: (to) => ({ path: "/compare", query: { ...to.query, by: "division" } }),
   },
 
   {

@@ -153,7 +153,7 @@ test.describe("หน้ารายละเอียดเครื่อง �
 });
 
 test.describe("จำมุมมองของแต่ละหน้าในแท็บนี้ (#115)", () => {
-  const GROUP = { "ภาพรวมการพิมพ์": "ภาพรวม", "ทะเบียนเครื่องพิมพ์": "งานประจำ", "รายงานสรุปการพิมพ์": "รายงาน", "ยี่ห้อ": "ตั้งค่าระบบ" };
+  const GROUP = { "ภาพรวมการพิมพ์": "ภาพรวม", "เปรียบเทียบการพิมพ์": "ภาพรวม", "ทะเบียนเครื่องพิมพ์": "งานประจำ", "รายงานสรุปการพิมพ์": "รายงาน", "ยี่ห้อ": "ตั้งค่าระบบ" };
   /** กดเมนูเหมือนผู้ใช้ — กลุ่มเมนูพับได้ จึงกางกลุ่มก่อนถ้าลิงก์ยังไม่แสดง */
   async function openFromMenu(page, name) {
     const menu = page.getByRole("complementary", { name: "เมนูหลัก" });
@@ -164,27 +164,27 @@ test.describe("จำมุมมองของแต่ละหน้าใ�
 
   test("กดเมนูกลับมาได้มุมมองล่าสุด และลิงก์ที่ระบุค่ามาเองชนะความจำ", async ({ page }) => {
     await comparisonFixture(page);
-    await page.goto("/dashboard?by=division&division=1,2&measure=pages");
+    await page.goto("/compare?by=contract&division=1,2&measure=pages");
     await expect(page.getByRole("region", { name: "สรุปตัวเลขสำคัญ" })).toContainText("5,970");
 
     await openFromMenu(page, "รายงานสรุปการพิมพ์");
     await expect(page).toHaveURL(/\/report/);
-    await openFromMenu(page, "ภาพรวมการพิมพ์");
-    await expect(page).toHaveURL(/by=division/);
+    await openFromMenu(page, "เปรียบเทียบการพิมพ์");
+    await expect(page).toHaveURL(/by=contract/);
     await expect(page).toHaveURL(/division=1(?:%2C|,)2/);
     await expect(page).toHaveURL(/measure=pages/);
 
     // ลิงก์ที่ระบุมุมมองมาเองชนะความจำเสมอ ไม่ถูกเติมค่าเก่าทับ
-    await page.goto("/dashboard?by=contract");
-    await expect(page).toHaveURL(/by=contract/);
+    await page.goto("/compare?by=building");
+    await expect(page).toHaveURL(/by=building/);
     await expect(page).not.toHaveURL(/division=1/);
 
     // ล้างตัวกรองแล้วกลับไปค่าเริ่มต้นจริง ทั้งใน URL และหลังไปหน้าอื่นแล้วกลับมา
-    await page.goto("/dashboard?by=division&division=1,2&measure=pages");
+    await page.goto("/compare?by=contract&division=1,2&measure=pages");
     await page.getByRole("region", { name: "ตัวกรองข้อมูล" }).getByRole("button", { name: "ล้างตัวกรอง", exact: true }).click();
     await expect(page).not.toHaveURL(/division=/);
     await openFromMenu(page, "รายงานสรุปการพิมพ์");
-    await openFromMenu(page, "ภาพรวมการพิมพ์");
+    await openFromMenu(page, "เปรียบเทียบการพิมพ์");
     await expect(page).not.toHaveURL(/division=/);
   });
 

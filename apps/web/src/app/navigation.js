@@ -16,6 +16,7 @@ import {
   Users,
   Wallet,
   FileUp,
+  GitCompareArrows,
 } from "lucide-vue-next";
 
 /**
@@ -61,7 +62,14 @@ export const NAV_GROUPS = [
         to: "/dashboard",
         label: t("ภาพรวมการพิมพ์"),
         icon: Gauge,
-        keywords: t("dashboard home หน้าแรก ภาพรวม สรุป งานค้าง compare เปรียบเทียบ ฝ่าย แผนก สัญญา ส่งออก"),
+        keywords: t("dashboard home หน้าแรก ภาพรวม สรุป งานค้าง ค่าใช้จ่าย ยอดพิมพ์ สัญญา ส่งออก"),
+      },
+      {
+        // ภาพรวมตอบว่า "ทั้งหมดเป็นอย่างไร" ส่วนหน้านี้ตอบว่า "ใครใช้มากกว่าใคร ปีนี้ต่างจากปีก่อนเท่าไร" (#206)
+        to: "/compare",
+        label: t("เปรียบเทียบการพิมพ์"),
+        icon: GitCompareArrows,
+        keywords: t("compare เปรียบเทียบ ฝ่าย แผนก สัญญา อาคาร เครื่อง ปีงบ หลายปี อันดับ ส่งออก"),
       },
     ],
   },

@@ -227,6 +227,7 @@ function readVendorReport(input) {
   if (!parsed || !parsed.sheets.length) return null;
 
   const devices = new Map();
+  const warnings = [];
   parsed.sheets.forEach((info, order) => {
     const rows = sheets.find((sheet) => sheet.name.trim() === info.sheet).rows;
     const headerRow = rows.findIndex((row) => row.some((c) => header(c).startsWith("meter start")));
@@ -242,6 +243,17 @@ function readVendorReport(input) {
       building: col("building"),
       floor: col("fool.", "floor"),
     };
+    // รายงานมิเตอร์บางฉบับ (เช่นของสัญญาเครื่องพิมพ์ทั่วไป) ไม่มีฝ่ายกับอาคาร — ต้องบอกตอนนำเข้า
+    // ไม่งั้นค่าใช้จ่ายทั้งสัญญาไปกองที่ "ไม่ระบุฝ่าย" โดยไม่มีใครรู้ว่าต้องแก้ที่ไหน (พบกับข้อมูลจริง)
+    const lacking = [at.division === -1 && "ฝ่าย", at.building === -1 && "อาคาร"].filter(Boolean);
+    if (lacking.length) {
+      warnings.push({
+        sheet: info.sheet,
+        reason:
+          `แผ่นนี้ไม่มีคอลัมน์${lacking.join("และ")} — เครื่องใหม่จะยังไม่ระบุ${lacking.join("และ")} ค่าใช้จ่ายจะอยู่ที่ "ไม่ระบุฝ่าย" ` +
+          "จนกว่าจะนำเข้ารายงานสถานะเครื่อง (ระบบเติมเฉพาะช่องที่ว่าง) หรือแก้ที่ทะเบียนเครื่อง",
+      });
+    }
     const seen = new Set();
     for (let r = headerRow + 1; r < rows.length; r++) {
       const row = rows[r];
@@ -291,7 +303,10 @@ function readVendorReport(input) {
     // ไม่มียอดสักงวด ≠ ยังไม่ติดตั้ง (ADR-0018 Q19) — รู้แค่ว่ายังไม่มียอด ให้ผ่านหน้าตรวจยืนยัน
     if (order === null) return device;
     // มียอด = ติดตั้งแล้วอย่างน้อยตั้งแต่งวดแรกที่มียอด ก่อนหน้านั้นยังยืนยันไม่ได้ (Q21)
-    return { ...device, installation: "installed", installed_on: parsed.sheets[order].period_start, installed_on_known: false };
+    // วันเริ่มคือวันที่ 1 ของ "เดือนสิ้นงวด" ไม่ใช่วันต้นงวด — ยอดของงวด 24 ก.พ.–23 มี.ค. ลงที่เดือน มี.ค.
+    // (vendor-meter.js) ถ้าเริ่มที่ 24 ก.พ. เดือน ก.พ. จะถูกนับว่าต้องกรอกทั้งที่ไม่มีงวดไหนลงเดือนนั้นได้เลย
+    // หน้าบันทึกยอดจึงค้าง "กรอกครบแล้ว 0 จาก N" ตลอดไป (พบกับข้อมูลจริง ก.ย. 2569)
+    return { ...device, installation: "installed", installed_on: `${parsed.sheets[order].month}-01`, installed_on_known: false };
   });
 
   return {
@@ -304,7 +319,7 @@ function readVendorReport(input) {
     })),
     rows,
     errors: parsed.errors,
-    warnings: [],
+    warnings,
   };
 }
 

@@ -39,7 +39,7 @@ describe("ไฟล์ Excel ของการเปรียบเทียบ
     expect(workbook.SheetNames).toEqual(["เปรียบเทียบ", "ข้อมูลรายละเอียด", "เงื่อนไขรายงาน"]);
 
     const [header, first, second] = XLSX.utils.sheet_to_json(workbook.Sheets["เปรียบเทียบ"], { header: 1, defval: null });
-    expect(header).toEqual(["ฝ่าย", "หน้าที่พิมพ์", "หน้าที่คิดเงิน", "ค่าใช้จ่าย (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)", "ต.ค. 2568", "พ.ย. 2568"]);
+    expect(header).toEqual(["ฝ่าย", "ยอดพิมพ์", "ยอดพิมพ์หลังหัก 2%", "ค่าใช้จ่าย (บาท)", "เครื่องที่มีข้อมูล (เครื่อง)", "ต.ค. 2568", "พ.ย. 2568"]);
     expect(first).toEqual(["ฝ่าย A", 300, 294, 125.69, 1, 100, 200]);
     expect(second).toEqual(["ฝ่าย B", 50, 49, 20.95, 2, 0, 50]);
 
