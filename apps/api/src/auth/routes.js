@@ -15,6 +15,7 @@ const router = express.Router();
 const db = require("../shared/db");
 const asyncHandler = require("../shared/async-handler");
 const requireAuth = require("./require-auth");
+const { passwordVersion } = require("./current-user");
 const { validate } = require("../shared/validate");
 const { unauthorized } = require("../shared/http-error");
 const { noStore } = require("../shared/cache");
@@ -83,7 +84,8 @@ router.post(
     }
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
+      // pwv = ลายนิ้วมือของรหัสผ่าน — เปลี่ยนรหัสผ่านแล้ว token นี้ใช้ไม่ได้ (#208, current-user.js)
+      { id: user.id, username: user.username, role: user.role, pwv: passwordVersion(user.password) },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
     );

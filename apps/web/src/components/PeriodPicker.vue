@@ -57,6 +57,11 @@ const props = defineProps({
   allEmitsEmpty: { type: Boolean, default: true },
   disabled: { type: Boolean, default: false },
   /**
+   * เลือกเดือนที่ไม่มียอดพิมพ์ได้ด้วย (#208) — หน้าค่าใช้จ่ายมีค่าเช่าคงที่ทุกเดือนของสัญญาแม้ไม่มีการพิมพ์
+   * ถ้าปิดเดือนเหล่านั้น ยอดตามใบแจ้งหนี้ของช่วงที่เลือกได้จะขาดค่าเช่าของเดือนนั้นไปเงียบๆ
+   */
+  allowEmpty: { type: Boolean, default: false },
+  /**
    * ช่วงเดือนต่อท้ายในบรรทัดเดียว — ใช้ในแถบเครื่องมือที่ช่องอื่นสูงบรรทัดเดียว (รอบที่ 3 ของ #51)
    * แบบสองบรรทัดทำให้ช่องสูงกว่าช่องข้างๆ ป้ายเหนือช่องจึงไม่ตรงแนว และบรรทัดล่างตัวเล็กอ่านยาก
    * เป็นค่าเริ่มต้นแล้ว — เดิมแต่ละหน้าเลือกเอง ช่องเลือกเดือนจึงสูงไม่เท่ากันในแต่ละหน้า
@@ -90,6 +95,7 @@ const cells = computed(() =>
     short: MONTH_NAMES[Number(value.slice(5, 7)) - 1],
     full: formatMonth(value),
     hasData: props.options.includes(value),
+    selectable: props.allowEmpty || props.options.includes(value),
   }))
 );
 
@@ -166,7 +172,7 @@ const presets = computed(() => {
 
   return list
     .map((preset) => {
-      const usable = preset.months.filter((m) => props.options.includes(m));
+      const usable = preset.months.filter((m) => props.allowEmpty || props.options.includes(m));
       return {
         ...preset,
         usable,
@@ -219,12 +225,12 @@ function monthsBetween(a, b) {
   const [from, to] = i <= j ? [i, j] : [j, i];
   return order
     .slice(from, to + 1)
-    .filter((c) => c.hasData)
+    .filter((c) => c.selectable)
     .map((c) => c.value);
 }
 
 function onCellClick(cell) {
-  if (!cell.hasData) return;
+  if (!cell.selectable) return;
 
   if (props.mode === "multi") {
     const next = selected.value.has(cell.value)
@@ -372,15 +378,19 @@ watch(open, (isOpen) => {
                 v-for="cell in cells"
                 :key="cell.value"
                 type="button"
-                :disabled="!cell.hasData"
-                :title="cell.hasData ? cell.full : t(&quot;{0} — ยังไม่มีข้อมูล&quot;, [cell.full])"
+                :disabled="!cell.selectable"
+                :title="cell.hasData ? cell.full : allowEmpty ? t(&quot;{0} — ไม่มีข้อมูลพิมพ์&quot;, [cell.full]) : t(&quot;{0} — ยังไม่มีข้อมูล&quot;, [cell.full])"
+                :aria-label="cell.hasData ? cell.full : t(&quot;{0} — ไม่มีข้อมูลพิมพ์&quot;, [cell.full])"
                 :aria-pressed="selected.has(cell.value)"
                 class="h-8 rounded-md text-xs font-medium transition-colors
                        disabled:opacity-25 disabled:cursor-not-allowed"
                 :class="{
                   'bg-brand text-brand-on': cellState(cell) === 'selected' || cellState(cell) === 'start',
                   'bg-brand-soft text-brand-ink': cellState(cell) === 'preview',
-                  'text-ink-soft hover:bg-surface-3': cellState(cell) === 'idle',
+                  'text-ink-soft hover:bg-surface-3': cellState(cell) === 'idle' && cell.hasData,
+                  'text-ink-soft': cellState(cell) === 'idle' && !cell.hasData && !allowEmpty,
+                  'hover:bg-surface-3': cellState(cell) === 'idle' && !cell.hasData && allowEmpty,
+                  'text-ink-mute italic': allowEmpty && !cell.hasData && cellState(cell) === 'idle',
                 }"
                 @click="onCellClick(cell)"
                 @mouseenter="hoverMonth = cell.value"

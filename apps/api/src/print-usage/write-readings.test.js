@@ -8,6 +8,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("../auth/unit-test-users"); // บัญชีจำลองแทนการอ่านฐาน (#208)
 
 const { writeReadings } = require("./routes");
 

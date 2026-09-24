@@ -44,6 +44,30 @@ async function captureStdout(fn) {
   return lines.join("");
 }
 
+/**
+ * ค่าที่ถูกบันทึก อ่านได้ทั้งสองรูปแบบของ logger (#208) — เดิมหาข้อความ "web-vital " ที่มีเฉพาะโหมด pretty
+ * เครื่องที่ตั้ง LOG_FORMAT=json (production) จึงล้มทั้งที่ปลายทางทำงานถูก
+ *   json:   {"time":…,"level":"info","message":"web-vital","vital":{…}}
+ *   pretty: 10:00:00 INFO  web-vital vital={…}
+ */
+function loggedVitals(out) {
+  return out.split("\n").flatMap((line) => {
+    const text = line.replace(/\x1b\[[0-9;]*m/g, "").trim();
+    // ใต้ node --test โปรโตคอลของตัวรันเทสเขียนลง stdout เดียวกัน บรรทัดจึงอาจมีไบต์อื่นนำหน้า
+    const start = text.indexOf('{"time"');
+    if (start >= 0) {
+      try {
+        const entry = JSON.parse(text.slice(start));
+        return entry.message === "web-vital" ? [entry.vital] : [];
+      } catch {
+        return [];
+      }
+    }
+    const match = text.match(/ web-vital vital=(\{.*\})$/);
+    return match ? [JSON.parse(match[1])] : [];
+  });
+}
+
 test("รับ batch แบบ text/plain (sendBeacon) ตอบ 204 และเขียน log หนึ่งบรรทัดต่อค่า โดยไม่ต้องล็อกอิน", async () => {
   const out = await captureStdout(() =>
     withServer(async (url) => {
@@ -58,12 +82,12 @@ test("รับ batch แบบ text/plain (sendBeacon) ตอบ 204 และ�
       assert.equal(res.headers.get("cross-origin-resource-policy"), "cross-origin");
     })
   );
-  const vitals = out.split("\n").filter((line) => line.includes("web-vital "));
+  const vitals = loggedVitals(out);
   assert.equal(vitals.length, 2);
-  assert.match(vitals[0], /"name":"LCP"/);
-  assert.match(vitals[0], /"value":1234.568/);
-  assert.match(vitals[1], /"target":"button.save"/);
-  assert.doesNotMatch(out, /user=/, "ต้องไม่บันทึกตัวตนผู้ใช้");
+  assert.equal(vitals[0].name, "LCP");
+  assert.equal(vitals[0].value, 1234.568);
+  assert.equal(vitals[1].target, "button.save");
+  assert.doesNotMatch(out, /user=|"user":/, "ต้องไม่บันทึกตัวตนผู้ใช้");
 });
 
 test("รับ application/json ได้ด้วย (เครื่องมือหรือเบราว์เซอร์ที่ไม่มี sendBeacon)", async () => {

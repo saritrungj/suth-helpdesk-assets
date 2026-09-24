@@ -126,6 +126,21 @@ const totalDevices = computed(() =>
   contracts.value.reduce((sum, contract) => sum + (contract.devices ?? []).length, 0)
 );
 
+/*
+ * ขอบเขตของผลค้นหา (#208) — ค้นเจอหนึ่งเครื่อง แต่ยอดเงินด้านบนและยอดของแต่ละสัญญายังเป็นยอดทั้งสัญญา
+ * ต้องบอกให้ชัด ไม่งั้นคนอ่านยอดของสัญญาแล้วคิดว่าเป็นยอดของเครื่องที่ค้นเจอ ส่วน Excel ส่งออกเฉพาะเครื่องที่ค้นเจอ
+ */
+const searching = computed(() => search.value.trim().length > 0);
+const foundDevices = computed(() =>
+  filteredContracts.value.reduce((sum, contract) => sum + (contract.devices ?? []).length, 0)
+);
+
+/** ส่วนประกอบของยอดตามใบแจ้งหนี้ — ค่าพิมพ์ + ค่าเช่าคงที่ + VAT (#208) */
+const invoiceParts = computed(() => ({
+  rental: contracts.value.reduce((sum, c) => sum + Math.round(Number(c.rental || 0) * 100), 0) / 100,
+  vat: contracts.value.reduce((sum, c) => sum + Math.round(Number(c.vat || 0) * 100), 0) / 100,
+}));
+
 function devicePages(device) {
   return (device.monthly ?? []).reduce((sum, m) => sum + Number(m.pages || 0), 0);
 }
@@ -296,7 +311,7 @@ onMounted(() => {
   <div>
     <div class="flex flex-wrap items-end gap-2 mb-3" data-print="hide">
       <UiField :label="t(&quot;เดือน&quot;)" class="w-80">
-        <PeriodPicker v-model="monthSelection" :options="monthsWithData" inline />
+        <PeriodPicker v-model="monthSelection" :options="monthsWithData" allow-empty inline />
       </UiField>
 
       <UiField :label="t(&quot;ค้นหาสัญญาหรือเครื่อง&quot;)" class="flex-1 min-w-[14rem] max-w-sm">
@@ -312,9 +327,9 @@ onMounted(() => {
         <UiTooltip :content="t(&quot;พับทั้งหมด&quot;)">
           <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;พับทั้งหมด&quot;)" @click="collapseAll"><ChevronsDownUp :size="15" /></UiButton>
         </UiTooltip>
-        <UiButton size="sm" variant="secondary" :disabled="!contracts.length || loading || !!loadError" :loading="exporting" @click="exportExcel">
+        <UiButton size="sm" variant="secondary" :disabled="!contracts.length || loading || !!loadError || (searching && !foundDevices)" :loading="exporting" data-testid="expense-export" @click="exportExcel">
           <template #icon><Download :size="15" /></template>
-          Excel
+          {{ searching ? t("Excel เฉพาะผลค้นหา ({0} เครื่อง)", [formatCount(foundDevices)]) : "Excel" }}
         </UiButton>
       </div>
     </div>
@@ -355,6 +370,15 @@ onMounted(() => {
         {{ formatCount(totalDevices) }}
       </UiStat>
     </div>
+
+    <p v-if="!loadError && anyInvoiceExtras && !loading" class="text-xs text-ink-mute -mt-2 mb-4 numeral" data-testid="invoice-parts">
+      {{ t("ตามใบแจ้งหนี้ = ค่าพิมพ์ {0} + ค่าเช่าคงที่ {1} + VAT {2} = {3} บาท", [formatBahtValue(printTotal), formatBahtValue(invoiceParts.rental), formatBahtValue(invoiceParts.vat), formatBahtValue(invoiceTotal)]) }}
+    </p>
+
+    <UiAlert v-if="searching && contracts.length && !loadError" tone="info" class="mb-4" data-testid="expense-search-scope">
+      <strong class="block">{{ t("พบ {0} จาก {1} เครื่อง", [formatCount(foundDevices), formatCount(totalDevices)]) }}</strong>
+      {{ t("ยอดเงินและยอดพิมพ์ด้านบน รวมทั้งยอดของแต่ละสัญญา เป็นยอดทั้งสัญญา ไม่ใช่เฉพาะเครื่องที่ค้นเจอ — Excel ส่งออกเฉพาะเครื่องที่ค้นเจอ") }}
+    </UiAlert>
 
     <UiAlert v-if="exportError" tone="danger" class="mb-4">
       {{ exportError }}

@@ -27,6 +27,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("../src/auth/unit-test-users"); // บัญชีจำลองแทนการอ่านฐาน (#208)
 const { MAX_PAGES_PER_MONTH } = require("@suth/domain");
 
 // ใช้ schema **ตัวจริง** ที่ routes.js ใช้ ไม่ใช่สำเนาที่เขียนขึ้นในเทส —

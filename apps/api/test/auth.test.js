@@ -7,6 +7,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("../src/auth/unit-test-users"); // บัญชีจำลองแทนการอ่านฐาน (#208)
 const jwt = require("jsonwebtoken");
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret-for-unit-tests";
@@ -16,6 +17,7 @@ const { readToken } = requireAuth;
 const { SESSION_COOKIE, sessionCookieOptions } = require("../src/auth/session-cookie");
 const requireAdmin = require("../src/auth/require-admin");
 const requireStaff = require("../src/auth/require-staff");
+const { passwordVersion, setUserSource } = require("../src/auth/current-user");
 
 function makeReq({ cookies = {}, headers = {} } = {}) {
   return { cookies, headers };
@@ -121,14 +123,73 @@ test("token ที่หมดอายุแล้วต้องได้ 401 
   assert.equal(error.code, "token_expired");
 });
 
-test("token ที่ใช้ได้ต้องผ่านและแนบ req.user ให้", () => {
+/** require-auth อ่านบัญชีปัจจุบันจากฐานแบบ async (#208) — รอให้ middleware เรียก next ก่อนตรวจ */
+function runAsync(middleware, req) {
+  return new Promise((resolve) => {
+    middleware(req, {}, (err) => resolve({ error: err ?? null, passed: !err }));
+  });
+}
+
+test("token ที่ใช้ได้ต้องผ่านและแนบ req.user ให้", async () => {
   const req = makeReq({ cookies: { [SESSION_COOKIE]: validToken() } });
-  const { error, passed } = run(requireAuth, req);
+  const { error, passed } = await runAsync(requireAuth, req);
 
   assert.equal(passed, true);
   assert.equal(error, null, "ห้ามส่ง error เมื่อ token ใช้ได้");
   assert.equal(req.user.username, "admin");
   assert.equal(req.user.role, "admin");
+});
+
+// ------------------------------------------------------------------
+// บัญชีปัจจุบันในฐานชนะบทบาทใน token (#208)
+//
+// token อายุ 8 ชั่วโมง — ผู้ใช้ที่ถูกลดสิทธิ์ ลบบัญชี หรือเปลี่ยนรหัสผ่าน ต้องไม่ใช้ token เดิมทำงานต่อ
+// ------------------------------------------------------------------
+
+test("ลดสิทธิ์แล้วมีผลทันที: token บอก admin แต่ฐานบอก viewer → ได้ viewer", async () => {
+  setUserSource(async (id) => ({ id, username: "admin", role: "viewer", password: "h" }));
+  try {
+    const req = makeReq({ cookies: { [SESSION_COOKIE]: validToken() } });
+    const { passed } = await runAsync(requireAuth, req);
+    assert.equal(passed, true);
+    assert.equal(req.user.role, "viewer");
+    assert.equal(run(requireAdmin, req).passed, false);
+  } finally {
+    setUserSource(async (id) => ({ id, username: "admin", role: "admin", password: "unit-test" }));
+  }
+});
+
+test("เพิ่มสิทธิ์ไม่มีผลจนกว่าจะล็อกอินใหม่: token บอก staff ฐานบอก admin → ได้ staff", async () => {
+  const token = jwt.sign({ id: 1, username: "admin", role: "staff" }, process.env.JWT_SECRET, { expiresIn: "1h" });
+  const req = makeReq({ cookies: { [SESSION_COOKIE]: token } });
+  await runAsync(requireAuth, req);
+  assert.equal(req.user.role, "staff");
+});
+
+test("บัญชีถูกลบ → 401 account_removed", async () => {
+  setUserSource(async () => null);
+  try {
+    const { error } = await runAsync(requireAuth, makeReq({ cookies: { [SESSION_COOKIE]: validToken() } }));
+    assert.equal(error.status, 401);
+    assert.equal(error.code, "account_removed");
+  } finally {
+    setUserSource(async (id) => ({ id, username: "admin", role: "admin", password: "unit-test" }));
+  }
+});
+
+test("เปลี่ยนรหัสผ่านแล้ว token จากการล็อกอินครั้งก่อนใช้ไม่ได้ → 401 password_changed", async () => {
+  const issued = jwt.sign({ id: 1, username: "admin", role: "admin", pwv: passwordVersion("old-hash") }, process.env.JWT_SECRET, { expiresIn: "1h" });
+  setUserSource(async (id) => ({ id, username: "admin", role: "admin", password: "new-hash" }));
+  try {
+    const { error } = await runAsync(requireAuth, makeReq({ cookies: { [SESSION_COOKIE]: issued } }));
+    assert.equal(error.status, 401);
+    assert.equal(error.code, "password_changed");
+    setUserSource(async (id) => ({ id, username: "admin", role: "admin", password: "old-hash" }));
+    const again = makeReq({ cookies: { [SESSION_COOKIE]: issued } });
+    assert.equal((await runAsync(requireAuth, again)).passed, true, "รหัสผ่านเดิม = token ยังใช้ได้");
+  } finally {
+    setUserSource(async (id) => ({ id, username: "admin", role: "admin", password: "unit-test" }));
+  }
 });
 
 // ------------------------------------------------------------------
