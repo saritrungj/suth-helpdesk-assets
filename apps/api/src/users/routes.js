@@ -18,6 +18,7 @@ const { z } = require("zod");
 
 const router = express.Router();
 const db = require("../shared/db");
+const { actorOf, recordAudit } = require("../shared/audit");
 const asyncHandler = require("../shared/async-handler");
 const requireAuth = require("../auth/require-auth");
 const requireAdmin = require("../auth/require-admin");
@@ -97,6 +98,11 @@ router.post(
       hash,
       role,
     ]);
+    // ห้ามเก็บรหัสผ่านหรือ hash ในประวัติ (ADR-0035)
+    await recordAudit(db, actorOf(req), [{
+      action: "create", entity: "user", entityId: result.insertId, entityKey: username,
+      summary: `เพิ่มผู้ใช้ ${username} (${role})`, after: { username, role },
+    }]);
 
     noStore(res);
     res.status(201).json({ id: result.insertId, username, role });
@@ -128,12 +134,26 @@ router.put(
       values.push(await bcrypt.hash(password, BCRYPT_ROUNDS));
     }
 
+    const [[before]] = await db.query("SELECT username, role FROM users WHERE id = ?", [targetId]);
     const [result] = await db.query(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`, [
       ...values,
       targetId,
     ]);
 
     if (!result.affectedRows) throw notFound("ไม่พบบัญชีผู้ใช้ที่ต้องการแก้ไข");
+    const changes = [
+      before.username !== username && `ชื่อ ${before.username} → ${username}`,
+      before.role !== role && `สิทธิ์ ${before.role} → ${role}`,
+      password && "เปลี่ยนรหัสผ่าน",
+    ].filter(Boolean);
+    if (changes.length) {
+      await recordAudit(db, actorOf(req), [{
+        action: "update", entity: "user", entityId: targetId, entityKey: username,
+        summary: `แก้ไขผู้ใช้ ${username}: ${changes.join(", ")}`,
+        before: { username: before.username, role: before.role },
+        after: { username, role, ...(password ? { password_changed: true } : {}) },
+      }]);
+    }
 
     noStore(res);
     res.json({ id: targetId, username, role });
@@ -164,7 +184,12 @@ router.delete(
       });
     }
 
+    const [[removed]] = await db.query("SELECT username, role FROM users WHERE id = ?", [targetId]);
     await db.query("DELETE FROM users WHERE id = ?", [targetId]);
+    await recordAudit(db, actorOf(req), [{
+      action: "delete", entity: "user", entityId: targetId, entityKey: removed?.username ?? null,
+      summary: `ลบผู้ใช้ ${removed?.username ?? targetId}`, before: removed ?? null,
+    }]);
 
     noStore(res);
     res.json({ message: "ลบบัญชีผู้ใช้เรียบร้อยแล้ว" });

@@ -51,6 +51,7 @@ const apiUrl = process.env.SUTH_API_URL || "http://localhost:3000/api";
  */
 const DB_SPECS = [
   "add-device-draft.spec.js",
+  "audit-log.spec.js",
   "axe-pages.spec.js",
   "default-fiscal-year.spec.js",
   "fiscal-year-cache.spec.js",

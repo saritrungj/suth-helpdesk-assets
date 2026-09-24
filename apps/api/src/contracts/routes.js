@@ -22,6 +22,25 @@ const { validate, idParam } = require("../shared/validate");
 const { notFound, badRequest, conflict } = require("../shared/http-error");
 const cache = require("../shared/cache");
 const { contractBody, writeContract } = require("./contract-write");
+const { today } = require("../devices/service-period");
+const { actorOf, changedFields, recordAudit } = require("../shared/audit");
+
+/** สัญญา + รายการราคา ณ ตอนนี้ — ใช้เทียบก่อน/หลังในประวัติการแก้ไข (ADR-0035) */
+async function contractSnapshot(q, id) {
+  const [[row]] = await q.query(
+    `SELECT id, contract_no, DATE_FORMAT(effective_from, '%Y-%m-%d') AS effective_from,
+            DATE_FORMAT(effective_to, '%Y-%m-%d') AS effective_to, monthly_rental, vat_rate
+     FROM contracts WHERE id = ?`,
+    [id]
+  );
+  if (!row) return null;
+  const [lines] = await q.query(
+    "SELECT category_id, price_per_page FROM contract_price_line WHERE contract_id = ? ORDER BY category_id",
+    [id]
+  );
+  const { id: _id, ...fields } = row;
+  return { ...fields, price_lines: lines.map((line) => `${line.category_id}:${line.price_per_page}`).join(", ") };
+}
 
 router.use(requireAuth);
 
@@ -139,7 +158,15 @@ router.post(
   requireAdmin,
   validate({ body: contractBody }),
   asyncHandler(async (req, res) => {
-    const id = await db.withTransaction((conn) => writeContract(conn, null, req.body));
+    const id = await db.withTransaction(async (conn) => {
+      const newId = await writeContract(conn, null, req.body);
+      const after = await contractSnapshot(conn, newId);
+      await recordAudit(conn, actorOf(req), [{
+        action: "create", entity: "contract", entityId: newId, entityKey: after.contract_no,
+        summary: `เพิ่มสัญญา ${after.contract_no}`, after,
+      }]);
+      return newId;
+    });
     const [contract] = await loadContracts(db, id);
     res.status(201).json(contract);
   })
@@ -162,8 +189,17 @@ router.put(
     try {
       const result = await db.withTransaction(async (conn) => {
         const before = await billingSnapshot(conn, id);
+        const contractBefore = await contractSnapshot(conn, id);
         await writeContract(conn, id, req.body);
         const after = await billingSnapshot(conn, id);
+        const contractAfter = await contractSnapshot(conn, id);
+        const diff = changedFields(contractBefore, contractAfter);
+        if (diff) {
+          await recordAudit(conn, actorOf(req), [{
+            action: "update", entity: "contract", entityId: id, entityKey: contractAfter.contract_no,
+            summary: `แก้ไขสัญญา ${contractAfter.contract_no}: ${Object.keys(diff.after).join(", ")}`, ...diff,
+          }]);
+        }
 
         const unpricedIn = (rows, month) => rows.find((row) => row.month === month)?.unpriced ?? 0;
         const newlyUnpriced = after.filter((row) => row.unpriced > unpricedIn(before, row.month));
@@ -211,6 +247,8 @@ router.delete(
       const [contracts] = await conn.query("SELECT id FROM contracts WHERE id = ? FOR UPDATE", [id]);
       if (!contracts.length) throw notFound("ไม่พบสัญญาที่ต้องการลบ");
 
+      // "วันนี้" ของงวดค่าเช่ามาจากแอปตามเวลาไทย ไม่ใช่ CURRENT_DATE ของฐาน — ฐานรันเวลา UTC ช่วง 00:00–07:00
+      // ของวันที่ 1 เดือนของฐานยังเป็นเดือนก่อน แล้วตัดสินงวดที่เกิดแล้วผิด (audit 2026-09-24 F11)
       const [[currentRows], [historyRows], [rentalRows]] = await Promise.all([
         conn.query("SELECT COUNT(*) AS count FROM devices WHERE contract_id = ?", [id]),
         conn.query("SELECT COUNT(*) AS count FROM device_contract_history WHERE contract_id = ?", [id]),
@@ -218,24 +256,25 @@ router.delete(
           `SELECT COUNT(*) AS count
            FROM v_contract_invoice i
            JOIN contracts c ON c.id = i.contract_id
+           CROSS JOIN (SELECT CAST(? AS DATE) AS today) t
            WHERE i.contract_id = ? AND i.rental > 0
              AND (
-               i.month < DATE_FORMAT(CURRENT_DATE, '%Y-%m')
+               i.month < DATE_FORMAT(t.today, '%Y-%m')
                OR (
-                 i.month = DATE_FORMAT(CURRENT_DATE, '%Y-%m')
-                 AND CURRENT_DATE >= CASE
-                   WHEN DAY(c.effective_from) = 1 THEN LAST_DAY(CURRENT_DATE)
+                 i.month = DATE_FORMAT(t.today, '%Y-%m')
+                 AND t.today >= CASE
+                   WHEN DAY(c.effective_from) = 1 THEN LAST_DAY(t.today)
                    ELSE LEAST(
-                     LAST_DAY(CURRENT_DATE),
+                     LAST_DAY(t.today),
                      DATE_ADD(
-                       STR_TO_DATE(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), '%Y-%m-%d'),
+                       STR_TO_DATE(DATE_FORMAT(t.today, '%Y-%m-01'), '%Y-%m-%d'),
                        INTERVAL (DAY(c.effective_from) - 2) DAY
                      )
                    )
                  END
                )
              )`,
-          [id]
+          [today(), id]
         ),
       ]);
 
@@ -258,7 +297,12 @@ router.delete(
         });
       }
 
+      const before = await contractSnapshot(conn, id);
       await conn.query("DELETE FROM contracts WHERE id = ?", [id]);
+      await recordAudit(conn, actorOf(req), [{
+        action: "delete", entity: "contract", entityId: id, entityKey: before?.contract_no ?? null,
+        summary: `ลบสัญญา ${before?.contract_no ?? id}`, before,
+      }]);
     });
 
     cache.noStore(res);

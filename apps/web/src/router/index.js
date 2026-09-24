@@ -2,6 +2,7 @@ import { t } from "../lib/locale";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { authState } from "../store/auth";
+import { toastInfo } from "../store/toast";
 import Login from "../views/Login.vue";
 import { installPageMemory } from "../lib/page-memory";
 import { setAppRouter } from "../lib/app-router";
@@ -158,6 +159,8 @@ const routes = [
     meta: { breadcrumb: t("เพิ่มเครื่อง") },
   },
   { path: "/admin/users", name: "Users", component: () => import("../views/admin/Users.vue") },
+  // ประวัติการแก้ไขทั้งระบบ (ADR-0035)
+  { path: "/admin/audit-log", name: "AuditLog", component: () => import("../views/admin/AuditLog.vue") },
 
   // ตรวจยืนยันสถานะการติดตั้งของเครื่องเดิม (ADR-0018) — ไม่มีรายการในเมนูถาวร
   // เพราะเป็นงานที่ทำครั้งเดียวแล้วจบ เข้าจากคำเตือนบนแดชบอร์ดหรือ Ctrl+K
@@ -180,7 +183,14 @@ const routes = [
   { path: "/admin/import-devices", redirect: "/admin/import" },
 
   // เส้นทางที่ไม่มีอยู่จริง — พากลับหน้าแรกแทนหน้าขาว
-  { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
+  // บอกผู้ใช้ด้วย ไม่พากลับเงียบๆ — เดิมลิงก์ผิดหรือหน้าที่ถูกลบไปแล้วดูเหมือน "กดแล้วเด้งกลับ" (audit F10)
+  {
+    path: "/:pathMatch(.*)*",
+    redirect: () => {
+      toastInfo(t("ไม่พบหน้าที่เปิด — พากลับหน้าภาพรวม"));
+      return "/dashboard";
+    },
+  },
 ];
 
 const router = createRouter({
@@ -236,6 +246,7 @@ router.beforeEach((to) => {
   }
 
   if (to.path.startsWith("/admin") && role !== "admin") {
+    toastInfo(t("หน้านี้สำหรับผู้ดูแลระบบ — พากลับหน้าภาพรวม"));
     return { path: "/dashboard" };
   }
 

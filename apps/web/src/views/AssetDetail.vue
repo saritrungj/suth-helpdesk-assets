@@ -49,6 +49,7 @@ import {
   UiSkeleton,
 } from "../ui";
 import UiChart from "../ui/UiChart.vue";
+import DeviceAuditCard from "../components/DeviceAuditCard.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -438,6 +439,9 @@ const usageSeries = computed(() => selectedYears.value.map((year, index) => ({
           </li>
         </ol>
       </UiCard>
+
+      <!-- ใครแก้เครื่องนี้/ยอดของเครื่องนี้ เมื่อไร (ADR-0035) — ผู้ดูแลเท่านั้น -->
+      <DeviceAuditCard v-if="isAdmin" :device-id="deviceId" />
     </template>
 
     <UiEmpty

@@ -152,6 +152,28 @@ CREATE TABLE import_session_event (
     INDEX idx_import_event_session (session_id, id)
 ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- บันทึกการตรวจย้อนหลัง (ADR-0035) — ใครแก้อะไร เมื่อไร จากค่าอะไรเป็นค่าอะไร เก็บเฉพาะช่องที่เปลี่ยน
+-- ห้ามเก็บรหัสผ่านหรือ hash ชื่อผู้ใช้เป็นสำเนา ลบบัญชีแล้วบันทึกยังบอกได้ว่าใครทำ
+CREATE TABLE audit_log (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    occurred_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    user_id INT NULL,
+    username VARCHAR(50) NULL,
+    action VARCHAR(20) NOT NULL,
+    entity VARCHAR(40) NOT NULL,
+    entity_id INT NULL,
+    entity_key VARCHAR(100) NULL,
+    summary VARCHAR(255) NOT NULL,
+    before_value JSON NULL,
+    after_value JSON NULL,
+    request_id VARCHAR(64) NULL,
+
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_audit_entity (entity, entity_id, occurred_at),
+    INDEX idx_audit_time (occurred_at),
+    INDEX idx_audit_user (user_id, occurred_at)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- สัญญาเช่าเครื่อง (ADR-0023) — เลขที่สัญญาไม่ซ้ำ และมีอายุสัญญาของตัวเอง
 --
 -- อายุสัญญา (effective_from–effective_to) คร่อมได้หลายปีงบ เช่น 36 งวดครอบปีงบ

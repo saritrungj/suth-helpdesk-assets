@@ -40,7 +40,7 @@ class ApiError extends Error {
   /**
    * @param {number} status รหัส HTTP
    * @param {string} title ข้อความภาษาไทยที่แสดงให้ผู้ใช้เห็นได้ทันที
-   * @param {{ code?: string, detail?: string, errors?: unknown }} [options]
+   * @param {{ code?: string, detail?: string, errors?: unknown, extra?: Record<string, unknown> }} [options]
    */
   constructor(status, title, options = {}) {
     super(title);
@@ -51,6 +51,8 @@ class ApiError extends Error {
     this.detail = options.detail;
     /** รายละเอียดรายช่องของฟอร์ม (ใช้กับ 400 จาก zod) */
     this.errors = options.errors;
+    /** ข้อมูลเพิ่มตาม RFC 9457 extension member เช่นรายการช่องที่ชนกัน (409 reading_changed) */
+    this.extra = options.extra;
     /** true = error นี้คาดไว้แล้ว ไม่ต้องบันทึก stack trace */
     this.expected = true;
   }
@@ -66,6 +68,7 @@ class ApiError extends Error {
 
     if (this.detail) problem.detail = this.detail;
     if (this.errors) problem.errors = this.errors;
+    if (this.extra) Object.assign(problem, this.extra);
 
     return problem;
   }

@@ -52,6 +52,7 @@ npm run dev:api
 | 10 | `migration_billing_lines_and_meters.sql` | อายุสัญญา รายการราคาต่อหมวด มิเตอร์ ราคา 4 ตำแหน่ง และการปัดยอดระดับรายการราคา (ต้องรันหลังข้อ 9) |
 | 11 | `migration_add_master_aliases.sql` | ชื่อเรียกอื่นของยี่ห้อ อาคาร และฝ่าย ([ADR-0025](../decisions/0025-master-data-aliases.md)) |
 | 12 | `migration_add_import_sessions.sql` | งานนำเข้าไฟล์เป็น session ประวัติการนำเข้า และที่มาของเครื่อง/ยอด ([ADR-0027](../decisions/0027-import-session-lifecycle.md)) |
+| 13 | `migration_add_audit_log.sql` | บันทึกการตรวจย้อนหลัง ใครแก้อะไร เมื่อไร ([ADR-0035](../decisions/0035-audit-log.md)) |
 
 ```sh
 mysql --default-character-set=utf8mb4 -u root -p your_database < database/migrations/migration_add_device_location.sql
