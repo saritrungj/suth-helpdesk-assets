@@ -90,6 +90,7 @@ const REQUIREMENTS = [
   { migration: "migration_add_import_sessions.sql", column: ["devices", "import_session_id"] },
   { migration: "migration_add_import_sessions.sql", column: ["print_transactions", "import_session_id"] },
   { migration: "migration_add_audit_log.sql", table: "audit_log" },
+  { migration: "migration_add_contract_meter_cycle_day.sql", column: ["contracts", "meter_cycle_day"] },
 ];
 
 /**

@@ -340,14 +340,14 @@ onMounted(() => {
       class="card grid grid-cols-1 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4"
       :class="anyInvoiceExtras ? 'sm:grid-cols-4' : 'sm:grid-cols-3'"
     >
-      <UiStat plain :label="t('ค่าพิมพ์')" :unit="t(&quot;บาท&quot;)" :hint="t('หัก 2% แล้ว')" :loading="loading">
+      <UiStat plain :label="t('ค่าพิมพ์รวม')" :unit="t(&quot;บาท&quot;)" :hint="t('หลังหัก 2% · ไม่รวมค่าเช่าและ VAT')" :loading="loading">
         {{ formatBahtValue(printTotal) }}
       </UiStat>
 
       <UiStat
         v-if="anyInvoiceExtras"
         plain
-        :label="t('เงินตามใบแจ้งหนี้รวม VAT')"
+        :label="t('ยอดตามใบแจ้งหนี้')"
         :unit="t(&quot;บาท&quot;)"
         :hint="t('รวมค่าเช่าคงที่และ VAT')"
         tone="ink"
@@ -356,7 +356,7 @@ onMounted(() => {
         {{ formatBahtValue(invoiceTotal) }}
       </UiStat>
 
-      <UiStat plain :label="t(&quot;ยอดพิมพ์&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ตามที่กรอก ยังไม่หัก 2%&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;ยอดพิมพ์รวม&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ก่อนหัก 2%&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 

@@ -4,7 +4,7 @@ import { t } from "../lib/locale";
 import { formatBahtValue, formatCompact, formatCount } from "../lib/format";
 import { UiCard, UiEmpty, UiField, UiFilterBar, UiSegmented, UiSkeleton } from "../ui";
 import UiStockChart from "../ui/UiStockChart.vue";
-import { deviceSpread, dimensionLabel, metricValue, monthText, monthsWithData } from "./comparison";
+import { dimensionLabel, metricValue, monthText, monthsWithData } from "./comparison";
 import { comparisonTitle } from "./comparison-export";
 
 /**
@@ -79,9 +79,6 @@ const singleMonth = computed(() => shown.value.model.months.length < 2);
 const isCost = computed(() => shown.value.model.metric === "cost");
 const formatValue = (value) => (isCost.value ? formatBahtValue(value) : formatCount(value));
 const unit = computed(() => (isCost.value ? t("บาท") : t("หน้า")));
-const spread = computed(() => deviceSpread(series.value.length
-  ? shown.value.model.entries.filter((entry) => shown.value.selected.includes(entry.key)).map((entry) => entry.summary)
-  : []));
 const isYears = computed(() => shown.value.model.dimension === "fiscalYear");
 const axisLabel = (key) => (isYears.value ? monthText(key) : monthText(key, { shortYear: true }));
 const pointLabel = (key) => (isYears.value ? monthText(key) : monthText(key, { long: true }));
@@ -125,10 +122,6 @@ const pointLabel = (key) => (isYears.value ? monthText(key) : monthText(key, { l
         :loading="loading"
         data-testid="compare-chart"
       />
-
-      <p v-if="!loading && !failed && spread" class="mt-3 text-sm text-ink-soft">
-        {{ t("จำนวนเครื่องต่างกัน ({0}–{1} เครื่อง) ผลรวมจึงต่างกันได้ ไม่ได้แปลว่าแต่ละเครื่องใช้งานต่างกัน", [formatCount(spread.min), formatCount(spread.max)]) }}
-      </p>
 
       <template #footer>
         <div class="flex flex-wrap justify-between gap-2 text-xs text-ink-mute">

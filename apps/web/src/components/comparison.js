@@ -556,15 +556,6 @@ export function stableSlots(previous, keys) {
   return next;
 }
 
-/** ข้อสังเกตที่ต้องอ่านคู่กับตัวเลข — ไม่ใช่ข้อสรุป */
-export function deviceSpread(summaries) {
-  const counts = summaries.filter((summary) => summary?.readings).map((summary) => summary.devices);
-  if (counts.length < 2) return null;
-  const min = Math.min(...counts);
-  const max = Math.max(...counts);
-  return min === max ? null : { min, max };
-}
-
 /* --------------------------------------------------------------------------
    ช่วงเวลา
    -------------------------------------------------------------------------- */

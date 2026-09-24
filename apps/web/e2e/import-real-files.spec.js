@@ -79,6 +79,10 @@ test("ไฟล์จริงทุกไฟล์: สัญญาจากห
 
     detail = await call("POST", `/import-sessions/${detail.id}/commit`);
     expect(detail.status, `${name}: ${JSON.stringify(detail.error ?? detail.validation?.notice)}`).toBe("completed");
+    // จำนวนเท่านั้น ไม่พิมพ์เลขเครื่องจริง — รอบมิเตอร์ที่อ่านได้และเครื่องที่ถูกเปลี่ยน (#221)
+    console.log(`[real-import] ${name}: เครื่องใหม่ ${detail.result.devices_created} · ยอดใหม่ ${detail.result.readings_new}`
+      + ` · รอบมิเตอร์ ${JSON.stringify((detail.result.meter_cycles ?? []).map((c) => c.cycle_day))}`
+      + ` · เปลี่ยนเครื่อง ${(detail.result.replaced_devices ?? []).length}`);
     completed.push(detail);
   }
   expect(completed.length).toBeGreaterThan(0);

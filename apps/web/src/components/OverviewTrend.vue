@@ -9,9 +9,9 @@ import UiStockChart from "../ui/UiStockChart.vue";
 /**
  * OverviewTrend — กราฟแบบแอปหุ้นสองกราฟของหน้าภาพรวม ค่าใช้จ่ายซ้าย ยอดพิมพ์ขวา (#206, #212)
  *
- * - แกนนอนคือทุกเดือนของปีงบ (หรือเดือนที่เลือก) เดือนที่ไม่มีข้อมูลเป็นช่องว่าง ไม่ใช่ศูนย์
- * - เดือนที่ผ่านไปแล้วแต่ยังกรอกไม่ครบทุกเครื่องมีเครื่องหมาย "ไม่ครบ" และกล่องค่าบอกว่ากรอกแล้วกี่จากกี่เครื่อง —
- *   ผู้อ่านแยกได้ว่ายอดต่ำเพราะใช้น้อย หรือเพราะข้อมูลยังเข้าไม่ครบ (เดิมดูเหมือนยอดตกทั้งที่ยังกรอกไม่ครบ)
+ * - แกนนอนเฉพาะเดือนที่มีข้อมูล (#221 ผู้ใช้ขอ — แกนครบ 12 เดือนมีช่องว่างยาวจนเส้นเบียดอยู่มุมขวา)
+ * - ไม่มีแจ้งเตือนในกราฟ เรื่องเดือนที่ยังกรอกไม่ครบอยู่ในกระดิ่งที่เดียว (#221)
+ * - ตัวเลขย่อเหนือทุกจุด หน่วยที่หัวแกนและป้ายค่าล่าสุด อ่านได้โดยไม่ต้องชี้เมาส์ (#221)
  * - กราฟค่าใช้จ่ายมีเส้นยอดตามใบแจ้งหนี้ (ค่าพิมพ์ + ค่าเช่าคงที่ + VAT) ให้เทียบใบแจ้งหนี้ของผู้ให้เช่าได้บนหน้าเดียว
  * - หัวการ์ดบอกค่าเดือนล่าสุดและเปลี่ยนไปเท่าไรจากเดือนก่อนหน้า แบบหน้ารายการหุ้น
  */
@@ -19,14 +19,10 @@ const props = defineProps({
   /** แบบจำลองมุมมองภาพรวม ตัวชี้วัดค่าใช้จ่าย / ยอดพิมพ์ (buildComparison) */
   cost: { type: Object, required: true },
   pages: { type: Object, required: true },
-  /** เดือนบนแกน ตามลำดับ */
+  /** เดือนที่อยู่ในช่วงที่เลือก ตามลำดับ — แกนแสดงเฉพาะเดือนที่มียอด */
   months: { type: Array, default: () => [] },
-  /** [{ month, required_devices, filled_devices }] จาก /dashboard/overview */
-  coverage: { type: Array, default: () => [] },
-  /** [{ month, invoice_total, rental, vat }] — ว่าง = ไม่วาดเส้นใบแจ้งหนี้ (เช่นเลือกหลายสัญญา) */
+  /** [{ month, invoice_total, print_cost }] — ว่าง = ไม่วาดเส้นใบแจ้งหนี้ (เช่นเลือกหลายสัญญา) */
   invoice: { type: Array, default: () => [] },
-  /** เดือนปัจจุบัน "YYYY-MM" — เดือนนี้ยังไม่จบ จึงไม่นับว่ากรอกไม่ครบ */
-  currentMonth: { type: String, default: "" },
   loading: { type: Boolean, default: false },
   failed: { type: Boolean, default: false },
   scopeText: { type: String, default: "" },
@@ -34,9 +30,14 @@ const props = defineProps({
 const emit = defineEmits(["details"]);
 
 // ระหว่างโหลดชุดใหม่ ให้กราฟเดิมค้างไว้พร้อมคำอธิบายเดิม — ห้ามติดหัวข้อใหม่บนตัวเลขเก่า
-const snapshot = () => ({ cost: props.cost, pages: props.pages, months: props.months, coverage: props.coverage, invoice: props.invoice, caption: props.scopeText });
+const snapshot = () => ({ cost: props.cost, pages: props.pages, months: withData(props.months, props.cost), invoice: props.invoice, caption: props.scopeText });
+/** เดือนที่มียอดจริง — เดือนก่อนเริ่มกรอกและเดือนที่ยังไม่มาไม่ขึ้นบนแกน */
+function withData(months, model) {
+  const filled = new Set(model.entries.filter((entry) => entry.summary.readings).map((entry) => entry.key));
+  return months.filter((month) => filled.has(month));
+}
 const settled = ref(snapshot());
-watch(() => [props.cost, props.pages, props.months, props.coverage, props.invoice, props.loading, props.scopeText], () => {
+watch(() => [props.cost, props.pages, props.months, props.invoice, props.loading, props.scopeText], () => {
   if (!props.loading && !props.failed) settled.value = snapshot();
 }, { immediate: true });
 const shown = computed(() => (props.loading ? settled.value : snapshot()));
@@ -50,21 +51,6 @@ const valuesOf = (model, metric) => {
   });
 };
 
-/** เดือนที่ผ่านไปแล้วแต่กรอกไม่ครบทุกเครื่องที่ต้องกรอก */
-const incomplete = computed(() => {
-  const byMonth = new Map(shown.value.coverage.map((m) => [m.month, m]));
-  const marks = [];
-  const notes = {};
-  shown.value.months.forEach((month, index) => {
-    const m = byMonth.get(month);
-    if (!m || !m.required_devices || m.filled_devices >= m.required_devices) return;
-    if (props.currentMonth && month >= props.currentMonth) return;
-    marks.push({ index });
-    notes[index] = t("กรอกแล้ว {0} จาก {1} เครื่อง — ยอดของเดือนนี้ยังไม่ครบ", [formatCount(m.filled_devices), formatCount(m.required_devices)]);
-  });
-  return { marks, notes };
-});
-
 function headline(values, format) {
   const filled = values.map((value, index) => ({ value, index })).filter((point) => point.value !== null);
   const last = filled.at(-1);
@@ -76,7 +62,6 @@ function headline(values, format) {
     value: format(last.value),
     change,
     previousLabel: previous ? formatMonth(shown.value.months[previous.index]) : "",
-    incomplete: incomplete.value.notes[last.index] !== undefined,
   };
 }
 
@@ -140,7 +125,6 @@ function select(model, { index }) {
           {{ card.headline.change > 0 ? "▲" : "▼" }} {{ Math.abs(card.headline.change * 100).toFixed(1) }}%
           <span class="font-normal text-ink-mute">{{ t("จาก{0}", [card.headline.previousLabel]) }}</span>
         </span>
-        <span v-if="card.headline.incomplete" class="text-xs text-warn-ink">{{ t("เดือนนี้ยังกรอกไม่ครบ") }}</span>
       </p>
       <UiSkeleton v-if="loading && !monthsWithData(card.series[0].values)" height="16rem" />
       <UiEmpty v-else-if="failed" :title="t('โหลดข้อมูลไม่สำเร็จ')" compact />
@@ -152,8 +136,7 @@ function select(model, { index }) {
         :axis-label="(month) => formatMonth(month, { shortYear: true })"
         :point-label="(month) => formatMonth(month, { long: true })"
         :series="card.series"
-        :markers="card.key === 'cost' || card.key === 'pages' ? incomplete.marks : []"
-        :notes="incomplete.notes"
+        point-labels
         :format-value="card.format"
         :format-axis="formatCompact"
         :unit="card.unit"
@@ -165,10 +148,7 @@ function select(model, { index }) {
       />
       <template #footer>
         <div class="flex flex-wrap justify-between gap-2 text-xs text-ink-mute">
-          <span>
-            {{ t("กดจุดบนกราฟเพื่อดูรายเครื่องของเดือนนั้น") }}
-            <template v-if="incomplete.marks.length"> · <span class="text-warn-ink">●</span> {{ t("เดือนที่ยังกรอกไม่ครบ") }}</template>
-          </span>
+          <span>{{ t("กดจุดบนกราฟเพื่อดูรายเครื่องของเดือนนั้น") }}</span>
           <span>{{ t("แสดง {0} เดือนที่มีข้อมูล", [formatCount(monthsWithData(card.series[0].values))]) }}</span>
         </div>
       </template>

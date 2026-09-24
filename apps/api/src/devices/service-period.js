@@ -17,7 +17,7 @@
 //
 // "วันนี้" เป็นข้อเท็จจริง ส่วน "น่าจะตั้งแต่ตอนนั้น" เป็นการเดา — เส้นแบ่งอยู่ตรงนี้
 
-const { monthOfDate } = require("@suth/domain");
+const { billingPeriodStart, monthOfDate } = require("@suth/domain");
 
 /** วันที่วันนี้ "YYYY-MM-DD" ตามเวลาไทย ให้ตรงกับเดือนที่ระบบใช้ตัดสินงานค้าง */
 function today() {
@@ -67,7 +67,18 @@ async function closeOpenPeriod(conn, deviceId, endDate) {
  * ไม่เปิดซ้ำถ้ามีช่วงเปิดอยู่ที่เริ่มก่อนหรือพร้อมกับวันที่ขอ — การกดบันทึกซ้ำโดย
  * ไม่ได้เปลี่ยนอะไรต้องไม่สร้างแถวขยะ (บทเรียนเดียวกับ recordLocationHistory)
  */
-async function openPeriod(conn, deviceId, startDate, { userId = null, note = null } = {}) {
+async function openPeriod(conn, deviceId, actualDate, { userId = null, note = null } = {}) {
+  // วันที่จริงกลายเป็นวันแรกของ "เดือนที่ต้องกรอกยอด" ตามรอบมิเตอร์ของสัญญา (#221) — ติดตั้ง 26 ก.ย.
+  // ในสัญญาที่ตัดรอบวันที่ 24 มียอดแรกในรายงาน ต.ค. จึงเริ่มนับ ต.ค. วันจริงเก็บไว้ในหมายเหตุ ไม่หาย
+  const [[contract]] = await conn.query(
+    `SELECT c.meter_cycle_day FROM devices d LEFT JOIN contracts c ON c.id = d.contract_id WHERE d.id = ?`,
+    [deviceId]
+  );
+  const startDate = billingPeriodStart(actualDate, contract?.meter_cycle_day);
+  if (startDate !== actualDate) {
+    const actual = `เริ่มใช้งานจริง ${actualDate}`;
+    note = note ? `${note} · ${actual}` : actual;
+  }
   const open = await openPeriodOf(conn, deviceId);
   if (open && open.effective_from <= startDate) return;
 

@@ -100,9 +100,11 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(pages).toContainText("แสดง 3 เดือนที่มีข้อมูล");
 
     // ปุ่ม "เทียบทุกฝ่าย" พาไปหน้าเปรียบเทียบด้วยขอบเขตเดิม
-    // สัญญาไม่เกิน 4 ฉบับเป็นปุ่มเลือกทีละฉบับ ไม่ต้องเปิดรายการ (#212)
-    await expect(filters.getByRole("radio", { name: "ทุกสัญญา" })).toBeChecked();
-    await filters.getByRole("radio", { name: /^CT-001\/2569/ }).click();
+    // สัญญาเป็นกล่องเลือกเสมอ (#221)
+    await expect(filters.getByRole("radio", { name: "ทุกสัญญา" })).toHaveCount(0);
+    await filters.getByLabel(/^สัญญา/).click();
+    await page.getByRole("option", { name: /^CT-001\/2569/ }).click();
+    await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/contract=7/);
     await page.getByRole("button", { name: "เทียบทุกฝ่าย" }).click();
     await expect(page).toHaveURL(/\/compare\?/);
@@ -147,7 +149,12 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(kpi).toContainText("5,970");
     // ยอดพิมพ์หลังหัก 2% (หลังหัก 2%) เป็นคำอธิบายของการ์ดยอดพิมพ์ ไม่ใช่การ์ดแยก (#197)
     await expect(kpi).toContainText("หลังหัก 2% เหลือ 5,850.6 หน้า");
-    await expect(kpi).toContainText("เฉลี่ยหน้าละ");
+    await expect(kpi).toContainText("ราคาเฉลี่ยต่อหน้า");
+    // การ์ดบอกว่าตัวเลขคืออะไร ไม่มีบรรทัดอธิบายแยกใต้การ์ด และการ์ดเครื่องไม่พูดถึงปัญหา (#221)
+    await expect(kpi).toContainText("ค่าพิมพ์รวม");
+    await expect(kpi).toContainText("หลังหัก 2% · ไม่รวมค่าเช่าและ VAT");
+    await expect(page.getByTestId("cost-scope-note")).toHaveCount(0);
+    await expect(kpi).not.toContainText("ไม่มีการพิมพ์");
     await expect(kpi).toContainText("2,632.77");
     await expect(kpi.locator(":scope > div")).toHaveCount(4);
     await expect(kpi).not.toContainText("รอราคา");
@@ -190,7 +197,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     const table = detailTable(page);
     await expect(table.getByRole("row", { name: /ฝ่ายการพยาบาล\s+4,550/ })).toBeVisible();
     await expect(table).not.toContainText("ฝ่ายเภสัชกรรม");
-    await expect(comparisonCard(page)).toContainText("จำนวนเครื่องต่างกัน (2–3 เครื่อง)");
+    await expect(comparisonCard(page)).not.toContainText("จำนวนเครื่องต่างกัน");
 
     const file = await download(page, async () => (await exportAs(page, "Excel")).click());
     expect(file.name).toBe("print-usage-report-fy2569-full-year-division-pages.xlsx");
@@ -650,6 +657,6 @@ test("หน้าค่าใช้จ่ายได้รายชื่อ�
   const monthsLoaded = page.waitForResponse((response) => response.url().endsWith("/api/print-transactions/months"));
   await page.goto("/expense");
   await monthsLoaded;
-  await expect(page.getByText("ค่าพิมพ์", { exact: true })).toBeVisible();
+  await expect(page.getByText("ค่าพิมพ์รวม", { exact: true })).toBeVisible();
   expect(kpiRequests.filter((search) => !new URLSearchParams(search).get("month"))).toEqual([]);
 });

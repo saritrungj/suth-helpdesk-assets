@@ -31,6 +31,7 @@ const { loadRegistryContext, applyRegistryPlan, describeRegistryPlan } = require
 const { parseVendorWorkbook, comparableContractNo } = require("./vendor-meter");
 const { splitBrandModel } = require("./brand-model");
 const { vendorTerms } = require("./vendor-terms");
+const { applyMeterCycles, applyReplacements } = require("./meter-cycle");
 const {
   parseMeterMonthHeader,
   loadMeters,
@@ -332,14 +333,20 @@ async function analyse(conn, session, info, { actorId, importSessionId }) {
   let readings = { status: info.hasReadings ? "waiting" : "none" };
   let readingSignature = [];
   let reconciliation = [];
-  let months = parseVendorWorkbook(info.raw)?.sheets.map((sheet) => sheet.month) ?? [];
+  const vendor = parseVendorWorkbook(info.raw);
+  let months = vendor?.sheets.map((sheet) => sheet.month) ?? [];
+  let meterCycles = [];
+  let replaced = [];
 
   if (!registryBlocked) {
+    // รอบมิเตอร์ก่อนสร้างเครื่อง — ช่วงที่ต้องกรอกของเครื่องใหม่นับเดือนตามรอบนี้ (#221)
+    meterCycles = await applyMeterCycles(conn, vendor);
     if (plan && registryChanges) {
       const applied = await applyRegistryPlan(conn, plan, { userId: actorId, importSessionId });
       outcome.devices_created = applied.created;
       outcome.devices_filled = applied.filled;
     }
+    replaced = await applyReplacements(conn, vendor);
     if (info.hasReadings) {
       const meters = await loadMeters(conn);
       const mapped = readingsFromSheets(info.raw, meters);
@@ -378,7 +385,26 @@ async function analyse(conn, session, info, { actorId, importSessionId }) {
 
   const fiscalYears = { ...(await fiscalYearCheck(conn, months)), planned: planned.fiscalYears.map(String) };
   const validation = buildValidation({ info, plan, described, contracts, readings, reconciliation, fiscalYears, registryChanges });
+  // สิ่งที่ระบบอ่านจากรายงานแล้วทำให้เอง (#221) — บอกไว้ในรายการตรวจ ไม่ต้องให้ใครตัดสิน
+  for (const cycle of meterCycles) {
+    validation.checklist.push({
+      key: `meter_cycle:${cycle.contract_no}`, state: "ok", action: null,
+      title: cycle.cycle_day === 1
+        ? `รอบมิเตอร์ของสัญญา ${cycle.contract_no}: ตัดรอบสิ้นเดือน`
+        : `รอบมิเตอร์ของสัญญา ${cycle.contract_no}: วันที่ ${cycle.cycle_day} ถึง ${cycle.cycle_day - 1} ของเดือนถัดไป`,
+      detail: "อ่านจากงวดในหัวรายงาน เครื่องที่ติดตั้งหลังวันตัดรอบเริ่มกรอกยอดเดือนถัดไป",
+    });
+  }
+  if (replaced.length) {
+    validation.checklist.push({
+      key: "replacements", state: "ok", action: null,
+      title: `ผู้ให้เช่าเปลี่ยนเครื่อง ${replaced.length} ลำดับ — ปิดเครื่องเดิมให้`,
+      detail: replaced.map((x) => `ลำดับ ${x.slot}: ${x.old_serial} → ${x.new_serial} ตั้งแต่ ${x.from_month}`).join(" · "),
+    });
+  }
+  validation.replacements = replaced.map(({ device_id: _id, ...rest }) => rest);
   validation.preview = buildPreview({ plan, described, contracts, readings, reconciliation, fiscalYears });
+  validation.preview.replacements = replaced.length;
   const fingerprint = sha256(JSON.stringify({
     file: session.file_sha256,
     decisions,
@@ -391,6 +417,8 @@ async function analyse(conn, session, info, { actorId, importSessionId }) {
         }
       : null,
     readings: readingSignature,
+    cycles: meterCycles.map((c) => [c.contract_no, c.cycle_day]),
+    replaced: replaced.map((x) => [x.slot, x.old_serial, x.new_serial, x.from_month]),
     contracts: contracts.map((c) => [c.key, c.state, c.system, c.issues.map((i) => [i.field, i.severity])]),
   }));
   return {
@@ -400,6 +428,8 @@ async function analyse(conn, session, info, { actorId, importSessionId }) {
       ...outcome,
       contracts_created: [...planned.contracts.values()].map(({ body }) => body.contract_no),
       fiscal_years_created: planned.fiscalYears,
+      meter_cycles: meterCycles,
+      replaced_devices: replaced,
       reconciliation,
       invoice: readings.invoice ?? [],
     },
@@ -839,7 +869,17 @@ async function commitSession(id, actor) {
             devices_created: o.devices_created, devices_filled: o.devices_filled, readings_new: o.readings_new,
             readings_overwritten: o.readings_overwritten, contracts_created: o.contracts_created, fiscal_years_created: o.fiscal_years_created,
           },
-        }]);
+        },
+        ...o.meter_cycles.map((c) => ({
+          action: "update", entity: "contract", entityId: c.contract_id, entityKey: c.contract_no,
+          summary: `รอบมิเตอร์ของสัญญา ${c.contract_no} เริ่มวันที่ ${c.cycle_day} (อ่านจากงานนำเข้า #${id})`,
+          before: { meter_cycle_day: null }, after: { meter_cycle_day: c.cycle_day },
+        })),
+        ...o.replaced_devices.map((x) => ({
+          action: "update", entity: "device", entityId: x.device_id, entityKey: x.old_serial,
+          summary: `ปลดระวาง ${x.old_serial}: ผู้ให้เช่าเปลี่ยนเป็น ${x.new_serial} ในลำดับ ${x.slot} ตั้งแต่ ${x.from_month} (งานนำเข้า #${id})`,
+          before: { status: "active" }, after: { status: "retired", service_end: x.service_end },
+        }))]);
         return result;
       });
       const result = { ...analysis.outcome, duration_ms: Date.now() - startedAt };
