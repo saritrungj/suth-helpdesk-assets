@@ -211,3 +211,18 @@ test.describe("จำมุมมองของแต่ละหน้าใ�
     await expect(search()).toHaveValue("HP");
   });
 });
+
+test("ล้างทั้งหมดในช่องปีงบกลับไปดูปีงบหลักปีเดียว (#204)", async ({ page }) => {
+  await comparisonFixture(page);
+  await page.route(/\/api\/fiscal-years$/, route => route.fulfill({ json: [
+    { id: 7, year: 2568, start_month: "2024-10", end_month: "2025-09" },
+    { id: 1, year: 2569, start_month: "2025-10", end_month: "2026-09" },
+  ] }));
+  await page.goto("/dashboard?fy=1&years=2568,2569");
+  await expect(comparisonCard(page)).toHaveAttribute("aria-busy", "false");
+  await page.getByRole("button", { name: /^ปีงบประมาณ/ }).first().click();
+  await page.getByRole("button", { name: "ล้างทั้งหมด" }).click();
+  // เดิมปุ่มนี้ไม่ทำอะไรเลย เพราะการเลือกว่างถูกปฏิเสธเงียบๆ
+  await expect(page).not.toHaveURL(/years=/);
+  await expect(page.getByText(/เลือกไว้ 1 รายการ/)).toBeVisible();
+});

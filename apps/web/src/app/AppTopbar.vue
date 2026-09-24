@@ -89,7 +89,7 @@ async function logout() {
 <template>
   <header
     class="sticky top-0 z-30 h-[var(--shell-topbar-height)] shrink-0 flex items-center gap-2 px-3 sm:px-4
-           bg-chrome"
+           chrome-glass"
     data-print="hide"
   >
     <UiButton

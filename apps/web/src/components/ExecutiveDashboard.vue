@@ -119,8 +119,11 @@ const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, a
 let reconcilingYears = false;
 async function chooseYears(years) {
   let next = [...new Set(years.map(String))].sort().slice(-MAX_YEARS);
-  // ไม่เลือกปีไหนเลยไม่มีความหมาย — เก็บของเดิมไว้
-  if (!next.length) return;
+  // "ล้างทั้งหมด" หรือเอาทุกปีออก = กลับไปดูปีงบหลักปีเดียว (#204) — เดิม return เฉยๆ ปุ่มล้างจึงไม่ทำอะไรเลย
+  if (!next.length) {
+    view.value = { ...view.value, years: [] };
+    return;
+  }
   // ปีงบหลักต้องมีอยู่จริงในระบบถึงจะสลับไปได้ ส่วนปีที่เอามาเทียบเป็นปีที่เคยนำเข้ายอด
   // ย้อนหลังไว้แต่ยังไม่ได้ตั้งเป็นปีงบในระบบก็ได้ (ช่วงเดือนของปีนั้นคำนวณจากกฎ ต.ค.–ก.ย.)
   const record = [...next].reverse()
@@ -500,15 +503,16 @@ function runCsv() {
       <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats" />
     </section>
 
+
+    <PrintComparison v-model:state="view" :model="model" :loading="loading" :failed="failed" :scope-text="scopeText"
+      @details="(entry) => openDetails('device', entry)" />
+
     <div class="grid grid-cols-1 lg:grid-cols-2 items-start gap-3 mb-4">
       <TopShareCard :title="t('ฝ่ายที่ใช้มากที่สุด ({0})', [unitText])" :data="topDivisions" :format="formatMetric" :loading="loading && !settledStats"
         :more-label="t('เทียบทุกฝ่าย')" @more="compareBy('division')" />
       <TopShareCard :title="t('เครื่องที่ใช้มากที่สุด ({0})', [unitText])" :data="topDevices" :format="formatMetric" :loading="loading && !settledStats"
         :more-label="t('เทียบทุกเครื่อง')" @more="compareBy('device')" />
     </div>
-
-    <PrintComparison v-model:state="view" :model="model" :loading="loading" :failed="failed" :scope-text="scopeText"
-      @details="(entry) => openDetails('device', entry)" />
 
     <ComparisonTable class="mb-4" :model="tableView.model" :loading="loading" :description="tableView.description"
       @details="(entry) => openDetails('device', entry)" />

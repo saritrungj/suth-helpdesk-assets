@@ -41,11 +41,16 @@ export function createContrastTools() {
     // the text opacity alone gives the wrong result when that group has a fill.
     for (let node = el; node; node = node.parentElement) {
       const s = getComputedStyle(node);
-      if (s.backgroundImage !== "none" || s.filter !== "none" ||
-          s.mixBlendMode !== "normal" || s.backdropFilter !== "none") {
+      // พื้นไล่สีของแอป (.canvas-wash, #204) ประกาศจุดที่แย่ที่สุดของตัวเองไว้ใน --canvas-wash-worst —
+      // วัดกับจุดนั้นแทนการยอมแพ้ ผ่านที่จุดแย่สุด = ผ่านทุกจุดของพื้น
+      const worst = node.classList?.contains("canvas-wash") ? s.getPropertyValue("--canvas-wash-worst").trim() : "";
+      // กระจกฝ้า (.chrome-glass) มีพื้นกึ่งทึบของตัวเอง blur แค่ทำให้พื้นข้างหลังนุ่มลง ไม่ทำให้เข้มขึ้น
+      const glass = node.classList?.contains("chrome-glass");
+      if ((s.backgroundImage !== "none" && !worst) || s.filter !== "none" ||
+          s.mixBlendMode !== "normal" || (s.backdropFilter !== "none" && !glass)) {
         return { unsupported: "image, filter or blend requires a separate visual measurement" };
       }
-      const fill = rgba(s.backgroundColor);
+      const fill = worst ? rgba(worst) : rgba(s.backgroundColor);
       fg = attenuate(over(fg, fill), Number(s.opacity));
       bg = attenuate(over(bg, fill), Number(s.opacity));
     }
