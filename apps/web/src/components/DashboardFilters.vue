@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { t } from "../lib/locale";
 import { formatMonth } from "../lib/locale-format";
-import { UiCombobox, UiField, UiFilterBar } from "../ui";
+import { UiCombobox, UiField, UiFilterBar, UiSegmented } from "../ui";
 import PeriodPicker from "./PeriodPicker.vue";
 
 /**
@@ -37,6 +37,8 @@ const props = defineProps({
    *   "ทั้งหมดเป็นอย่างไร" การเจาะฝ่าย แผนก อาคาร เครื่อง คือการเปรียบเทียบ จึงอยู่อีกหน้า
    */
   variant: { type: String, default: "compare" },
+  /** มีข้อมูลอย่างน้อยสองปีงบ — ไม่มี = ไม่มีช่องเลือกปีงบ (เทียบข้ามปีไม่ได้) บอกปีงบที่ใช้อยู่แทน (#212) */
+  multiYear: { type: Boolean, default: true },
   /** ปีงบของทั้งแอป (ชื่อที่แสดง) — ใช้บอกในหน้าภาพรวมว่ากำลังดูปีไหนและเปลี่ยนที่ไหน */
   fiscalYearLabel: { type: String, default: "" },
 });
@@ -92,6 +94,17 @@ const contracts = computed({
   set: (value) => patch({ contracts: value ?? [] }),
 });
 
+/** สัญญาไม่เกิน 4 ฉบับ — แสดงเป็นปุ่ม "ทุกสัญญา / แต่ละฉบับ" เลือกได้ทีละฉบับ */
+const contractButtons = computed(() => {
+  const list = props.options.contracts ?? [];
+  if (!list.length || list.length > 4) return null;
+  return [{ value: "", label: t("ทุกสัญญา") }, ...list.map((option) => ({ value: String(option.value), label: option.label }))];
+});
+const singleContract = computed({
+  get: () => (contracts.value.length === 1 ? String(contracts.value[0]) : ""),
+  set: (value) => { contracts.value = value ? [value] : []; },
+});
+
 const latestMonth = computed(() => (props.monthOptions.length ? formatMonth(props.monthOptions.at(-1)) : ""));
 </script>
 
@@ -101,12 +114,16 @@ const latestMonth = computed(() => (props.monthOptions.length ? formatMonth(prop
       <UiField :label="t('ช่วงเวลา')" class="flex-1 min-w-[13rem] sm:flex-none sm:w-72">
         <PeriodPicker v-model="months" :options="monthOptions" mode="multi" :all-label="t('ทั้งปีงบ')" />
       </UiField>
-      <UiField :label="t('สัญญา')" class="flex-1 min-w-[13rem] sm:flex-none sm:w-72">
+      <!-- สัญญาไม่กี่ฉบับ = ปุ่มเลือกตรงๆ กดครั้งเดียว ไม่ต้องเปิดรายการ (#212) -->
+      <UiField v-if="contractButtons" :label="t('สัญญา')">
+        <UiSegmented v-model="singleContract" :options="contractButtons" size="md" />
+      </UiField>
+      <UiField v-else :label="t('สัญญา')" class="flex-1 min-w-[13rem] sm:flex-none sm:w-72">
         <UiCombobox v-model="contracts" :options="options.contracts ?? []" multiple :placeholder="t('ทุกสัญญา')" :search-placeholder="t('พิมพ์เพื่อค้นหา…')" />
       </UiField>
       <!-- ปีงบมีที่เลือกที่เดียวคือแถบบนสุด — บอกตรงนี้ เพราะคนมองหาช่องปีงบในแถบตัวกรองก่อนเสมอ -->
       <p class="pb-2 text-xs text-ink-mute" data-testid="overview-fy-note">
-        <template v-if="fiscalYearLabel">{{ t("ปีงบ {0}", [fiscalYearLabel]) }} · </template>{{ t("เปลี่ยนปีงบได้ที่แถบเมนูด้านบน") }}<template v-if="latestMonth"> · {{ t("ข้อมูลล่าสุด {0}", [latestMonth]) }}</template>
+        <template v-if="fiscalYearLabel">{{ t("ปีงบ {0}", [fiscalYearLabel]) }} · </template>{{ t("เปลี่ยนปีงบที่แถบด้านบน") }}<template v-if="latestMonth"> · {{ t("ล่าสุด {0}", [latestMonth]) }}</template>
       </p>
     </template>
     <template #actions><slot name="actions" /></template>
@@ -115,13 +132,17 @@ const latestMonth = computed(() => (props.monthOptions.length ? formatMonth(prop
   <UiFilterBar v-else role="region" :aria-label="t('ตัวกรองข้อมูล')" :chips="chips" :toggle-label="t('ตัวกรองเพิ่มเติม')" @remove="remove" @clear="clearAll">
     <template #primary>
       <!-- บนจอแคบให้สองช่องนี้ยืดเต็มบรรทัดแทนการหดจนอ่านค่าที่เลือกอยู่ไม่ออก -->
-      <UiField :label="t('ปีงบประมาณ')" class="flex-1 min-w-[11rem] sm:flex-none sm:w-56">
+      <UiField v-if="multiYear" :label="t('ปีงบประมาณ')" class="flex-1 min-w-[11rem] sm:flex-none sm:w-56">
         <UiCombobox v-model="years" :options="yearOptions" multiple :placeholder="t('เลือกปีงบ')" :search-placeholder="t('พิมพ์เพื่อค้นหา…')" />
       </UiField>
       <UiField :label="t('ช่วงเวลา')" class="flex-1 min-w-[13rem] sm:flex-none sm:w-72">
         <PeriodPicker v-model="months" :options="monthOptions" mode="multi" :all-label="t('ทั้งปีงบ')" />
       </UiField>
-      <p v-if="latestMonth" class="pb-2 text-xs text-ink-mute">{{ t("ข้อมูลล่าสุด {0}", [latestMonth]) }}</p>
+      <p v-if="!multiYear || latestMonth" class="pb-2 text-xs text-ink-mute" data-testid="compare-fy-note">
+        <template v-if="!multiYear && fiscalYearLabel">{{ t("ปีงบ {0}", [fiscalYearLabel]) }} · {{ t("เปลี่ยนปีงบที่แถบด้านบน") }}</template>
+        <template v-if="!multiYear && fiscalYearLabel && latestMonth"> · </template>
+        <template v-if="latestMonth">{{ t("ข้อมูลล่าสุด {0}", [latestMonth]) }}</template>
+      </p>
     </template>
 
     <template #actions><slot name="actions" /></template>

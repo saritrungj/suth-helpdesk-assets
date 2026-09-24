@@ -25,18 +25,18 @@ test("อ่านเฉพาะ JS ที่ index.html โหลดตอน�
 });
 
 test("ผ่านเมื่ออยู่ในงบและไม่มีไลบรารีต้องห้าม", () => {
-  const dir = fakeDist({ "index-a.js": "console.log(1)", "shared-b.js": "export const x = 1", "chart-c.js": "Canvas is already in use" }, HTML);
+  const dir = fakeDist({ "index-a.js": "console.log(1)", "shared-b.js": "export const x = 1", "chart-c.js": "https://www.tradingview.com/?utm_medium=lwc-link" }, HTML);
   const result = check(dir);
   assert.equal(result.ok, true, result.problems.join("\n"));
   assert.equal(result.rows.length, 2);
 });
 
-test("ล้มเมื่อ chart.js อยู่ในไฟล์ที่ทุกหน้าโหลด และบอกวิธีแก้", () => {
-  const dir = fakeDist({ "index-a.js": "x", "shared-b.js": "throw new Error('Canvas is already in use')" }, HTML);
+test("ล้มเมื่อตัววาดกราฟอยู่ในไฟล์ที่ทุกหน้าโหลด และบอกวิธีแก้", () => {
+  const dir = fakeDist({ "index-a.js": "x", "shared-b.js": "const href = 'https://www.tradingview.com/?utm_medium=lwc-link'" }, HTML);
   const result = check(dir);
   assert.equal(result.ok, false);
-  assert.match(result.problems.join("\n"), /chart\.js is in \/assets\/shared-b\.js/);
-  assert.match(result.problems.join("\n"), /UiChart\.vue/);
+  assert.match(result.problems.join("\n"), /lightweight-charts is in \/assets\/shared-b\.js/);
+  assert.match(result.problems.join("\n"), /UiStockChart\.vue/);
 });
 
 test("ล้มเมื่อรวมเกินงบ", () => {

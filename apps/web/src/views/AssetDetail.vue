@@ -33,11 +33,12 @@ import { ArrowLeft, MapPin, Move, Pencil } from "lucide-vue-next";
 
 import { errorMessage } from "../lib/api-error";
 import { useQueryClient } from "@tanstack/vue-query";
-import { keys, useDevice, useDeviceHistory, useDeviceUsage } from "../api/queries";
+import { fiscalYearOfMonth } from "@suth/domain";
+import { keys, useDevice, useDeviceHistory, useDeviceUsage, useReadingMonths } from "../api/queries";
 import { authState } from "../store/auth";
 import { activeFiscalYear, fiscalYearState } from "../store/fiscalYear";
 import { FISCAL_POSITIONS, deviceYearSelection, fiscalPosition, monthText, yearComparisonOptions } from "../components/comparison";
-import { formatBahtValue, formatCount, formatUnitPrice } from "../lib/format";
+import { formatBahtValue, formatCompact, formatCount, formatUnitPrice } from "../lib/format";
 import {
   UiAlert,
   UiBadge,
@@ -48,7 +49,7 @@ import {
   UiCombobox,
   UiSkeleton,
 } from "../ui";
-import UiChart from "../ui/UiChart.vue";
+import UiStockChart from "../ui/UiStockChart.vue";
 import DeviceAuditCard from "../components/DeviceAuditCard.vue";
 
 const route = useRoute();
@@ -194,7 +195,11 @@ const totalPages = computed(() => usage.value.reduce((sum, row) => sum + Number(
 // เดิมหน้านี้คูณหน้าดิบด้วยราคาปัจจุบันเอง ซึ่งไม่หัก 2% และไม่ใช้ราคาของเดือนนั้น
 
 /* ปีงบที่เทียบอยู่ใน URL; ลิงก์ ?compare=previous-year เดิมยังเปิดเป็นคู่ปีได้ */
-const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, activeFiscalYear.value?.year));
+const { data: readingMonths } = useReadingMonths();
+const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, activeFiscalYear.value?.year, { dataMonths: readingMonths.value }));
+// เทียบข้ามปีได้เมื่อระบบมีข้อมูลอย่างน้อยสองปีงบ (#212) — ปีเดียวแล้วยังเสนอ "ปีงบก่อน" ได้แค่เส้นว่างในคำอธิบายสี
+const dataYears = computed(() => new Set((readingMonths.value ?? []).map((month) => String(fiscalYearOfMonth(month))).filter(Boolean)));
+const multiYear = computed(() => !readingMonths.value || dataYears.value.size >= 2);
 const selectedYears = computed({
   get: () => {
     return deviceYearSelection(route.query.years, yearOptions.value, activeFiscalYear.value?.year);
@@ -210,7 +215,10 @@ const selectedYears = computed({
 watch(() => activeFiscalYear.value?.year, (year, previous) => {
   if (previous && year !== previous) router.replace({ query: { ...route.query, years: undefined, compare: undefined } });
 });
-const yearIds = computed(() => selectedYears.value.map((year) =>
+const shownYears = computed(() => (multiYear.value
+  ? selectedYears.value
+  : [activeFiscalYear.value?.year].filter(Boolean).map(String)));
+const yearIds = computed(() => shownYears.value.map((year) =>
   fiscalYearState.list.find((item) => String(item.year) === year)?.id ?? null));
 const yearQueries = [0, 1, 2].map((index) => useDeviceUsage(deviceId, computed(() => yearIds.value[index] ?? null)));
 const yearLoadError = computed(() => yearQueries.some((query) => query.isError.value));
@@ -223,12 +231,14 @@ const pagesAt = (rows, position) => {
   return row ? Number(row.pages || 0) : null;
 };
 
-const usageLabels = FISCAL_POSITIONS.map((position) => monthText(position));
-const usageSeries = computed(() => selectedYears.value.map((year, index) => ({
+// เส้นละปีงบ วางซ้อนบนแกน ต.ค.→ก.ย. แบบกราฟหุ้น (#212) — เดิมเป็นแท่งกลุ่ม อ่านยากเมื่อมีสามปี
+const usageSeries = computed(() => shownYears.value.map((year, index) => ({
   key: year,
   label: t("ปีงบ {0}", [yearLabel(year)]),
-  data: FISCAL_POSITIONS.map((position) => pagesAt(yearQueries[index].data.value ?? [], position)),
+  values: FISCAL_POSITIONS.map((position) => pagesAt(yearQueries[index].data.value ?? [], position)),
+  slot: index + 1,
 })));
+const hasUsage = computed(() => usageSeries.value.some((series) => series.values.some((value) => value !== null)));
 </script>
 
 <template>
@@ -306,7 +316,7 @@ const usageSeries = computed(() => selectedYears.value.map((year, index) => ({
             </div>
           </template>
 
-          <UiField :label="t(&quot;ปีงบที่เปรียบเทียบ (2–3 ปี)&quot;)" class="mb-3">
+          <UiField v-if="multiYear" :label="t(&quot;ปีงบที่เปรียบเทียบ (2–3 ปี)&quot;)" class="mb-3">
             <UiCombobox v-model="selectedYears" :options="yearOptions" multiple :placeholder="t(&quot;เลือกปีงบ&quot;)" />
           </UiField>
 
@@ -316,12 +326,15 @@ const usageSeries = computed(() => selectedYears.value.map((year, index) => ({
               <UiButton variant="secondary" @click="retryYears">{{ t("ลองใหม่") }}</UiButton>
             </template>
           </UiAlert>
-          <UiChart
-            v-else-if="usageSeries.some((series) => series.data.some((value) => value !== null)) || yearLoading"
+          <UiStockChart
+            v-else-if="hasUsage || yearLoading"
             :loading="yearLoading"
-            kind="bar"
-            :labels="usageLabels"
+            :domain="FISCAL_POSITIONS"
+            :axis-label="monthText"
+            :point-label="monthText"
             :series="usageSeries"
+            :format-value="formatCount"
+            :format-axis="formatCompact"
             :unit="t(&quot;หน้า&quot;)"
             height="15rem"
             :category-label="t(&quot;เดือน&quot;)"
