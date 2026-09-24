@@ -206,7 +206,7 @@ router.get(
     const monthClause = months.length ? " AND v.month IN (?) " : "";
     const monthParam = months.length ? [months] : [];
 
-    const [totals, series, statusRows, byDepartment, coverageScope, unbilled, idle, noLocation] = await Promise.all([
+    const [totals, series, statusRows, byDepartment, coverageScope, unbilled, idle, noLocation, invoiceSeries] = await Promise.all([
       // ---------- 1) ยอดรวมของช่วงที่เลือก ----------
       db
         .query(
@@ -405,6 +405,23 @@ router.get(
           [...buildingParam, ...contractParam]
         )
         .then(([rows]) => rows[0]),
+
+      // ---------- 9) ยอดตามใบแจ้งหนี้รายเดือน (ค่าพิมพ์ + ค่าเช่าคงที่ + VAT) ----------
+      // กราฟค่าใช้จ่ายของหน้าภาพรวมวาดคู่กับค่าพิมพ์ ให้เทียบใบแจ้งหนี้ของผู้ให้เช่าได้บนหน้าเดียว (#212)
+      // ใช้ view เดียวกับหน้าค่าใช้จ่าย ตัวเลขจึงตรงกันทุกเดือน
+      range
+        ? db
+            .query(
+              `SELECT v.month, SUM(v.print_cost) AS print_cost, SUM(v.rental) AS rental, SUM(v.vat) AS vat,
+                      SUM(v.invoice_total) AS invoice_total
+               FROM v_contract_invoice v
+               WHERE v.month BETWEEN ? AND ? ${contract_id ? "AND v.contract_id = ?" : ""}
+               GROUP BY v.month
+               ORDER BY v.month`,
+              [range.start_month, range.end_month, ...(contract_id ? [contract_id] : [])]
+            )
+            .then(([rows]) => rows)
+        : Promise.resolve([]),
     ]);
 
     // ---------- ประกอบสถานะเครื่อง ----------
@@ -572,6 +589,16 @@ router.get(
         unpriced_readings: Number(row.unpriced_readings) || 0,
         device_count: Number(row.device_count),
       })),
+
+      invoice_series: invoiceSeries.map((row) => ({
+        month: row.month,
+        print_cost: Number(row.print_cost),
+        rental: Number(row.rental),
+        vat: Number(row.vat),
+        invoice_total: Number(row.invoice_total),
+      })),
+      idle_devices: Number(idle?.device_count) || 0,
+      missing_location_devices: Number(noLocation?.device_count) || 0,
 
       device_status: deviceStatus,
       top_departments: byDepartment,

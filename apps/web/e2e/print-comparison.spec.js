@@ -59,10 +59,11 @@ async function exportAs(page, format) {
 
 test.describe("หน้าภาพรวมการพิมพ์", () => {
   // chart.js เคยติดไปในไฟล์ที่ทุกหน้าโหลด (#169) — กราฟต้องโหลดเฉพาะหน้าที่วาดกราฟ และยังวาดได้จริง
+  // ตัววาดกราฟแบบหุ้น (#212) อยู่ในไฟล์ของหน้าภาพรวม (build) หรือโมดูลของตัวเอง (dev server)
   test("กราฟโหลดเฉพาะหน้าที่ใช้: หน้าเข้าสู่ระบบไม่โหลด ส่วนหน้าภาพรวมโหลดแล้ววาดได้", async ({ page }) => {
     const chartRequests = [];
     page.on("request", (request) => {
-      if (/UiChart/.test(request.url())) chartRequests.push(request.url());
+      if (/UiStockChart|lightweight-charts|ExecutiveDashboard/.test(request.url())) chartRequests.push(request.url());
     });
 
     await page.goto("/login");
@@ -84,7 +85,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(filters.getByLabel(/^สัญญา/)).toBeVisible();
     for (const gone of [/^ปีงบประมาณ/, /^ฝ่าย /, /^แผนก /, /^อาคาร /, /^เครื่อง /]) await expect(filters.getByLabel(gone)).toHaveCount(0);
     await expect(filters.getByRole("button", { name: /^ตัวกรองเพิ่มเติม/ })).toHaveCount(0);
-    await expect(page.getByTestId("overview-fy-note")).toContainText("เปลี่ยนปีงบได้ที่แถบเมนูด้านบน");
+    await expect(page.getByTestId("overview-fy-note")).toContainText("เปลี่ยนปีงบที่แถบด้านบน");
     await expect(page.getByText("เปรียบเทียบตาม", { exact: true })).toHaveCount(0);
 
     const cost = page.getByTestId("overview-trend-cost");
@@ -95,13 +96,13 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     expect(Math.abs(left.y - right.y)).toBeLessThan(2);
     expect(left.x).toBeLessThan(right.x);
     await pages.getByRole("radio", { name: "ตาราง", exact: true }).click();
-    await expect(pages.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" }).getByRole("row", { name: /ต\.ค\. 2568\s+1,800/ })).toBeVisible();
+    await expect(pages.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" }).getByRole("row", { name: /ตุลาคม 2568\s+1,800/ })).toBeVisible();
     await expect(pages).toContainText("แสดง 3 เดือนที่มีข้อมูล");
 
     // ปุ่ม "เทียบทุกฝ่าย" พาไปหน้าเปรียบเทียบด้วยขอบเขตเดิม
-    await filters.getByLabel(/^สัญญา/).click();
-    await page.getByRole("option", { name: /^CT-001\/2569/ }).click();
-    await page.keyboard.press("Escape");
+    // สัญญาไม่เกิน 4 ฉบับเป็นปุ่มเลือกทีละฉบับ ไม่ต้องเปิดรายการ (#212)
+    await expect(filters.getByRole("radio", { name: "ทุกสัญญา" })).toBeChecked();
+    await filters.getByRole("radio", { name: /^CT-001\/2569/ }).click();
     await expect(page).toHaveURL(/contract=7/);
     await page.getByRole("button", { name: "เทียบทุกฝ่าย" }).click();
     await expect(page).toHaveURL(/\/compare\?/);
@@ -172,8 +173,8 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
     await card.getByRole("radio", { name: "ตาราง", exact: true }).click();
     const chartTable = card.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" });
-    await expect(chartTable.getByRole("row", { name: /ต\.ค\. 2568\s+1,500\s+300\s+0/ })).toBeVisible();
-    await expect(chartTable.getByRole("row", { name: /ธ\.ค\. 2568\s+1,450\s+570\s+0/ })).toBeVisible();
+    await expect(chartTable.getByRole("row", { name: /ตุลาคม 2568\s+1,500\s+300\s+0/ })).toBeVisible();
+    await expect(chartTable.getByRole("row", { name: /ธันวาคม 2568\s+1,450\s+570\s+0/ })).toBeVisible();
   });
 
   test("กรองด้วยฝ่าย: ตัวเลขสำคัญ กราฟ ตาราง แผงรายละเอียด และไฟล์ Excel เป็นชุดเดียวกัน", async ({ page }) => {
@@ -382,7 +383,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
   });
 
   test("ตารางรายละเอียดที่มีเกินหนึ่งหน้า: ค้นหา เรียง และแบ่งหน้าทำงานกับกลุ่มทั้งหมด", async ({ page }) => {
-    // 25 เครื่อง ยอดไม่ซ้ำกัน — กราฟวาดได้ 8 กลุ่ม แต่ตารางต้องมีครบทุกกลุ่ม
+    // 25 เครื่อง ยอดไม่ซ้ำกัน — กราฟวาดเฉพาะที่ติ๊ก (#212) แต่ตารางต้องมีครบทุกกลุ่ม
     const template = COMPARISON_ROWS[0];
     const rows = Array.from({ length: 25 }, (_, index) => ({
       ...template,
@@ -400,8 +401,17 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     await expect(table).toContainText("แสดง 1–20 จาก 25");
     await expect(table.getByRole("row")).toHaveCount(21);
 
-    // กราฟวาดได้แค่ 8 กลุ่มแรก แต่ต้องบอกว่าอีก 17 กลุ่มอยู่ครบในตาราง
-    await expect(comparisonCard(page)).toContainText("อีก 17 รายการอยู่ในตารางและไฟล์ที่ส่งออก");
+    // เดือนเดียวไม่มีเส้นให้วาด — บอกให้อ่านสัดส่วนจากตาราง ส่วนตารางติ๊ก 3 อันดับแรกไว้ให้แล้ว
+    await expect(page.getByTestId("compare-single-month")).toBeVisible();
+    await expect(table.getByRole("checkbox", { checked: true })).toHaveCount(3);
+    await expect(table.getByRole("checkbox", { name: "เอา D25-SN · อาคารผู้ป่วยนอก ออกจากกราฟ" })).toBeChecked();
+    // ติ๊กเพิ่มได้ถึง 5 รายการ แล้วช่องที่เหลือถูกปิดจนกว่าจะเอาออก
+    await table.getByRole("checkbox", { name: "วาด D22-SN · อาคารผู้ป่วยนอก ลงกราฟ" }).check();
+    await table.getByRole("checkbox", { name: "วาด D21-SN · อาคารผู้ป่วยนอก ลงกราฟ" }).check();
+    await expect(table.getByRole("checkbox", { checked: true })).toHaveCount(5);
+    await expect(table.getByRole("checkbox", { name: "วาด D20-SN · อาคารผู้ป่วยนอก ลงกราฟ" })).toBeDisabled();
+    await table.getByRole("checkbox", { name: "เอา D25-SN · อาคารผู้ป่วยนอก ออกจากกราฟ" }).uncheck();
+    await expect(table.getByRole("checkbox", { name: "วาด D20-SN · อาคารผู้ป่วยนอก ลงกราฟ" })).toBeEnabled();
 
     await table.getByRole("button", { name: "ถัดไป" }).click();
     await expect(table).toContainText("แสดง 21–25 จาก 25");

@@ -2,7 +2,9 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { GitCompareArrows, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
-import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useReadingMonths } from '../api/queries';
+import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useOverview, useReadingMonths } from '../api/queries';
+import { fiscalYearOfMonth } from '@suth/domain';
+import { authState } from '../store/auth';
 import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState, setActiveFiscalYear } from '../store/fiscalYear';
 import { t } from '../lib/locale';
 import { yearLabel } from '../lib/locale-format';
@@ -14,12 +16,13 @@ import ExecutiveDetails from './ExecutiveDetails.vue';
 import ExportMenu from './ExportMenu.vue';
 import PrintComparison from './PrintComparison.vue';
 import OverviewTrend from './OverviewTrend.vue';
+import OverviewHealth from './OverviewHealth.vue';
 import ComparisonTable from './ComparisonTable.vue';
 import TopShareCard from './TopShareCard.vue';
 import { dashboardKpis, previousYearMonths, topShare } from './dashboard-kpi';
 import {
   MAX_YEARS, buildComparison, buildYearComparison, dimensionLabel, fiscalPosition,
-  itemOptions, metricLabel, metricUnit, monthText, periodLabel, summarize,
+  itemOptions, metricLabel, metricUnit, monthText, periodLabel, stableSlots, summarize,
   yearComparisonOptions, yearRows,
 } from './comparison';
 import {
@@ -130,6 +133,17 @@ const selectedYears = computed(() => {
 });
 const { data: readingMonths } = useReadingMonths();
 const yearOptions = computed(() => yearComparisonOptions(fiscalYearState.list, activeFiscalYear.value?.year, { dataMonths: readingMonths.value }));
+/*
+ * เทียบข้ามปีงบได้เมื่อมีข้อมูลอย่างน้อยสองปีงบ (#212) — ปีงบเดียวแล้วยังโชว์ช่องเลือกปีงบและ "เปรียบเทียบตาม ปีงบ"
+ * คนเลือกแล้วได้เส้นเดียวหรือเส้นว่าง จึงซ่อนไว้จนกว่าจะมีปีที่สอง ยังไม่รู้ (กำลังโหลด) = ถือว่าเทียบได้ ไม่กระพริบหาย
+ */
+const dataYears = computed(() => new Set((readingMonths.value ?? []).map((month) => String(fiscalYearOfMonth(month))).filter(Boolean)));
+const multiYear = computed(() => !readingMonths.value || dataYears.value.size >= 2);
+const compareDimensions = computed(() => (multiYear.value ? PAGE_DIMENSIONS.compare : PAGE_DIMENSIONS.compare.filter((dimension) => dimension !== 'fiscalYear')));
+watch(multiYear, (canCompare) => {
+  if (canCompare || isOverview) return;
+  if (view.value.by === 'fiscalYear' || view.value.years.length) view.value = { ...view.value, by: view.value.by === 'fiscalYear' ? DEFAULT_BY.compare : view.value.by, years: [] };
+}, { immediate: true });
 
 let reconcilingYears = false;
 async function chooseYears(years) {
@@ -319,6 +333,30 @@ const model = computed(() => (yearMode.value
     include: selectedKeysFor(view.value, view.value.by),
   })));
 
+/*
+ * รายการที่อยู่บนกราฟ แบบรายการหุ้นที่ติ๊กไว้ (#212) — ยังไม่ได้เลือกเอง = 3 อันดับแรกที่มียอด ตามตัวชี้วัดที่ดูอยู่
+ * เลือกเองแล้วคงไว้แม้สลับตัวชี้วัด แต่เปลี่ยน "เปรียบเทียบตาม" แล้วเริ่มใหม่ เพราะ key เป็นของมิติเดิม
+ */
+const MAX_PLOTTED = 5;
+const DEFAULT_PLOTTED = 3;
+const picked = ref(null);
+watch(() => view.value.by, () => { picked.value = null; });
+const plotted = computed(() => {
+  const m = model.value;
+  if (m.view !== 'group' || m.dimension === 'fiscalYear') return m.entries.map((entry) => entry.key);
+  const valid = new Set(m.entries.map((entry) => entry.key));
+  if (picked.value) return picked.value.filter((key) => valid.has(key));
+  return m.entries.filter((entry) => entry.summary.readings > 0).slice(0, DEFAULT_PLOTTED).map((entry) => entry.key);
+});
+function togglePlotted(key) {
+  const current = plotted.value;
+  if (current.includes(key)) picked.value = current.filter((item) => item !== key);
+  else if (current.length < MAX_PLOTTED) picked.value = [...current, key];
+}
+// สีผูกกับตัวตนของรายการ ไม่ใช่ลำดับ — เอารายการหนึ่งออกแล้วเส้นที่เหลือคงสีเดิม และกราฟกับตารางใช้ชุดเดียวกัน
+const plotSlots = ref(new Map());
+watch(plotted, (keys) => { plotSlots.value = stableSlots(plotSlots.value, keys); }, { immediate: true });
+
 const noun = computed(() => dimensionLabel(view.value.by));
 const metricText = computed(() => `${metricLabel(model.value.metric)} (${metricUnit(model.value.metric)})`);
 
@@ -373,7 +411,8 @@ const kpi = computed(() => dashboardKpis({ rows: rows.value, previousRows: previ
 const previousYearText = computed(() => (activeYear.value ? yearLabel(Number(activeYear.value) - 1) : ''));
 const compareHint = computed(() => {
   if (selectedYears.value.length > 1) return '';
-  return kpi.value.comparable ? t('เทียบช่วงเดียวกันปีงบ {0}', [previousYearText.value]) : t('ยังไม่มีข้อมูลปีก่อนให้เทียบ');
+  // ไม่มีข้อมูลปีก่อน = ไม่ต้องพูดอะไร — "ยังไม่มีข้อมูลปีก่อนให้เทียบ" ทุกการ์ดอ่านแล้วเหมือนระบบพัง (#212)
+  return kpi.value.comparable ? t('เทียบช่วงเดียวกันปีงบ {0}', [previousYearText.value]) : '';
 });
 const unitText = computed(() => (view.value.metric === 'cost' ? t('บาท') : t('หน้า')));
 const formatMetric = (value) => (view.value.metric === 'cost' ? money(value) : formatCount(value));
@@ -393,6 +432,26 @@ const costTrend = computed(() => buildComparison({ rows: rows.value, dimension: 
 const pagesTrend = computed(() => buildComparison({ rows: rows.value, dimension: 'overall', metric: 'rawPages' }));
 const trendCaption = computed(() => [yearsText.value, periodText.value, scopeCaption.value].join(' · '));
 const fiscalYearLabel = computed(() => (activeYear.value ? yearLabel(activeYear.value) : ''));
+
+/* ความครบถ้วน ใบแจ้งหนี้รายเดือน และจำนวนเครื่อง ของหน้าภาพรวม (#212) — สัญญาเดียวกรองที่ API ได้ หลายสัญญาไม่ได้ */
+const singleContract = computed(() => (view.value.contracts.length === 1 ? view.value.contracts[0] : undefined));
+const overviewParams = computed(() => ({
+  fiscal_year_id: activeFiscalYear.value?.id || undefined,
+  contract_id: singleContract.value,
+}));
+const overviewQuery = useOverview(overviewParams);
+const overviewData = computed(() => (isOverview ? overviewQuery.data.value ?? null : null));
+const currentMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).format(new Date());
+const trendMonths = computed(() => (view.value.months.length ? [...view.value.months].sort() : primaryMonths.value));
+const trendInvoice = computed(() => (view.value.contracts.length <= 1 ? overviewData.value?.invoice_series ?? [] : []));
+const isAdmin = computed(() => authState.user?.role === 'admin');
+const devicesHint = computed(() => {
+  const o = overviewData.value;
+  if (!o) return '';
+  const active = o.totals?.active_devices ?? 0;
+  const idle = view.value.months.length ? 0 : o.idle_devices ?? 0;
+  return idle ? t('จาก {0} เครื่องที่ใช้งาน · ไม่มีการพิมพ์เลย {1}', [formatCount(active), formatCount(idle)]) : t('จาก {0} เครื่องที่ใช้งาน', [formatCount(active)]);
+});
 
 const settledTable = ref(null);
 watch([model, periodText, ready], ([value, period, isReady]) => {
@@ -513,7 +572,7 @@ function runCsv() {
 
     <DashboardFilters
       :model-value="view" :options="scopeOptions" :year-options="yearOptions" :selected-years="selectedYears" :month-options="monthOptions"
-      :variant="mode" :fiscal-year-label="fiscalYearLabel"
+      :variant="mode" :fiscal-year-label="fiscalYearLabel" :multi-year="multiYear"
       @update:model-value="(next) => (view = next)" @update:years="chooseYears" />
 
     <UiAlert v-if="failed" tone="danger" class="mb-4">
@@ -531,7 +590,8 @@ function runCsv() {
         :delta="kpi.pages.delta" delta-inverse :hint="statsReady ? t('หลังหัก 2% เหลือ {0} หน้า', [formatNetPages(shownStats.totals.netPages)]) : ''" :trend="kpi.pages.trend" />
       <UiStat tone="ink" :label="t('เฉลี่ยหน้าละ')" :value="kpi.perPage.value === null ? '—' : formatBahtValue(kpi.perPage.value)" :unit="t('บาท')" :loading="loading && !settledStats"
         :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าใช้จ่าย ÷ ยอดพิมพ์หลังหัก 2%')" />
-      <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats" />
+      <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"
+        :hint="isOverview ? devicesHint : ''" />
     </section>
     <!-- ค่าใช้จ่ายที่นี่ไม่เท่ายอดตามใบแจ้งหนี้โดยตั้งใจ — บอกส่วนที่ขาด ไม่ให้ดูเหมือนข้อมูลหลุดจากหน้าค่าใช้จ่าย (#208) -->
     <p class="text-xs text-ink-mute -mt-2 mb-4" data-testid="cost-scope-note">
@@ -540,12 +600,15 @@ function runCsv() {
     </p>
 
     <template v-if="isOverview">
-      <OverviewTrend :cost="costTrend" :pages="pagesTrend" :loading="loading" :failed="failed" :scope-text="trendCaption"
+      <OverviewHealth :overview="overviewData" :current-month="currentMonth" :fiscal-year-id="activeFiscalYear?.id" :is-admin="isAdmin" />
+
+      <OverviewTrend :cost="costTrend" :pages="pagesTrend" :months="trendMonths" :coverage="overviewData?.coverage?.months ?? []"
+        :invoice="trendInvoice" :current-month="currentMonth" :loading="loading" :failed="failed" :scope-text="trendCaption"
         @details="(entry) => openDetails('device', entry)" />
 
       <div class="grid grid-cols-1 lg:grid-cols-2 items-start gap-3 mb-4">
         <TopShareCard :title="t('ฝ่ายที่ใช้มากที่สุด ({0})', [unitText])" :data="topDivisions" :format="formatMetric" :loading="loading && !settledStats"
-          :more-label="t('เทียบทุกฝ่าย')" @more="compareBy('division')" />
+          :more-label="t('เทียบทุกฝ่าย')" :fix-unassigned="{ path: '/assets', query: { missing: 'location', status: 'active' } }" @more="compareBy('division')" />
         <TopShareCard :title="t('เครื่องที่ใช้มากที่สุด ({0})', [unitText])" :data="topDevices" :format="formatMetric" :loading="loading && !settledStats"
           :more-label="t('เทียบทุกเครื่อง')" @more="compareBy('device')" />
       </div>
@@ -553,10 +616,11 @@ function runCsv() {
 
     <template v-else>
       <PrintComparison v-model:state="view" :model="model" :loading="loading" :failed="failed" :scope-text="scopeText"
-        :dimensions="PAGE_DIMENSIONS.compare" @details="(entry) => openDetails('device', entry)" />
+        :dimensions="compareDimensions" :selected="plotted" :slots="plotSlots" />
 
       <ComparisonTable class="mb-4" :model="tableView.model" :loading="loading" :description="tableView.description"
-        @details="(entry) => openDetails('device', entry)" />
+        :selected="plotted" :slots="plotSlots" :max="MAX_PLOTTED"
+        @toggle="togglePlotted" @details="(entry) => openDetails('device', entry)" />
     </template>
 
     <ExecutiveDetails v-model:open="detailOpen" :rows="detailRows" :scope="detailScope" :context="`${yearsText} · ${periodText}`" :initial-group="detailGroup" />

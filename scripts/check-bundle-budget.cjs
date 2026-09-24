@@ -10,6 +10,7 @@
 //
 // Why: chart.js used to ride along in the shared chunk only because ui/index.js re-exported
 // UiChart, so every page paid for a library only two pages use (#169), and nothing caught it.
+// The charts are now lightweight-charts via UiStockChart (#212) — same rule, new marker.
 const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
@@ -19,7 +20,7 @@ const INITIAL_JS_GZIP_BUDGET_KB = 200;
 
 /** Libraries that must load only on the pages that use them — marker = text that survives minification */
 const FORBIDDEN_IN_INITIAL = [
-  { name: "chart.js", marker: "Canvas is already in use", hint: "import UiChart directly from ../ui/UiChart.vue, not through ui/index.js" },
+  { name: "lightweight-charts", marker: "utm_medium=lwc-link", hint: "import UiStockChart directly from ../ui/UiStockChart.vue, not through ui/index.js" },
   { name: "xlsx (SheetJS)", marker: "SheetJS", hint: "use await import(\"xlsx\") as in lib/export-xlsx.js" },
 ];
 

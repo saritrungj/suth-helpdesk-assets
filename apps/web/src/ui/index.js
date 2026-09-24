@@ -10,9 +10,9 @@
  *     เป็นกลไกของ UI ล้วนๆ)
  *   - ทุกตัวต้องใช้ได้ทั้งโหมดสว่างและมืดโดยไม่ต้องมี prop มาบอก
  *
- * ข้อยกเว้น: UiChart ไม่ export จากที่นี่ — หน้าที่วาดกราฟ import `../ui/UiChart.vue` ตรงๆ
- * เพราะไฟล์นี้ถูกโหลดทุกหน้า (รวมหน้าเข้าสู่ระบบ) ถ้า export ไว้ chart.js ทั้งก้อนจะติดไป
- * ทุกหน้าด้วย ทั้งที่ใช้แค่สองหน้า (#169) — scripts/check-bundle-budget.cjs จับถ้าหลุดกลับมา
+ * ข้อยกเว้น: UiStockChart และ UiSparkline ไม่ export จากที่นี่ — หน้าที่วาดกราฟ import
+ * `../ui/UiStockChart.vue` ตรงๆ เพราะไฟล์นี้ถูกโหลดทุกหน้า (รวมหน้าเข้าสู่ระบบ) ถ้า export ไว้
+ * ตัววาดกราฟทั้งก้อนจะติดไปทุกหน้าด้วย (#169, #212) — scripts/check-bundle-budget.cjs จับถ้าหลุดกลับมา
  */
 export { default as UiAlert } from "./UiAlert.vue";
 export { default as UiActionRow } from "./UiActionRow.vue";

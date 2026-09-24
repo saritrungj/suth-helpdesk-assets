@@ -25,7 +25,7 @@ npm run build
 node scripts/check-bundle-budget.cjs
 ```
 
-สคริปต์ที่สองคือ performance budget: รวมขนาด gzip ของ JS ที่ `index.html` โหลดก่อนแสดงหน้าแรก (ทุกหน้า รวมหน้าเข้าสู่ระบบ) ล้มเมื่อเกินงบใน `INITIAL_JS_GZIP_BUDGET_KB` หรือเมื่อไลบรารีที่ใช้แค่บางหน้า (chart.js, xlsx) หลุดเข้าไปในไฟล์ชุดนั้น ถ้าต้องเพิ่มงบให้เขียนเหตุผลใน PR (#169)
+สคริปต์ที่สองคือ performance budget: รวมขนาด gzip ของ JS ที่ `index.html` โหลดก่อนแสดงหน้าแรก (ทุกหน้า รวมหน้าเข้าสู่ระบบ) ล้มเมื่อเกินงบใน `INITIAL_JS_GZIP_BUDGET_KB` หรือเมื่อไลบรารีที่ใช้แค่บางหน้า (lightweight-charts, xlsx) หลุดเข้าไปในไฟล์ชุดนั้น ถ้าต้องเพิ่มงบให้เขียนเหตุผลใน PR (#169)
 
 ## Health check ฝั่ง API
 

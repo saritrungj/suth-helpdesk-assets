@@ -20,6 +20,10 @@ const props = defineProps({
   description: { type: String, default: "" },
   disabled: { type: Boolean, default: false },
   indeterminate: { type: Boolean, default: false },
+  /** ชื่อสำหรับโปรแกรมอ่านจอ เมื่อไม่มีป้ายที่มองเห็น (เช่นช่องติ๊กในแถวตาราง) */
+  ariaLabel: { type: String, default: "" },
+  /** สีพื้นตอนติ๊ก (CSS) — ใช้ผูกช่องติ๊กกับสีเส้นกราฟ ไม่ระบุ = สีแบรนด์ */
+  color: { type: String, default: "" },
 });
 
 const emit = defineEmits(["update:modelValue"]);
@@ -52,6 +56,7 @@ function toggle() {
         :checked="checked"
         :disabled="disabled"
         :aria-checked="indeterminate ? 'mixed' : checked"
+        :aria-label="ariaLabel || undefined"
         @change="toggle"
       />
       <span
@@ -61,6 +66,7 @@ function toggle() {
             ? 'bg-brand border-brand text-brand-on'
             : 'bg-surface border-line peer-hover:border-line-strong'
         "
+        :style="color && (checked || indeterminate) ? { backgroundColor: color, borderColor: color } : undefined"
       >
         <Minus v-if="indeterminate" :size="12" stroke-width="3" aria-hidden="true" />
         <Check v-else-if="checked" :size="12" stroke-width="3.2" aria-hidden="true" />

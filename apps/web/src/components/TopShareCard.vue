@@ -16,6 +16,8 @@ defineProps({
   format: { type: Function, required: true },
   loading: { type: Boolean, default: false },
   moreLabel: { type: String, default: "" },
+  /** ลิงก์ไปแก้รายการ "ไม่ระบุ…" — มีแล้วแถวนั้นถูกเน้นเป็นคำเตือน ไม่ใช่อันดับปกติ (#212) */
+  fixUnassigned: { type: [Object, String], default: null },
 });
 defineEmits(["more"]);
 
@@ -31,14 +33,17 @@ const percent = (share) => `${(share * 100).toLocaleString("th-TH", { maximumFra
     <div v-if="loading" class="flex flex-col gap-2.5"><UiSkeleton v-for="n in 5" :key="n" height="1.75rem" /></div>
     <p v-else-if="!data.entries.length" class="text-sm text-ink-mute">{{ t("ยังไม่มีข้อมูลในช่วงนี้") }}</p>
     <ol v-else class="flex flex-col gap-2.5 list-none" data-testid="top-share">
-      <li v-for="entry in data.entries" :key="entry.key" class="min-w-0">
+      <li v-for="entry in data.entries" :key="entry.key" class="min-w-0" :data-unassigned="entry.key === 'unassigned' || undefined">
         <div class="flex items-baseline gap-2 text-sm">
-          <span class="truncate text-ink mr-auto" :title="entry.label">{{ entry.label }}</span>
+          <span class="truncate mr-auto" :class="entry.key === 'unassigned' && fixUnassigned ? 'text-warn-ink font-medium' : 'text-ink'" :title="entry.label">
+            {{ entry.label }}
+            <RouterLink v-if="entry.key === 'unassigned' && fixUnassigned" :to="fixUnassigned" class="ml-1 text-xs underline font-normal">{{ t("แก้ข้อมูล") }}</RouterLink>
+          </span>
           <span class="numeral text-ink-soft shrink-0">{{ format(entry.value) }}</span>
           <span class="numeral text-xs text-ink-mute w-11 text-right shrink-0">{{ percent(entry.share) }}</span>
         </div>
         <div class="h-1.5 mt-1 rounded-full bg-surface-3 overflow-hidden" aria-hidden="true">
-          <div class="h-full rounded-full bg-brand" :style="{ width: `${Math.max(2, entry.share * 100)}%` }" />
+          <div class="h-full rounded-full" :class="entry.key === 'unassigned' && fixUnassigned ? 'bg-warn' : 'bg-brand'" :style="{ width: `${Math.max(2, entry.share * 100)}%` }" />
         </div>
       </li>
     </ol>
