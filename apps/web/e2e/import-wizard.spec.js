@@ -72,7 +72,7 @@ test("สร้างสัญญาจากค่าที่อ่านจ�
 
   await expect(page.getByTestId("import-commit")).toBeEnabled();
   await page.getByTestId("import-commit").click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "บันทึก", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "ยืนยันบันทึก", exact: true }).click();
   await expect(page.getByTestId("import-result")).toBeVisible();
   expect(server.commits).toBe(1);
   await expect(page.getByTestId("open-dashboard")).toHaveAttribute("href", /\/dashboard\?fy=1/);
