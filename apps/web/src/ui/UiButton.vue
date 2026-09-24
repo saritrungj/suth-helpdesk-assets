@@ -52,9 +52,9 @@ const tag = computed(() => {
 
 const VARIANTS = {
   primary:
-    "bg-brand text-brand-on border-transparent hover:bg-brand-hover active:bg-brand-active shadow-e1",
+    "btn-primary active:brightness-95",
   secondary:
-    "bg-surface text-ink-soft border-line hover:bg-surface-2 hover:border-line-strong active:bg-surface-3",
+    "btn-glass text-ink border-line hover:bg-surface hover:border-line-strong active:bg-surface-2",
   ghost:
     "bg-transparent text-ink-mute border-transparent hover:bg-surface-3 hover:text-ink active:bg-surface-3",
   soft: "bg-brand-soft text-brand-ink border-transparent hover:bg-brand-soft-hover",
@@ -65,10 +65,10 @@ const VARIANTS = {
 };
 
 const SIZES = {
-  xs: "h-7 text-xs gap-1.5 rounded-sm",
+  xs: "h-7 text-xs gap-1.5 rounded-md",
   sm: "h-8 text-sm gap-1.5 rounded-md",
   md: "h-[var(--field-h)] text-base gap-2 rounded-md",
-  lg: "h-11 text-md gap-2 rounded-lg",
+  lg: "h-11 text-md gap-2 rounded-md",
 };
 
 const PADDING = {

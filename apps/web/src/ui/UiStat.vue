@@ -82,7 +82,7 @@ const sparkPath = computed(() => {
 
 <template>
   <div
-    class="px-4 py-3.5 flex flex-col gap-1 min-w-0 h-full"
+    class="@container px-4 py-3.5 flex flex-col gap-1 min-w-0 h-full"
     :class="[
       !plain && 'card transition-shadow duration-200 ease-out-quart hover:shadow-e2',
       emphasis && 'ring-1 ring-brand-line bg-brand-soft/35',
@@ -96,8 +96,9 @@ const sparkPath = computed(() => {
 
     <UiSkeleton v-if="loading" width="4.5rem" height="1.75rem" class="my-0.5" />
 
-    <p v-else class="flex items-baseline gap-1.5 min-w-0">
-      <span class="text-2xl font-semibold truncate" :class="VALUE_TONE[tone] ?? VALUE_TONE.brand">
+    <!-- ตัวเลขห้ามถูกตัด ("1,588,…" บนมือถือ #213) — ขนาดตามความกว้างการ์ด (cqi) และหน่วยขึ้นบรรทัดใหม่ได้ -->
+    <p v-else class="flex flex-wrap items-baseline gap-x-1.5 min-w-0">
+      <span class="text-[clamp(1rem,10.5cqi,1.5rem)] leading-tight font-bold whitespace-nowrap" :class="VALUE_TONE[tone] ?? VALUE_TONE.brand">
         <slot>{{ value }}</slot>
       </span>
       <span v-if="unit" class="text-xs text-ink-mute shrink-0">{{ unit }}</span>
@@ -106,7 +107,7 @@ const sparkPath = computed(() => {
     <div class="flex items-start gap-2 min-w-0">
       <span
         v-if="delta !== null && !loading"
-        class="text-2xs font-semibold px-1.5 py-0.5 rounded-xs numeral shrink-0"
+        class="text-2xs font-semibold px-1.5 py-0.5 rounded-sm numeral shrink-0"
         :class="deltaTone"
       >
         {{ deltaLabel }}

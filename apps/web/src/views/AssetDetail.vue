@@ -254,10 +254,10 @@ const hasUsage = computed(() => usageSeries.value.some((series) => series.values
     </UiAlert>
 
     <template v-if="loading">
-      <UiSkeleton class="h-24 w-full rounded-xl mb-4" />
+      <UiSkeleton class="h-24 w-full rounded-lg mb-4" />
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <UiSkeleton class="h-64 w-full rounded-xl lg:col-span-2" />
-        <UiSkeleton class="h-64 w-full rounded-xl" />
+        <UiSkeleton class="h-64 w-full rounded-lg lg:col-span-2" />
+        <UiSkeleton class="h-64 w-full rounded-lg" />
       </div>
     </template>
 
@@ -266,7 +266,7 @@ const hasUsage = computed(() => usageSeries.value.some((series) => series.values
            เทียบกับสติกเกอร์บนตัวเครื่องทีละตัวอักษร -->
       <header
         class="flex flex-wrap items-start justify-between gap-x-6 gap-y-4 mb-5 p-5
-               rounded-xl border border-line-soft bg-surface"
+               rounded-lg border border-line-soft bg-surface"
       >
         <div class="min-w-0">
           <p class="eyebrow mb-1.5"> {{ t("ทะเบียนเครื่องพิมพ์") }} </p>

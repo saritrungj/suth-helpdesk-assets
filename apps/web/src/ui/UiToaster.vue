@@ -51,7 +51,7 @@ const RAILS = {
           v-for="item in toastState.items"
           :key="item.id"
           class="pointer-events-auto relative flex items-start gap-2.5 overflow-hidden
-                 rounded-xl border border-line-soft bg-surface-float shadow-pop px-4 py-3 pl-5 text-sm"
+                 rounded-lg border border-line-soft bg-surface-float shadow-pop px-4 py-3 pl-5 text-sm"
           :role="item.type === 'error' ? 'alert' : 'status'"
         >
           <!-- แถบสีด้านซ้ายบอกชนิด — เห็นได้จากหางตาโดยไม่ต้องอ่านไอคอน -->

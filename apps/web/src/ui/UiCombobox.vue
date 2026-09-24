@@ -28,7 +28,7 @@ import {
   ComboboxTrigger,
   ComboboxViewport,
 } from "reka-ui";
-import { Check, ChevronsUpDown, Search, X } from "lucide-vue-next";
+import { Check, ChevronDown, Search, X } from "lucide-vue-next";
 import { useField } from "./field-context";
 
 const props = defineProps({
@@ -133,12 +133,13 @@ watch(open, (isOpen) => {
 
         <span
           v-if="count > 2"
-          class="shrink-0 numeral text-2xs px-1.5 py-0.5 rounded-xs bg-brand-soft text-brand-ink"
+          class="shrink-0 numeral text-2xs px-1.5 py-0.5 rounded-sm bg-brand-soft text-brand-ink"
         >
           {{ count }}
         </span>
 
-        <ChevronsUpDown :size="15" class="shrink-0 text-ink-faint" aria-hidden="true" />
+        <!-- ▾ เดียวกับ PeriodPicker และ <select> ของระบบ (#213) — เดิม ⇕ ทำให้ช่องเลือกสองแบบดูเป็นคนละชนิด -->
+        <ChevronDown :size="15" class="shrink-0 text-ink-faint" aria-hidden="true" />
       </ComboboxTrigger>
     </ComboboxAnchor>
 

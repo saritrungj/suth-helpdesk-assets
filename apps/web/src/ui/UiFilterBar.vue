@@ -131,7 +131,7 @@ watch(
       v-show="!collapsible || open"
       :id="panelId"
       class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3
-             mt-3 p-4 rounded-xl border border-line-soft bg-surface"
+             mt-3 p-4 rounded-lg border border-line-soft bg-surface"
     >
       <slot />
     </div>

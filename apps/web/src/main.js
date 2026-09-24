@@ -3,6 +3,12 @@ import { createApp } from "vue";
 import { VueQueryPlugin } from "@tanstack/vue-query";
 import { queryClient } from "./api/query-client";
 import App from "./App.vue";
+// ฟอนต์อยู่ในแอปเอง ไม่ดึงจาก Google Fonts (#213) — เครือข่ายภายในโรงพยาบาลที่ออกอินเทอร์เน็ตไม่ได้
+// เคยได้ฟอนต์ระบบแทน Anuphan ทั้งหน้า และไม่ส่งที่อยู่ IP ของผู้ใช้ไปบริการภายนอก ไฟล์ .woff2 แยกตาม
+// unicode-range เบราว์เซอร์โหลดเฉพาะชุดอักษรที่หน้าใช้จริง (ไทย + ละติน)
+import "@fontsource-variable/anuphan";
+import "@fontsource/ibm-plex-mono/latin-400.css";
+import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./style.css";
 
 import router from "./router";

@@ -41,9 +41,9 @@ const DOTS = {
 };
 
 const SIZES = {
-  sm: "text-2xs px-1.5 py-0.5 gap-1 rounded-xs",
+  sm: "text-2xs px-1.5 py-0.5 gap-1 rounded-sm",
   md: "text-xs px-2 py-0.5 gap-1.5 rounded-sm",
-  lg: "text-sm px-2.5 py-1 gap-1.5 rounded-md",
+  lg: "text-sm px-2.5 py-1 gap-1.5 rounded-sm",
 };
 
 const classes = computed(() => [

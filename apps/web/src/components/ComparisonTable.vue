@@ -92,7 +92,7 @@ const columns = computed(() => {
         <UiCheckbox
           :model-value="isPicked(row)"
           :disabled="loading || noData(row.summary) || (!isPicked(row) && full)"
-          :aria-label="isPicked(row) ? t('เอา {0} ออกจากกราฟ', [row.displayLabel]) : t('วาด {0} ลงกราฟ', [row.displayLabel])"
+          :aria-label="isPicked(row) ? t('ซ่อน {0} จากกราฟ', [row.displayLabel]) : t('แสดง {0} บนกราฟ', [row.displayLabel])"
           :color="colorOf(row)"
           :data-testid="`plot-${row.key}`"
           @update:model-value="emit('toggle', row.key)"

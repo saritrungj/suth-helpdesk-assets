@@ -34,7 +34,7 @@ const icon = computed(() => (props.variant === "search" ? SearchX : Inbox));
     :class="compact ? 'py-8 px-4 gap-2' : 'py-14 px-6 gap-3'"
   >
     <div
-      class="grid place-items-center rounded-2xl bg-surface-2 border border-line-soft text-ink-faint"
+      class="grid place-items-center rounded-lg bg-surface-2 border border-line-soft text-ink-faint"
       :class="compact ? 'w-10 h-10' : 'w-14 h-14'"
     >
       <component :is="icon" :size="compact ? 18 : 24" aria-hidden="true" />

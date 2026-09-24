@@ -159,7 +159,7 @@ test("graph selection retains the filter and follow-up links retain their scope"
   const trend = page.getByTestId("overview-trend-pages");
   await trend.getByRole("radio", { name: "ตาราง", exact: true }).click();
   const months = trend.locator("tbody button");
-  await expect(trend.locator("canvas")).toHaveCount(1);
+  await expect(trend.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" })).toBeVisible();
   const count = await months.count();
   const filterUrl = page.url();
   if (count) {

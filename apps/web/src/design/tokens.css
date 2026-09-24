@@ -179,15 +179,17 @@
   --canvas: oklch(0.985 0.004 205);        /* พื้นของพื้นที่ทำงาน */
   /* ไล่สีรุ้งจางๆ ใต้พื้นที่ทำงาน (#204) — mesh gradient จาก radial-gradient ซ้อนกัน อยู่หลังการ์ดเท่านั้น
      การ์ดยังเป็นพื้นทึบ (--surface) ข้อความบนการ์ดจึงคอนทราสต์เท่าเดิม */
+  /* #213: ชัดขึ้นด้วยความอิ่มสีและความทึบ ไม่ใช่ด้วยการทำให้เข้มขึ้น — ความสว่าง (L) เท่าเดิม
+     ข้อความบนพื้นจึงยังผ่านคอนทราสต์ และสียังไม่แย่งสายตาจากการ์ด */
   --canvas-wash:
-    radial-gradient(60% 55% at 0% 0%, oklch(0.9 0.085 350 / 0.7), transparent 72%),
-    radial-gradient(50% 50% at 100% 0%, oklch(0.93 0.09 85 / 0.7), transparent 72%),
-    radial-gradient(55% 55% at 100% 100%, oklch(0.91 0.085 165 / 0.65), transparent 72%),
-    radial-gradient(55% 60% at 0% 100%, oklch(0.9 0.085 245 / 0.7), transparent 72%),
-    radial-gradient(45% 45% at 55% 45%, oklch(0.93 0.07 300 / 0.5), transparent 72%);
+    radial-gradient(62% 58% at 0% 0%, oklch(0.9 0.11 350 / 0.8), transparent 72%),
+    radial-gradient(52% 52% at 100% 0%, oklch(0.93 0.11 85 / 0.8), transparent 72%),
+    radial-gradient(58% 58% at 100% 100%, oklch(0.91 0.11 165 / 0.75), transparent 72%),
+    radial-gradient(58% 62% at 0% 100%, oklch(0.9 0.11 245 / 0.8), transparent 72%),
+    radial-gradient(48% 48% at 55% 45%, oklch(0.93 0.09 300 / 0.6), transparent 72%);
   /* จุดที่เข้มที่สุดของ --canvas-wash = ใจกลางจุดสีที่เข้มสุด (ความทึบ 70%) ทับพื้น ใช้วัดคอนทราสต์ของข้อความ
      ที่วางบนพื้นนี้ (e2e/contrast-helper.js) ผ่านที่จุดนี้ = ผ่านทุกจุดของพื้น — แก้สี wash ต้องแก้ค่านี้ตาม */
-  --canvas-wash-worst: color-mix(in srgb, oklch(0.9 0.085 350) 70%, oklch(0.985 0.004 205));
+  --canvas-wash-worst: color-mix(in srgb, oklch(0.9 0.11 350) 80%, oklch(0.985 0.004 205));
   --chrome: oklch(0.962 0.012 205);        /* แถบเมนูและแถบบน */
   --chrome-line: oklch(0.905 0.016 205);   /* ขอบของพื้นที่ทำงานตรงที่ชนกรอบ */
   --chrome-hover: oklch(0.935 0.016 205);  /* hover ของรายการบนกรอบ */
@@ -281,7 +283,8 @@
      ล็อกไว้ด้วย e2e/wcag.spec.js ซึ่งไล่วัดทุกพื้นที่ token นี้ถูกใช้จริง
      #204: เข้มขึ้นอีกขั้นครึ่ง (0.515 → 0.49) เพราะคำอธิบายใต้หัวหน้าวางบนพื้นไล่สีรุ้งโดยตรง
      จุดสีที่เข้มที่สุดของพื้น (--canvas-wash-worst) ให้แค่ 4.37 ด้วย n-650 */
-  --ink-mute: oklch(0.49 0.029 220);
+  /* #213: เข้มขึ้นอีกขั้น (0.49 → 0.455) — ข้อความรองมีมากที่สุดบนจอ ผู้ใช้บอกว่าทุกอย่างดูจาง */
+  --ink-mute: oklch(0.455 0.030 225);
   --ink-faint: var(--n-500);        /* 3.3:1 ไอคอนประดับเท่านั้น; placeholder ใช้ ink-mute */
   --ink-invert: oklch(1 0 0);       /* ตัวหนังสือบนพื้นทึบเข้ม */
 
@@ -293,6 +296,14 @@
   --brand-ink: var(--teal-800);     /* ตัวหนังสือ/ไอคอนสีแบรนด์บนพื้นสว่าง 7.1:1 */
   --brand-soft: var(--teal-100);    /* พื้นอ่อนของ badge/สถานะ active */
   --brand-soft-hover: var(--teal-200);
+  /* ปุ่มหลักแบบแสงเหนือ (#213) — ไล่ teal → น้ำเงินฟ้า ให้เข้ากับพื้นไล่สีรุ้ง แทนสีทึบก้อนเดียว
+     ตัวอักษรขาวผ่าน 4.5:1 ทั้งสองปลาย (teal-700 = 5.26:1, ปลายน้ำเงิน L 0.50 ≈ 5.6:1) */
+  --brand-gradient: linear-gradient(135deg, var(--teal-700) 0%, oklch(0.500 0.118 232) 100%);
+  /* ปลายที่คอนทราสต์กับตัวอักษรต่ำสุด — ตัวตรวจ (e2e/contrast-helper.js) วัดกับจุดนี้ แก้ gradient ต้องแก้ตาม */
+  --brand-worst: var(--teal-700);
+  --brand-gradient-hover: linear-gradient(135deg, var(--teal-800) 0%, oklch(0.450 0.118 232) 100%);
+  --brand-glow: inset 0 1px 0 oklch(1 0 0 / 0.18), 0 1px 2px oklch(0.30 0.06 220 / 0.20), 0 6px 16px -6px oklch(0.55 0.13 220 / 0.55);
+  --brand-glow-hover: inset 0 1px 0 oklch(1 0 0 / 0.22), 0 1px 2px oklch(0.30 0.06 220 / 0.22), 0 10px 22px -8px oklch(0.55 0.14 220 / 0.65);
   --brand-line: var(--teal-300);
   /* วงแหวนโฟกัส — ตัวบอกว่าคีย์บอร์ดอยู่ตรงไหน จึงต้องต่างจากพื้นอย่างน้อย 3:1
      ตามข้อ 1.4.11 เช่นเดียวกับขอบช่องกรอก ค่าเดิม teal-500 วัดได้ 2.66:1
@@ -398,36 +409,39 @@
      ทำให้พื้นมืดกับปุ่ม/กราฟสี teal อยู่ในตระกูลเดียวกันแทนที่จะดูเป็นคนละชุด
      ค่า L ทุกตัวเท่าเดิม ตัวเลข contrast ด้านล่างจึงยังใช้ได้ (L ใน OKLCH คือ
      ความสว่างเชิงการรับรู้ การขยับ hue ที่ chroma ต่ำไม่เปลี่ยนอัตราส่วน) */
-  --canvas: oklch(0.175 0.014 205);
+  /* #213: น้ำเงินกรมท่าเข้ม (hue 265) แทน graphite อม teal — ผู้ใช้บอกว่าโหมดมืดเดิม "ไม่เข้า"
+     การ์ดกลืนกับพื้น (ต่างกันแค่ L 0.04) ตอนนี้การ์ดสว่างกว่าพื้นชัดเจน (L 0.07) มีขอบบนสว่างจางๆ
+     และแสงเรืองสีน้ำเงินใต้การ์ด (--elev-*) แสงรุ้งของพื้นเป็นแสงเรืองจางบนพื้นกรมท่า */
+  --canvas: oklch(0.165 0.045 265);
   --canvas-wash:
-    radial-gradient(60% 55% at 0% 0%, oklch(0.34 0.09 350 / 0.45), transparent 70%),
-    radial-gradient(50% 50% at 100% 0%, oklch(0.35 0.08 85 / 0.38), transparent 70%),
-    radial-gradient(55% 55% at 100% 100%, oklch(0.34 0.08 165 / 0.38), transparent 70%),
-    radial-gradient(55% 60% at 0% 100%, oklch(0.34 0.09 245 / 0.45), transparent 70%),
-    radial-gradient(45% 45% at 55% 45%, oklch(0.34 0.08 300 / 0.32), transparent 70%);
+    radial-gradient(62% 58% at 0% 0%, oklch(0.36 0.1 350 / 0.5), transparent 70%),
+    radial-gradient(52% 52% at 100% 0%, oklch(0.36 0.08 85 / 0.36), transparent 70%),
+    radial-gradient(58% 58% at 100% 100%, oklch(0.36 0.09 165 / 0.42), transparent 70%),
+    radial-gradient(58% 62% at 0% 100%, oklch(0.36 0.1 245 / 0.55), transparent 70%),
+    radial-gradient(48% 48% at 55% 45%, oklch(0.36 0.1 300 / 0.4), transparent 70%);
   /* โหมดมืด ข้อความสว่าง — จุดที่ "สว่างที่สุด" ของพื้นคือกรณีแย่สุด */
-  --canvas-wash-worst: color-mix(in srgb, oklch(0.34 0.09 245) 45%, oklch(0.175 0.014 205));
-  --surface: oklch(0.215 0.015 205);
-  --surface-2: oklch(0.245 0.016 205);
-  --surface-3: oklch(0.285 0.017 205);
-  --surface-inset: oklch(0.190 0.014 205);
-  --surface-float: oklch(0.255 0.016 205);
+  --canvas-wash-worst: color-mix(in srgb, oklch(0.36 0.1 245) 55%, oklch(0.165 0.045 265));
+  --surface: oklch(0.245 0.045 265);
+  --surface-2: oklch(0.275 0.046 265);
+  --surface-3: oklch(0.315 0.048 265);
+  --surface-inset: oklch(0.205 0.040 265);
+  --surface-float: oklch(0.290 0.046 265);
   /* --brand-backdrop-ink/-ink-soft ไม่ต้องประกาศซ้ำ — n-900/n-650 ไม่เปลี่ยนในโหมดมืด */
   --brand-backdrop: oklch(1 0 0);   /* ห้ามกลับสี โลโก้ถูกออกแบบบนพื้นขาว */
   --scrim: oklch(0.12 0.012 205 / 0.65);
   --scrim-panel: oklch(0.080 0.010 220 / 0.38);
 
   /* ลำดับเดียวกับโหมดสว่าง: กรอบ < พื้นที่ทำงาน < การ์ด (มืดสุดอยู่นอกสุด) */
-  --chrome: oklch(0.155 0.013 205);
-  --chrome-line: oklch(0.255 0.014 210);
-  --chrome-hover: oklch(0.205 0.015 205);
+  --chrome: oklch(0.140 0.040 265);
+  --chrome-line: oklch(0.280 0.044 265);
+  --chrome-hover: oklch(0.210 0.046 265);
 
-  --row-hover: oklch(0.245 0.016 205);
-  --row-selected: oklch(0.310 0.043 205);
+  --row-hover: oklch(0.280 0.046 265);
+  --row-selected: oklch(0.320 0.050 230);
   --row-stripe: oklch(1 0 0 / 0.035);
 
-  --sheet-head: oklch(0.260 0.018 205);
-  --sheet-body: oklch(0.185 0.012 210);
+  --sheet-head: oklch(0.290 0.046 265);
+  --sheet-body: oklch(0.200 0.040 265);
 
   /* บนพื้นมืด แสงสีต้องแรงขึ้นถึงจะมองเห็น — ค่าเดียวกับโหมดสว่างจะหายไปเลย */
   --aurora-1: oklch(0.690 0.105 205 / 0.28);
@@ -443,17 +457,18 @@
   --on-aurora-mute: oklch(0.985 0.003 205 / 0.85);
   --on-aurora-faint: oklch(0.985 0.003 205 / 0.48);
 
-  --line-soft: oklch(0.290 0.014 220);
-  --line: oklch(0.345 0.016 220);
-  --line-strong: oklch(0.430 0.020 220);
+  --line-soft: oklch(0.340 0.042 265);
+  --line: oklch(0.395 0.044 265);
+  --line-strong: oklch(0.470 0.046 265);
   /* ดูเหตุผลที่ฝั่งโหมดสว่าง — บนพื้นเข้มต้องสว่างขึ้นแทนที่จะเข้มลง */
   --field-line: oklch(0.560 0.022 220);
   --field-line-strong: oklch(0.680 0.024 220);
 
   --ink: oklch(0.975 0.004 220);      /* 16.3:1 */
   --ink-soft: oklch(0.900 0.008 220); /* 13.0:1 */
-  --ink-mute: oklch(0.700 0.020 220); /*  6.6:1 */
-  --ink-faint: oklch(0.605 0.024 220);/*  4.6:1 */
+  /* สว่างขึ้นตามการ์ดที่สว่างขึ้น (#213) — คงอัตราส่วนเดิมกับ --surface */
+  --ink-mute: oklch(0.760 0.022 250); /*  ~7:1 */
+  --ink-faint: oklch(0.645 0.026 250);/*  ~4.6:1 */
   --ink-invert: oklch(0.155 0.012 220);
 
   /* ปุ่มหลักโหมดมืดสลับขั้ว: พื้น teal สว่าง + ตัวหนังสือเกือบดำ (6.9:1)
@@ -465,6 +480,12 @@
   --brand-ink: var(--teal-300);       /* 11.7:1 */
   --brand-soft: oklch(0.310 0.043 205);
   --brand-soft-hover: oklch(0.360 0.052 205);
+  /* โหมดมืด: แสงเรือง — ไล่ teal สว่าง → ฟ้า ตัวอักษรเกือบดำ (≥ 7:1 ทั้งสองปลาย) พร้อมแสงเรืองรอบปุ่ม */
+  --brand-gradient: linear-gradient(135deg, oklch(0.760 0.120 192) 0%, oklch(0.740 0.115 232) 100%);
+  --brand-worst: oklch(0.740 0.115 232);
+  --brand-gradient-hover: linear-gradient(135deg, oklch(0.820 0.110 192) 0%, oklch(0.800 0.105 232) 100%);
+  --brand-glow: inset 0 1px 0 oklch(1 0 0 / 0.30), 0 0 0 1px oklch(0.80 0.10 210 / 0.25), 0 8px 24px -8px oklch(0.70 0.14 215 / 0.60);
+  --brand-glow-hover: inset 0 1px 0 oklch(1 0 0 / 0.35), 0 0 0 1px oklch(0.85 0.10 210 / 0.35), 0 10px 30px -8px oklch(0.72 0.15 215 / 0.75);
   --brand-line: oklch(0.420 0.062 205);
   --brand-ring: var(--teal-400);
 
@@ -524,10 +545,11 @@
 
   /* โหมดมืดใช้เงาน้อยลงมาก เพราะเงาดำบนพื้นดำแทบไม่สื่ออะไร
      ลำดับชั้นมาจากความสว่างของ --surface-* แทน */
-  --elev-1: 0 1px 2px oklch(0 0 0 / 0.4);
-  --elev-2: 0 2px 6px oklch(0 0 0 / 0.45);
-  --elev-3: 0 10px 30px -10px oklch(0 0 0 / 0.6);
-  --elev-pop: 0 16px 48px -12px oklch(0 0 0 / 0.7);
+  /* #213: ขอบบนสว่างจาง (inset) + แสงเรืองสีน้ำเงินใต้แผ่น — การ์ดลอยขึ้นจากพื้นกรมท่าให้เห็น */
+  --elev-1: inset 0 1px 0 oklch(1 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.45), 0 8px 24px -14px oklch(0.55 0.14 255 / 0.45);
+  --elev-2: inset 0 1px 0 oklch(1 0 0 / 0.07), 0 2px 6px oklch(0 0 0 / 0.5), 0 12px 32px -14px oklch(0.58 0.15 255 / 0.55);
+  --elev-3: 0 10px 30px -10px oklch(0 0 0 / 0.6), 0 16px 40px -16px oklch(0.55 0.14 255 / 0.4);
+  --elev-pop: 0 16px 48px -12px oklch(0 0 0 / 0.7), 0 0 0 1px oklch(1 0 0 / 0.05);
 }
 
 /* ---------------------------------------------------------------------------
@@ -642,9 +664,17 @@
    และวรรณยุกต์ไทยซ้อนกันสองชั้นบน-ล่าง ต้องการที่ว่างแนวตั้งมากกว่าภาษาละติน
    --------------------------------------------------------------------------- */
 @theme {
-  --font-sans: "Anuphan", "IBM Plex Sans Thai", ui-sans-serif, system-ui, -apple-system,
+  --font-sans: "Anuphan Variable", "Anuphan", "IBM Plex Sans Thai", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Cascadia Code", monospace;
+
+  /* น้ำหนักตัวอักษร (#213) — Anuphan เป็น variable font (300–700) บน Windows น้ำหนัก 400 ที่ 13–14px
+     เส้นบางจนทุกอย่าง "จางเท่ากันหมด" จึงขยับทั้งชุดขึ้นครึ่งขั้น ลำดับชั้นยังห่างกันเท่าเดิม
+     ปกติ 450 · เน้น 550 · หัวข้อ 650 · ตัวเลขสำคัญและชื่อหน้า 700 */
+  --font-weight-normal: 450;
+  --font-weight-medium: 550;
+  --font-weight-semibold: 650;
+  --font-weight-bold: 700;
 
   --text-2xs: 0.6875rem;              /* 11px — eyebrow, ป้ายกำกับเล็กสุด */
   --text-2xs--line-height: 1.4;

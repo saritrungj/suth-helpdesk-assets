@@ -110,7 +110,7 @@ const pointLabel = (key) => (isYears.value ? monthText(key) : monthText(key, { l
         :title="t('ช่วงที่เลือกมีข้อมูลเดือนเดียว')"
         :description="t('ดูสัดส่วนของแต่ละรายการในตารางด้านล่าง หรือเลือกช่วงเวลาอย่างน้อย 2 เดือนเพื่อดูเป็นเส้นรายเดือน')" />
       <UiEmpty v-else-if="!hasChart" compact
-        :title="t('ติ๊กรายการในตารางด้านล่างเพื่อวาดลงกราฟ')"
+        :title="t('เลือกรายการในตารางด้านล่างเพื่อแสดงบนกราฟ')"
         :description="t('เลือกได้สูงสุด 5 รายการ เทียบกันบนแกนเดือนเดียวกัน')" />
       <UiStockChart v-else
         :domain="shown.model.months"
@@ -132,7 +132,7 @@ const pointLabel = (key) => (isYears.value ? monthText(key) : monthText(key, { l
 
       <template #footer>
         <div class="flex flex-wrap justify-between gap-2 text-xs text-ink-mute">
-          <span>{{ t("ติ๊ก{0}ในตารางด้านล่างเพื่อเพิ่มหรือเอาเส้นออก (สูงสุด 5)", [noun]) }}</span>
+          <span>{{ t("เลือก{0}ในตารางด้านล่างเพื่อแสดงบนกราฟ (สูงสุด 5 รายการ)", [noun]) }}</span>
           <span v-if="isYears">{{ t("แสดง {0} เดือนของปีงบ · มีข้อมูล {1} เดือน", [formatCount(shown.model.months.length), formatCount(monthsWithData(shown.model))]) }}</span>
           <span v-else>{{ t("แสดง {0} เดือนที่มีข้อมูล", [formatCount(monthsWithData(shown.model))]) }}</span>
         </div>

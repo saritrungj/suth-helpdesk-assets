@@ -43,9 +43,11 @@ export function createContrastTools() {
       const s = getComputedStyle(node);
       // พื้นไล่สีของแอป (.canvas-wash, #204) ประกาศจุดที่แย่ที่สุดของตัวเองไว้ใน --canvas-wash-worst —
       // วัดกับจุดนั้นแทนการยอมแพ้ ผ่านที่จุดแย่สุด = ผ่านทุกจุดของพื้น
-      const worst = node.classList?.contains("canvas-wash") ? s.getPropertyValue("--canvas-wash-worst").trim() : "";
-      // กระจกฝ้า (.chrome-glass) มีพื้นกึ่งทึบของตัวเอง blur แค่ทำให้พื้นข้างหลังนุ่มลง ไม่ทำให้เข้มขึ้น
-      const glass = node.classList?.contains("chrome-glass");
+      // ปุ่มหลักไล่สี (.btn-primary, #213) ประกาศปลายที่คอนทราสต์ต่ำสุดไว้ใน --brand-worst แบบเดียวกัน
+      const worst = node.classList?.contains("canvas-wash") ? s.getPropertyValue("--canvas-wash-worst").trim()
+        : node.classList?.contains("btn-primary") ? s.getPropertyValue("--brand-worst").trim() : "";
+      // กระจกฝ้า (.chrome-glass, ปุ่มรอง .btn-glass) มีพื้นกึ่งทึบของตัวเอง blur แค่ทำให้พื้นข้างหลังนุ่มลง ไม่ทำให้เข้มขึ้น
+      const glass = node.classList?.contains("chrome-glass") || node.classList?.contains("btn-glass");
       if ((s.backgroundImage !== "none" && !worst) || s.filter !== "none" ||
           s.mixBlendMode !== "normal" || (s.backdropFilter !== "none" && !glass)) {
         return { unsupported: "image, filter or blend requires a separate visual measurement" };
