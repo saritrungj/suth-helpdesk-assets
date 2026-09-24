@@ -25,7 +25,8 @@ const asyncHandler = require("../shared/async-handler");
 const requireAuth = require("../auth/require-auth");
 const requireStaff = require("../auth/require-staff");
 const { validate, monthString, blankToNull } = require("../shared/validate");
-const { notFound } = require("../shared/http-error");
+const { notFound, conflict } = require("../shared/http-error");
+const { actorOf, recordAudit } = require("../shared/audit");
 const cache = require("../shared/cache");
 const { readCoverageScope } = require("../shared/coverage-scope");
 const { primaryMeterId, assertReadingsPriced } = require("../devices/meters");
@@ -86,6 +87,13 @@ const pagesField = z
   )
   .transform((value) => (typeof value === "number" ? value : null));
 
+/**
+ * ค่าที่ผู้กรอกเห็นก่อนแก้ (audit 2026-09-24 F06) — ไม่ส่ง = ไม่ตรวจ (เครื่องมือเก่า/สคริปต์),
+ * null = เห็นช่องว่าง, ตัวเลข = เห็นยอดนั้น ถ้าในฐานไม่ใช่ค่านี้แล้ว แปลว่ามีคนแก้ระหว่างนั้น
+ * ต้องไม่เขียนทับเงียบๆ — เดิมสองคนกรอกเดือนเดียวกัน คนที่กดทีหลังชนะโดยไม่มีใครรู้
+ */
+const previousField = z.union([z.null(), z.number().int().min(0)]).optional();
+
 const fiscalYearIdQuery = z.object({
   fiscal_year_id: z.coerce.number({ error: "กรุณาระบุปีงบประมาณ" }).int().positive("กรุณาระบุปีงบประมาณ"),
 });
@@ -125,23 +133,29 @@ async function fiscalYearRange(id) {
  *
  * @returns {Promise<{ outcome: "saved"|"cleared"|"skipped", meterId: number, unchanged?: boolean }>}
  */
-async function writeReading(conn, deviceId, month, pages) {
+async function writeReading(conn, deviceId, month, pages, previous) {
   const meterId = await primaryMeterId(conn, deviceId);
+
+  // FOR UPDATE: สองคำขอที่แก้ช่องเดียวกันพร้อมกันต้องต่อคิวกัน ไม่งั้นทั้งคู่เห็นค่าเดิมแล้วผ่านด่านเทียบค่า
+  const [[existing]] = await conn.query(
+    "SELECT pages FROM print_transactions WHERE meter_id = ? AND month = ? FOR UPDATE",
+    [meterId, month]
+  );
+  const before = existing === undefined ? null : Number(existing.pages);
+  if (previous !== undefined && previous !== before) {
+    return { outcome: "conflict", meterId, before, month, deviceId };
+  }
 
   if (pages === null) {
     const [result] = await conn.query("DELETE FROM print_transactions WHERE meter_id = ? AND month = ?", [
       meterId,
       month,
     ]);
-    return { outcome: result.affectedRows > 0 ? "cleared" : "skipped", meterId };
+    return { outcome: result.affectedRows > 0 ? "cleared" : "skipped", meterId, before };
   }
 
   // ยอดเดิมที่ส่งมาซ้ำด้วยจำนวนหน้าเท่าเดิมไม่ใช่ยอดใหม่ — หน้าต่างกรอกทั้งปีส่งครบทุกเดือนเสมอ (#154)
-  const [[existing]] = await conn.query(
-    "SELECT pages FROM print_transactions WHERE meter_id = ? AND month = ?",
-    [meterId, month]
-  );
-  const unchanged = existing !== undefined && Number(existing.pages) === pages;
+  const unchanged = before === pages;
 
   // ON DUPLICATE KEY UPDATE พึ่ง UNIQUE KEY (meter_id, month) ใน schema.sql
   // ถ้าคีย์นั้นหายไป การกดบันทึกซ้ำเดือนเดิมจะเพิ่มแถวใหม่ทุกครั้งและยอดจะถูกนับซ้ำ
@@ -165,7 +179,7 @@ async function writeReading(conn, deviceId, month, pages) {
     [deviceId, meterId, month, pages]
   );
 
-  return { outcome: "saved", meterId, unchanged };
+  return { outcome: "saved", meterId, unchanged, before };
 }
 
 /**
@@ -179,18 +193,53 @@ async function writeReading(conn, deviceId, month, pages) {
  *
  * @param {Array<{ deviceId: number, month: string, pages: number|null }>} items
  */
-async function writeReadings(conn, items) {
+async function writeReadings(conn, items, actor) {
   const counts = { saved: 0, cleared: 0, skipped: 0 };
   const saved = [];
+  const changes = [];
+  const conflicts = [];
 
   for (const item of items) {
-    const { outcome, meterId, unchanged } = await writeReading(conn, item.deviceId, item.month, item.pages);
-    counts[outcome] += 1;
-    if (outcome === "saved" && !unchanged) saved.push({ meterId, month: item.month });
+    const result = await writeReading(conn, item.deviceId, item.month, item.pages, item.previous);
+    if (result.outcome === "conflict") {
+      conflicts.push({ device_id: item.deviceId, month: item.month, current: result.before, yours: item.previous ?? null });
+      continue;
+    }
+    counts[result.outcome] += 1;
+    if (result.outcome === "saved" && !result.unchanged) saved.push({ meterId: result.meterId, month: item.month });
+    const after = result.outcome === "cleared" ? null : result.outcome === "saved" ? item.pages : result.before;
+    if (result.before !== after) changes.push({ deviceId: item.deviceId, month: item.month, before: result.before, after });
+  }
+
+  // ทั้งชุดหรือไม่เลย — บันทึกบางช่องแล้วบอกว่าบางช่องชน ทำให้ผู้ใช้ไม่รู้ว่าอะไรเข้าไปแล้ว
+  if (conflicts.length) {
+    throw conflict("มีคนแก้ยอดบางช่องไปแล้วระหว่างที่คุณกรอก — ยังไม่ได้บันทึกอะไร", {
+      code: "reading_changed",
+      detail: "โหลดยอดล่าสุดแล้วตรวจก่อนบันทึกอีกครั้ง",
+      extra: { conflicts: conflicts.slice(0, 50) },
+    });
   }
 
   await assertReadingsPriced(conn, saved);
+  if (actor && changes.length) await auditReadingChanges(conn, actor, changes);
   return counts;
+}
+
+/** หนึ่งบรรทัดต่อช่องที่ค่าเปลี่ยนจริง — ยอดที่ส่งซ้ำค่าเดิมไม่ถูกบันทึก */
+async function auditReadingChanges(conn, actor, changes) {
+  const ids = [...new Set(changes.map((change) => change.deviceId))];
+  const [rows] = await conn.query("SELECT id, serial_number FROM devices WHERE id IN (?)", [ids]);
+  const serialOf = new Map(rows.map((row) => [row.id, row.serial_number]));
+  const show = (value) => (value === null ? "ว่าง" : value.toLocaleString("th-TH"));
+  await recordAudit(conn, actor, changes.map((change) => ({
+    action: change.before === null ? "create" : change.after === null ? "delete" : "update",
+    entity: "print_reading",
+    entityId: change.deviceId,
+    entityKey: change.month,
+    summary: `ยอดพิมพ์ ${serialOf.get(change.deviceId) ?? change.deviceId} เดือน ${change.month}: ${show(change.before)} → ${show(change.after)}`,
+    before: change.before === null ? null : { pages: change.before },
+    after: change.after === null ? null : { pages: change.after },
+  })));
 }
 
 // ============================================================
@@ -421,13 +470,14 @@ router.post(
       device_id: z.coerce.number().int().positive("กรุณาระบุเครื่อง"),
       month: monthString,
       pages: pagesField,
+      previous: previousField,
     }),
   }),
   asyncHandler(async (req, res) => {
-    const { device_id, month, pages } = req.body;
+    const { device_id, month, pages, previous } = req.body;
 
     const { saved, cleared } = await db.withTransaction((conn) =>
-      writeReadings(conn, [{ deviceId: device_id, month, pages }])
+      writeReadings(conn, [{ deviceId: device_id, month, pages, previous }], actorOf(req))
     );
     const outcome = saved ? "saved" : cleared ? "cleared" : "skipped";
 
@@ -453,6 +503,7 @@ router.post(
           z.object({
             device_id: z.coerce.number().int().positive(),
             pages: pagesField,
+            previous: previousField,
           })
         )
         .min(1, "ไม่มีรายการให้บันทึก")
@@ -465,7 +516,8 @@ router.post(
     const result = await db.withTransaction((conn) =>
       writeReadings(
         conn,
-        items.map((item) => ({ deviceId: item.device_id, month, pages: item.pages }))
+        items.map((item) => ({ deviceId: item.device_id, month, pages: item.pages, previous: item.previous })),
+        actorOf(req)
       )
     );
 
@@ -487,7 +539,7 @@ router.post(
     body: z.object({
       device_id: z.coerce.number().int().positive("กรุณาระบุเครื่อง"),
       items: z
-        .array(z.object({ month: monthString, pages: pagesField }))
+        .array(z.object({ month: monthString, pages: pagesField, previous: previousField }))
         .min(1, "ไม่มีรายการให้บันทึก")
         .max(120, "บันทึกได้ครั้งละไม่เกิน 120 เดือน"),
     }),
@@ -498,7 +550,8 @@ router.post(
     const result = await db.withTransaction((conn) =>
       writeReadings(
         conn,
-        items.map((item) => ({ deviceId: device_id, month: item.month, pages: item.pages }))
+        items.map((item) => ({ deviceId: device_id, month: item.month, pages: item.pages, previous: item.previous })),
+        actorOf(req)
       )
     );
 

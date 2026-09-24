@@ -16,6 +16,7 @@ import {
   Users,
   Wallet,
   FileUp,
+  History,
   GitCompareArrows,
 } from "lucide-vue-next";
 
@@ -185,6 +186,13 @@ export const ADMIN_GROUPS = [
         label: t("จัดการผู้ใช้งาน"),
         icon: UserCog,
         keywords: t("user account ผู้ใช้ รหัสผ่าน สิทธิ์"),
+        admin: true,
+      },
+      {
+        to: "/admin/audit-log",
+        label: t("ประวัติการแก้ไข"),
+        icon: History,
+        keywords: t("audit log history ประวัติ ใครแก้ แก้ไข ย้อนหลัง ตรวจสอบ"),
         admin: true,
       },
     ],

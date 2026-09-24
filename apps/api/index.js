@@ -131,6 +131,7 @@ app.use("/api/print-transactions", require("./src/print-usage/routes"));
 app.use("/api/dashboard", require("./src/dashboard/routes"));
 app.use("/api/users", require("./src/users/routes"));
 app.use("/api/expense", require("./src/expense/routes"));
+app.use("/api/audit-log", require("./src/audit/routes"));
 
 // หน้าแรกของ API — บอกว่าใครพูดอยู่และจะไปดูอะไรต่อได้ที่ไหน
 // ไม่ใช่ health check (ของจริงอยู่ที่ /api/health) เพราะไม่ได้ตรวจอะไรเลย
@@ -193,12 +194,14 @@ app.use((err, req, res, next) => {
       title: "เกิดข้อผิดพลาดในระบบ",
       status: 500,
       code: "internal_error",
-      // ข้อความจริงส่งออกไปเฉพาะตอนพัฒนา — ใน production มันบอกชื่อตาราง ชื่อคอลัมน์
-      // และโครงสร้างฐานข้อมูลให้คนนอกฟรีๆ id ของคำขอพอให้ผู้ใช้แจ้งแล้วเราไล่ล็อกเจอ
+      // ข้อความจริงส่งออกไปเฉพาะเครื่องพัฒนาที่ตั้ง NODE_ENV=development ไว้ชัดเจน — มันบอกชื่อตาราง
+      // ชื่อคอลัมน์ และโครงสร้างฐานข้อมูลให้คนนอกฟรีๆ id ของคำขอพอให้ผู้ใช้แจ้งแล้วเราไล่ล็อกเจอ
+      // เดิมซ่อนเฉพาะเมื่อ NODE_ENV=production แล้ว production จริงไม่ได้ตั้งค่านี้ รายละเอียดจึงหลุด
+      // ออกไปทุกครั้ง (audit 2026-09-24 F02) — ค่าที่ไม่ได้ตั้งต้องปลอดภัยโดยปริยาย
       detail:
-        process.env.NODE_ENV === "production"
-          ? `กรุณาแจ้งผู้ดูแลระบบพร้อมรหัสอ้างอิง ${req.id}`
-          : err?.message,
+        process.env.NODE_ENV === "development"
+          ? err?.message
+          : `กรุณาแจ้งผู้ดูแลระบบพร้อมรหัสอ้างอิง ${req.id}`,
       request_id: req.id,
     });
 });

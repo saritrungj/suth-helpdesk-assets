@@ -23,11 +23,15 @@ const ALIASES = [{ id: 7, target_id: 2, alias: "รัตนเวชพัฒ�
 /** ยิงคำขอหนึ่งครั้งกับ router จริง โดยแทน db.query ด้วยข้อมูลจำลองด้านบน */
 async function call(method, route, body, { role = "admin", writeError } = {}) {
   const writes = [];
+  const audits = [];
   const original = db.query;
   db.query = async (sql, params) => {
     const text = String(sql);
     if (/^SELECT id, name FROM `building`/.test(text)) return [BUILDINGS];
     if (/FROM `(building|brand)_alias`/.test(text) && text.startsWith("SELECT")) return [ALIASES];
+    // ค่าก่อนแก้/ลบ และแถวประวัติการแก้ไข (ADR-0035) ไม่นับเป็นการเขียนของเส้นทางที่ทดสอบ
+    if (text.startsWith("SELECT")) return [[{ id: 1, name: "ชื่อเดิม", year: "2568", start_month: "2024-10", end_month: "2025-09" }]];
+    if (text.startsWith("INSERT INTO audit_log")) { audits.push({ sql: text, params }); return [{ affectedRows: 1 }]; }
     writes.push({ sql: text, params });
     if (writeError) throw Object.assign(new Error("db"), { code: writeError });
     return [{ insertId: 99, affectedRows: 1 }];
@@ -45,7 +49,7 @@ async function call(method, route, body, { role = "admin", writeError } = {}) {
       headers: { authorization: `Bearer ${sign(role)}`, "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    return { status: res.status, headers: res.headers, body: await res.json(), writes };
+    return { status: res.status, headers: res.headers, body: await res.json(), writes, audits };
   } finally {
     db.query = original;
     await new Promise((resolve) => server.close(resolve));
@@ -162,4 +166,19 @@ test("POST, PUT และ DELETE ใน registerLookup ส่ง Location แล
   assert.equal(putRes.status, 200);
   assert.equal(putRes.headers.get("location"), "/api/buildings");
   assert.equal(putRes.headers.get("cache-control"), "no-store");
+});
+
+test("เพิ่ม แก้ และลบข้อมูลอ้างอิงมีบันทึกในประวัติการแก้ไข พร้อมผู้ทำและค่าก่อน/หลัง (ADR-0035)", async () => {
+  const created = await call("POST", "/buildings", { name: "อาคารใหม่" });
+  const [row] = created.audits[0].params[0];
+  assert.deepEqual(row.slice(0, 6), [1, "admin", "create", "building", 99, "อาคารใหม่"]);
+
+  const updated = await call("PUT", "/buildings/1", { name: "อาคารเปลี่ยนชื่อ" });
+  const [upd] = updated.audits[0].params[0];
+  assert.equal(upd[2], "update");
+  assert.deepEqual(JSON.parse(upd[7]), { name: "ชื่อเดิม" });
+  assert.deepEqual(JSON.parse(upd[8]), { name: "อาคารเปลี่ยนชื่อ" });
+
+  const removed = await call("DELETE", "/buildings/1");
+  assert.equal(removed.audits[0].params[0][0][2], "delete");
 });

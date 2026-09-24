@@ -30,6 +30,7 @@ const { validate, idParam, requiredText, optionalId } = require("../shared/valid
 const { MAX_LENGTH } = require("@suth/domain");
 const { notFound, badRequest } = require("../shared/http-error");
 const cache = require("../shared/cache");
+const { actorOf, changedFields, recordAudit } = require("../shared/audit");
 const { normalizeName } = require("./names");
 const lookupWrites = require("./lookup-writes");
 
@@ -105,6 +106,10 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
       validate({ params: idParam, body: aliasBody }),
       asyncHandler(async (req, res) => {
         const created = await lookupWrites.addAlias(db, alias.kind, req.params.id, req.body.alias);
+        await recordAudit(db, actorOf(req), [{
+          action: "create", entity: "alias", entityId: created.id, entityKey: `${alias.kind}:${req.params.id}`,
+          summary: `เพิ่มชื่อเรียกอื่นของ${label} "${created.alias}"`, after: { target_id: req.params.id, alias: created.alias },
+        }]);
         cache.noStore(res);
         res.set("Location", `${req.baseUrl}${path}/aliases`);
         res.status(201).json({ id: created.id, target_id: req.params.id, alias: created.alias });
@@ -116,8 +121,13 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
       requireAdmin,
       validate({ params: idParam }),
       asyncHandler(async (req, res) => {
+        const [[existing]] = await db.query(`SELECT * FROM \`${alias.table}\` WHERE id = ?`, [req.params.id]);
         const [result] = await db.query(`DELETE FROM \`${alias.table}\` WHERE id = ?`, [req.params.id]);
         if (!result.affectedRows) throw notFound("ไม่พบชื่อเรียกอื่นที่ต้องการลบ");
+        await recordAudit(db, actorOf(req), [{
+          action: "delete", entity: "alias", entityId: req.params.id, entityKey: `${alias.kind}:${existing?.[alias.column] ?? ""}`,
+          summary: `ลบชื่อเรียกอื่นของ${label} "${existing?.alias ?? req.params.id}"`, before: existing ?? null,
+        }]);
         cache.noStore(res);
         res.set("Location", `${req.baseUrl}${path}/aliases`);
         res.json({ message: "ลบชื่อเรียกอื่นเรียบร้อยแล้ว" });
@@ -163,6 +173,11 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
         `INSERT INTO \`${table}\` (${fields.map((f) => `\`${f}\``).join(", ")}) VALUES (${fields.map(() => "?").join(", ")})`,
         values
       );
+      const after = Object.fromEntries(fields.map((field) => [field, req.body[field]]));
+      await recordAudit(db, actorOf(req), [{
+        action: "create", entity: table, entityId: result.insertId, entityKey: req.body.name,
+        summary: `เพิ่ม${label} "${req.body.name}"`, after,
+      }]);
 
       cache.noStore(res);
       res.set("Location", `${req.baseUrl}${path}/${result.insertId}`);
@@ -178,12 +193,20 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
       await assertNotAlias(req.body.name);
       const fields = parentField ? ["name", parentField] : ["name"];
 
+      const [[before]] = await db.query(`SELECT ${fields.map((f) => `\`${f}\``).join(", ")} FROM \`${table}\` WHERE id = ?`, [req.params.id]);
       const [result] = await db.query(
         `UPDATE \`${table}\` SET ${fields.map((f) => `\`${f}\` = ?`).join(", ")} WHERE id = ?`,
         [...fields.map((field) => req.body[field]), req.params.id]
       );
 
       if (!result.affectedRows) throw notFound(`ไม่พบ${label}ที่ต้องการแก้ไข`);
+      const diff = changedFields(before, Object.fromEntries(fields.map((field) => [field, req.body[field]])), fields);
+      if (diff) {
+        await recordAudit(db, actorOf(req), [{
+          action: "update", entity: table, entityId: req.params.id, entityKey: req.body.name,
+          summary: `แก้ไข${label} "${before?.name ?? ""}" → "${req.body.name}"`, ...diff,
+        }]);
+      }
 
       cache.noStore(res);
       res.set("Location", `${req.baseUrl}${path}`);
@@ -198,8 +221,13 @@ function registerLookup({ table, path, label, parentField, parentRequired = true
     asyncHandler(async (req, res) => {
       // ถ้ายังมีเครื่อง/ชั้น/แผนกอ้างถึงอยู่ MySQL จะโยน ER_ROW_IS_REFERENCED
       // ซึ่ง error handler กลางแปลงเป็นข้อความภาษาไทยที่บอกวิธีแก้ให้แล้ว
+      const [[before]] = await db.query(`SELECT * FROM \`${table}\` WHERE id = ?`, [req.params.id]);
       const [result] = await db.query(`DELETE FROM \`${table}\` WHERE id = ?`, [req.params.id]);
       if (!result.affectedRows) throw notFound(`ไม่พบ${label}ที่ต้องการลบ`);
+      await recordAudit(db, actorOf(req), [{
+        action: "delete", entity: table, entityId: req.params.id, entityKey: before?.name ?? null,
+        summary: `ลบ${label} "${before?.name ?? req.params.id}"`, before: before ?? null,
+      }]);
 
       cache.noStore(res);
       res.set("Location", `${req.baseUrl}${path}`);
@@ -268,6 +296,10 @@ router.post(
       "INSERT INTO fiscal_year (year, start_month, end_month) VALUES (?, ?, ?)",
       [year, startMonth, endMonth]
     );
+    await recordAudit(db, actorOf(req), [{
+      action: "create", entity: "fiscal_year", entityId: result.insertId, entityKey: String(year),
+      summary: `เพิ่มปีงบ ${year}`, after: { year, start_month: startMonth, end_month: endMonth },
+    }]);
 
     cache.noStore(res);
     res.set("Location", `${req.baseUrl}/fiscal-years/${result.insertId}`);
@@ -284,12 +316,20 @@ router.put(
     // แก้เลขปีแล้วช่วงเดือนต้องคำนวณใหม่ด้วย ไม่งั้นจะค้างช่วงเดือนของปีเก่าไว้
     const { startMonth, endMonth } = rangeOf(year);
 
+    const [[before]] = await db.query("SELECT year, start_month, end_month FROM fiscal_year WHERE id = ?", [req.params.id]);
     const [result] = await db.query(
       "UPDATE fiscal_year SET year = ?, start_month = ?, end_month = ? WHERE id = ?",
       [year, startMonth, endMonth, req.params.id]
     );
 
     if (!result.affectedRows) throw notFound("ไม่พบปีงบประมาณที่ต้องการแก้ไข");
+    const diff = changedFields(before, { year, start_month: startMonth, end_month: endMonth });
+    if (diff) {
+      await recordAudit(db, actorOf(req), [{
+        action: "update", entity: "fiscal_year", entityId: req.params.id, entityKey: String(year),
+        summary: `แก้ไขปีงบ ${before?.year ?? ""} → ${year}`, ...diff,
+      }]);
+    }
 
     cache.noStore(res);
     res.set("Location", `${req.baseUrl}/fiscal-years`);
@@ -302,8 +342,13 @@ router.delete(
   requireAdmin,
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {
+    const [[before]] = await db.query("SELECT year, start_month, end_month FROM fiscal_year WHERE id = ?", [req.params.id]);
     const [result] = await db.query("DELETE FROM fiscal_year WHERE id = ?", [req.params.id]);
     if (!result.affectedRows) throw notFound("ไม่พบปีงบประมาณที่ต้องการลบ");
+    await recordAudit(db, actorOf(req), [{
+      action: "delete", entity: "fiscal_year", entityId: req.params.id, entityKey: before ? String(before.year) : null,
+      summary: `ลบปีงบ ${before?.year ?? req.params.id}`, before: before ?? null,
+    }]);
 
     cache.noStore(res);
     // RFC 9111 §4.4 บังคับ invalidate target URI ของ DELETE อยู่แล้ว; Location นี้

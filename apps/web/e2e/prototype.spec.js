@@ -199,7 +199,8 @@ test("monthly failure preserves draft for retry and canceled mode navigation", a
   await page.getByRole("radio", { name: "ภาพรวมทั้งปี", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "ยกเลิก", exact: true }).click();
   await expect(input).toHaveValue("250");
-  expect(state.writes).toEqual([{ month: "2026-08", items: [{ device_id: 1, pages: 250 }] }]);
+  // previous = ค่าที่เห็นก่อนแก้ ให้ API ปฏิเสธถ้ามีคนบันทึกทับไปก่อน (#214, ADR-0035)
+  expect(state.writes).toEqual([{ month: "2026-08", items: [{ device_id: 1, pages: 250, previous: 100 }] }]);
 });
 
 test("annual draft survives canceling close", async ({ page }) => {

@@ -873,9 +873,11 @@ async function save() {
   }
 
   // ส่งครบทุกเดือนเสมอ รวมเดือนที่ลบจนว่าง เพื่อให้ API รู้ว่าต้องลบค่าเดิมทิ้ง
-  const items = monthRows.value.map((row) => ({
+  // previous = ค่าตอนเปิดหน้าต่าง — มีคนแก้เดือนเดียวกันระหว่างนั้น API ตอบ 409 แทนการทับเงียบๆ (audit F06)
+  const items = monthRows.value.map((row, index) => ({
     month: row.month,
     pages: isFilled(row.pages) ? Number(row.pages) : null,
+    previous: annualSnapshot.value[index] ?? null,
   }));
 
   dialogSaving.value = true;
@@ -1114,6 +1116,7 @@ onUnmounted(unregisterFiscalYearGuard);
       :can-edit="canEdit && monthPagesReady && !loading && !pageError"
       :ready="monthPagesReady && !loading && !pageError"
       @saved="onMonthSaved"
+      @stale="onMonthSaved"
       @update:month="filters.month = $event"
       @update:dirty="onDirtyChange"
     >

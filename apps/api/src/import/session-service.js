@@ -41,6 +41,7 @@ const {
 } = require("./readings-import");
 const { contractBody, writeContract } = require("../contracts/contract-write");
 const store = require("./session-store");
+const { recordAudit } = require("../shared/audit");
 const { autoNameDecisions, autoModelDecisions, contractFromPrefill, autoCommitBlockers } = require("./auto-resolve");
 
 /** เพดานรายการที่เก็บในผลตรวจ — ผลตรวจอยู่ในแถวเดียวของฐาน รายการเต็มดูจากไฟล์ได้เสมอ */
@@ -829,6 +830,16 @@ async function commitSession(id, actor) {
       const analysis = await db.withTransaction(async (conn) => {
         const result = await analyse(conn, session, info, { actorId: actorId(actor), importSessionId: id });
         if (result.fingerprint !== session.fingerprint || !result.validation.can_commit) throw new StaleImport(result);
+        // หนึ่งบรรทัดในประวัติการแก้ไขของทั้งระบบ — รายละเอียดทุกขั้นอยู่ในประวัติของงานนำเข้าเอง (ADR-0035)
+        const o = result.outcome;
+        await recordAudit(conn, { userId: actorId(actor), username: actor?.username ?? null, requestId: null }, [{
+          action: "create", entity: "import_session", entityId: id, entityKey: session.file_name,
+          summary: `บันทึกงานนำเข้า #${id} ${session.file_name}: เครื่องใหม่ ${o.devices_created} · เติม ${o.devices_filled} · ยอดใหม่ ${o.readings_new} · แทนที่ ${o.readings_overwritten}`,
+          after: {
+            devices_created: o.devices_created, devices_filled: o.devices_filled, readings_new: o.readings_new,
+            readings_overwritten: o.readings_overwritten, contracts_created: o.contracts_created, fiscal_years_created: o.fiscal_years_created,
+          },
+        }]);
         return result;
       });
       const result = { ...analysis.outcome, duration_ms: Date.now() - startedAt };

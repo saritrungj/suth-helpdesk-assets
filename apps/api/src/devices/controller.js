@@ -31,6 +31,43 @@ const {
 const cache = require("../shared/cache");
 const { DEVICE_STATUSES, INSTALLATION_STATUSES, MAX_LENGTH } = require("@suth/domain");
 const servicePeriod = require("./service-period");
+const { actorOf, changedFields, recordAudit } = require("../shared/audit");
+
+/** ช่องของเครื่องที่บันทึกในประวัติการแก้ไข (ADR-0035) */
+const AUDIT_FIELDS = [
+  "serial_number", "brand_id", "model", "building_id", "floor_id", "location", "division_id", "department_id",
+  "contract_id", "price_override", "status", "installation_status",
+];
+const FIELD_LABEL = {
+  serial_number: "Serial", brand_id: "ยี่ห้อ", model: "รุ่น", building_id: "อาคาร", floor_id: "ชั้น", location: "ตำแหน่ง",
+  division_id: "ฝ่าย", department_id: "แผนก", contract_id: "สัญญา", price_override: "ราคาพิเศษ", status: "สถานะ",
+  installation_status: "สถานะการติดตั้ง",
+};
+
+async function deviceSnapshot(q, id) {
+  const [[row]] = await q.query(`SELECT id, ${AUDIT_FIELDS.join(", ")} FROM devices WHERE id = ?`, [id]);
+  return row ?? null;
+}
+
+/** บันทึกการแก้ไขเครื่องหนึ่งครั้ง — ไม่มีช่องไหนเปลี่ยน = ไม่บันทึก */
+async function auditDevice(q, req, action, before, after, verb) {
+  const serial = after?.serial_number ?? before?.serial_number ?? "";
+  if (action !== "update") {
+    const snapshot = action === "create" ? after : before;
+    const { id: _id, ...fields } = snapshot ?? {};
+    await recordAudit(q, actorOf(req), [{
+      action, entity: "device", entityId: snapshot?.id ?? null, entityKey: serial,
+      summary: `${verb} ${serial}`, before: action === "delete" ? fields : null, after: action === "create" ? fields : null,
+    }]);
+    return;
+  }
+  const diff = changedFields(before, after, AUDIT_FIELDS);
+  if (!diff) return;
+  const labels = Object.keys(diff.after).map((field) => FIELD_LABEL[field] ?? field).join(", ");
+  await recordAudit(q, actorOf(req), [{
+    action, entity: "device", entityId: after.id, entityKey: serial, summary: `${verb} ${serial}: ${labels}`, ...diff,
+  }]);
+}
 const { recordContractHistory } = require("./contract-history");
 const { setDeviceMeters, assertDeviceReadingsPriced, unpricedDeviceReadingKeys } = require("./meters");
 
@@ -493,6 +530,7 @@ exports.create = async (req, res) => {
       hasColorMeter: data.has_color_meter ?? false,
     });
 
+    await auditDevice(conn, req, "create", null, await deviceSnapshot(conn, result.insertId), "เพิ่มเครื่อง");
     return result.insertId;
   });
 
@@ -517,6 +555,7 @@ exports.update = async (req, res) => {
 
   await db.withTransaction(async (conn) => {
     const alreadyUnpriced = await unpricedDeviceReadingKeys(conn, Number(req.params.id));
+    const before = await deviceSnapshot(conn, req.params.id);
     const [result] = await conn.query(
       `UPDATE devices
        SET serial_number = ?, brand_id = ?, model = ?, contract_id = ?, price_override = ?, status = ?
@@ -556,6 +595,7 @@ exports.update = async (req, res) => {
       hasColorMeter: has_color_meter,
     });
     await assertDeviceReadingsPriced(conn, Number(req.params.id), alreadyUnpriced);
+    await auditDevice(conn, req, "update", before, await deviceSnapshot(conn, req.params.id), "แก้ไขเครื่อง");
   });
 
   res.json({ message: "บันทึกการแก้ไขเรียบร้อยแล้ว" });
@@ -605,6 +645,7 @@ exports.reviewInstallation = async (req, res) => {
   await db.withTransaction(async (conn) => {
     const [[device]] = await conn.query("SELECT id, status FROM devices WHERE id = ?", [req.params.id]);
     if (!device) throw notFound("ไม่พบเครื่องที่ต้องการตรวจยืนยัน");
+    const before = await deviceSnapshot(conn, device.id);
 
     await servicePeriod.recordInstallationReview(conn, device.id, {
       installationStatus: installation_status,
@@ -614,6 +655,13 @@ exports.reviewInstallation = async (req, res) => {
       userId: req.user?.id ?? null,
       note,
     });
+    const after = await deviceSnapshot(conn, device.id);
+    await recordAudit(conn, actorOf(req), [{
+      action: "update", entity: "device", entityId: device.id, entityKey: after.serial_number,
+      summary: `ตรวจยืนยันการติดตั้ง ${after.serial_number}: ${installation_status === "installed" ? "ติดตั้งแล้ว" : "ยังไม่ติดตั้ง"} ตั้งแต่ ${effective_from || servicePeriod.today()}${history_known ? " (ยืนยันย้อนหลังได้)" : ""}`,
+      before: { installation_status: before.installation_status },
+      after: { installation_status: after.installation_status, effective_from: effective_from || servicePeriod.today(), history_known: Boolean(history_known), note: note ?? null },
+    }]);
   });
 
   res.json({ message: "บันทึกผลการตรวจยืนยันแล้ว" });
@@ -626,6 +674,7 @@ exports.move = async (req, res) => {
   const data = req.body;
 
   await db.withTransaction(async (conn) => {
+    const before = await deviceSnapshot(conn, req.params.id);
     const [result] = await conn.query(
       `UPDATE devices
        SET building_id = ?, floor_id = ?, location = ?, division_id = ?, department_id = ?
@@ -636,6 +685,7 @@ exports.move = async (req, res) => {
     if (!result.affectedRows) throw notFound("ไม่พบเครื่องที่ต้องการย้าย");
 
     await recordLocationHistory(conn, req.params.id, data);
+    await auditDevice(conn, req, "update", before, await deviceSnapshot(conn, req.params.id), "ย้ายเครื่อง");
   });
 
   res.json({ message: "ย้ายเครื่องเรียบร้อยแล้ว" });
@@ -794,8 +844,12 @@ exports.remove = async (req, res) => {
   // ยอดพิมพ์ที่เคยบันทึกไว้อ้างถึงเครื่องนี้อยู่ MySQL จะปฏิเสธการลบด้วย foreign key
   // แล้ว error handler กลางแปลงเป็น 409 พร้อมข้อความว่าต้องจัดการของที่อ้างถึงก่อน
   // ซึ่งถูกต้องแล้ว — การลบเครื่องที่มีประวัติค่าใช้จ่ายทิ้งจะทำให้รายงานย้อนหลังเพี้ยน
-  const [result] = await db.query("DELETE FROM devices WHERE id = ?", [req.params.id]);
-  if (!result.affectedRows) throw notFound("ไม่พบเครื่องที่ต้องการลบ");
+  await db.withTransaction(async (conn) => {
+    const before = await deviceSnapshot(conn, req.params.id);
+    const [result] = await conn.query("DELETE FROM devices WHERE id = ?", [req.params.id]);
+    if (!result.affectedRows) throw notFound("ไม่พบเครื่องที่ต้องการลบ");
+    await auditDevice(conn, req, "delete", before, null, "ลบเครื่อง");
+  });
 
   res.json({ message: "ลบเครื่องเรียบร้อยแล้ว" });
 };

@@ -84,6 +84,10 @@ async function deleteContract({ exists = true, current = 0, history = 0, rentals
       if (statement.includes("FROM device_contract_history WHERE contract_id")) return [[{ count: history }], []];
       if (statement.includes("FROM v_contract_invoice")) return [[{ count: rentals }], []];
       if (statement.includes("DELETE FROM contracts")) return [{ affectedRows: 1 }, []];
+      // ประวัติการแก้ไข (ADR-0035): สำเนาสัญญาก่อนลบ + แถว audit_log
+      if (statement.includes("SELECT id, contract_no")) return [[{ id: 1, contract_no: "TEST-1", effective_from: "2026-01-01", effective_to: "2026-12-31", monthly_rental: null, vat_rate: null }], []];
+      if (statement.includes("FROM contract_price_line WHERE contract_id")) return [[], []];
+      if (statement.includes("INSERT INTO audit_log")) return [{ affectedRows: 1 }, []];
       throw new Error(`Unexpected SQL: ${statement}`);
     },
   });
@@ -117,9 +121,12 @@ test("DELETE /api/contracts/:id ลบสัญญาที่ไม่มี re
   assert.equal(res.headers.get("location"), "/api/contracts");
   assert.equal(res.headers.get("cache-control"), "no-store");
   assert.ok(res.calls.includes("DELETE FROM contracts WHERE id = ?"));
+  assert.ok(res.calls.some((sql) => sql.includes("INSERT INTO audit_log")), "การลบสัญญาต้องมีบันทึกในประวัติการแก้ไข");
   const rentalSql = res.calls.find((sql) => sql.includes("FROM v_contract_invoice"));
-  assert.match(rentalSql, /i\.month < DATE_FORMAT\(CURRENT_DATE, '%Y-%m'\)/);
-  assert.match(rentalSql, /CURRENT_DATE >= CASE[\s\S]*DAY\(c\.effective_from\)/);
+  assert.match(rentalSql, /i\.month < DATE_FORMAT\(t\.today, '%Y-%m'\)/);
+  assert.match(rentalSql, /t\.today >= CASE[\s\S]*DAY\(c\.effective_from\)/);
+  // วันนี้มาจากแอปตามเวลาไทย ไม่ใช่ CURRENT_DATE ของฐานที่รันเวลา UTC (audit F11)
+  assert.doesNotMatch(rentalSql, /CURRENT_DATE/);
 });
 
 for (const [reason, options] of [

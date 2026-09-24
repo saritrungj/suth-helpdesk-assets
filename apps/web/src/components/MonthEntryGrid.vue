@@ -60,7 +60,7 @@ const props = defineProps({
   ready: { type: Boolean, default: true },
 });
 
-const emit = defineEmits(["saved", "update:month", "update:dirty"]);
+const emit = defineEmits(["saved", "stale", "update:month", "update:dirty"]);
 
 const queryClient = useQueryClient();
 
@@ -254,7 +254,8 @@ async function save() {
   inFlight.value = new Map(sending);
 
   try {
-    const items = [...sending].map(([device_id, pages]) => ({ device_id, pages }));
+    // previous = ค่าที่ผู้ใช้เห็นก่อนแก้ ถ้ามีคนอื่นบันทึกช่องเดียวกันไประหว่างนั้น API ตอบ 409 แทนการทับเงียบๆ (audit F06)
+    const items = [...sending].map(([device_id, pages]) => ({ device_id, pages, previous: savedValue(device_id) }));
     await api.post("/print-transactions/bulk", { month: props.month, items });
 
     toastSuccess(t("บันทึกแล้ว"));
@@ -285,6 +286,8 @@ async function save() {
     // การล้างทิ้งเพราะเน็ตสะดุดคือการทำให้เขาต้องทำงานใหม่ทั้งหมด
     saveError.value = errorMessage(err, t("บันทึกไม่สำเร็จ กรุณาลองใหม่"));
     toastError(saveError.value);
+    // มีคนแก้บางช่องไปแล้ว — โหลดยอดล่าสุดมาให้เห็นก่อน ค่าที่กรอกไว้ยังค้างอยู่ กดบันทึกซ้ำได้หลังตรวจ
+    if (err?.response?.data?.code === "reading_changed") emit("stale");
 
     // บันทึกไม่สำเร็จ ค่าที่ส่งไปจึงไม่เคยกลายเป็นของจริง — คืนกลับเป็นของค้าง
     // ถ้าผู้ใช้ยังไม่ได้พิมพ์ทับไปแล้ว
