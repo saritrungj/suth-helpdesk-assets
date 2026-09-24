@@ -134,7 +134,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
   <aside
     ref="asideEl"
     class="fixed lg:sticky top-0 z-50 h-dvh shrink-0 flex flex-col
-           bg-chrome lg:bg-transparent border-r border-chrome-line lg:border-r-0
+           bg-chrome lg:chrome-veil border-r border-chrome-line lg:border-r-0
            duration-200 ease-out-quart
            lg:translate-x-0"
     :class="[

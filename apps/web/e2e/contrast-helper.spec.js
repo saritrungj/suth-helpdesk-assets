@@ -57,3 +57,15 @@ test("audit includes placeholders, input values and sidebar text", async ({ page
   const result = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText();`);
   expect(result.failures.map((item) => item.kind).sort()).toEqual(["placeholder", "text", "value"]);
 });
+
+test("พื้นไล่สีที่ประกาศจุดแย่สุด (.canvas-wash) วัดกับจุดนั้น ไม่ข้ามไป (#204)", async ({ page }) => {
+  await page.setContent(`<body style="background:white">
+    <div class="canvas-wash" style="--canvas-wash-worst: rgb(128,128,128); background-image: linear-gradient(white, pink)">
+      <p id="text" style="color:black">Text</p></div>
+    <div style="background-image: linear-gradient(white, pink)"><p id="plain" style="color:black">Plain</p></div></body>`);
+  const washed = await page.evaluate(`${CONTRAST_HELPERS} contrast.measureText(document.querySelector('#text'));`);
+  expect(washed.unsupported).toBeUndefined();
+  expect(washed.background).toEqual([128, 128, 128]);
+  const plain = await page.evaluate(`${CONTRAST_HELPERS} contrast.measureText(document.querySelector('#plain'));`);
+  expect(plain.unsupported).toBeTruthy();
+});
