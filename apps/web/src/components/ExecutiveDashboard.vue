@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { GitCompareArrows, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
 import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useOverview, useReadingMonths } from '../api/queries';
 import { fiscalYearOfMonth } from '@suth/domain';
-import { authState } from '../store/auth';
 import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState, setActiveFiscalYear } from '../store/fiscalYear';
 import { t } from '../lib/locale';
 import { yearLabel } from '../lib/locale-format';
@@ -16,7 +15,6 @@ import ExecutiveDetails from './ExecutiveDetails.vue';
 import ExportMenu from './ExportMenu.vue';
 import PrintComparison from './PrintComparison.vue';
 import OverviewTrend from './OverviewTrend.vue';
-import OverviewHealth from './OverviewHealth.vue';
 import ComparisonTable from './ComparisonTable.vue';
 import TopShareCard from './TopShareCard.vue';
 import { dashboardKpis, previousYearMonths, topShare } from './dashboard-kpi';
@@ -444,7 +442,6 @@ const overviewData = computed(() => (isOverview ? overviewQuery.data.value ?? nu
 const currentMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).format(new Date());
 const trendMonths = computed(() => (view.value.months.length ? [...view.value.months].sort() : primaryMonths.value));
 const trendInvoice = computed(() => (view.value.contracts.length <= 1 ? overviewData.value?.invoice_series ?? [] : []));
-const isAdmin = computed(() => authState.user?.role === 'admin');
 const devicesHint = computed(() => {
   const o = overviewData.value;
   if (!o) return '';
@@ -600,8 +597,6 @@ function runCsv() {
     </p>
 
     <template v-if="isOverview">
-      <OverviewHealth :overview="overviewData" :current-month="currentMonth" :fiscal-year-id="activeFiscalYear?.id" :is-admin="isAdmin" />
-
       <OverviewTrend :cost="costTrend" :pages="pagesTrend" :months="trendMonths" :coverage="overviewData?.coverage?.months ?? []"
         :invoice="trendInvoice" :current-month="currentMonth" :loading="loading" :failed="failed" :scope-text="trendCaption"
         @details="(entry) => openDetails('device', entry)" />
