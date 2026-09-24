@@ -1180,5 +1180,7 @@
   "จาก {0} เครื่องที่ติดตั้งแล้ว": "of {0} installed devices",
   "ยอดพิมพ์รวม": "Total pages",
   "ราคาเฉลี่ยต่อหน้า": "Average price per page",
-  "หลังหัก 2% · ไม่รวมค่าเช่าและ VAT": "After 2% deduction · excludes rent and VAT"
+  "หลังหัก 2% · ไม่รวมค่าเช่าและ VAT": "After 2% deduction · excludes rent and VAT",
+  "ต้องตรวจ": "Needs review",
+  "ไม่มียอดพิมพ์ในปีงบนี้ ({0} เครื่อง)": "No printing this fiscal year ({0} devices)"
 }

@@ -377,7 +377,7 @@ router.get(
       range
         ? db
             .query(
-              `SELECT COUNT(*) AS device_count
+              `SELECT d.id
                FROM devices d
                LEFT JOIN building b ON d.building_id = b.id
                WHERE d.status = 'active' AND d.installation_status = 'installed'
@@ -397,8 +397,8 @@ router.get(
                  )`,
               [...buildingParam, ...contractParam, currentMonth(), range.end_month, range.start_month, range.start_month, range.end_month]
             )
-            .then(([rows]) => rows[0])
-        : Promise.resolve({ device_count: 0 }),
+            .then(([rows]) => ({ device_count: rows.length, ids: rows.map((row) => row.id) }))
+        : Promise.resolve({ device_count: 0, ids: [] }),
 
       // ---------- 8) เครื่องที่ยังไม่รู้ว่าอยู่ฝ่าย/อาคารไหน ----------
       // รายงานมิเตอร์ของผู้ให้เช่าบางฉบับไม่มีคอลัมน์ฝ่ายกับอาคาร เครื่องที่ลงจากไฟล์นั้นจึงว่าง
@@ -513,7 +513,8 @@ router.get(
         title: `มี ${idle.device_count} เครื่องที่ไม่มียอดพิมพ์เลยตลอดปีงบนี้`,
         detail: "อาจย้ายไปหน่วยงานที่ต้องใช้ หรือพิจารณาไม่ต่อสัญญาในปีถัดไป",
         count: Number(idle.device_count),
-        action: { label: "ดูรายการเครื่อง", to: "/assets", query: { status: "active" } },
+        // ลิงก์ไปเฉพาะเครื่องกลุ่มนี้ ไม่ใช่เครื่องที่ใช้งานอยู่ทั้งหมด (#221 ผู้ใช้เจอว่ากดแล้วต้องไล่หาเอง)
+        action: { label: "ดูรายการเครื่อง", to: "/assets", query: { missing: "usage", ids: idle.ids.join(",") } },
       });
     }
 
@@ -612,6 +613,7 @@ router.get(
         invoice_total: Number(row.invoice_total),
       })),
       idle_devices: Number(idle?.device_count) || 0,
+      idle_device_ids: idle?.ids ?? [],
       missing_location_devices: Number(noLocation?.device_count) || 0,
 
       device_status: deviceStatus,

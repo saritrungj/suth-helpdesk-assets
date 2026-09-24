@@ -91,11 +91,17 @@ function emptyFilters() {
     // ยอดพิมพ์ของมันจึงหายไปจากงบเงียบๆ แดชบอร์ดเตือนเรื่องนี้แล้วลิงก์มาที่นี่
     contract: "",
     // "location" = ยังไม่ระบุฝ่ายหรืออาคาร — ลิงก์จากคำเตือน missing_location บนหน้าภาพรวม
+    // "usage:1,2,3" = เครื่องที่ไม่มียอดพิมพ์ทั้งปีงบ (id จากคำเตือน idle_devices, #221) — เก็บ id ไว้ในค่าเดียว
+    // ให้จำตัวกรองข้ามหน้าได้เหมือนตัวกรองอื่น
     missing: "",
   };
 }
 
 const filters = ref(emptyFilters());
+/** id ของเครื่องจากตัวกรอง "ไม่มียอดพิมพ์" — ว่าง = ไม่ได้กรองแบบนี้ */
+const idleIds = computed(() => new Set(String(filters.value.missing).startsWith("usage:")
+  ? String(filters.value.missing).slice(6).split(",").map(Number).filter(Boolean)
+  : []));
 
 const STATUS_META = {
   active: { label: t("ใช้งานอยู่"), tone: "ok" },
@@ -138,7 +144,7 @@ const FILTER_LABELS = {
   fiscalYear: t("ปีงบ"),
   status: t("สถานะ"),
   contract: t("สัญญา"),
-  missing: t("ที่ตั้ง"),
+  missing: t("ต้องตรวจ"),
 };
 
 const activeFilters = computed(() =>
@@ -151,7 +157,7 @@ const activeFilters = computed(() =>
         key === "status"
           ? (STATUS_META[value]?.label ?? value)
           : key === "missing"
-            ? t("ยังไม่ระบุฝ่ายหรืออาคาร")
+            ? (String(value).startsWith("usage:") ? t("ไม่มียอดพิมพ์ในปีงบนี้ ({0} เครื่อง)", [idleIds.value.size]) : t("ยังไม่ระบุฝ่ายหรืออาคาร"))
           : key === "contract" && value === "__unassigned__"
             ? t("ยังไม่ผูกสัญญา")
             : key === "contract"
@@ -203,7 +209,8 @@ const filteredAssets = computed(() =>
       (!filters.value.status || a.status === filters.value.status) &&
       (!filters.value.contract ||
         (filters.value.contract === "__unassigned__" ? !a.contract_id : String(a.contract_id) === filters.value.contract)) &&
-      (filters.value.missing !== "location" || !a.division_id || !a.building_id)
+      (filters.value.missing !== "location" || !a.division_id || !a.building_id) &&
+      (!idleIds.value.size || idleIds.value.has(a.id))
   )
 );
 
@@ -236,6 +243,10 @@ const queryClient = useQueryClient();
 usePageState({ search, filters });
 
 onMounted(() => {
+  if (route.query.missing === "usage") {
+    const ids = String(route.query.ids ?? "").split(",").map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    if (ids.length) filters.value.missing = `usage:${ids.join(",")}`;
+  }
   if (route.query.status && STATUS_META[route.query.status]) {
     filters.value.status = route.query.status;
   }
