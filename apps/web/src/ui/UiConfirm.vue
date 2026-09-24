@@ -39,7 +39,7 @@ import { confirmState, resolveConfirm } from "../store/confirmDialog";
 
       <AlertDialogContent
         class="fixed z-[141] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-               w-[calc(100%-2rem)] max-w-md rounded-xl border border-line-soft
+               w-[calc(100%-2rem)] max-w-md rounded-lg border border-line-soft
                bg-surface-float shadow-pop data-[state=open]:animate-pop-in"
       >
         <div class="flex items-start gap-3.5 p-5">
@@ -76,11 +76,11 @@ import { confirmState, resolveConfirm } from "../store/confirmDialog";
           <button
             type="button"
             class="inline-flex items-center justify-center h-[var(--field-h)] px-5 rounded-md border border-transparent
-                   text-base font-medium shadow-e1 transition-colors"
+                   text-base font-medium transition-[box-shadow,background-color]"
             :class="
               confirmState.danger
-                ? 'bg-danger text-danger-on hover:bg-danger-hover'
-                : 'bg-brand text-brand-on hover:bg-brand-hover'
+                ? 'bg-danger text-danger-on hover:bg-danger-hover shadow-e1'
+                : 'btn-primary'
             "
             @click="resolveConfirm(true)"
           >

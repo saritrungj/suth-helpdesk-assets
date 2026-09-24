@@ -50,7 +50,7 @@ defineEmits(["update:modelValue"]);
 
         <span
           v-if="tab.count !== undefined"
-          class="numeral text-2xs px-1.5 py-0.5 rounded-xs bg-surface-3 text-ink-mute
+          class="numeral text-2xs px-1.5 py-0.5 rounded-sm bg-surface-3 text-ink-mute
                  group-data-[state=active]:bg-brand-soft group-data-[state=active]:text-brand-ink"
         >
           {{ tab.count }}

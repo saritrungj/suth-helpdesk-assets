@@ -77,8 +77,9 @@
 @utility field-select {
   appearance: none;
   padding-inline-end: 2rem;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
-    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  /* ลูกศรสีเดียวกับไอคอน ▾ ของ UiCombobox/PeriodPicker (--ink-faint) — ช่องเลือกทุกแบบหน้าตาเดียวกัน (#213) */
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-faint) 50%),
+    linear-gradient(135deg, var(--ink-faint) 50%, transparent 50%);
   background-position: calc(100% - 1.05rem) center, calc(100% - 0.7rem) center;
   background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
   background-repeat: no-repeat;
@@ -90,12 +91,14 @@
    --------------------------------------------------------------------------- */
 
 /* ป้ายกำกับเหนือหัวข้อ — ตัวเล็ก ช่องไฟกว้าง สีจาง ใช้บอกบริบทของหน้า/การ์ด */
+/* ป้ายเหนือหัวข้อ/ตัวเลข — 12px ไม่ใช่ 11px และไม่ถ่างช่องไฟ (#213): ภาษาไทยที่ถ่างตัวอักษร
+   สระและวรรณยุกต์ลอยห่างจากพยัญชนะ อ่านยากและดูจาง ส่วนตัวพิมพ์ใหญ่ละตินถ่างเล็กน้อยพอ */
 @utility eyebrow {
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   line-height: 1.4;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink-mute);
 }
 
@@ -189,4 +192,29 @@
   @media (forced-colors: active) {
     background-color: Canvas;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   ปุ่มหลัก (#213) — ไล่สีแบบแสงเหนือและแสงเรืองจาง ให้เข้ากับพื้นไล่สีรุ้งทั้งสองโหมด
+   ใช้กับ UiButton variant="primary" และปุ่มยืนยันของ UiConfirm เท่านั้น — ปุ่มหลักมีสไตล์เดียวทั้งระบบ
+   --------------------------------------------------------------------------- */
+@utility btn-primary {
+  background-color: var(--brand);
+  background-image: var(--brand-gradient);
+  color: var(--brand-on);
+  border-color: transparent;
+  box-shadow: var(--brand-glow);
+  &:hover {
+    background-image: var(--brand-gradient-hover);
+    box-shadow: var(--brand-glow-hover);
+  }
+  @media (forced-colors: active) {
+    background-image: none;
+  }
+}
+
+/* ปุ่มรองบนพื้นไล่สี — พื้นการ์ดโปร่งเล็กน้อยให้สีรุ้งซึมผ่าน ตัวอักษรยังอยู่บนพื้นเกือบทึบ */
+@utility btn-glass {
+  background-color: color-mix(in oklab, var(--surface) 82%, transparent);
+  backdrop-filter: blur(8px) saturate(1.3);
 }

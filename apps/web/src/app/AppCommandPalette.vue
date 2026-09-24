@@ -100,7 +100,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
       <DialogContent
         class="fixed z-[151] left-1/2 -translate-x-1/2 top-[12vh]
                w-[calc(100%-2rem)] max-w-xl overflow-hidden
-               rounded-xl border border-line-soft bg-surface-float shadow-pop
+               rounded-lg border border-line-soft bg-surface-float shadow-pop
                data-[state=open]:animate-pop-in"
         :aria-label="t(&quot;ค้นหาหน้าในระบบ&quot;)"
         aria-describedby="undefined"

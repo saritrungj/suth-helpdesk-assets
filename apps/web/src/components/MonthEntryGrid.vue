@@ -404,7 +404,7 @@ defineExpose({ isDirty, dirtyCount, discard });
     <!-- ตัวอย่างก่อนวาง -->
     <div
       v-if="pastePreview"
-      class="mb-3 rounded-xl border border-brand-line bg-brand-soft/40 p-4"
+      class="mb-3 rounded-lg border border-brand-line bg-brand-soft/40 p-4"
       role="dialog"
       :aria-label="t(&quot;ตัวอย่างก่อนวางตัวเลข&quot;)"
     >

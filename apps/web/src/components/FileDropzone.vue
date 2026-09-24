@@ -67,7 +67,7 @@ function onDrop(event) {
         @change="pick($event.target.files[0])"
       />
 
-      <span class="grid place-items-center w-11 h-11 rounded-xl bg-surface-3 text-ink-mute" aria-hidden="true">
+      <span class="grid place-items-center w-11 h-11 rounded-lg bg-surface-3 text-ink-mute" aria-hidden="true">
         <Upload :size="20" />
       </span>
 

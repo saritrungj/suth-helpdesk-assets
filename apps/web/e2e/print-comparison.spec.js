@@ -404,14 +404,14 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
     // เดือนเดียวไม่มีเส้นให้วาด — บอกให้อ่านสัดส่วนจากตาราง ส่วนตารางติ๊ก 3 อันดับแรกไว้ให้แล้ว
     await expect(page.getByTestId("compare-single-month")).toBeVisible();
     await expect(table.getByRole("checkbox", { checked: true })).toHaveCount(3);
-    await expect(table.getByRole("checkbox", { name: "เอา D25-SN · อาคารผู้ป่วยนอก ออกจากกราฟ" })).toBeChecked();
+    await expect(table.getByRole("checkbox", { name: "ซ่อน D25-SN · อาคารผู้ป่วยนอก จากกราฟ" })).toBeChecked();
     // ติ๊กเพิ่มได้ถึง 5 รายการ แล้วช่องที่เหลือถูกปิดจนกว่าจะเอาออก
-    await table.getByRole("checkbox", { name: "วาด D22-SN · อาคารผู้ป่วยนอก ลงกราฟ" }).check();
-    await table.getByRole("checkbox", { name: "วาด D21-SN · อาคารผู้ป่วยนอก ลงกราฟ" }).check();
+    await table.getByRole("checkbox", { name: "แสดง D22-SN · อาคารผู้ป่วยนอก บนกราฟ" }).check();
+    await table.getByRole("checkbox", { name: "แสดง D21-SN · อาคารผู้ป่วยนอก บนกราฟ" }).check();
     await expect(table.getByRole("checkbox", { checked: true })).toHaveCount(5);
-    await expect(table.getByRole("checkbox", { name: "วาด D20-SN · อาคารผู้ป่วยนอก ลงกราฟ" })).toBeDisabled();
-    await table.getByRole("checkbox", { name: "เอา D25-SN · อาคารผู้ป่วยนอก ออกจากกราฟ" }).uncheck();
-    await expect(table.getByRole("checkbox", { name: "วาด D20-SN · อาคารผู้ป่วยนอก ลงกราฟ" })).toBeEnabled();
+    await expect(table.getByRole("checkbox", { name: "แสดง D20-SN · อาคารผู้ป่วยนอก บนกราฟ" })).toBeDisabled();
+    await table.getByRole("checkbox", { name: "ซ่อน D25-SN · อาคารผู้ป่วยนอก จากกราฟ" }).uncheck();
+    await expect(table.getByRole("checkbox", { name: "แสดง D20-SN · อาคารผู้ป่วยนอก บนกราฟ" })).toBeEnabled();
 
     await table.getByRole("button", { name: "ถัดไป" }).click();
     await expect(table).toContainText("แสดง 21–25 จาก 25");

@@ -60,7 +60,7 @@ const SIZES = {
         class="fixed z-[101] bg-surface-float shadow-pop border border-line-soft flex flex-col
                inset-x-0 bottom-0 max-h-[90dvh] rounded-t-2xl
                sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2
-               sm:w-[calc(100%-2rem)] sm:rounded-xl sm:max-h-[85dvh]
+               sm:w-[calc(100%-2rem)] sm:rounded-lg sm:max-h-[85dvh]
                data-[state=open]:animate-slide-up sm:data-[state=open]:animate-pop-in"
         :class="SIZES[size] ?? SIZES.md"
         :aria-describedby="description ? undefined : 'undefined'"

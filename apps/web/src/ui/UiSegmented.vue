@@ -65,7 +65,7 @@ const sizing = computed(() =>
       {{ option.label }}
       <span
         v-if="option.count !== undefined"
-        class="numeral text-2xs px-1 rounded-xs"
+        class="numeral text-2xs px-1 rounded-sm"
         :class="modelValue === option.value ? 'bg-brand-soft text-brand-ink' : 'bg-surface-3 text-ink-mute'"
       >
         {{ option.count }}

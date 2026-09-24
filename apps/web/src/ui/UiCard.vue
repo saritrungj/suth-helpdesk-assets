@@ -36,7 +36,7 @@ defineProps({
       <div class="min-w-0 flex-1">
         <slot name="header">
           <p v-if="eyebrow" class="eyebrow">{{ eyebrow }}</p>
-          <h2 v-if="title" class="text-lg font-semibold text-ink truncate">{{ title }}</h2>
+          <h2 v-if="title" class="text-[1.0625rem] leading-snug font-semibold text-ink truncate">{{ title }}</h2>
           <p v-if="description" class="text-xs text-ink-mute mt-0.5">{{ description }}</p>
         </slot>
       </div>

@@ -102,7 +102,7 @@ function chartOptions() {
     layout: {
       background: { type: ColorType.Solid, color: "transparent" },
       textColor: rgba(c.text),
-      fontFamily: "Anuphan, 'Noto Sans Thai', sans-serif",
+      fontFamily: "'Anuphan Variable', Anuphan, 'Noto Sans Thai', sans-serif",
       fontSize: 12,
       attributionLogo: true,
     },
@@ -312,7 +312,8 @@ const ariaSummary = computed(() => {
         <tbody>
           <tr v-for="(row, index) in tableRows" :key="row.key" class="border-b border-line-soft last:border-0">
             <th scope="row" class="py-2 pr-4 font-normal text-ink">
-              <button v-if="selectable" type="button" class="underline" @click="emit('select', { index })">{{ row.label }}</button>
+              <!-- กดได้เฉพาะเดือนที่มีค่า — แกนมีครบ 12 เดือน เดือนว่างกดแล้วไม่มีอะไรให้ดู -->
+              <button v-if="selectable && row.values.some((v) => v !== null && v !== undefined)" type="button" class="underline" @click="emit('select', { index })">{{ row.label }}</button>
               <template v-else>{{ row.label }}</template>
               <span v-if="row.note" class="block text-2xs text-warn-ink">{{ row.note }}</span>
             </th>

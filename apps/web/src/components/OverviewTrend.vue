@@ -85,11 +85,11 @@ const pagesValues = computed(() => valuesOf(shown.value.pages, "rawPages"));
 const invoiceValues = computed(() => {
   if (!shown.value.invoice.length) return null;
   const byMonth = new Map(shown.value.invoice.map((row) => [row.month, row]));
-  // เดือนที่ยังไม่จบและยังไม่มียอดพิมพ์มีแค่ค่าเช่า — ถ้าวาดไว้ ป้ายค่าล่าสุดจะเป็นค่าเช่าเดือนเดียวที่ดูเหมือนยอดตก
+  // เดือนที่ยังไม่มียอดพิมพ์เลยมีแค่ค่าเช่า — เส้นค่าพิมพ์เป็นช่องว่างที่เดือนนั้น เส้นใบแจ้งหนี้ก็ต้องว่างด้วย
+  // ไม่งั้นเส้นดูเหมือนเริ่มจากศูนย์ (เดือนก่อนเริ่มกรอก) หรือป้ายค่าล่าสุดเป็นค่าเช่าเดือนเดียวที่ดูเหมือนยอดตก
   const values = shown.value.months.map((month) => {
     const row = byMonth.get(month);
-    if (!row) return null;
-    if (props.currentMonth && month >= props.currentMonth && !row.print_cost) return null;
+    if (!row || !row.print_cost) return null;
     return row.invoice_total;
   });
   return values.some((value) => value) ? values : null;
