@@ -98,7 +98,7 @@ const sparkPath = computed(() => {
 
     <!-- ตัวเลขห้ามถูกตัด ("1,588,…" บนมือถือ #213) — ขนาดตามความกว้างการ์ด (cqi) และหน่วยขึ้นบรรทัดใหม่ได้ -->
     <p v-else class="flex flex-wrap items-baseline gap-x-1.5 min-w-0">
-      <span class="text-[clamp(1rem,10.5cqi,1.5rem)] leading-tight font-bold whitespace-nowrap" :class="VALUE_TONE[tone] ?? VALUE_TONE.brand">
+      <span class="text-[clamp(1rem,10.5cqi,1.5rem)] leading-tight font-semibold whitespace-nowrap" :class="VALUE_TONE[tone] ?? VALUE_TONE.brand">
         <slot>{{ value }}</slot>
       </span>
       <span v-if="unit" class="text-xs text-ink-mute shrink-0">{{ unit }}</span>
