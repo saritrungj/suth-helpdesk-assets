@@ -55,11 +55,11 @@ test("comparison rejects inherited object properties as metric query values", as
       billing_contract_id: 1, billing_contract_no: "OLD-A" },
   ] }));
 
-  await page.goto("/dashboard?by=constructor&measure=toString");
+  await page.goto("/compare?by=constructor&measure=toString");
 
   await expect(page.getByRole("radio", { name: "ค่าใช้จ่าย", exact: true })).toBeChecked();
-  await expect(page.getByRole("radio", { name: "ภาพรวม", exact: true })).toBeChecked();
-  await expect(page.getByRole("heading", { name: "ค่าใช้จ่ายรายเดือน", exact: true })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "ฝ่าย", exact: true })).toBeChecked();
+  await expect(page).not.toHaveURL(/constructor|toString/);
 });
 
 /**
@@ -70,7 +70,8 @@ test("comparison rejects inherited object properties as metric query values", as
 const NARROW = { width: 320, height: 740 };
 const KEY_PAGES = [
   { name: "asset-detail", url: "/assets/1", heading: "SUTH-001" },
-  { name: "device-ranking", url: "/dashboard?by=device", heading: "ภาพรวมการพิมพ์" },
+  { name: "device-ranking", url: "/compare?by=device", heading: "เปรียบเทียบการพิมพ์" },
+  { name: "overview", url: "/dashboard", heading: "ภาพรวมการพิมพ์" },
 ];
 
 for (const target of KEY_PAGES) {
