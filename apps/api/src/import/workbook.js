@@ -6,6 +6,7 @@
 const fs = require("fs");
 const XLSX = require("xlsx");
 const { badRequest } = require("../shared/http-error");
+const { assertZipWithinLimits } = require("./zip-limit");
 
 /** เพดานไฟล์ยอดพิมพ์ต่อการนำเข้าหนึ่งครั้ง — ไฟล์รายงวดจริงมีไม่กี่สิบแผ่น แผ่นละไม่กี่ร้อยแถว */
 const MAX_IMPORT_SHEETS = 60;
@@ -50,8 +51,12 @@ function readWorkbook(filePath, options) {
       const text = fs.readFileSync(filePath, "utf8").replace(/^﻿/, "");
       return XLSX.read(text, { type: "string", raw: true });
     }
-    return XLSX.readFile(filePath, options);
+    // คลายไม่เกินเพดานก่อนให้ SheetJS คลายทั้งก้อนเข้าหน่วยความจำ (#207, zip-limit.js)
+    const buffer = fs.readFileSync(filePath);
+    assertZipWithinLimits(buffer);
+    return XLSX.read(buffer, { ...options, type: "buffer" });
   } catch (err) {
+    if (err?.status === 400) throw err;
     throw badRequest("ไฟล์นี้เปิดเป็นตารางไม่ได้", {
       code: "unreadable_file",
       detail: "ไฟล์อาจเสียหาย หรือเป็นไฟล์ชนิดอื่นที่ถูกเปลี่ยนนามสกุลมาเป็น .xlsx/.csv — ลองเปิดด้วย Excel แล้วบันทึกใหม่",

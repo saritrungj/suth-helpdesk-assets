@@ -12,8 +12,6 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { Download, FolderOpen } from "lucide-vue-next";
 import api from "../../services/api";
 import { keys, useImportSessions } from "../../api/queries";
-import { invalidateAfterWrites } from "../../api/invalidate";
-import { refreshFiscalYears } from "../../store/fiscalYear";
 import { errorMessage } from "../../lib/api-error";
 import { formatCount } from "../../lib/format";
 import { formatDateTime } from "../../lib/locale-format";
@@ -30,7 +28,8 @@ const showClosed = ref(false);
 const sessions = useImportSessions(showClosed);
 const rows = computed(() => sessions.data.value ?? []);
 
-// นำเข้าอัตโนมัติ (#190, ADR-0030) — ผู้ดูแลเลือกตอนอัปโหลดว่าให้ระบบสร้างและบันทึกให้เลยไหม จำค่าไว้ในเบราว์เซอร์นี้
+// ให้ระบบเตรียมให้ (#190, ADR-0030/0034) — เลือกชื่อ หมวดของรุ่น และเตรียมสัญญา/ปีงบจากหัวรายงาน แต่ **ไม่บันทึก**
+// ผู้ดูแลเห็นสรุปสิ่งที่จะเกิดในหน้างานแล้วกดยืนยันเอง (#207) จำค่าไว้ในเบราว์เซอร์นี้
 const AUTO_KEY = "suth.import.auto";
 function readAuto() {
   try { return localStorage.getItem(AUTO_KEY) !== "off"; } catch { return true; }
@@ -50,14 +49,10 @@ async function upload(file) {
   try {
     const body = new FormData();
     body.append("file", file);
-    if (autoCommit.value) body.append("auto", "commit");
+    if (autoCommit.value) body.append("auto", "resolve");
     const { data } = await api.post("/import-sessions", body, { headers: { "Content-Type": "multipart/form-data" } });
     queryClient.setQueryData(keys.importSession(data.id), data);
     queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
-    if (data.status === "completed") {
-      await refreshFiscalYears();
-      await invalidateAfterWrites(queryClient, ["device", "usage", "contracts", "fiscal-years", "buildings", "floors", "divisions", "departments", "brands"]);
-    }
     await router.push(`/admin/import/${data.id}`);
   } catch (err) {
     uploadError.value = errorMessage(err, t("อัปโหลดไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"));
@@ -95,12 +90,12 @@ function headline(row) {
 
     <FileDropzone :model-value="null" :disabled="uploading" @update:model-value="upload" />
     <div>
-      <UiCheckbox v-model="autoCommit" :disabled="uploading" :label="t('สร้างข้อมูลที่ขาดและบันทึกให้เลยเมื่อไม่มีอะไรต้องถาม')" data-testid="import-auto-toggle" />
+      <UiCheckbox v-model="autoCommit" :disabled="uploading" :label="t('ให้ระบบเตรียมข้อมูลที่ขาดให้ แล้วแสดงก่อนบันทึก')" data-testid="import-auto-toggle" />
       <p class="text-xs text-ink-mute mt-1 pl-6">
-        {{ t("ระบบสร้างสัญญาจากหัวรายงาน ปีงบ ยี่ห้อ อาคาร ฝ่าย และเลือกหมวดของรุ่นที่รู้จักให้ แล้วบันทึกทันที — หยุดถามเฉพาะชื่อที่คล้ายของเดิม ตัวเลขที่จะแทนที่ค่าเดิม หรือตัวเลขสัญญาที่ไม่ตรงกับไฟล์") }}
+        {{ t("ระบบเตรียมสัญญาจากหัวรายงาน ปีงบ ยี่ห้อ อาคาร ฝ่าย และเลือกหมวดของรุ่นที่รู้จักให้ แล้วแสดงสรุปว่าจะบันทึกอะไร — ยังไม่มีอะไรเข้าระบบจนกว่าคุณจะกดยืนยัน") }}
       </p>
     </div>
-    <p v-if="uploading" class="text-sm text-ink-soft" role="status">{{ autoCommit ? t("กำลังอัปโหลด ตรวจ และบันทึกให้… ไฟล์ใหญ่อาจใช้เวลาครึ่งนาที") : t("กำลังอัปโหลดและตรวจไฟล์…") }}</p>
+    <p v-if="uploading" class="text-sm text-ink-soft" role="status">{{ autoCommit ? t("กำลังอัปโหลด ตรวจ และเตรียมข้อมูล… ไฟล์ใหญ่อาจใช้เวลาครึ่งนาที") : t("กำลังอัปโหลดและตรวจไฟล์…") }}</p>
     <UiAlert v-if="uploadError" tone="danger">{{ uploadError }}</UiAlert>
 
     <section class="rounded-lg border border-line-soft p-3" data-testid="import-sessions">

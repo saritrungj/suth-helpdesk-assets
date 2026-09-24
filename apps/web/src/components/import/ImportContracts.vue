@@ -7,12 +7,16 @@
  *
  * ผู้ใช้ในการตรวจ audit 2026-09-23 พิมพ์สัญญาเองแล้วไม่มีค่าเช่า/VAT และวันสิ้นสุดผิด ยอดตามใบแจ้งหนี้จึงต่างจาก
  * ของผู้ให้เช่าโดยไม่มีอะไรเตือน — ที่นี่จึงไม่ให้พิมพ์จากศูนย์ถ้าไฟล์บอกได้
+ *
+ * ฟอร์มนี้ไม่สร้างสัญญาทันที (#207, ADR-0034) — เก็บเป็นแผน "สร้างเมื่อกดยืนยัน" แก้หรือเอาออกจากแผนได้จนกว่าจะยืนยัน
+ * ยกเลิกงานนำเข้า = สัญญาไม่ถูกสร้าง
  */
 import { reactive, watch } from "vue";
 import { ExternalLink } from "lucide-vue-next";
 import { formatDate } from "../../lib/locale-format";
+import { formatBahtValue } from "../../lib/format";
 import { t } from "../../lib/locale";
-import { UiAlert, UiButton, UiField, UiInput } from "../../ui";
+import { UiAlert, UiBadge, UiButton, UiField, UiInput } from "../../ui";
 import { contractBodyFromForm, contractFormFromPrefill } from "./import-session";
 
 const props = defineProps({
@@ -24,14 +28,20 @@ const props = defineProps({
   /** ข้อผิดพลาดรายช่องจาก API ของการสร้างครั้งล่าสุด (field → ข้อความ) */
   errors: { type: Object, default: () => ({}) },
 });
-const emit = defineEmits(["create"]);
+const emit = defineEmits(["create", "unplan"]);
 
 const forms = reactive({});
+/** สัญญาในแผนที่กำลังแก้ — เปิดฟอร์มเดิมด้วยค่าที่วางแผนไว้ */
+const editing = reactive({});
 
 // ฟอร์มเริ่มจากค่าในไฟล์ครั้งแรกที่เห็นสัญญานั้น ราคาของหมวดที่เพิ่งเลือกเพิ่มทีหลังถูกเติมให้ ค่าที่ผู้ใช้แก้แล้วไม่ถูกทับ
 watch(
   () => props.contracts,
   (contracts) => {
+    for (const contract of contracts) {
+      // แผนถูกเก็บแล้ว = ปิดฟอร์มแก้ ค่าบนหน้าคือค่าที่อยู่ในแผนจริง
+      if (contract.planned && editing[contract.key] === "sent") delete editing[contract.key];
+    }
     for (const contract of contracts.filter((c) => c.state === "missing")) {
       const fresh = contractFormFromPrefill(contract.prefill);
       const form = forms[contract.key];
@@ -58,6 +68,16 @@ function resetFromFile(contract) {
   forms[contract.key] = contractFormFromPrefill(contract.prefill);
 }
 
+function startEdit(contract) {
+  forms[contract.key] = contractFormFromPrefill(contract.planned_body);
+  editing[contract.key] = true;
+}
+
+function submit(contract) {
+  if (editing[contract.key]) editing[contract.key] = "sent";
+  emit("create", contractBodyFromForm(forms[contract.key]));
+}
+
 const SOURCE = {
   title: "อายุสัญญาจากหัวแผ่น",
   installments: "อายุสัญญาคำนวณจากเลขงวดในหัวแผ่น",
@@ -75,11 +95,11 @@ const FIELD = { term: "อายุสัญญา", rental: "ค่าเช่
     >
       <p class="text-sm font-semibold text-ink mb-2">{{ t("สัญญา {0}", [contract.contract_no]) }}</p>
 
-      <!-- ยังไม่มีในระบบ -->
-      <template v-if="contract.state === 'missing' && forms[contract.key]">
+      <!-- ยังไม่มีในระบบ หรือกำลังแก้สัญญาในแผน -->
+      <template v-if="(contract.state === 'missing' || (contract.planned && editing[contract.key])) && forms[contract.key]">
         <p class="text-xs text-ink-mute mb-3">
           {{ contract.prefill?.term_source ? t(SOURCE[contract.prefill.term_source]) : t("ไฟล์ไม่ได้บอกอายุสัญญา — กรอกจากเอกสารสัญญา") }}
-          · {{ t("ตรวจทุกช่องกับเอกสารสัญญาก่อนกดสร้าง") }}
+          · {{ t("ตรวจทุกช่องกับเอกสารสัญญา — สัญญาจะถูกสร้างเมื่อกดยืนยันบันทึกงานนี้เท่านั้น") }}
         </p>
         <div class="grid gap-3 sm:grid-cols-2">
           <UiField :label="t('เลขที่สัญญา')"><UiInput v-model="forms[contract.key].contract_no" disabled /></UiField>
@@ -112,17 +132,42 @@ const FIELD = { term: "อายุสัญญา", rental: "ค่าเช่
           <ul class="list-disc pl-5 text-sm"><li v-for="(message, field) in errors" :key="field">{{ message }}</li></ul>
         </UiAlert>
         <div class="flex flex-wrap items-center justify-end gap-2 mt-3">
-          <p v-if="whyCannotCreate(contract)" class="text-xs text-warn-ink mr-auto">{{ whyCannotCreate(contract) }}</p>
-          <UiButton variant="ghost" size="sm" :disabled="!editable || busy" @click="resetFromFile(contract)">{{ t("ใช้ค่าจากไฟล์อีกครั้ง") }}</UiButton>
+          <p v-if="contract.state === 'missing' && whyCannotCreate(contract)" class="text-xs text-warn-ink mr-auto">{{ whyCannotCreate(contract) }}</p>
+          <UiButton v-if="contract.planned" variant="ghost" size="sm" :disabled="busy" @click="delete editing[contract.key]">{{ t("ยกเลิกการแก้") }}</UiButton>
+          <UiButton v-else variant="ghost" size="sm" :disabled="!editable || busy" @click="resetFromFile(contract)">{{ t("ใช้ค่าจากไฟล์อีกครั้ง") }}</UiButton>
           <UiButton
             variant="primary"
             size="sm"
-            :disabled="!editable || busy || Boolean(whyCannotCreate(contract))"
+            :disabled="!editable || busy || (contract.state === 'missing' && Boolean(whyCannotCreate(contract)))"
             data-testid="create-contract"
-            @click="emit('create', contractBodyFromForm(forms[contract.key]))"
+            @click="submit(contract)"
           >
-            {{ t("สร้างสัญญา") }}
+            {{ contract.planned ? t("เก็บการแก้") : t("ใช้สัญญานี้ — สร้างเมื่อยืนยัน") }}
           </UiButton>
+        </div>
+      </template>
+
+      <!-- อยู่ในแผน: จะสร้างเมื่อกดยืนยัน -->
+      <template v-else-if="contract.planned">
+        <div class="flex flex-wrap items-center gap-2 mb-2" data-testid="contract-planned">
+          <UiBadge tone="info" dot>{{ t("จะสร้างเมื่อกดยืนยัน") }}</UiBadge>
+          <span class="text-xs text-ink-mute">{{ t("ยังไม่อยู่ในระบบ — ยกเลิกงานนี้แล้วสัญญาจะไม่ถูกสร้าง") }}</span>
+        </div>
+        <dl class="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+          <div><dt class="inline text-ink-mute">{{ t("อายุสัญญา") }}: </dt><dd class="inline">{{ formatDate(contract.planned_body.effective_from) }} – {{ formatDate(contract.planned_body.effective_to) }}</dd></div>
+          <div><dt class="inline text-ink-mute">{{ t("ค่าเช่าคงที่ต่อเดือน (บาท)") }}: </dt><dd class="inline">{{ contract.planned_body.monthly_rental == null ? "—" : formatBahtValue(contract.planned_body.monthly_rental) }}</dd></div>
+          <div><dt class="inline text-ink-mute">{{ t("อัตรา VAT (%)") }}: </dt><dd class="inline">{{ contract.planned_body.vat_rate ?? "—" }}</dd></div>
+          <div v-for="line in contract.planned_body.price_lines" :key="line.category_id">
+            <dt class="inline text-ink-mute">{{ line.category_name || t("หมวด {0}", [line.category_id]) }}: </dt><dd class="inline">{{ t("{0} บาท/หน้า", [line.price_per_page]) }}</dd>
+          </div>
+        </dl>
+        <div v-for="issue in contract.issues" :key="issue.key" class="rounded-lg p-2 mt-2" :class="issue.severity === 'blocking' ? 'bg-danger-soft' : 'bg-surface-2'">
+          <p class="text-sm font-medium text-ink">{{ t(FIELD[issue.field] ?? issue.field) }}: {{ t("ไฟล์ {0} · แผน {1}", [issue.file ?? "—", issue.system ?? "—"]) }}</p>
+          <p class="text-xs text-ink-soft">{{ issue.message }}</p>
+        </div>
+        <div v-if="editable" class="flex flex-wrap justify-end gap-2 mt-3">
+          <UiButton variant="ghost" size="sm" :disabled="busy" data-testid="unplan-contract" @click="emit('unplan', contract.key)">{{ t("ไม่สร้างสัญญานี้") }}</UiButton>
+          <UiButton variant="secondary" size="sm" :disabled="busy" data-testid="edit-planned-contract" @click="startEdit(contract)">{{ t("แก้") }}</UiButton>
         </div>
       </template>
 

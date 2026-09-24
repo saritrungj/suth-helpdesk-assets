@@ -23,7 +23,7 @@ const ACTION = {
   resolve_contract: "ดูความต่าง",
   decide_names: "เลือกชื่อ",
   decide_models: "เลือกหมวด",
-  create_fiscal_years: "สร้างปีงบ",
+  create_fiscal_years: "สร้างปีงบเมื่อยืนยัน",
 };
 </script>
 

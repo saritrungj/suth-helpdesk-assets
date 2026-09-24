@@ -32,6 +32,10 @@ const EVENTS = {
   decisions_changed: "เปลี่ยนการตัดสินใจ",
   contract_created: "สร้างสัญญาจากไฟล์",
   fiscal_years_created: "สร้างปีงบ",
+  // #207 — สัญญา/ปีงบเป็นแผนจนกว่าจะกดยืนยัน (งานเก่ายังมี contract_created / fiscal_years_created ในประวัติ)
+  contract_planned: "เตรียมสัญญา — สร้างเมื่อยืนยัน",
+  contract_unplanned: "เอาสัญญาออกจากแผน",
+  fiscal_years_planned: "เตรียมปีงบ — สร้างเมื่อยืนยัน",
   commit_started: "เริ่มบันทึก",
   completed: "บันทึกสำเร็จ",
   stale: "ข้อมูลเปลี่ยนระหว่างตรวจ — ไม่ได้บันทึก",
@@ -60,7 +64,14 @@ export function eventDetail(event) {
     case "contract_created":
       return `${d.auto ? t("(อัตโนมัติ)") + " " : ""}${d.contract_no ?? ""} ${d.effective_from ?? ""} – ${d.effective_to ?? ""}`.trim();
     case "fiscal_years_created":
+    case "fiscal_years_planned":
       return `${d.auto ? t("(อัตโนมัติ)") + " " : ""}${(d.years ?? []).join(", ")}`;
+    case "contract_planned": {
+      const list = d.contracts ?? [d];
+      return `${d.auto ? t("(อัตโนมัติ)") + " " : ""}${list.map((c) => `${c.contract_no ?? ""} ${c.effective_from ?? ""} – ${c.effective_to ?? ""}`.trim()).join(", ")}`;
+    }
+    case "contract_unplanned":
+      return d.contract_no ?? "";
     case "auto_decided":
       return t("ชื่อ {0} · รุ่น {1}", [d.names?.length ?? 0, d.models?.length ?? 0]);
     case "auto_finished":
@@ -145,14 +156,14 @@ const KIND_LABEL = { brand: "ยี่ห้อ", building: "อาคาร", d
 export function autoMadeLines(made = {}) {
   const lines = [];
   for (const contract of made.contracts ?? []) {
-    lines.push(t("สร้างสัญญา {0} ({1} – {2}) จากหัวรายงาน", [contract.contract_no, contract.effective_from, contract.effective_to]));
+    lines.push(t("จะสร้างสัญญา {0} ({1} – {2}) จากหัวรายงาน", [contract.contract_no, contract.effective_from, contract.effective_to]));
   }
-  if (made.fiscal_years?.length) lines.push(t("สร้างปีงบ {0}", [made.fiscal_years.join(", ")]));
+  if (made.fiscal_years?.length) lines.push(t("จะสร้างปีงบ {0}", [made.fiscal_years.join(", ")]));
   for (const kind of ["brand", "building", "division"]) {
     const entries = (made.names ?? []).filter((n) => n.kind === kind);
     const created = entries.filter((n) => n.decision === "create").map((n) => n.name);
     const merged = entries.filter((n) => n.decision === "alias");
-    if (created.length) lines.push(t("สร้าง{0}ใหม่ {1} รายการ: {2}", [t(KIND_LABEL[kind]), created.length, created.join(", ")]));
+    if (created.length) lines.push(t("จะสร้าง{0}ใหม่ {1} รายการ: {2}", [t(KIND_LABEL[kind]), created.length, created.join(", ")]));
     for (const n of merged) lines.push(t("ถือว่า{0} “{1}” คือ “{2}”", [t(KIND_LABEL[kind]), n.name, n.target]));
   }
   if (made.models?.length) {

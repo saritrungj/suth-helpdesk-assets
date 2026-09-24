@@ -42,7 +42,7 @@ function syntheticFile(tag) {
   };
 }
 
-/** auto = ช่อง "บันทึกให้เลย" ของหน้าอัปโหลด (#190) — เทสที่ทำทีละขั้นปิดไว้ */
+/** auto = ช่อง "ให้ระบบเตรียมให้" ของหน้าอัปโหลด (#190, #207) — เทสที่ทำทีละขั้นปิดไว้ */
 async function upload(page, name, buffer, { auto = false } = {}) {
   await page.addInitScript((value) => localStorage.setItem("suth.import.auto", value), auto ? "on" : "off");
   await page.goto("/admin/import");
@@ -53,6 +53,22 @@ async function upload(page, name, buffer, { auto = false } = {}) {
 }
 
 const item = (page, key) => page.locator(`[data-testid=checklist-item]`, { hasText: key });
+
+/** สัญญาในระบบที่เลขตรงกับ — ใช้ยืนยันว่ายังไม่มีอะไรถูกสร้างก่อนกดยืนยัน (#207) */
+async function contractInSystem(contractNo) {
+  const contracts = await apiFetch("/contracts");
+  return (Array.isArray(contracts) ? contracts : contracts.data ?? []).some((c) => c.contract_no === contractNo);
+}
+
+/** กดยืนยันบันทึกแล้วรอผล — ปุ่มบอกจำนวนรายการที่จะเขียน */
+async function confirmCommit(page) {
+  await expect(page.getByTestId("import-preview")).toBeVisible();
+  await expect(page.getByTestId("import-commit")).toHaveText(/ยืนยันบันทึก [\d,]+ รายการ/);
+  await page.getByTestId("import-commit").click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "ยืนยันบันทึก", exact: true }).click();
+  await expect(page.getByTestId("import-result")).toBeVisible({ timeout: 60000 });
+  await expect(page.getByTestId("import-status")).toHaveText("บันทึกแล้ว");
+}
 
 test("ไฟล์รายงานมิเตอร์ → สร้างสัญญาจากหัวไฟล์ → บันทึก → หน้าค่าใช้จ่ายได้ยอดเท่าที่คำนวณจากไฟล์", async ({ page }) => {
   test.skip(process.env.SUTH_E2E_DISPOSABLE_DB !== "1", "สร้างสัญญาและเครื่องถาวร — รันเฉพาะฐานชั่วคราวของ verify:db");
@@ -86,7 +102,10 @@ test("ไฟล์รายงานมิเตอร์ → สร้างส
   await expect(page.getByRole("textbox", { name: "ราคาต่อหน้า A3 ขาวดำ" })).toHaveValue("0.35");
   await expect(page.getByRole("textbox", { name: "ราคาต่อหน้า A3 สี" })).toHaveValue("3.9");
   await page.getByTestId("create-contract").click();
-  await expect(item(page, `สัญญา ${file.contractNo} ตรงกับไฟล์`)).toBeVisible({ timeout: 30000 });
+  // สัญญายังไม่ถูกสร้าง — เป็นแผนที่จะสร้างเมื่อกดยืนยัน (#207)
+  await expect(item(page, `จะสร้างสัญญา ${file.contractNo} เมื่อกดยืนยัน`)).toBeVisible({ timeout: 30000 });
+  await expect(page.getByTestId("contract-planned")).toBeVisible();
+  expect(await contractInSystem(file.contractNo)).toBe(false);
 
   const fiscal = item(page, "ยังไม่มีปีงบ");
   if (await fiscal.count()) {
@@ -98,12 +117,12 @@ test("ไฟล์รายงานมิเตอร์ → สร้างส
   await expect(item(page, "ยอดตามใบแจ้งหนี้ตรงกับท้ายแผ่นทุกงวด")).toBeVisible();
   await expect(page.getByTestId("readings-new")).toHaveText(String(file.months.length * 4));
 
-  // 6) บันทึก
+  // 6) สรุปสิ่งที่จะเกิด แล้วยืนยัน
+  await expect(page.getByTestId(`preview-contract:${file.contractNo}`)).toContainText("ค่าเช่า");
+  await expect(page.getByTestId("preview-create")).toContainText("4 เครื่อง");
   await expect(page.getByTestId("import-commit")).toBeEnabled();
-  await page.getByTestId("import-commit").click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "บันทึก", exact: true }).click();
-  await expect(page.getByTestId("import-result")).toBeVisible({ timeout: 60000 });
-  await expect(page.getByTestId("import-status")).toHaveText("บันทึกแล้ว");
+  await confirmCommit(page);
+  expect(await contractInSystem(file.contractNo)).toBe(true);
 
   // 7) ข้อมูลถึงฐานและต่อกันครบ: เครื่อง 4 เครื่อง (สำรอง 1) ผูกสัญญา มีที่มาเป็นงานนี้
   const devices = await apiFetch("/devices");
@@ -111,7 +130,8 @@ test("ไฟล์รายงานมิเตอร์ → สร้างส
   expect(ours).toHaveLength(4);
   const detail = await apiFetch(`/import-sessions/${id}`);
   expect(detail.result).toMatchObject({ devices_created: 4, readings_new: file.months.length * 4 });
-  expect(detail.events.map((e) => e.event)).toEqual(expect.arrayContaining(["uploaded", "contract_created", "completed"]));
+  expect(detail.result.contracts_created).toEqual([file.contractNo]);
+  expect(detail.events.map((e) => e.event)).toEqual(expect.arrayContaining(["uploaded", "contract_planned", "completed"]));
 
   // 8) ไปหน้าภาพรวมจากปุ่มในผลลัพธ์ แล้วหน้าค่าใช้จ่ายของปีงบเดียวกัน — ยอดของสัญญานี้เท่ากับที่คำนวณจากไฟล์
   await page.getByTestId("open-dashboard").click();
@@ -154,28 +174,61 @@ test("ออกจากหน้ากลางงานแล้วกลั�
   }
 });
 
-test("นำเข้าอัตโนมัติ (#190): ระบบว่างของสัญญานี้ → อัปโหลดครั้งเดียว ได้สัญญา ชื่อ เครื่อง และยอด โดยไม่ต้องกดอะไรต่อ", async ({ page }) => {
+test("ระบบเตรียมให้ (#190, #207): อัปโหลดครั้งเดียว เห็นสัญญา ชื่อ เครื่อง และยอดที่จะบันทึก — เข้าระบบเมื่อกดยืนยันเท่านั้น", async ({ page }, testInfo) => {
   test.skip(process.env.SUTH_E2E_DISPOSABLE_DB !== "1", "สร้างสัญญาและเครื่องถาวร — รันเฉพาะฐานชั่วคราวของ verify:db");
   test.setTimeout(180000);
   const file = syntheticFile(`C${run}`);
   const id = await upload(page, "meter-report-auto.xlsx", file.buffer, { auto: true });
 
-  await expect(page.getByTestId("import-status")).toHaveText("บันทึกแล้ว", { timeout: 60000 });
-  const auto = page.getByTestId("import-result").getByTestId("import-auto");
-  await expect(auto).toContainText(`สร้างสัญญา ${file.contractNo}`);
+  // เตรียมครบแล้ว แต่ยังไม่มีอะไรเข้าระบบ
+  const auto = page.getByTestId("import-auto");
+  await expect(auto).toContainText(`จะสร้างสัญญา ${file.contractNo}`, { timeout: 60000 });
   await expect(auto).toContainText(`อาคารทดสอบ C${run}`);
+  await expect(page.getByTestId("import-status")).not.toHaveText("บันทึกแล้ว");
+  await expect(page.getByTestId("import-preview")).toContainText(`สร้างสัญญา ${file.contractNo}`);
+  await expect(page.getByTestId("preview-new")).toContainText(String(file.months.length * 4));
+  expect(await contractInSystem(file.contractNo)).toBe(false);
+  await page.screenshot({ path: testInfo.outputPath("import-preview.png"), fullPage: true });
+  const before = await apiFetch(`/import-sessions/${id}`);
+  expect(before.validation.auto.stopped).toEqual([]);
+  // หมวดของรุ่นมาจากแคตตาล็อก หรือจากเครื่องที่เทสก่อนหน้าลงไว้แล้ว — ราคาของสัญญาที่จะสร้างต้องตรงกับไฟล์ทั้งสองทาง
+  const [contract] = before.validation.auto.made.contracts;
+  expect(contract.contract_no).toBe(file.contractNo);
+  expect(contract.price_lines.map((line) => Number(line.price_per_page)).sort()).toEqual([0.35, 0.365, 3.9]);
+
+  await confirmCommit(page);
+  expect(await contractInSystem(file.contractNo)).toBe(true);
+  await expect(page.getByTestId("import-result-created")).toContainText(file.contractNo);
   await expect(page.getByTestId("open-dashboard")).toBeVisible();
 
   const detail = await apiFetch(`/import-sessions/${id}`);
   expect(detail.result.devices_created).toBe(4);
   expect(detail.result.readings_new).toBe(file.months.length * 4);
-  expect(detail.result.auto.stopped).toEqual([]);
-  // หมวดของรุ่นมาจากแคตตาล็อก หรือจากเครื่องที่เทสก่อนหน้าลงไว้แล้ว — ราคาของสัญญาที่สร้างต้องตรงกับไฟล์ทั้งสองทาง
-  const [contract] = detail.result.auto.made.contracts;
-  expect(contract.contract_no).toBe(file.contractNo);
-  expect(contract.price_lines.map((line) => Number(line.price_per_page)).sort()).toEqual([0.35, 0.365, 3.9]);
+  expect(detail.result.contracts_created).toEqual([file.contractNo]);
   const events = (await apiFetch(`/import-sessions/${id}/events`)).map((e) => e.event);
-  expect(events).toEqual(expect.arrayContaining(["auto_decided", "contract_created", "auto_finished", "completed"]));
+  expect(events).toEqual(expect.arrayContaining(["auto_decided", "contract_planned", "auto_finished", "completed"]));
+  expect(events).not.toContain("contract_created");
+});
+
+test("ยกเลิกงานที่ระบบเตรียมไว้ — ไม่มีสัญญา ปีงบ ชื่อ หรือเครื่องจากไฟล์นั้นค้างในระบบ (#207)", async ({ page }) => {
+  test.setTimeout(120000);
+  const file = syntheticFile(`U${run}`);
+  const id = await upload(page, "meter-report-undo.xlsx", file.buffer, { auto: true });
+  await expect(page.getByTestId("import-auto")).toContainText(`จะสร้างสัญญา ${file.contractNo}`, { timeout: 60000 });
+  const years = (await apiFetch("/fiscal-years")).map((fy) => fy.year);
+
+  await page.getByRole("button", { name: "ยกเลิกงานนี้" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "ยกเลิกงานนี้", exact: true }).click();
+  await expect(page.getByTestId("import-status")).not.toHaveText(/ตรวจแล้ว|พร้อม/);
+
+  expect(await contractInSystem(file.contractNo)).toBe(false);
+  expect((await apiFetch("/fiscal-years")).map((fy) => fy.year)).toEqual(years);
+  const devices = await apiFetch("/devices");
+  expect((Array.isArray(devices) ? devices : devices.data ?? []).filter((d) => d.serial_number.startsWith(`TX9-U${run}-`))).toHaveLength(0);
+  const buildings = await apiFetch("/buildings");
+  expect((Array.isArray(buildings) ? buildings : buildings.data ?? []).some((b) => b.name === `อาคารทดสอบ U${run}`)).toBe(false);
+  const events = (await apiFetch(`/import-sessions/${id}/events`)).map((e) => e.event);
+  expect(events).toEqual(expect.arrayContaining(["contract_planned", "abandoned"]));
 });
 
 test("นำเข้าอัตโนมัติ (#190): ชื่อที่คล้ายของเดิม → หยุดถามเฉพาะชื่อนั้น ชื่ออื่นเลือกให้แล้ว และยังไม่บันทึก", async ({ page }) => {
@@ -183,7 +236,8 @@ test("นำเข้าอัตโนมัติ (#190): ชื่อที�
   test.setTimeout(180000);
   const first = syntheticFile(`D${run}`);
   const firstId = await upload(page, "meter-report-d1.xlsx", first.buffer, { auto: true });
-  await expect(page.getByTestId("import-status")).toHaveText("บันทึกแล้ว", { timeout: 60000 });
+  await expect(page.getByTestId("import-preview")).toBeVisible({ timeout: 60000 });
+  await confirmCommit(page);
 
   // ไฟล์ที่สอง: อาคารเดิมแต่เว้นวรรคต่างกัน + ฝ่ายใหม่จริง
   const months = lastCompletedMonths(2);

@@ -13,6 +13,11 @@
  *
  * checklist จาก API บอกว่าเหลืออะไร ส่วนด้านล่างเรียงตามลำดับที่ต้องทำ: สัญญา → ชื่อและหมวดมิเตอร์ → เครื่อง
  * → ยอดมิเตอร์และยอดตามใบแจ้งหนี้ → บันทึก
+ *
+ * ## ไม่มีอะไรเข้าระบบก่อนกดยืนยัน (#207, ADR-0034)
+ *
+ * สัญญาและปีงบที่สร้างจากหน้านี้ (หรือที่ระบบเตรียมให้) เป็นแผนใน session จนกว่าจะกดยืนยัน ก่อนปุ่มยืนยันมีสรุป
+ * "เมื่อกดยืนยัน ระบบจะ…" ที่มาจากการลองบันทึกแล้วย้อนกลับ ปุ่มบอกจำนวนรายการที่จะเขียน
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
@@ -37,6 +42,7 @@ import ImportContracts from "../../components/import/ImportContracts.vue";
 import ImportDecisions from "../../components/import/ImportDecisions.vue";
 import ImportDevices from "../../components/import/ImportDevices.vue";
 import ImportHistory from "../../components/import/ImportHistory.vue";
+import ImportPreview from "../../components/import/ImportPreview.vue";
 import ImportReadings from "../../components/import/ImportReadings.vue";
 import { EDITABLE, decisionsPayload, fiscalYearForMonths, statusOf } from "../../components/import/import-session";
 
@@ -166,39 +172,37 @@ async function run(label, request, after) {
 
 const revalidate = () => run(t("ตรวจไฟล์ไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/validate`));
 
-/** ให้ระบบเลือกชื่อ หมวดของรุ่น สร้างสัญญาและปีงบที่เหลือให้ (#190) — ไม่บันทึก คนกดบันทึกเอง */
+/** ให้ระบบเลือกชื่อ หมวดของรุ่น และเตรียมสัญญา/ปีงบที่เหลือให้ (#190) — ไม่บันทึก คนดูแล้วกดยืนยันเอง (#207) */
 async function autoResolve() {
-  const data = await run(t("ให้ระบบเลือกให้ไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/auto`, { commit: false }), async () => {
-    await refreshFiscalYears();
-    await invalidateAfterWrites(queryClient, ["contracts", "fiscal-years"]);
-  });
-  if (data) toastSuccess(t("ระบบเลือกให้เท่าที่เลือกได้แล้ว"));
+  const data = await run(t("ให้ระบบเลือกให้ไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/auto`, {}));
+  if (data) toastSuccess(t("ระบบเตรียมให้เท่าที่ทำได้แล้ว — ตรวจแล้วกดยืนยัน"));
 }
-
 async function createContract(body) {
   contractErrors.value = {};
-  const data = await run(t("สร้างสัญญาไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/contracts`, body), () =>
-    invalidateAfterWrites(queryClient, ["contracts"])
-  );
-  if (data) toastSuccess(t("สร้างสัญญา {0} แล้ว", [body.contract_no]));
+  const data = await run(t("เก็บสัญญาไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/contracts`, body));
+  if (data) toastSuccess(t("สัญญา {0} จะถูกสร้างเมื่อกดยืนยัน", [body.contract_no]));
   else contractErrors.value = lastFieldErrors;
 }
-
-async function createFiscalYears(years) {
-  const data = await run(t("สร้างปีงบไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/fiscal-years`, { years }), async () => {
-    await refreshFiscalYears();
-    await invalidateAfterWrites(queryClient, ["fiscal-years"]);
-  });
-  if (data) toastSuccess(t("สร้างปีงบ {0} แล้ว", [years.join(", ")]));
+async function unplanContract(key) {
+  const data = await run(t("เอาสัญญาออกไม่สำเร็จ"), () => api.delete(`/import-sessions/${id.value}/contracts/${encodeURIComponent(key)}`));
+  if (data) toastSuccess(t("เอาสัญญาออกจากงานนี้แล้ว"));
 }
-
+async function createFiscalYears(years) {
+  const data = await run(t("เก็บปีงบไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/fiscal-years`, { years }));
+  if (data) toastSuccess(t("ปีงบ {0} จะถูกสร้างเมื่อกดยืนยัน", [years.join(", ")]));
+}
+const preview = computed(() => validation.value?.preview ?? null);
+const writeCount = computed(() => preview.value?.writes ?? 0);
 async function commit() {
-  const s = registry.value?.summary ?? {};
-  const r = validation.value?.readings?.counts ?? {};
+  const p = preview.value ?? {};
+  const extra = [
+    p.contracts?.length ? t("สัญญาใหม่ {0}", [p.contracts.map((c) => c.contract_no).join(", ")]) : "",
+    p.fiscal_years?.length ? t("ปีงบ {0}", [p.fiscal_years.join(", ")]) : "",
+  ].filter(Boolean).join(" · ");
   const ok = await askConfirm(
-    t("จะสร้างเครื่องใหม่ {0} เติมข้อมูล {1} เครื่อง ตัวเลขใหม่ {2} และแทนที่ค่าเดิม {3} รายการ — บันทึกทั้งหมดพร้อมกัน ถ้าผิดพลาดจะไม่บันทึกเลยสักรายการ",
-      [formatCount(s.create ?? 0), formatCount(s.fill ?? 0), formatCount(r.new ?? 0), formatCount(r.overwrite ?? 0)]),
-    { title: t("บันทึกงานนำเข้านี้"), confirmText: t("บันทึก") }
+    t("บันทึก {0} รายการตามสรุปด้านบน{1} — บันทึกทั้งหมดพร้อมกัน ถ้าผิดพลาดหรือข้อมูลในระบบเปลี่ยนไประหว่างนี้ จะไม่บันทึกเลยสักรายการ",
+      [formatCount(writeCount.value), extra ? ` (${extra})` : ""]),
+    { title: t("ยืนยันบันทึกงานนำเข้านี้"), confirmText: t("ยืนยันบันทึก") }
   );
   if (!ok) return;
   const data = await run(t("บันทึกไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/commit`), async (result) => {
@@ -322,6 +326,11 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
         <p class="text-sm text-ink-soft mt-1">
           {{ t("เครื่องใหม่ {0} · เติมข้อมูล {1} · ตัวเลขใหม่ {2} · แทนที่ {3}", [formatCount(session.result.devices_created), formatCount(session.result.devices_filled), formatCount(session.result.readings_new), formatCount(session.result.readings_overwritten)]) }}
         </p>
+        <p v-if="session.result.contracts_created?.length || session.result.fiscal_years_created?.length" class="text-sm text-ink-soft" data-testid="import-result-created">
+          <template v-if="session.result.contracts_created?.length">{{ t("สร้างสัญญา {0}", [session.result.contracts_created.join(", ")]) }}</template>
+          <template v-if="session.result.contracts_created?.length && session.result.fiscal_years_created?.length"> · </template>
+          <template v-if="session.result.fiscal_years_created?.length">{{ t("สร้างปีงบ {0}", [session.result.fiscal_years_created.join(", ")]) }}</template>
+        </p>
         <ImportAutoSummary v-if="session.result.auto" :auto="session.result.auto" class="mt-3" />
         <div class="flex flex-wrap gap-2 mt-3">
           <UiButton v-if="dashboardFy" variant="primary" size="sm" :to="{ path: '/dashboard', query: { fy: dashboardFy.id } }" data-testid="open-dashboard">
@@ -338,20 +347,21 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
           <ImportAutoSummary v-if="validation.auto && editable" :auto="validation.auto" class="mb-3 pb-3 border-b border-line-soft" />
           <p class="text-sm font-semibold text-ink mb-2">{{ t("สิ่งที่ต้องทำก่อนบันทึก") }}</p>
           <ImportChecklist :items="validation.checklist" :busy="busy" :editable="editable" @action="onChecklistAction" />
+          <ImportPreview v-if="editable && preview && session.can_commit" :preview="preview" class="mt-4" />
           <div v-if="editable" class="flex flex-wrap justify-end gap-2 mt-4">
             <p v-if="busy" class="text-sm text-ink-mute mr-auto" role="status">{{ t("กำลังบันทึกการเลือกและตรวจใหม่…") }}</p>
             <UiButton v-if="!session.can_commit" variant="secondary" :disabled="busy" data-testid="import-auto-resolve" @click="autoResolve">
               <template #icon><Sparkles :size="15" /></template>{{ t("ให้ระบบเลือกส่วนที่เหลือ") }}
             </UiButton>
             <UiButton variant="primary" :disabled="!session.can_commit || busy" :loading="busy && session.status === 'processing'" data-testid="import-commit" @click="commit">
-              <template #icon><Upload :size="15" /></template>{{ t("บันทึกทั้งหมด") }}
+              <template #icon><Upload :size="15" /></template>{{ session.can_commit ? t("ยืนยันบันทึก {0} รายการ", [formatCount(writeCount)]) : t("ยืนยันบันทึก") }}
             </UiButton>
           </div>
         </UiCard>
 
         <section v-if="validation.contracts?.length" id="section-contracts" class="mb-4">
           <h2 class="text-base font-semibold text-ink mb-2">{{ t("สัญญา") }}</h2>
-          <ImportContracts :contracts="validation.contracts" :acknowledged="acknowledged" :editable="editable" :busy="busy" :errors="contractErrors" @create="createContract" />
+          <ImportContracts :contracts="validation.contracts" :acknowledged="acknowledged" :editable="editable" :busy="busy" :errors="contractErrors" @create="createContract" @unplan="unplanContract" />
         </section>
 
         <section v-if="registry && (registry.unresolved?.brand?.length || registry.unresolved?.building?.length || registry.unresolved?.division?.length || registry.models?.length)" id="section-decisions" class="mb-4">

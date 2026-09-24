@@ -5,6 +5,7 @@
 
 const { z } = require("zod");
 const { badRequest } = require("../shared/http-error");
+const { contractBody } = require("../contracts/contract-write");
 
 const nameDecision = z.union([
   z.object({ action: z.literal("create"), as: z.string().max(255).optional() }),
@@ -28,6 +29,13 @@ const decisionSchema = z.object({
   // ยอมรับความต่างระหว่างสัญญาในระบบกับไฟล์ พร้อมเหตุผล (import session, #179) — คีย์เช่น
   // "contract:SUTH86/2567:rental" เหตุผลถูกเก็บในประวัติของ session
   acknowledged: z.record(z.string().max(200), z.string().trim().min(3, "ระบุเหตุผลอย่างน้อย 3 ตัวอักษร").max(500)).optional(),
+  // สัญญาและปีงบที่จะสร้าง "เมื่อกดยืนยัน" (#207, ADR-0034) — เก็บเป็นแผนใน session ไม่เขียนลงระบบ
+  // analyse() เขียนแผนนี้ใน transaction เดียวกับเครื่องและยอด ตรวจ = ลองแล้วย้อน, ยืนยัน = commit ทั้งก้อน
+  // ยกเลิกงาน = ไม่มีอะไรค้างในระบบ ชุดนี้เปลี่ยนได้เฉพาะผ่าน endpoint ของมัน (saveDecisions คงค่าเดิมไว้)
+  planned: z.object({
+    contracts: z.record(z.string().max(200), contractBody).optional(),
+    fiscal_years: z.array(z.coerce.number().int().min(2500).max(2700)).max(10).optional(),
+  }).optional(),
 });
 
 function parseDecisions(raw) {
