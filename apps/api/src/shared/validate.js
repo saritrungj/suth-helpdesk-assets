@@ -18,6 +18,7 @@
 
 const { z } = require("zod");
 const { badRequest } = require("./http-error");
+const { thaiMessage } = require("./validation-messages");
 
 /**
  * แปลงผลจาก zod ให้เป็นรายการข้อผิดพลาดรายช่อง ที่ฟอร์มฝั่งเว็บเอาไปวางใต้ช่องได้เลย
@@ -29,7 +30,8 @@ function toFieldErrors(error) {
   return error.issues.map((issue) => ({
     // path ว่าง = ปัญหาของทั้งก้อน ไม่ใช่ของช่องใดช่องหนึ่ง
     field: issue.path.length ? issue.path.join(".") : "_",
-    message: issue.message,
+    // ข้อความอังกฤษของ zod ถูกแปลงเป็นไทย — ข้อความไทยที่ schema เขียนเองไม่ถูกแตะ (#257)
+    message: thaiMessage(issue),
   }));
 }
 
