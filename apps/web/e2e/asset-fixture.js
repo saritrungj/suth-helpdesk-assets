@@ -12,6 +12,9 @@ export async function assetFixture(page, role = "admin") {
       price_per_page: 0.45, price_override: null, status: "active",
     })),
     failSave: false, failList: false, failOptions: false, delay: 0, writes: [],
+    // ผู้ใช้ที่ล็อกอินอยู่ (null = ยังไม่ได้ล็อกอิน) และคนที่จะได้เมื่อส่งฟอร์มล็อกอิน — ใช้ทดสอบการสลับผู้ใช้ (#241)
+    user: { id: 1, username: role, role },
+    nextUser: null,
   };
   const masters = {
     brands: [{ id: 1, name: "SUTH Printer" }],
@@ -28,7 +31,9 @@ export async function assetFixture(page, role = "admin") {
     const key = url.pathname.replace(/^\/api\//, "");
     const method = route.request().method();
     const json = (data, status = 200) => route.fulfill({ status, json: data });
-    if (key === "auth/me") return json({ user: { id: 1, username: role, role } });
+    if (key === "auth/me") return state.user ? json({ user: state.user }) : json({ title: "กรุณาเข้าสู่ระบบ", code: "no_token" }, 401);
+    if (key === "auth/logout") { state.user = null; return json({ message: "ok" }); }
+    if (key === "auth/login") { state.user = state.nextUser ?? { id: 1, username: role, role }; return json({ user: state.user }); }
     if (key === "devices") return state.failList ? json({ title: "Unavailable" }, 503) : json(state.rows);
     if (masters[key]) return state.failOptions && key === "buildings" ? json({}, 503) : json(masters[key]);
     const match = key.match(/^devices\/(\d+)(?:\/(move|history|current-usage))?$/);

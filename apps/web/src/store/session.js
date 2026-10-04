@@ -1,5 +1,6 @@
 import api from "../services/api";
 import { setAuth, clearAuth, authState } from "./auth";
+import { clearSessionMemory } from "../lib/session-memory";
 
 // การเรียก API ที่เกี่ยวกับ session แยกออกมาจาก store/auth.js
 // เพราะ services/api.js import clearAuth จาก store/auth อยู่แล้ว ถ้าเอาการเรียก API
@@ -40,6 +41,9 @@ export async function logout() {
     // ไม่ต้องทำอะไร — เคลียร์ฝั่งเว็บต่อไปอยู่ดี
   } finally {
     clearAuth();
+    // กดออกเอง = จบงานของคนนี้ในแท็บนี้: ไม่เหลือตัวกรอง คำค้น หรือหน้าที่จะกลับไปให้คนถัดไป (#241)
+    clearSessionMemory();
+    authState.signedOut = true;
   }
 }
 

@@ -2,7 +2,7 @@ import { t } from "../lib/locale";
 import axios from "axios";
 import { appRouter } from "../lib/app-router";
 import { toastInfo } from "../store/toast";
-import { clearAuth } from "../store/auth";
+import { authState, clearAuth } from "../store/auth";
 
 // ที่อยู่ของ API มาจาก environment ไม่ใช่ค่าคงที่ในโค้ด — เดิม hardcode เป็น localhost
 // ทำให้ build ที่ได้ใช้ได้เฉพาะบนเครื่องพัฒนา deploy จริงไม่ได้จนกว่าจะแก้โค้ด
@@ -34,7 +34,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !error.config?.skipAuthRedirect) {
       clearAuth();
 
-      if (window.location.pathname !== "/login" && !isHandlingSessionExpiry) {
+      // คำขอที่ค้างอยู่ตอนผู้ใช้กดออกจากระบบจะได้ 401 ตามมา — ไม่ใช่ session หมดอายุ ไม่ต้องแจ้งหรือจำหน้าเดิม
+      if (window.location.pathname !== "/login" && !isHandlingSessionExpiry && !authState.signedOut) {
         isHandlingSessionExpiry = true;
 
         toastInfo(t("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่"));

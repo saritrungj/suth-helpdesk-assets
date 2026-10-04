@@ -238,7 +238,11 @@ router.beforeEach((to) => {
   const role = authState.user?.role;
 
   if (to.path !== "/login" && !isLoggedIn) {
-    return { path: "/login", query: { redirect: to.fullPath } };
+    // กดออกจากระบบเอง: ไม่พาหน้าที่คนก่อนเปิดค้างไปให้คนที่ล็อกอินถัดไป (#241)
+    return authState.signedOut ? { path: "/login" } : { path: "/login", query: { redirect: to.fullPath } };
+  }
+  if (to.path === "/login" && authState.signedOut && to.query.redirect) {
+    return { path: "/login" };
   }
 
   if (to.path === "/login" && isLoggedIn) {

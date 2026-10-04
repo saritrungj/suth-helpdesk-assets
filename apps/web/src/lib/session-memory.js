@@ -47,3 +47,33 @@ export function modeMemory(page) {
     },
   };
 }
+
+const OWNER_KEY = "owner";
+
+/** ล้างทุกอย่างที่จำไว้ในแท็บนี้ — เรียกเมื่อผู้ใช้กดออกจากระบบ (#241) */
+export function clearSessionMemory() {
+  try {
+    const storage = window.sessionStorage;
+    const keys = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (key?.startsWith(PREFIX)) keys.push(key);
+    }
+    for (const key of keys) storage.removeItem(key);
+  } catch {
+    // ที่เก็บของเบราว์เซอร์ใช้ไม่ได้ = ไม่มีอะไรให้ล้าง
+  }
+}
+
+/**
+ * ผูกความจำของแท็บนี้กับผู้ใช้ที่เพิ่งยืนยันตัวตน — ถ้าของเดิมเป็นของคนอื่น (หรือไม่รู้ว่าของใคร) ล้างก่อน
+ *
+ * เครื่องที่ใช้ร่วมกัน: คนก่อนปิดหน้าหรือ session หมดอายุโดยไม่ได้กดออกจากระบบ คนถัดไปล็อกอินใน
+ * แท็บเดิมต้องไม่ได้ตัวกรองและคำค้นของคนก่อน ส่วนคนเดิมที่ล็อกอินกลับมายังได้มุมมองเดิม (#241)
+ */
+export function claimSessionMemory(userId) {
+  const owner = String(userId ?? "");
+  if (!owner) return;
+  if (readSession(OWNER_KEY, null) !== owner) clearSessionMemory();
+  writeSession(OWNER_KEY, owner);
+}
