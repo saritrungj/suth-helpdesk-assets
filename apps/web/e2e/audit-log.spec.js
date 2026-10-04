@@ -4,6 +4,7 @@
 // และคนที่เปิดหน้าไว้ก่อนแล้วกดบันทึกทีหลัง ต้องไม่ทับค่าที่อีกคนเพิ่งแก้ไปเงียบๆ
 
 import { expect, test } from "@playwright/test";
+import { formatMonthTH } from "@suth/domain";
 import { apiFetch, issueToken, reasonToSkip, signIn, writesAllowed } from "./fixtures.js";
 
 const API_URL = process.env.SUTH_API_URL || "http://localhost:3000/api";
@@ -50,11 +51,11 @@ test("แก้ยอดพิมพ์แล้วประวัติบอ�
   // หน้าประวัติการแก้ไขแสดงรายการเดียวกัน
   await page.goto("/admin/audit-log");
   await expect(page.getByRole("heading", { level: 1, name: "ประวัติการแก้ไข" })).toBeVisible();
-  await expect(page.getByTestId("audit-log-table")).toContainText(`เดือน ${reading.month}: ${original.toLocaleString("th-TH")} → ${changed.toLocaleString("th-TH")}`);
+  await expect(page.getByTestId("audit-log-table")).toContainText(`เดือน ${formatMonthTH(reading.month)}: ${original.toLocaleString("th-TH")} → ${changed.toLocaleString("th-TH")}`);
 
   // หน้ารายละเอียดเครื่องมีประวัติของเครื่องนั้น
   await page.goto(`/assets/${reading.device_id}`);
-  await expect(page.getByTestId("device-audit")).toContainText(`เดือน ${reading.month}`);
+  await expect(page.getByTestId("device-audit")).toContainText(`เดือน ${formatMonthTH(reading.month)}`);
 
   // คืนค่าเดิม
   const restored = await post("/print-transactions", { device_id: reading.device_id, month: reading.month, pages: original, previous: changed });
