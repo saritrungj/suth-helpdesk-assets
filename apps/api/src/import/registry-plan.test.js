@@ -349,6 +349,30 @@ test("เลขซีเรียลที่เป็นขีดกลาง�
   }
 });
 
+// แถวที่ไม่มี Serial ถูกข้ามแน่นอน จึงต้องไม่ทำให้เกิดชื่อ ชั้น แผนก รุ่น หรือสัญญาใหม่ และไม่บล็อก
+// ไฟล์ทั้งไฟล์ — ข้อความท้ายแผ่น (ชื่อผู้ส่งมอบ เบอร์โทร) ไม่ควรกลายเป็นยี่ห้อให้ตัดสิน (#229)
+test("แถวไม่มี Serial ไม่พาชื่อ ชั้น รุ่น หรือสัญญาของตัวเองเข้าแผน", () => {
+  const known = {
+    master: master({ brands: [{ id: 1, name: "OKI" }], buildings: [{ id: 1, name: "อาคาร ก (A)" }], divisions: [{ id: 1, name: "ฝ่าย ก" }] }),
+    floors: [{ id: 1, building_id: 1, name: "5" }],
+    departments: [{ id: 1, division_id: 1, name: "งาน ก" }],
+    decisions: { names: {}, models: { "oki|es5112": { meter_category_id: 2 } } },
+  };
+  const stray = row({
+    row: 5, serial_number: "", brand: "ผู้ส่งมอบ", model: "นายสมมติ 000-000-0000", building: "อาคาร ก (A)",
+    floor: "9", division: "ฝ่ายใหม่", department: "งานใหม่", contract_no: "ZZ 1/2569",
+  });
+  const result = plan([row(), stray], known);
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.blocking, []);
+  assert.equal(result.new_floors.length, 0);
+  assert.equal(result.new_departments.length, 0);
+  assert.deepEqual(result.rows.map((r) => r.action), ["create", "skip"]);
+  assert.deepEqual(result.rows[1].reasons, ["ไม่มีเลขซีเรียล"]);
+  assert.equal(result.summary.skip, 1);
+});
+
 test("ดักจับการหลบเลี่ยงด้วย Zero-width space, ช่องว่างนำหน้า, หรือตัวอักษรแบบ Full-width (#134)", () => {
   for (const sn of ["\u200B=cmd|' /C calc'!A0", "  @SUM(1,1)", "＝1+1", "|cmd"]) {
     const result = plan([row({ serial_number: sn })], { decisions: allCreate });

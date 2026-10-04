@@ -81,6 +81,39 @@ test("ข้ามแถวหัวตารางที่ซ้ำกลา�
   assert.equal(serials.length, 3);
 });
 
+// แถวที่ลืมกรอก Serial แต่ช่องอื่นครบ เดิมถูกข้ามตั้งแต่ตอนอ่านแผ่น จึงไม่ถูกนับว่าข้ามและ
+// ไม่มีเหตุผลให้ผู้ดูแลเห็น — ยอดในสรุปน้อยกว่าจำนวนแถวในไฟล์โดยไม่มีคำอธิบาย (#229)
+test("แถวที่มีข้อมูลเครื่องแต่ไม่มี Serial ถูกส่งต่อให้ขั้นวางแผนรายงาน ไม่หายเงียบ", () => {
+  const sheet = {
+    name: "Sheet1",
+    rows: [
+      ["serial_number", "brand", "model", "building", "floor", "location"],
+      ["", "HP", "LaserJet M404dn", "อาคารตัวอย่าง", "2", "ห้อง D1"],
+      ["TESTSN0010", "HP", "LaserJet M404dn", "อาคารตัวอย่าง", "2", "ห้อง D2"],
+      ["", "HP", "LaserJet M404dn", "อาคารตัวอย่าง", "3", "ห้อง D3"],
+    ],
+  };
+  const result = parseRegistryWorkbook([sheet]);
+
+  assert.deepEqual(result.rows.map((r) => [r.row, r.serial_number]), [[2, ""], [3, "TESTSN0010"], [4, ""]]);
+  // แถวไม่มี Serial สองแถวไม่ใช่ "เครื่องเดียวกันซ้ำ"
+  assert.equal(result.warnings.length, 0);
+});
+
+test("แถวสรุปท้ายแผ่นและแถวที่มีข้อมูลช่องเดียวยังถูกข้ามตามเดิม", () => {
+  const sheet = {
+    name: "Sheet1",
+    rows: [
+      ["no.", "serial_number", "brand", "model", "building", "location"],
+      ["1", "TESTSN0011", "HP", "LaserJet M404dn", "อาคารตัวอย่าง", "ห้อง D1"],
+      ["รวม 1 เครื่อง", "", "", "", "", ""],
+      ["", "", "", "", "", "หมายเหตุ: ตรวจแล้ว"],
+      ["", "", "", "", "", ""],
+    ],
+  };
+  assert.deepEqual(parseRegistryWorkbook([sheet]).rows.map((r) => r.serial_number), ["TESTSN0011"]);
+});
+
 test("'ยังไม่มีจุดติดตั้ง' ในช่องอาคาร = ยังไม่ได้ติดตั้ง ไม่ใช่ชื่ออาคาร", () => {
   const row = parseRegistryWorkbook([okiSheet]).rows[2];
   assert.equal(row.building, "");

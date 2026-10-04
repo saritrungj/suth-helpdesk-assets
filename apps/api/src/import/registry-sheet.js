@@ -124,6 +124,16 @@ function cell(row, index) {
   return index === -1 ? "" : normalizeName(row[index]);
 }
 
+/** คอลัมน์ที่บอกว่าแถวนี้พูดถึงเครื่อง — แถวสรุปหรือหมายเหตุมีข้อความช่องเดียว จึงต้องมีอย่างน้อยสองช่อง */
+const DEVICE_COLUMNS = ["brand", "model", "building", "floor", "location", "division", "department"];
+
+function describesDevice(row, at, cells) {
+  const filled = DEVICE_COLUMNS.filter((name) => at[name] !== -1 && cell(row, at[name]));
+  // แถวหัวตารางซ้ำกลางแผ่นที่ช่อง Serial ว่าง ไม่ใช่เครื่อง
+  if (filled.some((name) => header(cell(row, at[name])) === cells[at[name]])) return false;
+  return filled.length >= 2;
+}
+
 /**
  * แผ่นทะเบียน (รูปแบบ 1 และ 2)
  */
@@ -149,9 +159,11 @@ function readRegistrySheet(sheet, warnings) {
   for (let r = headerRow + 1; r < sheet.rows.length; r++) {
     const row = sheet.rows[r] ?? [];
     const serial = cell(row, at.serial);
-    if (!serial) continue; // แถวว่าง แถวสรุปท้ายแผ่น
+    // ไม่มี Serial: แถวว่างและแถวสรุปท้ายแผ่นข้ามเงียบ แต่แถวที่กรอกข้อมูลเครื่องไว้แล้วต้องไปถึง
+    // ขั้นวางแผน ซึ่งนับเป็น "ข้าม" พร้อมเหตุผล — ไม่งั้นแถวหายโดยไม่มีใครรู้ (#229)
+    if (!serial && !describesDevice(row, at, cells)) continue;
     // แถวหัวตารางซ้ำกลางแผ่น (พบในแผ่น OKI)
-    if (header(serial) === cells[at.serial]) continue;
+    if (serial && header(serial) === cells[at.serial]) continue;
 
     const modelText = cell(row, at.model);
     const split = splitBrandModel(modelText);
@@ -343,6 +355,8 @@ function parseRegistryWorkbook(sheets) {
   const firstRow = new Map();
   const duplicate = new Set();
   for (const row of rows) {
+    // แถวไม่มี Serial ไม่ใช่เครื่องเดียวกันซ้ำ — ปล่อยให้ขั้นวางแผนรายงานทีละแถว
+    if (!row.serial_number) continue;
     const key = row.serial_number.toUpperCase();
     if (firstRow.has(key)) {
       const first = firstRow.get(key);
