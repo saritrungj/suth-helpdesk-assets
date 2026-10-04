@@ -288,10 +288,10 @@ const hasUsage = computed(() => usageSeries.value.some((series) => series.values
         </div>
 
         <div v-if="isAdmin" class="flex flex-wrap items-center gap-2">
-          <UiButton :to="`/assets?edit=${device.id}`" variant="secondary">
+          <UiButton :to="`/assets?edit=${device.id}&from=detail`" variant="secondary">
             <template #icon><Pencil :size="15" /></template> {{ t("แก้ไข") }} </UiButton>
 
-          <UiButton :to="`/assets?move=${device.id}`" variant="secondary">
+          <UiButton :to="`/assets?move=${device.id}&from=detail`" variant="secondary">
             <template #icon><Move :size="15" /></template> {{ t("ย้ายเครื่อง") }} </UiButton>
         </div>
       </header>
