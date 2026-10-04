@@ -72,7 +72,7 @@ const UNPRICED_CAUSES = [
     cause: "outside_term",
     code: "unpriced_outside_term",
     severity: "critical",
-    title: (count) => `มี ${count} เครื่องที่มียอดพิมพ์นอกอายุสัญญา`,
+    title: (count) => `มี ${count} เครื่องที่มีจำนวนพิมพ์นอกอายุสัญญา`,
     detail: (group) => `${readingsAndPages(group)} ยังไม่ถูกนับในยอดเงิน — ตรวจวันเริ่ม/สิ้นสุดของสัญญา`,
     action: { label: "ไปตรวจอายุสัญญา", to: "/admin/contracts" },
   },
@@ -99,7 +99,7 @@ const UNPRICED_CAUSES = [
     cause: "contract_history",
     code: "unpriced_contract_history",
     severity: "critical",
-    title: (count) => `มี ${count} เครื่องที่ประวัติสัญญาไม่ครอบคลุมยอดพิมพ์`,
+    title: (count) => `มี ${count} เครื่องที่ประวัติสัญญาไม่ครอบคลุมจำนวนพิมพ์`,
     detail: (group) => `${readingsAndPages(group)} ต้องตรวจวันที่เริ่มคิดเงินของเครื่อง`,
     action: { label: "ไปตรวจประวัติสัญญาของเครื่อง", to: "/assets" },
     opensFirstDevice: true,
@@ -473,7 +473,7 @@ router.get(
         severity: "warning",
         title: `มี ${coverage.unreviewed_devices} เครื่องที่ยังไม่ได้ตรวจยืนยันสถานะการติดตั้ง`,
         detail:
-          "ยืนยันความครบถ้วนของยอดพิมพ์ไม่ได้จนกว่าจะตรวจครบ ระบบไม่เดาให้ว่าเครื่องเหล่านี้ติดตั้งแล้วหรือยัง",
+          "ยืนยันความครบถ้วนของจำนวนพิมพ์ไม่ได้จนกว่าจะตรวจครบ ระบบไม่เดาให้ว่าเครื่องเหล่านี้ติดตั้งแล้วหรือยัง",
         count: coverage.unreviewed_devices,
         action: { label: "ไปตรวจยืนยันการติดตั้ง", to: "/admin/installation-review" },
       });
@@ -490,8 +490,8 @@ router.get(
         severity: "warning",
         title:
           incompleteMonths.length === 1
-            ? `ยังกรอกยอดพิมพ์ไม่ครบ 1 เดือน`
-            : `ยังกรอกยอดพิมพ์ไม่ครบ ${incompleteMonths.length} เดือน`,
+            ? `ยังกรอกจำนวนพิมพ์ไม่ครบ 1 เดือน`
+            : `ยังกรอกจำนวนพิมพ์ไม่ครบ ${incompleteMonths.length} เดือน`,
         detail: `เดือนที่ค้างนานที่สุดคือ${formatMonthTH(oldest, { long: true })} ขาดอีก ${missing} เครื่อง`,
         count: incompleteMonths.length,
         params: { month: oldest, missing_devices: missing },
@@ -510,7 +510,7 @@ router.get(
       attention.push({
         code: "idle_devices",
         severity: "info",
-        title: `มี ${idle.device_count} เครื่องที่ไม่มียอดพิมพ์เลยตลอดปีงบนี้`,
+        title: `มี ${idle.device_count} เครื่องที่ไม่มีจำนวนพิมพ์เลยตลอดปีงบนี้`,
         detail: "อาจย้ายไปหน่วยงานที่ต้องใช้ หรือพิจารณาไม่ต่อสัญญาในปีถัดไป",
         count: Number(idle.device_count),
         // ลิงก์ไปเฉพาะเครื่องกลุ่มนี้ ไม่ใช่เครื่องที่ใช้งานอยู่ทั้งหมด (#221 ผู้ใช้เจอว่ากดแล้วต้องไล่หาเอง)

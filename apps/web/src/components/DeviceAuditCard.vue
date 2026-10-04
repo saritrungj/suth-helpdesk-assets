@@ -39,7 +39,7 @@ defineExpose({ load });
 </script>
 
 <template>
-  <UiCard class="mt-4" :eyebrow="t('ประวัติ')" :title="t('การแก้ไขข้อมูลและยอดพิมพ์')" data-testid="device-audit">
+  <UiCard class="mt-4" :eyebrow="t('ประวัติ')" :title="t('การแก้ไขข้อมูลและจำนวนพิมพ์')" data-testid="device-audit">
     <template v-if="total > rows.length" #actions>
       <UiButton size="sm" variant="ghost" to="/admin/audit-log">{{ t("ดูทั้งหมด {0} รายการ", [formatCount(total)]) }}</UiButton>
     </template>

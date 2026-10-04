@@ -253,8 +253,8 @@ async function exportExcel() {
     "Serial",
     t("ยี่ห้อ"),
     t("รุ่น"),
-    t("ยอดพิมพ์"),
-    t("ค่าใช้จ่าย (หัก 2%)"),
+    t("จำนวนพิมพ์"),
+    t("ค่าพิมพ์ (หลังหัก 2%)"),
   ];
 
   const rows = filteredContracts.value.flatMap((contract) =>
@@ -356,7 +356,7 @@ onMounted(() => {
         {{ formatBahtValue(invoiceTotal) }}
       </UiStat>
 
-      <UiStat plain :label="t(&quot;ยอดพิมพ์รวม&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ก่อนหัก 2%&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;จำนวนพิมพ์รวม&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ก่อนหัก 2%&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 
@@ -377,7 +377,7 @@ onMounted(() => {
 
     <UiAlert v-if="searching && contracts.length && !loadError" tone="info" class="mb-4" data-testid="expense-search-scope">
       <strong class="block">{{ t("พบ {0} จาก {1} เครื่อง", [formatCount(foundDevices), formatCount(totalDevices)]) }}</strong>
-      {{ t("ยอดเงินและยอดพิมพ์ด้านบน รวมทั้งยอดของแต่ละสัญญา เป็นยอดทั้งสัญญา ไม่ใช่เฉพาะเครื่องที่ค้นเจอ — Excel ส่งออกเฉพาะเครื่องที่ค้นเจอ") }}
+      {{ t("ยอดเงินและจำนวนพิมพ์ด้านบน รวมทั้งยอดของแต่ละสัญญา เป็นยอดทั้งสัญญา ไม่ใช่เฉพาะเครื่องที่ค้นเจอ — Excel ส่งออกเฉพาะเครื่องที่ค้นเจอ") }}
     </UiAlert>
 
     <UiAlert v-if="exportError" tone="danger" class="mb-4">
@@ -550,7 +550,7 @@ onMounted(() => {
                   <tr class="text-xs text-ink-mute">
                     <th class="text-left font-medium py-1.5"> {{ t("เดือน") }} </th>
                     <th class="text-right font-medium py-1.5"> {{ t("จำนวนหน้า") }} </th>
-                    <th class="text-right font-medium py-1.5"> {{ t("ค่าใช้จ่าย") }} </th>
+                    <th class="text-right font-medium py-1.5"> {{ t("ค่าพิมพ์") }} </th>
                   </tr>
                 </thead>
                 <tbody>

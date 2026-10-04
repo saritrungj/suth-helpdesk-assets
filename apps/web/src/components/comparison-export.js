@@ -38,9 +38,9 @@ export function summarySheet(rows) {
     costPerDevice: averagePerDevice(summary, "cost"),
   };
   return sheetOf(t("สรุป"), [
-    { header: t("ยอดพิมพ์"), format: FORMATS.count, value: (item) => item.rawPages },
-    { header: t("ยอดพิมพ์หลังหัก 2%"), format: FORMATS.pages, value: (item) => item.netPages },
-    { header: t("ค่าใช้จ่าย (บาท)"), format: FORMATS.baht, value: (item) => item.cost },
+    { header: t("จำนวนพิมพ์"), format: FORMATS.count, value: (item) => item.rawPages },
+    { header: t("จำนวนพิมพ์หลังหัก 2%"), format: FORMATS.pages, value: (item) => item.netPages },
+    { header: t("ค่าพิมพ์ (บาท)"), format: FORMATS.baht, value: (item) => item.cost },
     { header: t("เครื่องที่มีข้อมูล (เครื่อง)"), format: FORMATS.count, value: (item) => item.devices },
     { header: t("หน้าต่อเครื่อง"), format: FORMATS.pages, value: (item) => item.pagesPerDevice },
     { header: t("บาทต่อเครื่อง"), format: FORMATS.baht, value: (item) => item.costPerDevice },
@@ -59,9 +59,9 @@ export function monthlySheet(rows) {
 /** คอลัมน์ยอดของหนึ่งรายการ — ไม่มีข้อมูลเป็นเซลล์ว่าง ไม่ใช่ศูนย์ */
 function measureColumns(summaryOf, suffix = "") {
   return [
-    { header: `${t("ยอดพิมพ์")}${suffix}`, format: FORMATS.count, value: (record) => countOrNull(summaryOf(record), "rawPages") },
-    { header: `${t("ยอดพิมพ์หลังหัก 2%")}${suffix}`, format: FORMATS.pages, value: (record) => countOrNull(summaryOf(record), "netPages") },
-    { header: `${t("ค่าใช้จ่าย (บาท)")}${suffix}`, format: FORMATS.baht, value: (record) => summaryOf(record)?.cost ?? null },
+    { header: `${t("จำนวนพิมพ์")}${suffix}`, format: FORMATS.count, value: (record) => countOrNull(summaryOf(record), "rawPages") },
+    { header: `${t("จำนวนพิมพ์หลังหัก 2%")}${suffix}`, format: FORMATS.pages, value: (record) => countOrNull(summaryOf(record), "netPages") },
+    { header: `${t("ค่าพิมพ์ (บาท)")}${suffix}`, format: FORMATS.baht, value: (record) => summaryOf(record)?.cost ?? null },
     { header: `${t("เครื่องที่มีข้อมูล (เครื่อง)")}${suffix}`, format: FORMATS.count, value: (record) => summaryOf(record)?.devices ?? 0 },
   ];
 }
@@ -210,10 +210,10 @@ const DETAIL_COLUMNS = () => [
   { header: t("แผนก"), value: (row) => row.department_name || t("ไม่ระบุแผนก") },
   { header: t("สัญญาที่คิดเงิน"), text: true, value: (row) => row.billing_contract_no || t("ไม่ผูกสัญญา") },
   { header: t("อาคาร"), value: (row) => row.building_name ?? "" },
-  { header: t("ยอดพิมพ์"), format: FORMATS.count, value: (row) => Number(row.pages_printed || 0) },
-  { header: t("ยอดพิมพ์หลังหัก 2%"), format: FORMATS.pages, value: (row) => Math.round(Number(row.net_pages || 0) * 100) / 100 },
+  { header: t("จำนวนพิมพ์"), format: FORMATS.count, value: (row) => Number(row.pages_printed || 0) },
+  { header: t("จำนวนพิมพ์หลังหัก 2%"), format: FORMATS.pages, value: (row) => Math.round(Number(row.net_pages || 0) * 100) / 100 },
   { header: t("ราคาต่อหน้า (บาท)"), format: FORMATS.price, value: (row) => (row.price_per_page == null ? null : Number(row.price_per_page)) },
-  { header: t("ค่าใช้จ่าย (บาท)"), format: FORMATS.baht, value: (row) => (row.total_cost == null ? null : Number(row.total_cost)) },
+  { header: t("ค่าพิมพ์ (บาท)"), format: FORMATS.baht, value: (row) => (row.total_cost == null ? null : Number(row.total_cost)) },
 ];
 
 /** แผ่น "ข้อมูลรายละเอียด" — หนึ่งแถวต่อเครื่องต่อเดือน เรียงตามเดือน หน่วยงาน และ Serial */
@@ -240,7 +240,7 @@ export function conditionsSheet(filename, pairs) {
 /** นิยามและข้อควรระวังที่ทุกไฟล์เปรียบเทียบมีเหมือนกัน */
 export function standardNotes() {
   return [
-    [t("ความหมายของตัวเลข"), t("ยอดพิมพ์ = จำนวนหน้าที่บันทึก · ยอดพิมพ์หลังหัก 2% = ยอดพิมพ์ × 0.98")],
+    [t("ความหมายของตัวเลข"), t("จำนวนพิมพ์ = จำนวนหน้าที่บันทึก · จำนวนพิมพ์หลังหัก 2% = จำนวนพิมพ์ × 0.98")],
     [t("หน่วยงานและสัญญา"), t("ใช้ฝ่าย แผนก และสัญญาที่คิดเงินที่มีผลในแต่ละเดือน")],
     [t("ไม่มีข้อมูลกับศูนย์"), t("ช่องว่าง = ยังไม่ได้บันทึก ส่วน 0 = เดือนนั้นไม่มีการพิมพ์")],
     [t("ข้อควรระวัง"), t("ใช้มากไม่ได้แปลว่าสิ้นเปลือง ให้ดูจำนวนเครื่องและลักษณะงานประกอบ")],

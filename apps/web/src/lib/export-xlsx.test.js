@@ -76,7 +76,7 @@ describe("ไฟล์ Excel ที่พร้อมใช้ต่อ", () => 
           columns: [{}, { format: FORMATS.count }],
           chart: { type: "bar", title: "อันดับยอดพิมพ์", valueFormat: FORMATS.count, valueTitle: "หน้า",
             series: [{ name: { c1: 1, r1: 0 }, categories: { c1: 0, r1: 1, r2: 2 }, values: { c1: 1, r1: 1, r2: 2 } }] } },
-        { name: "ข้อมูลรายละเอียด", header: ["เดือน", "Serial", "ค่าใช้จ่าย (บาท)"], rows: [[monthCell("2025-10"), "00123", 1234.5], [monthCell("2025-11"), "00124", null]],
+        { name: "ข้อมูลรายละเอียด", header: ["เดือน", "Serial", "ค่าพิมพ์ (บาท)"], rows: [[monthCell("2025-10"), "00123", 1234.5], [monthCell("2025-11"), "00124", null]],
           columns: [{ format: FORMATS.month }, { text: true }, { format: FORMATS.baht }] },
         { name: "เงื่อนไขรายงาน", header: ["หัวข้อ", "รายละเอียด"], rows: [["ช่วงเวลา", "ต.ค. 2568"]], filter: false },
       ],

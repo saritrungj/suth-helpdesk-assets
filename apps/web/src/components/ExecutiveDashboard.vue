@@ -587,10 +587,10 @@ function runCsv() {
     <section class="grid grid-cols-1 min-[360px]:grid-cols-2 xl:grid-cols-4 gap-3 mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
       <UiStat emphasis :label="t('ค่าพิมพ์รวม')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats"
         :delta="kpi.cost.delta" delta-inverse :hint="costHint" :trend="kpi.cost.trend" />
-      <UiStat tone="ink" :label="t('ยอดพิมพ์รวม')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
+      <UiStat tone="ink" :label="t('จำนวนพิมพ์รวม')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
         :delta="kpi.pages.delta" delta-inverse :hint="statsReady ? t('ก่อนหัก 2% · หลังหักเหลือ {0} หน้า', [formatNetPages(shownStats.totals.netPages)]) : ''" :trend="kpi.pages.trend" />
       <UiStat tone="ink" :label="t('ราคาเฉลี่ยต่อหน้า')" :value="kpi.perPage.value === null ? '—' : formatBahtValue(kpi.perPage.value)" :unit="t('บาท')" :loading="loading && !settledStats"
-        :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าพิมพ์รวม ÷ ยอดพิมพ์หลังหัก 2%')" />
+        :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าพิมพ์รวม ÷ จำนวนพิมพ์หลังหัก 2%')" />
       <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"
         :hint="devicesHint" />
     </section>

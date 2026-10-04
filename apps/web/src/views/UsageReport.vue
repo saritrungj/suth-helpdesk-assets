@@ -10,7 +10,7 @@ import { UiPageHeader } from "../ui";
   <div>
     <UiPageHeader
       :title="t('ค่าใช้จ่ายตามสัญญา')"
-      :description="t('ตรวจยอดพิมพ์หลังหัก 2% และข้อมูลประกอบใบแจ้งหนี้ของแต่ละสัญญา — หัก 2% คือคิดเงินจากจำนวนหน้าที่บันทึก × 0.98')"
+      :description="t('ตรวจจำนวนพิมพ์หลังหัก 2% และข้อมูลประกอบใบแจ้งหนี้ของแต่ละสัญญา — หัก 2% คือคิดเงินจากจำนวนหน้าที่บันทึก × 0.98')"
     >
       <template v-if="activeFiscalYear?.year" #meta>
         <p data-topbar-context class="mt-1 text-sm text-ink-mute numeral">

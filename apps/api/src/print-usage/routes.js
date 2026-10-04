@@ -236,7 +236,7 @@ async function auditReadingChanges(conn, actor, changes) {
     entity: "print_reading",
     entityId: change.deviceId,
     entityKey: change.month,
-    summary: `ยอดพิมพ์ ${serialOf.get(change.deviceId) ?? change.deviceId} เดือน ${change.month}: ${show(change.before)} → ${show(change.after)}`,
+    summary: `จำนวนพิมพ์ ${serialOf.get(change.deviceId) ?? change.deviceId} เดือน ${change.month}: ${show(change.before)} → ${show(change.after)}`,
     before: change.before === null ? null : { pages: change.before },
     after: change.after === null ? null : { pages: change.after },
   })));
@@ -482,7 +482,7 @@ router.post(
     const outcome = saved ? "saved" : cleared ? "cleared" : "skipped";
 
     res.json({
-      message: outcome === "cleared" ? "ลบยอดพิมพ์ของเดือนนี้แล้ว" : "บันทึกยอดพิมพ์สำเร็จ",
+      message: outcome === "cleared" ? "ลบจำนวนพิมพ์ของเดือนนี้แล้ว" : "บันทึกจำนวนพิมพ์สำเร็จ",
       outcome,
     });
   })

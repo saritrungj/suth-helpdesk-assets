@@ -43,8 +43,8 @@ const DIMENSION_OPTIONS = computed(() => (props.dimensions
   ? ALL_DIMENSION_OPTIONS.filter((option) => props.dimensions.includes(option.value))
   : ALL_DIMENSION_OPTIONS));
 const METRIC_OPTIONS = [
-  { value: "cost", label: t("ค่าใช้จ่าย") },
-  { value: "rawPages", label: t("ยอดพิมพ์") },
+  { value: "cost", label: t("ค่าพิมพ์") },
+  { value: "rawPages", label: t("จำนวนพิมพ์") },
 ];
 
 const update = (patch) => { state.value = { ...state.value, ...patch }; };

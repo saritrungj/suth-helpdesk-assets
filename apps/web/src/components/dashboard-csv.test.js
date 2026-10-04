@@ -18,7 +18,7 @@ describe("CSV รายละเอียดของหน้าภาพรว
   test("ไฟล์ไม่มีคอลัมน์สถานะราคา และคงเซลล์ว่างเมื่อข้อมูลผิดปกติ", () => {
     const row = cells(dashboardCsv([reading({ total_cost: null })]), 1);
     expect(row.at(-1)).toBe("");
-    expect(cells(dashboardCsv([reading()]), 0).at(-1)).toBe("ค่าใช้จ่าย (บาท)");
+    expect(cells(dashboardCsv([reading()]), 0).at(-1)).toBe("ค่าพิมพ์ (บาท)");
     expect(cells(dashboardCsv([reading()]), 1).at(-1)).toBe("49.00");
   });
 

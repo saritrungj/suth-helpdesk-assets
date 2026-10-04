@@ -205,7 +205,7 @@ function mapTemplateReadings(raw, meters) {
           row: r + 1,
           serial_number: sn,
           month,
-          reason: `ยอดพิมพ์ต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง ${MAX_PAGES_PER_MONTH.toLocaleString("th-TH")} (พบ "${cellValue}")`,
+          reason: `จำนวนพิมพ์ต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง ${MAX_PAGES_PER_MONTH.toLocaleString("th-TH")} (พบ "${cellValue}")`,
         });
         continue;
       }
