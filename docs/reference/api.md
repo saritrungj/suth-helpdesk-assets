@@ -10,7 +10,7 @@ prefix และความรับผิดชอบ — รายละเ�
 |---|---|---|
 | `POST /api/auth/login` | ไม่ | ตรวจรหัสผ่าน ตั้ง cookie แล้วคืนข้อมูลผู้ใช้ (ไม่คืน token) |
 | `GET /api/auth/me` | ใช่ | บอกว่าตอนนี้เป็นใคร — เว็บเรียกตอนเปิดหน้าเพราะอ่าน cookie เองไม่ได้ |
-| `POST /api/auth/logout` | ไม่ | ลบ cookie ทิ้ง เรียกได้แม้ token หมดอายุแล้ว |
+| `POST /api/auth/logout` | ไม่ | ลบ cookie ทิ้งและเพิกถอน token ที่ส่งมา — token นั้นได้ 401 `signed_out` จนหมดอายุ ([ADR-0038](../decisions/0038-revoke-session-on-logout.md)) เรียกได้แม้ token หมดอายุแล้ว |
 
 เส้นอื่นทั้งหมดต้องล็อกอิน
 

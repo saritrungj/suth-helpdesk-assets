@@ -18,7 +18,7 @@ import crypto from "node:crypto";
 import { test } from "@playwright/test";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const API_URL = process.env.SUTH_API_URL || "http://localhost:3000/api";
+export const API_URL = process.env.SUTH_API_URL || "http://localhost:3000/api";
 
 /** อ่าน JWT_SECRET จาก apps/api/.env — ไฟล์นี้ถูก gitignore ไว้และไม่เคยถูก commit */
 function readSecret() {
@@ -68,6 +68,9 @@ export function issueToken(role = "admin") {
     role,
     iat: now,
     exp: now + 60 * 60 * 2,
+    // token ไม่ซ้ำกันต่อการออกแต่ละครั้ง: เทสออกจากระบบเพิกถอนเฉพาะ token ของตัวเอง ไม่ใช่ของเทสอื่น
+    // ที่บังเอิญเซ็นในวินาทีเดียวกัน (#240, ADR-0038)
+    jti: crypto.randomUUID(),
   });
 }
 
