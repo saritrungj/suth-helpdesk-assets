@@ -32,6 +32,7 @@ const express = require("express");
 const router = express.Router();
 
 const db = require("../shared/db");
+const { missingFiscalYearAttention } = require("./fiscal-year-gap");
 const asyncHandler = require("../shared/async-handler");
 const { validate } = require("../shared/validate");
 const cache = require("../shared/cache");
@@ -531,6 +532,11 @@ router.get(
         action: { label: "ดูเครื่องที่ยังไม่ระบุ", to: "/assets", query: { missing: "location", status: "active" } },
       });
     }
+
+    // เดือนนี้ไม่อยู่ในปีงบใดเลย (ปีงบใหม่ยังไม่ถูกเพิ่ม) — ไม่ขึ้นกับปีงบหรือตัวกรองที่กำลังดู (#256)
+    const [allFiscalYears] = await db.query("SELECT start_month, end_month FROM fiscal_year");
+    const fiscalYearGap = missingFiscalYearAttention(today, allFiscalYears);
+    if (fiscalYearGap) attention.push(fiscalYearGap);
 
     attention.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 
