@@ -8,6 +8,7 @@
 |---|---|
 | นามสกุลที่รับ | `.xlsx`, `.xls`, `.csv` |
 | ขนาดสูงสุด | 5 MB |
+| การเข้ารหัสของ `.csv` | UTF-8 (มีหรือไม่มี BOM), UTF-16 ที่มี BOM, หรือ Windows-874 (ที่ Excel ภาษาไทยบันทึกเป็น "CSV (Comma delimited)") — ไฟล์ที่ถอดเป็นข้อความไม่ได้ถูกปฏิเสธด้วย `unreadable_encoding` |
 | ชื่อ form field | `file` |
 | สิทธิ์ที่ต้องมี | role `admin` |
 

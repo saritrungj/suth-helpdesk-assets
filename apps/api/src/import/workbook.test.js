@@ -82,3 +82,55 @@ for (const [label, bom] of [["ไม่มี BOM", ""], ["มี BOM", "﻿"]])
     }
   });
 }
+
+// ---------- การเข้ารหัสของ CSV (#228) ----------
+//
+// Excel ภาษาไทยบันทึก "CSV (Comma delimited)" เป็น Windows-874 ถ้าอ่านเป็น UTF-8 ตรงๆ ชื่ออาคาร
+// และฝ่ายจะกลายเป็นตัวแทนที่ (U+FFFD) แล้วถูกเสนอให้สร้างเป็นข้อมูลหลักใหม่
+
+const iconv = (text, encoding) => {
+  if (encoding === "utf8") return Buffer.from(text, "utf8");
+  if (encoding === "utf8-bom") return Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text, "utf8")]);
+  if (encoding === "utf16le") return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, "utf16le")]);
+  // Windows-874: อักษรไทย U+0E01–U+0E5B อยู่ที่ไบต์ 0xA1–0xFB ที่เหลือในเทสนี้เป็น ASCII
+  return Buffer.from([...text].map((ch) => {
+    const code = ch.codePointAt(0);
+    return code >= 0x0e01 && code <= 0x0e5b ? code - 0x0e01 + 0xa1 : code;
+  }));
+};
+
+function withCsv(buffer, check) {
+  const file = path.join(os.tmpdir(), `suth-csv-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.csv`);
+  fs.writeFileSync(file, buffer);
+  try {
+    return check(file);
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+const THAI_CSV = "serial_number,brand,building,division\r\nTESTSN0001,HP,อาคารพยาธิ,ฝ่ายสารสนเทศ\r\n";
+
+for (const encoding of ["utf8", "utf8-bom", "windows-874", "utf16le"]) {
+  test(`CSV ภาษาไทยแบบ ${encoding} อ่านชื่อได้ถูกต้อง`, () => {
+    const rows = withCsv(iconv(THAI_CSV, encoding), (file) => readAllSheets(file, "ทะเบียน.csv")[0].rows);
+    assert.deepEqual(rows[1], ["TESTSN0001", "HP", "อาคารพยาธิ", "ฝ่ายสารสนเทศ"]);
+  });
+}
+
+test("CSV ที่ถอดรหัสเป็นข้อความไม่ได้ถูกปฏิเสธพร้อมวิธีแก้ ไม่ปล่อยตัวเพี้ยนเข้าระบบ", () => {
+  // 0x81 ไม่ใช่ UTF-8 ที่ถูกต้อง และไม่มีอักขระใน Windows-874
+  const broken = Buffer.concat([Buffer.from("serial_number,building\r\nTESTSN0001,"), Buffer.from([0xcd, 0x81, 0xd2]), Buffer.from("\r\n")]);
+  assert.throws(
+    () => withCsv(broken, (file) => readAllSheets(file, "x.csv")),
+    (error) => error.status === 400 && error.code === "unreadable_encoding" && /CSV UTF-8/.test(error.detail)
+  );
+});
+
+test("CSV UTF-8 ที่มีตัวแทนที่ (U+FFFD) อยู่แล้วถูกปฏิเสธ — ชื่อเพี้ยนต้องไม่ถูกเสนอเป็นข้อมูลหลัก", () => {
+  const corrupted = Buffer.from(`serial_number,building${String.fromCharCode(13, 10)}TESTSN0001,${String.fromCharCode(0xfffd, 0xfffd)}`, "utf8");
+  assert.throws(
+    () => withCsv(corrupted, (file) => readAllSheets(file, "x.csv")),
+    (error) => error.status === 400 && error.code === "unreadable_encoding"
+  );
+});
