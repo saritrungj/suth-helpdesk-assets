@@ -15,6 +15,8 @@ export async function assetFixture(page, role = "admin") {
     // ผู้ใช้ที่ล็อกอินอยู่ (null = ยังไม่ได้ล็อกอิน) และคนที่จะได้เมื่อส่งฟอร์มล็อกอิน — ใช้ทดสอบการสลับผู้ใช้ (#241)
     user: { id: 1, username: role, role },
     nextUser: null,
+    password: "current-fixture-pw",
+    passwordRequests: [],
   };
   const masters = {
     brands: [{ id: 1, name: "SUTH Printer" }],
@@ -33,6 +35,16 @@ export async function assetFixture(page, role = "admin") {
     const json = (data, status = 200) => route.fulfill({ status, json: data });
     if (key === "auth/me") return state.user ? json({ user: state.user }) : json({ title: "กรุณาเข้าสู่ระบบ", code: "no_token" }, 401);
     if (key === "auth/logout") { state.user = null; return json({ message: "ok" }); }
+    // เปลี่ยนรหัสผ่านของตัวเอง: รหัสปัจจุบันที่ถูกคือ state.password
+    if (key === "auth/password" && method === "PUT") {
+      const body = route.request().postDataJSON();
+      state.passwordRequests.push(body);
+      if (body.current_password !== state.password) {
+        return json({ title: "รหัสผ่านปัจจุบันไม่ถูกต้อง", status: 400, code: "wrong_current_password", errors: [{ field: "current_password", message: "รหัสผ่านปัจจุบันไม่ถูกต้อง" }] }, 400);
+      }
+      state.password = body.new_password;
+      return json({ message: "เปลี่ยนรหัสผ่านแล้ว" });
+    }
     if (key === "auth/login") { state.user = state.nextUser ?? { id: 1, username: role, role }; return json({ user: state.user }); }
     if (key === "devices") return state.failList ? json({ title: "Unavailable" }, 503) : json(state.rows);
     if (masters[key]) return state.failOptions && key === "buildings" ? json({}, 503) : json(masters[key]);
