@@ -6,7 +6,7 @@ import { formatDate, formatMonth } from "../lib/locale-format";
  */
 
 const ENTITY_LABEL = {
-  print_reading: "ยอดพิมพ์",
+  print_reading: "จำนวนพิมพ์",
   device: "เครื่อง",
   contract: "สัญญา",
   fiscal_year: "ปีงบ",
@@ -38,7 +38,7 @@ export function auditActionOf(action) {
 }
 
 const FIELD_LABEL = {
-  pages: "ยอดพิมพ์", serial_number: "Serial", brand_id: "ยี่ห้อ", model: "รุ่น", building_id: "อาคาร",
+  pages: "จำนวนพิมพ์", serial_number: "Serial", brand_id: "ยี่ห้อ", model: "รุ่น", building_id: "อาคาร",
   floor_id: "ชั้น", location: "ตำแหน่ง", division_id: "ฝ่าย", department_id: "แผนก",
   contract_id: "สัญญา", price_override: "ราคาพิเศษ", status: "สถานะ", installation_status: "สถานะการติดตั้ง",
   effective_from: "เริ่ม", effective_to: "สิ้นสุด", history_known: "ยืนยันย้อนหลังได้", note: "หมายเหตุ",

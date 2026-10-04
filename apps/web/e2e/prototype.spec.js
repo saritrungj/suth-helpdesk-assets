@@ -286,7 +286,7 @@ test("expense Excel export carries the search context and the on-screen amounts"
   const context = XLSX.utils.sheet_to_json(workbook.Sheets["บริบทรายงาน"], { header: 1 });
   expect(context).toContainEqual(["ค้นหา", "SUTH-001"]);
   const [header, ...rows] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
-  expect(header).toContain("ค่าใช้จ่าย (หัก 2%)");
+  expect(header).toContain("ค่าพิมพ์ (หลังหัก 2%)");
   expect(rows).toHaveLength(1);
   expect(rows[0]).toEqual(["SUTH-2569", "0.45", "ราคาตามสัญญา", "SUTH-001", "SUTH Printer", "Office 400", 1000, 360]);
 });

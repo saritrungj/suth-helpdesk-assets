@@ -78,7 +78,7 @@ const STATES = [
     async setup(page) {
       await comparisonFixture(page);
       await page.goto("/dashboard?by=department");
-      await expect(page.getByRole("region", { name: "พื้นที่เปรียบเทียบ" })).toContainText("ค่าใช้จ่ายรายเดือน");
+      await expect(page.getByRole("region", { name: "พื้นที่เปรียบเทียบ" })).toContainText("ค่าพิมพ์รายเดือน");
     },
   },
 ];

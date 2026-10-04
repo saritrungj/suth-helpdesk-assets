@@ -184,7 +184,7 @@ function parseVendorWorkbook(sheets) {
       }
       const pages = meterEnd - meterStart;
       if (pages > MAX_PAGES_PER_MONTH) {
-        errors.push({ ...where, reason: `ยอดพิมพ์ ${pages} หน้าสูงผิดปกติ` });
+        errors.push({ ...where, reason: `จำนวนพิมพ์ ${pages} หน้าสูงผิดปกติ` });
         continue;
       }
 

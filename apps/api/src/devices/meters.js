@@ -101,7 +101,7 @@ async function setDeviceMeters(conn, deviceId, { primaryCategoryId, hasColorMete
     );
   } else if (!hasColorMeter && color) {
     if (Number(color.readings) > 0) {
-      throw badRequest("ถอดมิเตอร์สีไม่ได้ เพราะมียอดพิมพ์สีบันทึกไว้แล้ว", { code: "color_meter_in_use" });
+      throw badRequest("ถอดมิเตอร์สีไม่ได้ เพราะมีจำนวนพิมพ์สีบันทึกไว้แล้ว", { code: "color_meter_in_use" });
     }
     await conn.query("DELETE FROM device_meter WHERE id = ?", [color.id]);
   }

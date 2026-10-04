@@ -39,7 +39,7 @@ for (const theme of ["light", "dark"]) {
     await page.keyboard.press("Escape");
     await expect(table.getByRole("row", { name: /NEW-B/ })).toHaveCount(0);
     expect(await color()).toBe(original);
-    await page.getByRole("radio", { name: "ค่าใช้จ่าย", exact: true }).click();
+    await page.getByRole("radio", { name: "ค่าพิมพ์", exact: true }).click();
     await expect(table.getByRole("row", { name: /THIRD-C/ })).toContainText("24.50");
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}.png`), fullPage: true });
     await page.setViewportSize({ width: 320, height: 740 });
@@ -57,7 +57,7 @@ test("comparison rejects inherited object properties as metric query values", as
 
   await page.goto("/compare?by=constructor&measure=toString");
 
-  await expect(page.getByRole("radio", { name: "ค่าใช้จ่าย", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "ค่าพิมพ์", exact: true })).toBeChecked();
   await expect(page.getByRole("radio", { name: "ฝ่าย", exact: true })).toBeChecked();
   await expect(page).not.toHaveURL(/constructor|toString/);
 });

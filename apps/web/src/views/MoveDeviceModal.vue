@@ -348,7 +348,7 @@ async function submit() {
                 {{ formatCount(currentUsage.total_pages ?? currentUsage.net_pages) }} {{ t("หน้า") }} </dd>
             </div>
             <div v-if="currentUsage.total_cost !== undefined" class="flex items-baseline gap-1.5">
-              <dt class="text-ink-mute"> {{ t("ค่าใช้จ่ายสะสม") }} </dt>
+              <dt class="text-ink-mute"> {{ t("ค่าพิมพ์สะสม") }} </dt>
               <dd class="numeral font-semibold text-ink">
                 {{ formatBahtValue(currentUsage.total_cost) }} {{ t("บาท") }} </dd>
             </div>

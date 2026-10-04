@@ -94,11 +94,11 @@ const CARDS = computed(() => [
   },
   {
     key: "pages",
-    title: t("ยอดพิมพ์รายเดือน"),
+    title: t("จำนวนพิมพ์รายเดือน"),
     unit: t("หน้า"),
     format: formatCount,
     headline: headline(pagesValues.value, formatCount),
-    series: [{ key: "pages", label: t("ยอดพิมพ์"), values: pagesValues.value, slot: 2, area: true }],
+    series: [{ key: "pages", label: t("จำนวนพิมพ์"), values: pagesValues.value, slot: 2, area: true }],
   },
 ]);
 

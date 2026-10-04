@@ -56,9 +56,9 @@ const columns = computed(() => {
   if (selectable.value) list.push({ key: "plot", label: t("บนกราฟ"), sortable: false, width: "4.5rem", value: (row) => (isPicked(row) ? 1 : 0) });
   list.push({ key: "label", label: props.model.view === "overall" ? t("เดือน") : dimensionLabel(props.model.dimension), value: (row) => row.displayLabel, sortable: props.model.view !== "overall" });
   list.push(
-    { key: "rawPages", label: t("ยอดพิมพ์"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.rawPages) },
-    { key: "netPages", label: t("ยอดพิมพ์หลังหัก 2%"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.netPages) },
-    { key: "cost", label: t("ค่าใช้จ่าย (บาท)"), align: "right", value: (row) => row.summary.cost },
+    { key: "rawPages", label: t("จำนวนพิมพ์"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.rawPages) },
+    { key: "netPages", label: t("จำนวนพิมพ์หลังหัก 2%"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.netPages) },
+    { key: "cost", label: t("ค่าพิมพ์ (บาท)"), align: "right", value: (row) => row.summary.cost },
   );
   // ลำดับแบบรายการหุ้น: ชื่อ → ตัวเลข → สัดส่วน → รูปทรงรายเดือน แล้วค่อยค่าเฉลี่ย
   if (showShare.value) list.push({ key: "share", label: t("สัดส่วน{0}", [metricLabel(props.model.metric)]), align: "right", value: (row) => shareOf(row), csv: (row) => (shareOf(row) === null ? "" : (shareOf(row) * 100).toFixed(1)) });

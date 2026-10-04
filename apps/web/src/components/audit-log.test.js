@@ -43,6 +43,6 @@ describe("auditValueText", () => {
 
   test("ค่าที่ไม่รู้จักแสดงตามเดิม ไม่ถูกแปลงผิด", () => {
     expect(auditValueText({ pages: 1200, status: "custom" }, { pages: 1500, status: "custom" }))
-      .toBe("ยอดพิมพ์: 1,200 → 1,500\nสถานะ: custom → custom");
+      .toBe("จำนวนพิมพ์: 1,200 → 1,500\nสถานะ: custom → custom");
   });
 });

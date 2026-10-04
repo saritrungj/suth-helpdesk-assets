@@ -157,7 +157,7 @@ const activeFilters = computed(() =>
         key === "status"
           ? (STATUS_META[value]?.label ?? value)
           : key === "missing"
-            ? (String(value).startsWith("usage:") ? t("ไม่มียอดพิมพ์ในปีงบนี้ ({0} เครื่อง)", [idleIds.value.size]) : t("ยังไม่ระบุฝ่ายหรืออาคาร"))
+            ? (String(value).startsWith("usage:") ? t("ไม่มีจำนวนพิมพ์ในปีงบนี้ ({0} เครื่อง)", [idleIds.value.size]) : t("ยังไม่ระบุฝ่ายหรืออาคาร"))
           : key === "contract" && value === "__unassigned__"
             ? t("ยังไม่ผูกสัญญา")
             : key === "contract"
