@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { fiscalYearMonths, sumSatang, toSatang } from "@suth/domain";
+import { currentMonth, fiscalYearMonths, sumSatang, toSatang } from "@suth/domain";
 import {
   signIn,
   reasonToSkip,
@@ -187,10 +187,12 @@ test("graph selection retains the filter and follow-up links retain their scope"
 
 test("unavailable comparison month explains missing data", async ({ page }) => {
   await page.route("**/api/dashboard/monthly-kpi?**", (route) => route.fulfill({ json: [] }));
-  await page.goto("/dashboard?months=2026-09");
+  // เดือนต้องอยู่ในปีงบที่เปิดอยู่ ไม่งั้นหน้าตัด months ออกจาก URL — เดิมตรึง 2026-09 ไว้ จึงล้มทันทีที่ข้ามปีงบ (#233)
+  const month = currentMonth();
+  await page.goto(`/dashboard?months=${month}`);
   // ทั้งกราฟค่าใช้จ่ายและกราฟยอดพิมพ์บอกเหตุผลเดียวกัน (#206)
   await expect(page.getByText("ยังไม่มีการพิมพ์ในขอบเขตที่เลือก", { exact: true })).toHaveCount(2);
-  await expect(page).toHaveURL(/months=2026-09/);
+  await expect(page).toHaveURL(new RegExp(`months=${month}`));
 });
 
 test("cancel language change retains unsaved device form", async ({ page }) => {
@@ -467,6 +469,22 @@ function totalsBy({ header, body }, keyOf) {
   return totals;
 }
 
+/** เดือนก่อนของเดือน "YYYY-MM" */
+function monthBefore(month) {
+  const [year, index] = month.split("-").map(Number);
+  return index === 1 ? `${year - 1}-12` : `${year}-${String(index - 1).padStart(2, "0")}`;
+}
+
+/**
+ * ยอดของสองเดือนที่ seed_ci.sql ใส่ไว้ (เดือนก่อนกับเดือนนี้) — ไม่ผูกกับปีงบ
+ *
+ * เดือนแรกของปีงบ เดือนก่อนอยู่ปีงบก่อนหน้า การถามตามเดือนของปีงบจึงได้เดือนเดียว (#233)
+ */
+async function seededMonthReadings() {
+  const now = currentMonth();
+  return apiFetch(`/dashboard/monthly-kpi?month=${monthBefore(now)},${now}`);
+}
+
 async function fiscalYearReadings() {
   const year = await activeFiscalYear();
   const months = fiscalYearMonths({ startMonth: year.start_month, endMonth: year.end_month });
@@ -500,7 +518,7 @@ test("report division filter follows the division of each month (#104)", async (
        CI-SN-032 ประวัติซ้อน — ยอดอยู่กับช่วงที่เริ่มทีหลังเท่านั้น ไม่ถูกนับสองฝ่าย
      ค่าที่คาดหวังมาจาก API ไม่ได้ตรึงตัวเลขจาก seed เพื่อให้เทสยืนยันว่าหน้ากับ API
      ตรงกัน ไม่ใช่ยืนยันว่า seed ยังเหมือนเดิม */
-  const [devices, readings] = await Promise.all([apiFetch("/devices"), fiscalYearReadings()]);
+  const [devices, readings, year] = await Promise.all([apiFetch("/devices"), fiscalYearReadings(), activeFiscalYear()]);
   const serials = ["CI-SN-031", "CI-SN-032"];
   const cases = serials.map((serial) => devices.find((device) => device.serial_number === serial));
   test.skip(cases.some((device) => !device), "Needs devices 31/32 from database/seed_ci.sql");
@@ -511,7 +529,11 @@ test("report division filter follows the division of each month (#104)", async (
       .reduce((sum, row) => sum + Number(row.pages_printed || 0), 0);
   const [moved, overlapping] = cases;
   // ยืนยันว่า seed ยังเป็นรูปที่เทสนี้ต้องการ ก่อนสรุปอะไรจากหน้าจอ
-  expect(pagesOf(moved, "ฝ่ายการพยาบาล")).toBeGreaterThan(0);
+  // ยอดของฝ่ายเดิมคือยอดเดือนก่อน — เดือนแรกของปีงบ เดือนก่อนอยู่นอกปีงบที่หน้ารายงานแสดง จึงต้องเป็น 0
+  // (ถ้าไม่ใช่ 0 แปลว่ายอดเดือนนี้ถูกนับให้ฝ่ายเดิม) เดือนอื่นของปีต้องมียอดจริง (#233)
+  const previousMonthInYear = monthBefore(currentMonth()) >= year.start_month;
+  if (previousMonthInYear) expect(pagesOf(moved, "ฝ่ายการพยาบาล")).toBeGreaterThan(0);
+  else expect(pagesOf(moved, "ฝ่ายการพยาบาล")).toBe(0);
   expect(pagesOf(moved, "ฝ่ายเภสัชกรรม")).toBeGreaterThan(0);
   expect(pagesOf(overlapping, "ฝ่ายการพยาบาล")).toBe(0);
   expect(pagesOf(overlapping, "ฝ่ายเภสัชกรรม")).toBeGreaterThan(0);
@@ -534,7 +556,7 @@ test("report division filter follows the division of each month (#104)", async (
 
 
 test("monthly KPI exposes the month-effective location IDs (#107)", async () => {
-  const [devices, readings] = await Promise.all([apiFetch("/devices"), fiscalYearReadings()]);
+  const [devices, readings] = await Promise.all([apiFetch("/devices"), seededMonthReadings()]);
   const moved = devices.find((device) => device.serial_number === "CI-SN-031");
   expect(moved, "CI-SN-031 from the isolated CI seed").toBeTruthy();
   const rows = readings.filter((row) => row.device_id === moved.id).sort((a, b) => a.month.localeCompare(b.month));

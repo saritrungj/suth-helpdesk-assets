@@ -108,6 +108,45 @@ function load(file) {
   ], { input: fs.readFileSync(path.join(root, "database", file)), stdio: ["pipe", "inherit", "inherit"] });
 }
 
+const SEED_TODAY = "SET @today       = CURDATE();";
+
+/** วันที่จำลองของปีนี้: วันแรกและช่วงต้นปีงบ ขอบ 3 เดือน กลางปี และวันสุดท้ายของปีงบ */
+function seedCheckDates(year = new Date().getFullYear()) {
+  return [`${year}-10-01`, `${year}-10-31`, `${year}-12-31`, `${year}-01-01`, `${year}-03-31`, `${year}-09-30`];
+}
+
+/**
+ * โหลด schema + seed_ci.sql ด้วยวันที่จำลองลงฐานแยก แล้วลบทิ้ง — ก่อนโหลดชุดจริง
+ *
+ * seed คำนวณทุกอย่างจากวันที่รัน จึงเคยโหลดไม่ผ่านเฉพาะช่วง ต.ค.–ธ.ค. โดยไม่มีอะไรบอกล่วงหน้า (#233)
+ * ตรวจที่นี่เพื่อให้รู้ตั้งแต่เดือนอื่นของปี ไม่ใช่รอถึงต้นปีงบแล้วชุด db รันไม่ได้ทั้งชุด
+ */
+function checkSeedDates() {
+  const schema = fs.readFileSync(path.join(root, "database", "schema.sql"));
+  const seed = fs.readFileSync(path.join(root, "database", "seed_ci.sql"), "utf8");
+  if (seed.split(SEED_TODAY).length !== 2) throw new Error(`seed_ci.sql ต้องมีบรรทัด "${SEED_TODAY}" หนึ่งบรรทัด`);
+
+  const mysql = (args, input) => spawnSync(
+    "docker",
+    ["exec", "-i", "-e", `MYSQL_PWD=${dbPassword}`, container, "mysql", "--default-character-set=utf8mb4", "-uroot", ...args],
+    { input, encoding: "utf8" }
+  );
+  for (const date of seedCheckDates()) {
+    const scratch = `seed_check_${date.replaceAll("-", "")}`;
+    const steps = [
+      [["-e", `CREATE DATABASE ${scratch}`]],
+      [[scratch], schema],
+      [[scratch], seed.replace(SEED_TODAY, `SET @today       = DATE '${date}';`)],
+      [["-e", `DROP DATABASE ${scratch}`]],
+    ];
+    for (const [args, input] of steps) {
+      const result = mysql(args, input);
+      if (result.status !== 0) throw new Error(`seed_ci.sql โหลดไม่ผ่านเมื่อวันที่รันคือ ${date}: ${String(result.stderr).trim()}`);
+    }
+  }
+  console.log(`verify:db — seed_ci.sql โหลดผ่านกับวันที่จำลอง ${seedCheckDates().length} วัน`);
+}
+
 async function main() {
   const docker = spawnSync("docker", ["info"], { stdio: "ignore" });
   if (docker.error || docker.status !== 0) {
@@ -129,6 +168,7 @@ async function main() {
     ], { stdio: "ignore" });
     created = true;
     await waitForMysql();
+    checkSeedDates();
     load("schema.sql");
     load("seed_ci.sql");
 
