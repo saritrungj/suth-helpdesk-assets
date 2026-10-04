@@ -17,7 +17,7 @@
 
 const db = require("../shared/db");
 const { z } = require("zod");
-const { notFound } = require("../shared/http-error");
+const { conflict, notFound } = require("../shared/http-error");
 const {
   validate,
   idParam,
@@ -435,6 +435,19 @@ exports.getOne = async (req, res) => {
 // `firstFrom` ใช้กับช่วงแรกของเครื่องที่ยังไม่มีประวัติเท่านั้น — เครื่องที่นำเข้าจากไฟล์มียอด
 // ย้อนหลังตั้งแต่เริ่มสัญญา ถ้าช่วงแรกเริ่มวันนี้ ยอดเดือนก่อนๆ จะไปตกที่หน่วยงานปัจจุบันเสมอ
 // แม้เครื่องจะย้ายไปแล้ว (ADR-0014) การย้ายยังมีผลวันนี้เสมอ
+/** ที่ตั้งและหน่วยงานสองชุดเท่ากันทุกช่องหรือไม่ — ตำแหน่งว่างกับ null เท่ากัน ช่องว่างหัวท้ายไม่นับ */
+function sameLocation(a, b) {
+  const text = (value) => String(value ?? "").trim();
+  return (
+    (a.building_id ?? null) === (b.building_id ?? null) &&
+    (a.floor_id ?? null) === (b.floor_id ?? null) &&
+    text(a.location) === text(b.location) &&
+    (a.division_id ?? null) === (b.division_id ?? null) &&
+    (a.department_id ?? null) === (b.department_id ?? null)
+  );
+}
+exports.sameLocation = sameLocation;
+
 async function recordLocationHistory(conn, deviceId, loc, firstFrom) {
   const [[latest]] = await conn.query(
     `SELECT * FROM device_location_history
@@ -675,6 +688,14 @@ exports.move = async (req, res) => {
 
   await db.withTransaction(async (conn) => {
     const before = await deviceSnapshot(conn, req.params.id);
+    if (!before) throw notFound("ไม่พบเครื่องที่ต้องการย้าย");
+    // ปลายทางเท่าที่เดิม: เดิมตอบ 200 "ย้ายเรียบร้อย" ทั้งที่ไม่มีอะไรเปลี่ยนและไม่มีประวัติเพิ่ม (#239)
+    if (sameLocation(before, data)) {
+      throw conflict("ปลายทางเหมือนที่ตั้งและหน่วยงานปัจจุบัน ยังไม่ได้ย้ายเครื่อง", {
+        code: "move_unchanged",
+        detail: "เปลี่ยนอาคาร ชั้น ตำแหน่ง ฝ่าย หรือแผนกอย่างน้อยหนึ่งอย่างก่อนย้าย",
+      });
+    }
     const [result] = await conn.query(
       `UPDATE devices
        SET building_id = ?, floor_id = ?, location = ?, division_id = ?, department_id = ?
