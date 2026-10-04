@@ -53,3 +53,41 @@ test("ออกจากระบบด้วยคำขอแบบที่�
     }
   });
 });
+
+// ออกจากระบบต้องเพิกถอน token ที่ส่งมาจริง ไม่ใช่แค่ล้าง cookie (#240, ADR-0038)
+test("ออกจากระบบเพิกถอนทั้ง token ใน cookie และใน Authorization จนถึงเวลาหมดอายุของแต่ละใบ", async () => {
+  const jwt = require("jsonwebtoken");
+  const revokedSessions = require("../src/auth/revoked-sessions");
+  revokedSessions.clear();
+  const sign = (n, expiresIn) => jwt.sign({ id: 1, username: "admin", role: "admin", n }, process.env.JWT_SECRET, { expiresIn });
+  const cookieToken = sign(1, "1h");
+  const bearerToken = sign(2, "2h");
+  const expired = sign(3, -10);
+
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: `${SESSION_COOKIE}=${cookieToken}`, Authorization: `Bearer ${bearerToken}` },
+      body: "{}",
+    });
+    assert.equal(res.status, 200);
+    assert.ok(clearsSession(res));
+
+    // cookie ที่หมดอายุแล้วคู่กับ Bearer ที่ยังใช้ได้: Bearer ต้องถูกเพิกถอนด้วย
+    const other = sign(4, "1h");
+    await fetch(`${base}/auth/logout`, {
+      method: "POST",
+      headers: { Cookie: `${SESSION_COOKIE}=${expired}`, Authorization: `Bearer ${other}` },
+    });
+    assert.equal(revokedSessions.isRevoked(other), true);
+  });
+
+  assert.equal(revokedSessions.isRevoked(cookieToken), true);
+  assert.equal(revokedSessions.isRevoked(bearerToken), true);
+  // เก็บเฉพาะ token ที่ยังใช้ได้ และจำถึงเวลาหมดอายุของใบนั้น
+  assert.equal(revokedSessions.isRevoked(expired), false);
+  assert.equal(revokedSessions.snapshot().length, 3);
+  assert.equal(revokedSessions.isRevoked(cookieToken, Date.now() + 61 * 60 * 1000), false);
+  assert.equal(revokedSessions.isRevoked(bearerToken, Date.now() + 61 * 60 * 1000), true);
+  revokedSessions.clear();
+});

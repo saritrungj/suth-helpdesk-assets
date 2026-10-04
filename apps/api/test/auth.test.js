@@ -264,3 +264,35 @@ test("sameSite=none ต้องบังคับ secure เสมอ ไม่
 test("อายุ cookie ตรงกับอายุ token คือ 8 ชั่วโมง", () => {
   assert.equal(sessionCookieOptions().maxAge, 8 * 60 * 60 * 1000);
 });
+
+// ------------------------------------------------------------------
+// ออกจากระบบแล้ว token เดิมต้องใช้ไม่ได้ (#240, ADR-0038)
+//
+// เดิม logout ลบ cookie ฝั่งเบราว์เซอร์อย่างเดียว token ที่ถูกคัดลอกไว้ก่อนยังผ่านด่านนี้ได้จนครบ 8 ชั่วโมง
+// ------------------------------------------------------------------
+
+test("token ที่ถูกเพิกถอนตอนออกจากระบบได้ 401 signed_out ทั้งทาง cookie และ Bearer", async () => {
+  const revokedSessions = require("../src/auth/revoked-sessions");
+  revokedSessions.clear();
+  const token = validToken();
+  const { exp } = jwt.decode(token);
+
+  // ก่อนออกจากระบบ: ผ่าน
+  const before = await new Promise((resolve) => requireAuth(makeReq({ cookies: { [SESSION_COOKIE]: token } }), {}, resolve));
+  assert.equal(before, undefined);
+
+  revokedSessions.revoke(token, exp);
+
+  for (const req of [makeReq({ cookies: { [SESSION_COOKIE]: token } }), makeReq({ headers: { authorization: `Bearer ${token}` } })]) {
+    const { error, passed } = run(requireAuth, req);
+    assert.equal(passed, false);
+    assert.equal(error.status, 401);
+    assert.equal(error.code, "signed_out");
+  }
+
+  // การล็อกอินใหม่ได้ token ใหม่ ซึ่งไม่ถูกกระทบ
+  const fresh = jwt.sign({ id: 1, username: "admin", role: "admin", n: 2 }, process.env.JWT_SECRET, { expiresIn: "1h" });
+  const after = await new Promise((resolve) => requireAuth(makeReq({ cookies: { [SESSION_COOKIE]: fresh } }), {}, resolve));
+  assert.equal(after, undefined);
+  revokedSessions.clear();
+});

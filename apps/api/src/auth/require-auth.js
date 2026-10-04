@@ -11,6 +11,7 @@ const jwt = require("jsonwebtoken");
 const { SESSION_COOKIE } = require("./session-cookie");
 const { unauthorized } = require("../shared/http-error");
 const { currentUser } = require("./current-user");
+const revokedSessions = require("./revoked-sessions");
 
 /**
  * อ่าน token จากคำขอ
@@ -64,6 +65,11 @@ module.exports = (req, res, next) => {
         code: expired ? "token_expired" : "invalid_token",
       })
     );
+  }
+
+  // ออกจากระบบแล้ว: token เดิมใช้ไม่ได้แม้ยังไม่หมดอายุ (#240, ADR-0038)
+  if (revokedSessions.isRevoked(token)) {
+    return next(unauthorized("ออกจากระบบแล้ว กรุณาเข้าสู่ระบบใหม่", { code: "signed_out" }));
   }
 
   // บทบาทและสถานะบัญชีปัจจุบันจากฐาน — ลดสิทธิ์/ลบบัญชี/เปลี่ยนรหัสผ่านมีผลทันที (#208, current-user.js)

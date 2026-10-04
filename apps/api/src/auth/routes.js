@@ -5,6 +5,7 @@
 // token เก็บใน cookie แบบ httpOnly ไม่ใช่ localStorage (ADR-0006) — JavaScript
 // ในหน้าอ่านค่าไม่ได้เลย และเราสั่งลบได้ทันทีตอนออกจากระบบ
 
+const crypto = require("crypto");
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -15,6 +16,8 @@ const router = express.Router();
 const db = require("../shared/db");
 const asyncHandler = require("../shared/async-handler");
 const requireAuth = require("./require-auth");
+const { readToken } = requireAuth;
+const revokedSessions = require("./revoked-sessions");
 const { passwordVersion } = require("./current-user");
 const { validate } = require("../shared/validate");
 const { unauthorized } = require("../shared/http-error");
@@ -85,7 +88,9 @@ router.post(
 
     const token = jwt.sign(
       // pwv = ลายนิ้วมือของรหัสผ่าน — เปลี่ยนรหัสผ่านแล้ว token นี้ใช้ไม่ได้ (#208, current-user.js)
-      { id: user.id, username: user.username, role: user.role, pwv: passwordVersion(user.password) },
+      // jti = เลขประจำ token: ล็อกอินสองครั้งในวินาทีเดียวกันต้องไม่ได้ token เดียวกัน ไม่งั้นออกจากระบบแล้ว
+      // ล็อกอินใหม่ทันทีจะได้ token ที่เพิ่งถูกเพิกถอนกลับมา (#240)
+      { id: user.id, username: user.username, role: user.role, pwv: passwordVersion(user.password), jti: crypto.randomUUID() },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
     );
@@ -120,6 +125,20 @@ router.get("/me", requireAuth, (req, res) => {
 // ถ้าบังคับ คนที่ token หมดอายุแล้วจะออกจากระบบไม่ได้และ cookie จะค้างในเบราว์เซอร์
 // ============================================================
 router.post("/logout", (req, res) => {
+  // เพิกถอน token ที่ส่งมา — ลบ cookie อย่างเดียวไม่พอ สำเนาของ token ยังใช้ได้จนหมดอายุ (#240, ADR-0038)
+  // token ที่ตรวจลายเซ็นไม่ผ่านหรือหมดอายุแล้วไม่ต้องจำ: ด่าน require-auth ปฏิเสธเองอยู่แล้ว
+  // ทั้ง cookie และ Bearer: ด่าน require-auth อ่าน cookie ก่อน ถ้าเพิกถอนเฉพาะตัวที่มันจะเลือก คำขอที่มี
+  // cookie ค้าง (หมดอายุ) คู่กับ Bearer ที่ยังใช้ได้ จะออกจากระบบ "สำเร็จ" โดย Bearer ไม่ถูกเพิกถอน
+  const bearer = readToken({ cookies: {}, headers: req.headers });
+  for (const token of new Set([req.cookies?.[SESSION_COOKIE], bearer].filter(Boolean))) {
+    try {
+      const claims = jwt.verify(token, process.env.JWT_SECRET);
+      revokedSessions.revoke(token, claims.exp);
+      logger.info("ออกจากระบบ", { request_id: req.id, user: claims.username });
+    } catch {
+      // ไม่มี session ที่ใช้ได้ให้เพิกถอน
+    }
+  }
   res.clearCookie(SESSION_COOKIE, sessionCookieOptions({ maxAge: undefined }));
   noStore(res);
   res.json({ message: "ออกจากระบบแล้ว" });
