@@ -36,6 +36,46 @@ function removeUploadedFile(file) {
 }
 
 /**
+ * แปลงไบต์ของ CSV เป็นข้อความ — UTF-8 (มีหรือไม่มี BOM), UTF-16 ที่มี BOM หรือ Windows-874
+ *
+ * Excel ภาษาไทยบันทึก "CSV (Comma delimited)" เป็น Windows-874 เดิมอ่านเป็น UTF-8 เสมอ ชื่ออาคาร
+ * และฝ่ายจึงกลายเป็นตัวแทนที่ (U+FFFD) แล้วถูกเสนอให้สร้างเป็นข้อมูลหลักใหม่ (#228)
+ *
+ * ลำดับ: UTF-8 แบบเข้ม (ไบต์ผิดรูป = ไม่ใช่ UTF-8) → Windows-874 → ถ้ายังมีตัวแทนที่หรืออักขระ
+ * ควบคุม C1 แปลว่าไม่ใช่ทั้งสองแบบ ปฏิเสธพร้อมวิธีบันทึกใหม่ ไม่เดาต่อ
+ */
+function decodeCsv(buffer) {
+  const text = decodeCsvBytes(buffer);
+  // ตัวแทนที่ (U+FFFD) หรืออักขระควบคุม C1 = ถอดรหัสผิด หรือไฟล์เพี้ยนมาก่อนแล้วถูกบันทึกทับเป็น UTF-8
+  if (text.includes(String.fromCharCode(0xfffd)) || /[\u0080-\u009F]/.test(text)) {
+    throw badRequest("อ่านตัวอักษรในไฟล์ CSV นี้ไม่ได้ — บันทึกใหม่เป็น CSV UTF-8 หรือ .xlsx แล้วอัปโหลดอีกครั้ง", {
+      code: "unreadable_encoding",
+      detail: "เปิดไฟล์ต้นฉบับด้วย Excel แล้วเลือก Save As เป็น \"CSV UTF-8 (Comma delimited)\" หรือ Excel Workbook (.xlsx)",
+    });
+  }
+  return text;
+}
+
+function decodeCsvBytes(buffer) {
+  if (buffer[0] === 0xff && buffer[1] === 0xfe) return new TextDecoder("utf-16le").decode(buffer.subarray(2));
+  if (buffer[0] === 0xfe && buffer[1] === 0xff) return new TextDecoder("utf-16be").decode(buffer.subarray(2));
+
+  try {
+    // TextDecoder ตัด BOM ของ UTF-8 ให้เอง
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    // ไม่ใช่ UTF-8 — ลอง Windows-874 ต่อ
+  }
+
+  try {
+    return new TextDecoder("windows-874").decode(buffer);
+  } catch {
+    // Node ที่ไม่มี ICU เต็มไม่รู้จัก Windows-874 — คืนตัวแทนที่ให้ตกไปที่ข้อความปฏิเสธ
+    return String.fromCharCode(0xfffd);
+  }
+}
+
+/**
  * อ่านไฟล์ที่อัปโหลดมาเป็นแผ่นงานแรก — ไฟล์ที่ SheetJS แกะไม่ออกต้องเป็น 400 ไม่ใช่ 500
  *
  * ด่านนามสกุล/MIME ที่ routes.js กันไว้เชื่อได้แค่ชื่อไฟล์กับหัวที่ client ส่งมา ซึ่ง
@@ -48,8 +88,7 @@ function readWorkbook(filePath, options) {
     // CSV อ่านเป็นข้อความ UTF-8 เอง — SheetJS อ่าน CSV ที่ไม่มี BOM เป็น latin1 แล้วหัวคอลัมน์ไทย
     // อย่าง "สถานะ" กลายเป็นตัวอ่านไม่ออก ตัด BOM ออกถ้ามี
     if (options?.csv) {
-      const text = fs.readFileSync(filePath, "utf8").replace(/^﻿/, "");
-      return XLSX.read(text, { type: "string", raw: true });
+      return XLSX.read(decodeCsv(fs.readFileSync(filePath)), { type: "string", raw: true });
     }
     // คลายไม่เกินเพดานก่อนให้ SheetJS คลายทั้งก้อนเข้าหน่วยความจำ (#207, zip-limit.js)
     const buffer = fs.readFileSync(filePath);
