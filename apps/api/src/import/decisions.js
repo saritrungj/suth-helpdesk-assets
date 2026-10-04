@@ -5,6 +5,7 @@
 
 const { z } = require("zod");
 const { badRequest } = require("../shared/http-error");
+const { thaiMessage } = require("../shared/validation-messages");
 const { contractBody } = require("../contracts/contract-write");
 
 const nameDecision = z.union([
@@ -57,7 +58,7 @@ function validateDecisions(value) {
   if (!parsed.success) {
     throw badRequest("ข้อมูลการตัดสินใจไม่ถูกต้อง", {
       code: "invalid_decisions",
-      errors: parsed.error.issues.map((issue) => ({ field: issue.path.join("."), message: issue.message })),
+      errors: parsed.error.issues.map((issue) => ({ field: issue.path.join("."), message: thaiMessage(issue) })),
     });
   }
   return parsed.data;

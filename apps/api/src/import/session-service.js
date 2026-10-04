@@ -20,6 +20,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const db = require("../shared/db");
 const { ApiError, badRequest, conflict } = require("../shared/http-error");
+const { thaiMessage } = require("../shared/validation-messages");
 const { logger } = require("../shared/logger");
 const { fiscalYearOfMonth, getFiscalYearRange } = require("@suth/domain");
 const { today } = require("../devices/contract-history");
@@ -806,7 +807,7 @@ async function createContract(id, actor, body) {
   if (!parsed.success) {
     throw badRequest("ข้อมูลสัญญาไม่ถูกต้อง", {
       code: "validation_failed",
-      errors: parsed.error.issues.map((issue) => ({ field: issue.path.join("."), message: issue.message })),
+      errors: parsed.error.issues.map((issue) => ({ field: issue.path.join("."), message: thaiMessage(issue) })),
     });
   }
   const key = comparableContractNo(parsed.data.contract_no);
