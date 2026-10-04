@@ -29,6 +29,9 @@ const asyncHandler = require("../shared/async-handler");
 const cache = require("../shared/cache");
 const db = require("../shared/db");
 const { validate, idParam } = require("../shared/validate");
+
+// ลายนิ้วมือของผลตรวจที่ผู้เรียกเห็น — ไม่ส่ง = ไม่ตรวจ, null = งานที่ยังไม่เคยตรวจผ่าน (#227)
+const seenFingerprint = z.string().max(128).nullable().optional();
 const { removeUploadedFile } = require("./workbook");
 const { handleUpload } = require("./upload");
 const store = require("./session-store");
@@ -95,9 +98,9 @@ router.get(
 
 router.put(
   "/import-sessions/:id/decisions",
-  validate({ params: idParam, body: z.object({ decisions: z.record(z.string(), z.unknown()) }) }),
+  validate({ params: idParam, body: z.object({ decisions: z.record(z.string(), z.unknown()), fingerprint: seenFingerprint }) }),
   noStore(async (req, res) => {
-    res.json(await sessions.saveDecisions(req.params.id, req.user, req.body.decisions));
+    res.json(await sessions.saveDecisions(req.params.id, req.user, req.body.decisions, req.body.fingerprint));
   })
 );
 
@@ -144,9 +147,9 @@ router.post(
 
 router.post(
   "/import-sessions/:id/commit",
-  validate({ params: idParam }),
+  validate({ params: idParam, body: z.object({ fingerprint: seenFingerprint }).optional() }),
   noStore(async (req, res) => {
-    res.json(await sessions.commitSession(req.params.id, req.user));
+    res.json(await sessions.commitSession(req.params.id, req.user, req.body?.fingerprint));
   })
 );
 

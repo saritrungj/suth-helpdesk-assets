@@ -49,7 +49,7 @@ function validationFor(decisions, { contractCreated }) {
         brand: [{ id: 1, name: "OKI" }],
         building: [{ id: 1, name: "อาคารผู้ป่วยนอก" }],
         division: [{ id: 1, name: "ฝ่ายการพยาบาล" }],
-        meter_categories: [{ id: 2, code: "a4-laser-bw", name: "A4 เลเซอร์ ขาวดำ" }],
+        meter_categories: [{ id: 2, code: "a4-laser-bw", name: "A4 เลเซอร์ ขาวดำ" }, { id: 3, code: "a3-bw", name: "A3 ขาวดำ" }],
       },
     },
     readings: decided
@@ -84,6 +84,23 @@ export async function importSessionFixture(page) {
     contractBodies: [],
     commits: 0,
     uploaded: false,
+    // ลายนิ้วมือของผลตรวจ — เปลี่ยนทุกครั้งที่งานถูกแก้ (#227)
+    revision: 1,
+    seen: [],
+    /** จำลองอีกหน้าหรืออีกคนแก้การตัดสินใจของงานนี้ */
+    changeElsewhere(decisions) {
+      state.decisions = decisions;
+      state.revision += 1;
+    },
+  };
+  const fingerprint = () => `fp-${state.revision}`;
+  /** หน้าที่ส่งลายนิ้วมือเก่ามาได้ 409 เหมือน API จริง — คืน true เมื่อตอบไปแล้ว */
+  const rejectStale = (route) => {
+    const seen = route.request().postDataJSON()?.fingerprint;
+    state.seen.push(seen);
+    if (seen === undefined || seen === fingerprint()) return false;
+    route.fulfill({ status: 409, json: { title: "งานนำเข้านี้ถูกแก้จากหน้าอื่นหรือผู้ใช้อื่นแล้ว — โหลดผลล่าสุดให้แล้ว ตรวจอีกครั้งก่อนทำต่อ", status: 409, code: "import_session_changed" } });
+    return true;
   };
   const detail = () => {
     const validation = validationFor(state.decisions, state);
@@ -99,6 +116,7 @@ export async function importSessionFixture(page) {
       completed_at: state.status === "completed" ? "2026-09-23T07:10:00.000Z" : null,
       decisions: state.decisions,
       validation,
+      fingerprint: fingerprint(),
       can_commit: state.status === "ready",
       result: state.status === "completed" ? { devices_created: 2, devices_filled: 0, readings_new: 2, readings_overwritten: 0, months: ["2026-08"] } : null,
       error: null,
@@ -127,6 +145,8 @@ export async function importSessionFixture(page) {
     }
     if (path === "41" && method === "GET") return json(detail());
     if (path === "41/decisions" && method === "PUT") {
+      if (rejectStale(route)) return undefined;
+      state.revision += 1;
       state.decisions = route.request().postDataJSON().decisions;
       state.puts.push(state.decisions);
       return json(detail());
@@ -134,10 +154,12 @@ export async function importSessionFixture(page) {
     if (path === "41/contracts" && method === "POST") {
       state.contractBodies.push(route.request().postDataJSON());
       state.contractCreated = true;
+      state.revision += 1;
       return json(detail());
     }
     if (path === "41/validate" && method === "POST") return json(detail());
     if (path === "41/commit" && method === "POST") {
+      if (rejectStale(route)) return undefined;
       state.commits += 1;
       state.status = "completed";
       return json(detail());

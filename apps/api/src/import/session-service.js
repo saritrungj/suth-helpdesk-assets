@@ -644,6 +644,8 @@ function present(session, extra = {}) {
     completed_at: session.completed_at,
     decisions: session.decisions,
     validation: session.validation,
+    // ลายนิ้วมือของผลตรวจชุดนี้ — หน้าเว็บส่งกลับมากับการแก้การตัดสินใจและการยืนยัน (#227)
+    fingerprint: session.fingerprint ?? null,
     can_commit: session.status === "ready" && Boolean(session.validation?.can_commit),
     result: session.result,
     error: session.error,
@@ -731,15 +733,39 @@ async function assertOpenForChanges(session) {
   }
 }
 
+/**
+ * ผู้เรียกกำลังทำงานกับผลตรวจชุดล่าสุดหรือไม่ — กันหน้าที่ค้างเก่าเขียนทับหรือยืนยันสิ่งที่ไม่ได้เห็น
+ *
+ * ลายนิ้วมือในฐานเปลี่ยนทุกครั้งที่มีคนเปลี่ยนการตัดสินใจหรือแผน การเทียบตอน commit กับค่าในฐาน
+ * อย่างเดียวจึงจับไม่ได้ว่า "คนที่กด" ยังดูสรุปชุดเก่าอยู่ (#227) หน้าเว็บส่งค่าที่ตัวเองแสดงมาด้วย
+ * ผู้เรียกที่ไม่ส่ง (สคริปต์ที่ทำงานคนเดียว) ไม่ถูกตรวจ
+ *
+ * @param {{ fingerprint?: string|null }} session
+ * @param {string|null|undefined} seen ลายนิ้วมือที่ผู้เรียกเห็น — undefined = ไม่ได้ส่งมา
+ */
+function assertSeenLatest(session, seen) {
+  if (seen === undefined) return;
+  if ((seen ?? null) === (session.fingerprint ?? null)) return;
+  throw sessionChanged();
+}
+
+function sessionChanged() {
+  return conflict("งานนำเข้านี้ถูกแก้จากหน้าอื่นหรือผู้ใช้อื่นแล้ว — โหลดผลล่าสุดให้แล้ว ตรวจอีกครั้งก่อนทำต่อ", {
+    code: "import_session_changed",
+  });
+}
+
 /** เก็บการตัดสินใจชุดใหม่ทั้งชุด แล้วตรวจใหม่ — ประวัติเก็บเฉพาะสิ่งที่เปลี่ยน */
-async function saveDecisions(id, actor, rawDecisions) {
+async function saveDecisions(id, actor, rawDecisions, seen) {
   const session = await store.getSession(id);
   await assertOpenForChanges(session);
+  assertSeenLatest(session, seen);
   // แผนสัญญา/ปีงบเปลี่ยนได้เฉพาะทาง endpoint ของมัน — หน้าเว็บส่งชื่อ หมวด และการยอมรับมาทั้งชุด ห้ามล้างแผนทิ้ง
   const { planned: _ignored, ...incoming } = rawDecisions ?? {};
   const decisions = validateDecisions({ ...incoming, ...(session.decisions?.planned ? { planned: session.decisions.planned } : {}) });
   const changes = diffDecisions(session.decisions ?? {}, decisions);
-  await store.saveOutcome(db, id, actorId(actor), { decisions });
+  // เขียนพร้อมเงื่อนไขในคำสั่งเดียว — การเทียบข้างบนอย่างเดียวมีช่องให้คำขออื่นแทรกระหว่างอ่านกับเขียน
+  if (!(await store.saveDecisions(db, id, actorId(actor), decisions, seen))) throw sessionChanged();
   if (changes.length) await store.addEvent(db, id, "decisions_changed", actorId(actor), { changes: changes.slice(0, 200) });
   return validateSession(id, actor, "decisions");
 }
@@ -845,12 +871,17 @@ function oneAtATime(work) {
 /**
  * บันทึกจริง — วางแผนซ้ำใน transaction เดียวกับการเขียน ลายนิ้วมือต้องตรงกับผลตรวจที่ผู้ใช้เห็น
  */
-async function commitSession(id, actor) {
+async function commitSession(id, actor, seen) {
   const session = await store.getSession(id);
+  // ก่อนตรวจสถานะ: หน้าที่ค้างเก่าควรได้คำตอบว่า "งานถูกแก้แล้ว" ไม่ใช่ "ยังบันทึกไม่ได้"
+  assertSeenLatest(session, seen);
   if (session.status !== "ready" || !session.validation?.can_commit) {
     throw conflict("ยังบันทึกไม่ได้ — ตรวจไฟล์ให้ผ่านทุกข้อก่อน", { code: "import_not_ready" });
   }
-  await store.transition(db, id, ["ready"], "processing", actorId(actor), "งานนี้กำลังบันทึกอยู่ หรือถูกเปลี่ยนไปแล้ว — รีเฟรชแล้วดูสถานะล่าสุด");
+  // เงื่อนไขลายนิ้วมือ: commit ใช้การตัดสินใจจาก session ที่อ่านมาข้างบน ถ้ามีคนแก้แทรกเข้ามาต้องไม่ไปต่อ
+  await store.transition(db, id, ["ready"], "processing", actorId(actor), "งานนี้กำลังบันทึกอยู่ หรือถูกเปลี่ยนไปแล้ว — รีเฟรชแล้วดูสถานะล่าสุด", {
+    fingerprint: session.fingerprint,
+  });
   await store.addEvent(db, id, "commit_started", actorId(actor), { fingerprint: session.fingerprint });
 
   return oneAtATime(async () => {
@@ -1088,6 +1119,7 @@ module.exports = {
   inspectFile,
   analyse,
   diffDecisions,
+  assertSeenLatest,
   createFromUpload,
   validateSession,
   saveDecisions,

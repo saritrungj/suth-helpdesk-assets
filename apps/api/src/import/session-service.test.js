@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { diffDecisions } = require("./session-service");
+const { diffDecisions, assertSeenLatest } = require("./session-service");
 const { validateDecisions } = require("./decisions");
 
 test("ประวัติเก็บเฉพาะการตัดสินใจที่เปลี่ยน พร้อมค่าก่อนและหลัง", () => {
@@ -21,4 +21,18 @@ test("ประวัติเก็บเฉพาะการตัดสิ�
 test("ยอมรับความต่างของสัญญาต้องมีเหตุผล", () => {
   assert.throws(() => validateDecisions({ acknowledged: { "contract:X:rental": " " } }), (err) => err.code === "invalid_decisions");
   assert.equal(validateDecisions({ acknowledged: { "contract:X:rental": "ตามบันทึกแก้ไขสัญญา" } }).acknowledged["contract:X:rental"], "ตามบันทึกแก้ไขสัญญา");
+});
+
+// หน้าที่ค้างเก่าต้องไม่เขียนทับหรือยืนยันสิ่งที่ไม่ได้เห็น (#227)
+test("ลายนิ้วมือที่ผู้เรียกเห็นต้องตรงกับผลตรวจล่าสุด ไม่ส่งมา = ไม่ตรวจ", () => {
+  const session = { fingerprint: "aaa" };
+  const changed = (err) => err.status === 409 && err.code === "import_session_changed";
+
+  assert.doesNotThrow(() => assertSeenLatest(session, "aaa"));
+  assert.doesNotThrow(() => assertSeenLatest(session, undefined));
+  assert.throws(() => assertSeenLatest(session, "bbb"), changed);
+  assert.throws(() => assertSeenLatest(session, null), changed);
+  // งานที่ยังไม่เคยตรวจผ่านไม่มีลายนิ้วมือ — หน้าเว็บส่ง null
+  assert.doesNotThrow(() => assertSeenLatest({ fingerprint: null }, null));
+  assert.throws(() => assertSeenLatest({}, "aaa"), changed);
 });
