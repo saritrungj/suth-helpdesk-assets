@@ -27,14 +27,14 @@ import { t } from "../lib/locale";
  *
  * 4. **มีของแก้ค้างแล้วออกจากหน้า ต้องเตือน** ทั้งการเปลี่ยนหน้าในแอปและการปิดแท็บ
  */
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { onBeforeRouteLeave } from "vue-router";
 import { Save, Undo2, TriangleAlert } from "lucide-vue-next";
 import { MAX_PAGES_PER_MONTH } from "@suth/domain";
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateAfterWrite } from "../api/invalidate";
-import { errorMessage } from "../lib/api-error";
+import { errorItems, errorMessage } from "../lib/api-error";
 import { askConfirm } from "../store/confirmDialog";
 import { toastError, toastSuccess } from "../store/toast";
 import { formatCount } from "../lib/format";
@@ -88,6 +88,9 @@ const saving = ref(false);
  */
 const inFlight = ref(new Map());
 const saveError = ref("");
+/** รายการที่ API ปฏิเสธพร้อมเหตุผล — เครื่องไหน เดือนไหน (#230) */
+const saveProblems = ref([]);
+const PROBLEMS_SHOWN = 5;
 const saveBar = ref(null);
 // Native fullscreen แสดงเฉพาะ element ที่ขยายกับลูกของมัน แถบบันทึกจึงต้องย้าย
 // เข้าไปเป็นลูกของตารางชั่วคราว ไม่เช่นนั้นผู้ใช้แก้ตัวเลขได้แต่กดบันทึกไม่ได้
@@ -142,6 +145,8 @@ function displayValue(deviceId) {
  */
 function onInput(deviceId, raw) {
   const text = String(raw ?? "").trim();
+  // ผู้ใช้กำลังแก้ช่องที่ถูกปฏิเสธ — เลิกชี้ช่องนั้น ผลจริงรู้ตอนบันทึกรอบถัดไป
+  clearProblem(deviceId);
 
   if (text === "") {
     if (baselineValue(deviceId) === null) draft.value.delete(deviceId);
@@ -158,6 +163,24 @@ function onInput(deviceId, raw) {
   else draft.value.set(deviceId, rounded);
 
   draft.value = new Map(draft.value);
+}
+
+/** เหตุผลที่ยอดของเครื่องนี้ในเดือนที่แสดงถูกปฏิเสธ — "" = ไม่มีปัญหา */
+function problemFor(deviceId) {
+  if (!saveProblems.value.length) return "";
+  const serial = props.devices.find((device) => device.id === deviceId)?.serial_number;
+  if (!serial) return "";
+  return saveProblems.value.find((item) => item.serial_number === serial && item.month === props.month)?.reason ?? "";
+}
+
+function describeProblem(item) {
+  return `${item.serial_number} ${formatMonth(item.month)} — ${item.reason}`;
+}
+
+function clearProblem(deviceId) {
+  if (!saveProblems.value.length) return;
+  const serial = props.devices.find((device) => device.id === deviceId)?.serial_number;
+  if (serial) saveProblems.value = saveProblems.value.filter((item) => item.serial_number !== serial);
 }
 
 const dirtyCount = computed(() => draft.value.size);
@@ -188,6 +211,7 @@ const invalidCount = computed(() => {
 function discard() {
   draft.value = new Map();
   saveError.value = "";
+  saveProblems.value = [];
 }
 
 /**
@@ -225,6 +249,14 @@ watch(
   }
 );
 
+const saveAlert = ref(null);
+
+/** ตารางยาวกว่าจอเสมอ — พากล่องแจ้งขึ้นมาให้เห็นแทนการแจ้งซ้ำอีกที่ */
+async function showSaveError() {
+  await nextTick();
+  saveAlert.value?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+}
+
 async function save() {
   if (!isDirty.value || saving.value) return;
 
@@ -245,6 +277,7 @@ async function save() {
 
   saving.value = true;
   saveError.value = "";
+  saveProblems.value = [];
 
   // ถ่ายภาพสิ่งที่กำลังจะส่ง ณ วินาทีนี้ไว้ก่อน — ผู้ใช้ยังพิมพ์ต่อได้ระหว่างรอ
   const sending = new Map(draft.value);
@@ -285,7 +318,11 @@ async function save() {
     // ⚠️ ห้ามล้าง draft เมื่อบันทึกไม่สำเร็จ — ผู้ใช้เพิ่งพิมพ์ตัวเลขไปหลายสิบช่อง
     // การล้างทิ้งเพราะเน็ตสะดุดคือการทำให้เขาต้องทำงานใหม่ทั้งหมด
     saveError.value = errorMessage(err, t("บันทึกไม่สำเร็จ กรุณาลองใหม่"));
-    toastError(saveError.value);
+    saveProblems.value = errorItems(err);
+    // แจ้งที่เดียว: กล่องเหนือตารางมีรายละเอียดและปุ่มลองใหม่ ส่วนตอนขยายตารางเต็มจอกล่องนั้น
+    // อยู่นอกส่วนที่แสดง จึงใช้ toast แทน
+    if (saveBarTarget.value === "body") showSaveError();
+    else toastError([saveError.value, ...saveProblems.value.slice(0, 1).map(describeProblem)].join(" · "));
     // มีคนแก้บางช่องไปแล้ว — โหลดยอดล่าสุดมาให้เห็นก่อน ค่าที่กรอกไว้ยังค้างอยู่ กดบันทึกซ้ำได้หลังตรวจ
     if (err?.response?.data?.code === "reading_changed") emit("stale");
 
@@ -394,12 +431,22 @@ defineExpose({ isDirty, dirtyCount, discard });
 
 <template>
   <div @focusin="keepFocusVisible">
-    <UiAlert v-if="saveError" tone="danger" class="mb-3">
-      {{ saveError }}
-      <template #actions>
-        <UiButton size="sm" variant="secondary" :loading="saving" @click="save"> {{ t("ลองบันทึกใหม่") }} </UiButton>
-      </template>
-    </UiAlert>
+    <div v-if="saveError" ref="saveAlert" class="mb-3 scroll-mt-4">
+      <UiAlert tone="danger">
+        {{ saveError }}
+        <ul v-if="saveProblems.length" class="mt-2 space-y-0.5">
+          <li v-for="item in saveProblems.slice(0, PROBLEMS_SHOWN)" :key="`${item.serial_number}|${item.month}`">
+            <span class="font-mono">{{ item.serial_number }}</span> · {{ formatMonth(item.month) }} — {{ item.reason }}
+          </li>
+          <li v-if="saveProblems.length > PROBLEMS_SHOWN">
+            {{ t("และอีก {0} รายการ", [saveProblems.length - PROBLEMS_SHOWN]) }}
+          </li>
+        </ul>
+        <template #actions>
+          <UiButton size="sm" variant="secondary" :loading="saving" @click="save"> {{ t("ลองบันทึกใหม่") }} </UiButton>
+        </template>
+      </UiAlert>
+    </div>
 
     <!-- ตัวอย่างก่อนวาง -->
     <div
@@ -450,7 +497,7 @@ defineExpose({ isDirty, dirtyCount, discard });
       </div>
     </div>
 
-    <slot :display-value="displayValue" :on-input="onInput" :on-paste="onPaste" :draft="draft" />
+    <slot :display-value="displayValue" :on-input="onInput" :on-paste="onPaste" :draft="draft" :problem-for="problemFor" />
 
     <!--
       แถบบันทึกที่ปักอยู่ก้นจอ — โผล่เมื่อมีของแก้ค้างเท่านั้น

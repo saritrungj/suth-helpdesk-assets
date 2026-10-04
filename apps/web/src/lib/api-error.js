@@ -84,3 +84,26 @@ export function fieldErrors(error) {
 
   return Object.fromEntries(errors.map((entry) => [entry.field, locale.value === "en" ? t("กรอกข้อมูลที่ถูกต้องในช่องนี้") : entry.message]));
 }
+
+/**
+ * รายการที่ทำให้ทั้งชุดถูกปฏิเสธ — เครื่องไหน เดือนไหน เพราะอะไร
+ *
+ * ต่างจาก fieldErrors: ไม่ได้ผูกกับช่องของฟอร์ม แต่ผูกกับแถวข้อมูลที่ส่งไป เช่นยอดพิมพ์
+ * ที่ยังไม่มีราคา (`unpriced_reading`) ถ้าแสดงแค่ title ผู้ใช้ต้องไล่หาเองจากทั้งตาราง (#230)
+ *
+ * @param {unknown} error
+ * @returns {Array<{ serial_number: string, month: string, reason: string }>}
+ */
+export function errorItems(error) {
+  const errors = error?.response?.data?.errors;
+  if (!Array.isArray(errors)) return [];
+
+  return errors
+    .filter((entry) => entry && !entry.field && entry.serial_number)
+    .map((entry) => ({
+      serial_number: String(entry.serial_number),
+      month: String(entry.month ?? ""),
+      // เหตุผลจาก API เป็นภาษาไทยและมีเลขสัญญาปนอยู่ จึงแปลทั้งประโยคไม่ได้
+      reason: locale.value === "en" ? t("ยังไม่มีราคาต่อหน้าของเดือนนี้") : String(entry.reason ?? ""),
+    }));
+}

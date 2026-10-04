@@ -43,7 +43,7 @@ import {
 import { toastError, toastSuccess } from "../store/toast";
 import { createDraftGuard } from "../lib/draft-guard";
 import { formatCount, percentOf } from "../lib/format";
-import { errorMessage } from "../lib/api-error";
+import { errorItems, errorMessage } from "../lib/api-error";
 import { applyPaste, describePaste, parseNumbers } from "../lib/paste-numbers";
 import { useCoverage, useMonthPages } from "../api/queries";
 import MonthEntryGrid from "../components/MonthEntryGrid.vue";
@@ -714,6 +714,19 @@ const dialogDevice = ref(null);
 const dialogLoading = ref(false);
 const dialogSaving = ref(false);
 const dialogError = ref("");
+/**
+ * ชื่อช่องกรอกสำหรับโปรแกรมอ่านหน้าจอ — ต่อเหตุผลที่ถูกปฏิเสธไว้ในชื่อ
+ *
+ * ไม่ใช้ aria-describedby เพราะตารางวาดเซลล์เดียวกันสองชุด (ตารางกับการ์ดจอแคบ)
+ * id ที่อ้างถึงจึงซ้ำกันในหน้า
+ */
+function entryLabel(row, problem) {
+  const label = t("จำนวนพิมพ์ของ {0}", [row.serial_number]);
+  return problem ? `${label} — ${problem}` : label;
+}
+
+/** เดือนที่ API ปฏิเสธพร้อมเหตุผล — บอกให้รู้ว่าต้องแก้เดือนไหน (#230) */
+const dialogProblems = ref([]);
 const monthRows = ref([]);
 const annualSnapshot = ref([]);
 const annualReady = ref(false);
@@ -758,6 +771,7 @@ async function openDialog(device) {
   dialogDevice.value = device;
   annualReady.value = false;
   dialogError.value = "";
+  dialogProblems.value = [];
   beforePaste.value = null;
   // ต่อท้ายด้วยปีเสมอ เพราะปีงบไทยคร่อมสองปีปฏิทิน ชื่อเดือนเปล่าๆ จึงกำกวม
   monthRows.value = fyMonths.value.map((month) => ({
@@ -865,6 +879,7 @@ function onMonthKeydown(event, index) {
 async function save() {
   if (dialogSaving.value || !annualReady.value) return;
   dialogError.value = "";
+  dialogProblems.value = [];
 
   const invalid = monthRows.value.find((row) => isFilled(row.pages) && Number(row.pages) < 0);
   if (invalid) {
@@ -893,6 +908,7 @@ async function save() {
   } catch (err) {
     console.error("Save print transactions error:", err);
     dialogError.value = errorMessage(err, t("บันทึกไม่สำเร็จ กรุณาลองใหม่"));
+    dialogProblems.value = errorItems(err);
   } finally {
     dialogSaving.value = false;
   }
@@ -1120,7 +1136,7 @@ onUnmounted(unregisterFiscalYearGuard);
       @update:month="filters.month = $event"
       @update:dirty="onDirtyChange"
     >
-      <template #default="{ displayValue, onInput, onPaste, draft }">
+      <template #default="{ displayValue, onInput, onPaste, draft, problemFor }">
         <UiDataTable
           :rows="filteredDevices"
           :columns="entryColumns"
@@ -1150,15 +1166,17 @@ onUnmounted(unregisterFiscalYearGuard);
           </template>
 
           <template #cell-entry="{ row, index, rows }">
-            <span v-if="draft.has(row.id)" class="block text-2xs text-brand-ink">{{ t("แก้ไขแล้ว") }}</span>
+            <span v-if="problemFor(row.id)" class="block text-2xs text-danger-ink">{{ problemFor(row.id) }}</span>
+            <span v-else-if="draft.has(row.id)" class="block text-2xs text-brand-ink">{{ t("แก้ไขแล้ว") }}</span>
             <UiInput
               :model-value="displayValue(row.id)"
               type="text"
               inputmode="numeric"
               class="w-28 text-right"
               :disabled="!canEdit || !monthPagesReady || loading || !!pageError"
-              :aria-label="t(&quot;จำนวนพิมพ์ของ {0}&quot;, [row.serial_number])"
-              :class="draft.has(row.id) ? 'ring-1 ring-brand-line' : ''"
+              :aria-label="entryLabel(row, problemFor(row.id))"
+              :class="problemFor(row.id) ? 'ring-1 ring-danger-line' : draft.has(row.id) ? 'ring-1 ring-brand-line' : ''"
+              :aria-invalid="problemFor(row.id) ? 'true' : undefined"
               @update:model-value="(v) => onInput(row.id, v)"
               @paste="(e) => onPaste(e, index, rows)"
             />
@@ -1292,6 +1310,9 @@ onUnmounted(unregisterFiscalYearGuard);
 
         <UiAlert v-if="dialogError" tone="danger">
           {{ dialogError }}
+          <ul v-if="dialogProblems.length" class="mt-2 space-y-0.5">
+            <li v-for="item in dialogProblems" :key="item.month">{{ formatMonth(item.month) }} — {{ item.reason }}</li>
+          </ul>
           <template v-if="!annualReady" #actions>
             <UiButton variant="secondary" @click="openDialog(dialogDevice)">{{ t("ลองใหม่") }}</UiButton>
           </template>
