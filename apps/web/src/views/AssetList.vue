@@ -24,7 +24,7 @@ import { errorMessage } from "../lib/api-error";
  * ชั้นที่ไม่มีอยู่ในอาคารนั้นแล้วได้ตารางว่างโดยไม่รู้สาเหตุ
  */
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { CirclePlus, FileSpreadsheet, MoreHorizontal, Move, Pencil, Search, Trash2 } from "lucide-vue-next";
 import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -226,6 +226,7 @@ const filteredAssets = computed(() =>
    ซึ่งไม่ใช่สิ่งที่คนคาดหวังจากปุ่มนั้น
    -------------------------------------------------------------------------- */
 const route = useRoute();
+const router = useRouter();
 const routeBillingFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(route.query.billing_from || ""))
   ? String(route.query.billing_from)
   : "";
@@ -414,6 +415,19 @@ const initialBillingFrom = computed(() =>
     ? routeBillingFrom
     : ""
 );
+/**
+ * แผงแก้ไข/ย้ายที่เปิดมาจากหน้ารายละเอียดเครื่อง (`?from=detail`) ปิดแล้วกลับไปหน้านั้น
+ *
+ * เดิมปิดแล้วค้างอยู่ที่ทะเบียน ผู้ใช้ที่กำลังดูเครื่องหนึ่งอยู่ต้องค้นหาเครื่องนั้นใหม่ (#239)
+ * ใช้ได้ครั้งเดียว — เปิดแผงของเครื่องอื่นจากทะเบียนต่อหลังจากนั้นไม่พากลับ
+ */
+let returnToDetailId = route.query.from === "detail" ? queryId("edit") ?? queryId("move") : null;
+watch([formOpen, moveOpen], ([form, move], [hadForm, hadMove]) => {
+  if (!returnToDetailId || form || move || !(hadForm || hadMove)) return;
+  const id = returnToDetailId;
+  returnToDetailId = null;
+  router.push(`/assets/${id}`);
+});
 watch(formOpen, (open, wasOpen) => {
   // คำแนะนำนี้เป็นของงานค้างที่ลิงก์มาเพียงครั้งเดียว ไม่ควรติดไปกับการเปิดแก้
   // เครื่องเดิมหรือเครื่องอื่นภายหลังจากปิด drawer แล้ว

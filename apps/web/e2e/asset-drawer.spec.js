@@ -186,7 +186,7 @@ test("move shows origin, destination and server date; failure retains location f
   await page.getByRole("menuitem", { name: "ย้ายเครื่อง", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "ย้ายเครื่อง", exact: true });
   await expect(drawer.getByText("ต้นทาง", { exact: true })).toBeVisible();
-  await expect(drawer.getByText("วันที่บันทึกตามเซิร์ฟเวอร์", { exact: false })).toBeVisible();
+  await expect(drawer.getByText("การย้ายมีผลตั้งแต่วันนี้", { exact: false })).toBeVisible();
   await drawer.getByRole("textbox", { name: "ตำแหน่งที่ตั้ง", exact: true }).fill("New counter");
   await drawer.getByRole("button", { name: "ย้ายเครื่อง", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "ย้ายเครื่อง", exact: true }).click();
@@ -200,6 +200,45 @@ test("move shows origin, destination and server date; failure retains location f
   await expect(drawer).not.toBeVisible();
   await expect(trigger).toBeFocused();
   expect(state.writes[1].body).toEqual({ building_id: 1, floor_id: 1, location: "New counter", division_id: 1, department_id: 1 });
+});
+
+// ย้ายไปที่เดิมเคยได้ "ย้ายเครื่องเรียบร้อย" ทั้งที่ไม่มีอะไรเปลี่ยน และย้ายโดยไม่เลือกแผนกได้โดยไม่มีคำเตือน (#239)
+test("move is unavailable until the destination differs; no department is confirmed with a warning", async ({ page }) => {
+  const state = await assetFixture(page);
+  await page.goto("/assets?move=1");
+  const drawer = page.getByRole("dialog", { name: "ย้ายเครื่อง", exact: true });
+  const move = drawer.getByRole("button", { name: "ย้ายเครื่อง", exact: true });
+  const place = drawer.getByRole("textbox", { name: "ตำแหน่งที่ตั้ง", exact: true });
+  const original = await place.inputValue();
+
+  await expect(move).toBeDisabled();
+  await expect(drawer.getByText("ปลายทางยังเหมือนต้นทาง", { exact: false })).toBeVisible();
+  await place.fill("New counter");
+  await expect(move).toBeEnabled();
+  await place.fill(original);
+  await expect(move).toBeDisabled();
+
+  await drawer.getByRole("button", { name: /^แผนก/ }).click();
+  await page.getByRole("option", { name: "ยังไม่ระบุ", exact: true }).click();
+  await expect(drawer.getByText("ยังไม่ได้เลือกแผนก", { exact: false })).toBeVisible();
+  await move.click();
+  await expect(page.getByRole("alertdialog")).toContainText("ค่าใช้จ่ายนับจากวันนี้จะอยู่ที่ฝ่ายนี้โดยไม่มีแผนกรับ");
+  await page.getByRole("alertdialog").getByRole("button", { name: "ย้ายเครื่อง", exact: true }).click();
+  await expect(drawer.getByText("ย้ายเรียบร้อย — ประวัติด้านล่างอัปเดตแล้ว")).toBeVisible();
+  // แจ้งที่เดียว และย้ายซ้ำไม่ได้จนกว่าจะเปลี่ยนปลายทางอีกครั้ง
+  await expect(page.getByText("ย้ายเครื่องเรียบร้อย", { exact: true })).toHaveCount(0);
+  await expect(move).toBeDisabled();
+  expect(state.writes).toHaveLength(1);
+  expect(state.writes[0].body.department_id).toBeNull();
+});
+
+test("move opened from the device page returns there when the panel closes", async ({ page }) => {
+  await assetFixture(page);
+  await page.goto("/assets?move=1&from=detail");
+  const drawer = page.getByRole("dialog", { name: "ย้ายเครื่อง", exact: true });
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole("button", { name: "ปิด", exact: true }).click();
+  await expect(page).toHaveURL(/\/assets\/1(\?|$)/);
 });
 
 test("move filtered out by search restores focus when the drawer closes", async ({ page }) => {

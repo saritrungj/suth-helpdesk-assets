@@ -30,7 +30,7 @@ import api from "../services/api";
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateAfterWrite } from "../api/invalidate";
 import { askConfirm } from "../store/confirmDialog";
-import { toastError, toastSuccess } from "../store/toast";
+
 import { formatBahtValue, formatCount } from "../lib/format";
 import {
   UiAlert,
@@ -249,12 +249,22 @@ watch(
   { immediate: true }
 );
 
+/** เลือกฝ่ายแล้วแต่ไม่เลือกแผนก — ย้ายได้ แต่ต้องรู้ก่อนว่าค่าใช้จ่ายจะไม่มีแผนกรับ (#239) */
+const missingDepartment = computed(() => Boolean(form.value.division_id) && !form.value.department_id);
+
+// แก้ปลายทางต่อหลังย้ายสำเร็จ = เริ่มการย้ายครั้งใหม่ ข้อความสำเร็จของครั้งก่อนต้องไม่ค้าง
+watch(dirty, (changed) => {
+  if (changed) successMessage.value = "";
+});
+
 async function submit() {
-  if (pending.value || !ready.value) return;
+  // ปลายทางเท่าต้นทาง = ไม่มีอะไรให้ย้าย — ปุ่มถูกปิดอยู่แล้ว กันทาง Enter ในฟอร์มด้วย
+  if (pending.value || !ready.value || !dirty.value) return;
   errors.value = {};
   confirming.value = true;
   const confirmed = await askConfirm(
-    t("ย้ายจาก\n{0}\n\nไปที่\n{1}\n\nจำนวนพิมพ์ที่บันทึกไว้แล้วยังเป็นของหน่วยงานเดิม ระบบจะเปิดช่วงใหม่นับจากวันนี้", [origin.value, destination.value]),
+    t("ย้ายจาก\n{0}\n\nไปที่\n{1}\n\nจำนวนพิมพ์ที่บันทึกไว้แล้วยังเป็นของหน่วยงานเดิม ระบบจะเปิดช่วงใหม่นับจากวันนี้", [origin.value, destination.value]) +
+      (missingDepartment.value ? `\n\n${t("ยังไม่ได้เลือกแผนก — ค่าใช้จ่ายนับจากวันนี้จะอยู่ที่ฝ่ายนี้โดยไม่มีแผนกรับ")}` : ""),
     { title: t("ยืนยันการย้ายเครื่อง"), confirmText: t("ย้ายเครื่อง"), danger: false }
   );
   confirming.value = false;
@@ -283,14 +293,13 @@ async function submit() {
     // ไม่ปิดหน้าต่างทันที — โหลดยอดและประวัติใหม่ให้ผู้ใช้เห็นกับตาว่าช่วงเดิมถูก
     // ปิดและบันทึกไว้จริง ของเดิมปิดทันทีจนไม่มีใครรู้ว่าประวัติถูกเขียนหรือไม่
     await Promise.all([loadCurrentUsage(props.assetId), loadHistory(props.assetId)]);
+    // แจ้งที่เดียว: แผงยังเปิดอยู่และข้อความนี้อยู่บนสุดของแผง ไม่ต้องมี toast ซ้ำ
     successMessage.value = historyError.value ? t("ย้ายเครื่องเรียบร้อย") : t("ย้ายเรียบร้อย — ประวัติด้านล่างอัปเดตแล้ว");
-    toastSuccess(t("ย้ายเครื่องเรียบร้อย"));
   } catch (err) {
     console.error("Move device error:", err);
     errors.value = fieldErrors(err);
     const message = errorMessage(err, t("ย้ายเครื่องไม่สำเร็จ"));
     formError.value = message;
-    toastError(message);
   } finally {
     saving.value = false;
   }
@@ -373,7 +382,7 @@ async function submit() {
           <UiCombobox v-model="form.division_id" :options="divisionOptions" :placeholder="t(&quot;เลือกฝ่าย&quot;)" :any-label="t(&quot;ยังไม่ระบุ&quot;)" />
         </UiField>
 
-        <UiField :label="t(&quot;แผนก&quot;)" :error="errors.department_id" :hint="form.division_id ? t(&quot;แผนกนี้จะรับผิดชอบค่าใช้จ่ายนับจากวันย้าย&quot;) : t(&quot;เลือกฝ่ายก่อน&quot;)">
+        <UiField :label="t(&quot;แผนก&quot;)" :error="errors.department_id" :hint="!form.division_id ? t(&quot;เลือกฝ่ายก่อน&quot;) : missingDepartment ? t(&quot;ยังไม่ได้เลือกแผนก — ค่าใช้จ่ายนับจากวันนี้จะอยู่ที่ฝ่ายนี้โดยไม่มีแผนกรับ&quot;) : t(&quot;แผนกนี้จะรับผิดชอบค่าใช้จ่ายนับจากวันย้าย&quot;)">
           <UiCombobox
             v-model="form.department_id"
             :options="departmentOptions"
@@ -392,7 +401,8 @@ async function submit() {
         <ArrowRight :size="15" class="text-brand-ink shrink-0" aria-hidden="true" />
         <span class="font-medium text-brand-ink">{{ destination }}</span>
         <!-- วันที่มีผลเลือกไม่ได้ (API ใช้วันที่ของเซิร์ฟเวอร์) จึงเป็นบรรทัดบอกในแถบสรุป ไม่ใช่ช่องที่แก้ไม่ได้ -->
-        <p class="basis-full text-xs text-brand-ink">{{ t("มีผลวันที่บันทึกตามเซิร์ฟเวอร์ — เลือกวันย้อนหลังไม่ได้") }}</p>
+        <p class="basis-full text-xs text-brand-ink">{{ t("การย้ายมีผลตั้งแต่วันนี้ — เลือกวันย้อนหลังไม่ได้") }}</p>
+        <p v-if="!dirty" id="move-unchanged-hint" class="basis-full text-xs text-brand-ink">{{ t("ปลายทางยังเหมือนต้นทาง — เปลี่ยนอย่างน้อยหนึ่งช่องก่อนย้าย") }}</p>
       </div>
 
       <UiAlert v-if="formError" tone="danger">{{ formError }}</UiAlert>
@@ -442,7 +452,7 @@ async function submit() {
 
     <template #footer>
       <UiButton variant="secondary" :disabled="pending" @click="requestClose"> {{ t("ปิด") }} </UiButton>
-      <UiButton variant="primary" :loading="pending" :disabled="!ready" @click="submit"> {{ t("ย้ายเครื่อง") }} </UiButton>
+      <UiButton variant="primary" :loading="pending" :disabled="!ready || !dirty" :aria-describedby="ready && !dirty ? 'move-unchanged-hint' : undefined" @click="submit"> {{ t("ย้ายเครื่อง") }} </UiButton>
     </template>
   </UiDrawer>
 </template>
