@@ -80,13 +80,13 @@ const columns = [
   { key: "username", label: t("ผู้ทำ"), width: "8rem", value: (row) => row.username ?? t("ระบบ") },
   { key: "action", label: t("การกระทำ"), width: "6rem", value: (row) => auditActionOf(row.action).label },
   { key: "summary", label: t("รายละเอียด") },
-  { key: "change", label: t("ค่าเดิม → ค่าใหม่"), value: (row) => auditValueText(row.before, row.after), sortable: false },
+  { key: "change", label: t("ค่าเดิม → ค่าใหม่"), value: (row) => auditValueText(row.before, row.after, row.names), sortable: false },
 ];
 </script>
 
 <template>
   <div>
-    <UiPageHeader :title="t('ประวัติการแก้ไข')" :description="t('ใครแก้อะไร เมื่อไร จากค่าอะไรเป็นค่าอะไร — ยอดพิมพ์ เครื่อง สัญญา ข้อมูลอ้างอิง ผู้ใช้ และงานนำเข้าที่บันทึกแล้ว')">
+    <UiPageHeader :title="t('ประวัติการแก้ไข')" :description="t('ใครแก้อะไร เมื่อไร จากค่าอะไรเป็นค่าอะไร — ยอดพิมพ์ เครื่อง สัญญา ข้อมูลอ้างอิง ผู้ใช้ และงานนำเข้าที่บันทึกแล้ว ชื่อฝ่าย แผนก อาคาร และสัญญาที่แสดงเป็นชื่อปัจจุบันของรายการนั้น')">
       <template #badge>
         <UiBadge tone="neutral">{{ t("{0} รายการ", [formatCount(total)]) }}</UiBadge>
       </template>
@@ -130,7 +130,7 @@ const columns = [
         <UiBadge :tone="auditActionOf(row.action).tone" size="sm">{{ auditActionOf(row.action).label }}</UiBadge>
       </template>
       <template #cell-change="{ row }">
-        <span class="text-xs text-ink-soft whitespace-pre-line">{{ auditValueText(row.before, row.after) || "—" }}</span>
+        <span class="text-xs text-ink-soft whitespace-pre-line">{{ auditValueText(row.before, row.after, row.names) || "—" }}</span>
       </template>
     </UiDataTable>
 

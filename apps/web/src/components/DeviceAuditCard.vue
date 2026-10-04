@@ -55,7 +55,7 @@ defineExpose({ load });
         <p class="text-xs text-ink-mute">
           {{ formatDateTime(row.occurred_at) }} · {{ row.username ?? t("ระบบ") }}
         </p>
-        <p v-if="row.entity === 'device' && row.action === 'update'" class="text-xs text-ink-soft whitespace-pre-line">{{ auditValueText(row.before, row.after) }}</p>
+        <p v-if="row.entity === 'device' && row.action === 'update'" class="text-xs text-ink-soft whitespace-pre-line">{{ auditValueText(row.before, row.after, row.names) }}</p>
       </li>
     </ol>
   </UiCard>

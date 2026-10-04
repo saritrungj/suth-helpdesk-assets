@@ -19,6 +19,7 @@ const requireAdmin = require("../auth/require-admin");
 const { validate } = require("../shared/validate");
 const cache = require("../shared/cache");
 const { ENTITIES } = require("../shared/audit");
+const { attachNames } = require("./names");
 
 router.use(requireAuth, requireAdmin);
 
@@ -81,12 +82,13 @@ router.get(
       total: Number(total),
       page,
       per_page,
-      rows: rows.map(({ occurred_epoch, before_value, after_value, ...row }) => ({
+      // names: ชื่อปัจจุบันของรายการที่ค่าก่อน/หลังอ้างถึงด้วยรหัส (ฝ่าย แผนก อาคาร …) — #237
+      rows: await attachNames(db, rows.map(({ occurred_epoch, before_value, after_value, ...row }) => ({
         ...row,
         occurred_at: new Date(Number(occurred_epoch) * 1000).toISOString(),
         before: parse(before_value),
         after: parse(after_value),
-      })),
+      }))),
     });
   })
 );
