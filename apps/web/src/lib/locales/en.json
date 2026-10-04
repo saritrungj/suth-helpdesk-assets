@@ -191,7 +191,6 @@
   "แก้ไข{0}เรียบร้อย": "{0} updated",
   "เพิ่ม{0}เรียบร้อย": "{0} added",
   "บันทึก{0}ไม่สำเร็จ": "Unable to save {0}",
-  "“{0}” จะถูกลบออกจากระบบ และรายการที่อ้างถึงอยู่อาจแสดงผลไม่ครบ": "“{0}” will be deleted. Records that reference it may become incomplete.",
   "ลบ{0}นี้": "Delete this {0}",
   "ลบ{0}": "Delete {0}",
   "ลบ{0}เรียบร้อย": "{0} deleted",
@@ -444,11 +443,9 @@
   "ยี่ห้อ / รุ่น": "Brand / model",
   "ราคา/หน้า": "Price/page",
   "โหลดทะเบียนเครื่องพิมพ์ไม่สำเร็จ": "Unable to load the asset register",
-  "เครื่อง Serial “{0}” จะถูกลบออกจากทะเบียน จำนวนพิมพ์ที่บันทึกไว้จะไม่ถูกนับในรายงานอีก": "Device “{0}” will be removed. Its recorded usage will no longer be included in reports.",
   "ลบเครื่องนี้ออกจากทะเบียน": "Remove this device from the register",
   "ลบเครื่องนี้": "Delete this device",
   "ลบเครื่องออกจากทะเบียนเรียบร้อย": "Device removed from register",
-  "ลบไม่สำเร็จ — เครื่องนี้อาจมีจำนวนพิมพ์บันทึกไว้แล้ว": "Unable to delete. Print usage may reference this device.",
   "ทรัพย์สิน": "Assets",
   "เครื่องที่ตรงกับเงื่อนไข": "Matching devices",
   "(จากทั้งหมด": "(of",
@@ -1184,5 +1181,9 @@
   "ต้องตรวจ": "Needs review",
   "ไม่มียอดพิมพ์ในปีงบนี้ ({0} เครื่อง)": "No printing this fiscal year ({0} devices)",
   "ยังไม่มีราคาต่อหน้าของเดือนนี้": "No price per page for this month yet",
-  "ยังไม่ผูกสัญญา — เครื่องที่ไม่มีราคาจะบันทึกจำนวนพิมพ์ไม่ได้": "No contract linked — print counts cannot be saved for a device with no price"
+  "ยังไม่ผูกสัญญา — เครื่องที่ไม่มีราคาจะบันทึกจำนวนพิมพ์ไม่ได้": "No contract linked — print counts cannot be saved for a device with no price",
+  "ลบเครื่อง Serial “{0}” ออกจากทะเบียน? ลบได้เฉพาะเครื่องที่ยังไม่มีจำนวนพิมพ์บันทึกไว้ — เครื่องที่เลิกใช้แล้วให้เปลี่ยนสถานะเป็น “ปลดระวาง” แทน": "Delete device Serial “{0}” from the registry? Only devices with no saved print counts can be deleted — for a device no longer in use, change its status to “Retired” instead",
+  "ลบ “{0}” ออกจากระบบ? ถ้ายังมีรายการอื่นอ้างถึงอยู่จะลบไม่ได้": "Delete “{0}” from the system? It cannot be deleted while other records still refer to it",
+  "ลบเครื่องไม่สำเร็จ กรุณาลองใหม่": "Could not delete the device. Please try again",
+  "ลบเครื่องนี้ไม่ได้ เพราะมีจำนวนพิมพ์หรือข้อมูลอื่นอ้างถึงอยู่ — เปลี่ยนสถานะเป็น “ปลดระวาง” แทน": "This device cannot be deleted because print counts or other records refer to it — change its status to “Retired” instead"
 }
