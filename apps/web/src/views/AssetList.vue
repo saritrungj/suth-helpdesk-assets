@@ -668,7 +668,7 @@ onMounted(async () => {
               class="mt-4"
               :to="{ path: '/admin/add-asset', query: { tab: 'import' } }"
             >
-              <template #icon><FileSpreadsheet :size="15" /></template> {{ t("นำเข้าจากไฟล์ CSV / Excel") }} </UiButton>
+              <template #icon><FileSpreadsheet :size="15" /></template> {{ t("นำเข้าจากไฟล์") }} </UiButton>
           </template>
         </div>
       </template>

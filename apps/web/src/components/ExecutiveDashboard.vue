@@ -588,7 +588,7 @@ function runCsv() {
       <UiStat emphasis :label="t('ค่าพิมพ์รวม')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats"
         :delta="kpi.cost.delta" delta-inverse :hint="costHint" :trend="kpi.cost.trend" />
       <UiStat tone="ink" :label="t('ยอดพิมพ์รวม')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
-        :delta="kpi.pages.delta" delta-inverse :hint="statsReady ? t('หลังหัก 2% เหลือ {0} หน้า', [formatNetPages(shownStats.totals.netPages)]) : ''" :trend="kpi.pages.trend" />
+        :delta="kpi.pages.delta" delta-inverse :hint="statsReady ? t('ก่อนหัก 2% · หลังหักเหลือ {0} หน้า', [formatNetPages(shownStats.totals.netPages)]) : ''" :trend="kpi.pages.trend" />
       <UiStat tone="ink" :label="t('ราคาเฉลี่ยต่อหน้า')" :value="kpi.perPage.value === null ? '—' : formatBahtValue(kpi.perPage.value)" :unit="t('บาท')" :loading="loading && !settledStats"
         :delta="kpi.perPage.delta" delta-inverse :hint="t('ค่าพิมพ์รวม ÷ ยอดพิมพ์หลังหัก 2%')" />
       <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"

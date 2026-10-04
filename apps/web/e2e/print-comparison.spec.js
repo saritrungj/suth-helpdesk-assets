@@ -148,7 +148,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
     await expect(kpi).toContainText("5,970");
     // ยอดพิมพ์หลังหัก 2% (หลังหัก 2%) เป็นคำอธิบายของการ์ดยอดพิมพ์ ไม่ใช่การ์ดแยก (#197)
-    await expect(kpi).toContainText("หลังหัก 2% เหลือ 5,850.6 หน้า");
+    await expect(kpi).toContainText("หลังหักเหลือ 5,850.6 หน้า");
     await expect(kpi).toContainText("ราคาเฉลี่ยต่อหน้า");
     // การ์ดบอกว่าตัวเลขคืออะไร ไม่มีบรรทัดอธิบายแยกใต้การ์ด และการ์ดเครื่องไม่พูดถึงปัญหา (#221)
     await expect(kpi).toContainText("ค่าพิมพ์รวม");
@@ -252,7 +252,7 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
       const kpi = kpiOf(page);
       await expect(kpi).toContainText(parity.pages);
-      await expect(kpi).toContainText(`หลังหัก 2% เหลือ ${parity.net} หน้า`);
+      await expect(kpi).toContainText(`หลังหักเหลือ ${parity.net} หน้า`);
       await expect(kpi).toContainText(parity.cost);
 
       // ตารางรายละเอียดอ่านจากแถวชุดเดียวกับตัวเลขสำคัญ — กลุ่มที่มียอดสูงสุดต้องมีอยู่จริง
