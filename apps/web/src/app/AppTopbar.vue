@@ -81,8 +81,12 @@ onMounted(loadFiscalYears);
 
 async function logout() {
   await endSession();
+  // ไปหน้าล็อกอินก่อนล้างปีงบ: การล้างทำให้เกิดการนำทางซ้ำไปหน้าปัจจุบัน ซึ่งยกเลิก push นี้ทิ้ง
+  // ผู้ใช้จึงค้างอยู่หน้าเดิมทั้งที่ออกจากระบบแล้ว — เดิมรอดเพราะคำขอที่ได้ 401 พาไปล็อกอินแทน
+  // พร้อม ?redirect= ของหน้าที่เปิดค้าง (#241) ถ้ายังถูกยกเลิกอีก ให้ลองซ้ำหนึ่งครั้ง
+  const failure = await router.push("/login");
+  if (failure) await router.replace("/login");
   resetFiscalYearState();
-  await router.push("/login");
 }
 </script>
 

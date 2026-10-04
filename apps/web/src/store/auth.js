@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 import { resetQueryCacheForNewIdentity } from "../api/query-client";
 import { clearFormDrafts } from "../lib/form-draft";
+import { claimSessionMemory } from "../lib/session-memory";
 
 // reactive state เดียวที่ทุก component (แถบเมนู, แถบบน, หน้าล็อกอิน) ใช้ร่วมกัน
 //
@@ -16,6 +17,10 @@ export const authState = reactive({
   // false ระหว่างที่ยังถาม /auth/me ไม่เสร็จ — router guard ต้องรอให้เป็น true ก่อน
   // ไม่งั้นตอนรีเฟรชหน้าจะถูกเด้งไป /login ทั้งที่ยังล็อกอินอยู่
   ready: false,
+
+  // true หลังผู้ใช้กดออกจากระบบเอง จนกว่าจะมีคนล็อกอินใหม่ — หน้าล็อกอินต้องไม่จำ "หน้าที่จะกลับไป"
+  // ของคนที่เพิ่งออก ต่างจาก session หมดอายุซึ่งคนเดิมควรได้กลับหน้าเดิม (#241)
+  signedOut: false,
 });
 
 /**
@@ -43,8 +48,11 @@ export function setAuth(user) {
 
   authState.user = user;
   authState.ready = true;
+  authState.signedOut = false;
 
   if (changed) resetQueryCacheForNewIdentity();
+  // ตัวกรองและคำค้นที่จำไว้ในแท็บเป็นของคนที่ตั้งไว้ — คนละคนเข้ามาต้องเริ่มจากค่าเริ่มต้น (#241)
+  claimSessionMemory(user?.id);
 }
 
 export function clearAuth() {
