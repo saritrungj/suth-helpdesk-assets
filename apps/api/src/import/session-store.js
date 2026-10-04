@@ -144,12 +144,14 @@ async function listEvents(sessionId, limit = 500) {
  * เปลี่ยนสถานะเมื่อสถานะปัจจุบันอยู่ใน from เท่านั้น — คนที่แพ้การแข่งได้ 409
  * @returns {Promise<void>}
  */
-async function transition(q, id, from, to, actorId, message) {
+async function transition(q, id, from, to, actorId, message, options = {}) {
+  // options.fingerprint: เปลี่ยนสถานะเฉพาะเมื่อผลตรวจในฐานยังเป็นชุดที่ผู้เรียกอ่านมา — กันคำขออื่นแทรกระหว่างอ่านกับเขียน (#227)
+  const guarded = Object.hasOwn(options, "fingerprint");
   const [result] = await q.query(
     `UPDATE import_session
      SET status = ?, status_changed_at = CURRENT_TIMESTAMP, last_activity_at = CURRENT_TIMESTAMP, last_activity_by = ?
-     WHERE id = ? AND status IN (${from.map(() => "?").join(", ")})`,
-    [to, actorId, id, ...from]
+     WHERE id = ? AND status IN (${from.map(() => "?").join(", ")})${guarded ? " AND fingerprint <=> ?" : ""}`,
+    [to, actorId, id, ...from, ...(guarded ? [options.fingerprint ?? null] : [])]
   );
   if (!result.affectedRows) {
     throw conflict(message ?? "งานนำเข้านี้อยู่ในสถานะที่ทำรายการนี้ไม่ได้แล้ว — รีเฟรชแล้วดูสถานะล่าสุด", {
@@ -171,6 +173,25 @@ async function saveOutcome(q, id, actorId, fields) {
      WHERE id = ?`,
     [...values, actorId, id]
   );
+}
+
+/**
+ * เก็บการตัดสินใจชุดใหม่ และล้างลายนิ้วมือ (ผลตรวจเดิมไม่ตรงกับการตัดสินใจชุดนี้แล้ว จนกว่าจะตรวจใหม่)
+ *
+ * expected ที่ไม่ใช่ undefined = เขียนเฉพาะเมื่อลายนิ้วมือในฐานยังเท่าค่านั้น ในคำสั่งเดียว คำขอสองตัว
+ * ที่อ่านค่าเดียวกันมาจึงผ่านได้ตัวเดียว (#227)
+ *
+ * @returns {Promise<boolean>} false = มีคนแก้ไปก่อนแล้ว ไม่ได้เขียน
+ */
+async function saveDecisions(q, id, actorId, decisions, expected) {
+  const guarded = expected !== undefined;
+  const [result] = await q.query(
+    `UPDATE import_session
+     SET decisions = ?, fingerprint = NULL, last_activity_at = CURRENT_TIMESTAMP, last_activity_by = ?
+     WHERE id = ?${guarded ? " AND fingerprint <=> ?" : ""}`,
+    [toJson(decisions), actorId, id, ...(guarded ? [expected ?? null] : [])]
+  );
+  return result.affectedRows > 0;
 }
 
 /**
@@ -253,5 +274,6 @@ module.exports = {
   listEvents,
   transition,
   saveOutcome,
+  saveDecisions,
   sweep,
 };

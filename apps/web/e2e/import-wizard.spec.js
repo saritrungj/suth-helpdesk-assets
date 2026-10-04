@@ -77,3 +77,34 @@ test("สร้างสัญญาจากค่าที่อ่านจ�
   expect(server.commits).toBe(1);
   await expect(page.getByTestId("open-dashboard")).toHaveAttribute("href", /\/dashboard\?fy=1/);
 });
+
+// หน้าที่ค้างเก่าต้องไม่ยืนยันสิ่งที่ตัวเองไม่ได้เห็น และต้องไม่เขียนทับสิ่งที่อีกหน้าเลือก (#227)
+test("งานถูกแก้จากหน้าอื่น — กดยืนยันแล้วไม่บันทึก โหลดผลล่าสุดมาให้ตรวจใหม่", async ({ page }) => {
+  await assetFixture(page, "admin");
+  const server = await importSessionFixture(page);
+  await openUploadedSession(page);
+
+  await page.getByRole("combobox", { name: "ตัดสินชื่อ ศูนย์ ก (EMC)" }).selectOption({ label: "สร้างอาคารใหม่ชื่อนี้" });
+  await page.getByRole("combobox", { name: "หมวดมิเตอร์ของรุ่น ES5112" }).selectOption({ label: "A4 เลเซอร์ ขาวดำ" });
+  await page.getByTestId("create-contract").click();
+  await expect(page.getByTestId("import-commit")).toBeEnabled();
+  // ทุกคำขอที่ผ่านมาส่งลายนิ้วมือที่หน้านี้เห็น
+  expect(server.seen.length).toBeGreaterThan(0);
+  expect(server.seen.every((value) => typeof value === "string")).toBe(true);
+
+  // อีกหน้าเปลี่ยนหมวดของรุ่นเป็น A3 ขาวดำ
+  server.changeElsewhere({
+    names: { building: { "ศูนย์ ก (EMC)": { action: "create" } } },
+    models: { "oki|es5112": { meter_category_id: 3, has_color_meter: false } },
+  });
+
+  await page.getByTestId("import-commit").click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "ยืนยันบันทึก", exact: true }).click();
+
+  await expect(page.getByRole("alert").filter({ hasText: "ถูกแก้จากหน้าอื่น" })).toBeVisible();
+  expect(server.commits).toBe(0);
+  await expect(page.getByTestId("import-result")).toHaveCount(0);
+  // หน้าแสดงสิ่งที่อีกหน้าเลือก ไม่ใช่ค่าที่ค้างอยู่ และไม่ส่งค่าค้างกลับไปทับ
+  await expect(page.getByRole("combobox", { name: "หมวดมิเตอร์ของรุ่น ES5112" })).toHaveValue("3");
+  expect(server.decisions.models["oki|es5112"].meter_category_id).toBe(3);
+});

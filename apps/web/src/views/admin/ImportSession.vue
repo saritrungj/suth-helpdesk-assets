@@ -76,43 +76,81 @@ let loadedFor = null;
 let saveTimer = null;
 let pendingSave = null;
 let lastSent = "";
+/**
+ * ลายนิ้วมือของผลตรวจที่กล่องเลือกในหน้านี้ตรงกับมัน — ส่งกลับไปกับการแก้และการยืนยัน (#227)
+ *
+ * ไม่ใช้ค่าจาก cache ตรงๆ: cache ถูกแทนด้วยผลล่าสุดได้จากการตรวจใหม่ การถามซ้ำ หรือคำตอบของปุ่มอื่น
+ * ขณะที่กล่องเลือกยังเป็นค่าที่ผู้ใช้แก้ค้างไว้ ถ้าส่งลายนิ้วมือใหม่คู่กับค่าค้าง จะทับสิ่งที่อีกหน้าเลือกได้
+ */
+let shownFingerprint = null;
+/** นับครั้งที่ต้องทิ้งค่าในหน้าเพราะงานถูกแก้จากที่อื่น — ให้ปุ่มที่กำลังทำงานรู้ว่าต้องหยุด */
+let adoptions = 0;
 
-/** ใส่ค่าจาก session ลงกล่องเลือก — ค่าที่ผู้ใช้เลือกไว้ในหน้านี้ชนะเสมอ */
+/**
+ * ใส่ค่าจาก session ลงกล่องเลือก
+ *
+ * ค่าที่ผู้ใช้แก้ไว้แต่ยังไม่ได้ส่งชนะเสมอ (คำตอบของคำขอเก่ามาถึงหลังผู้ใช้เลือกต่อแล้ว ต้องไม่ทับ)
+ * ถ้าไม่มีของค้าง ให้ใช้ค่าจากเซิร์ฟเวอร์ทั้งชุด — หน้าจะไม่แสดงตัวเลือกเก่าคู่กับสรุปชุดใหม่
+ */
 function applySession(data) {
   if (!data) return;
+  const unsent = loadedFor === data.id && JSON.stringify(decisionsPayload(choices, acknowledged)) !== lastSent;
   if (data.validation?.registry) {
-    const next = initialChoices(data.validation.registry, loadedFor === data.id ? choices : { names: {}, models: {}, renames: {} });
+    const next = initialChoices(data.validation.registry, unsent ? choices : { names: {}, models: {}, renames: {} });
     choices.names = next.names;
     choices.models = next.models;
     choices.renames = next.renames;
   }
-  if (loadedFor !== data.id) {
+  if (!unsent) {
     for (const key of Object.keys(acknowledged)) delete acknowledged[key];
     Object.assign(acknowledged, data.decisions?.acknowledged ?? {});
     loadedFor = data.id;
     lastSent = JSON.stringify(decisionsPayload(choices, acknowledged));
+    shownFingerprint = data.fingerprint ?? null;
   }
 }
 watch(session, applySession, { immediate: true });
 
 const payload = computed(() => JSON.stringify(decisionsPayload(choices, acknowledged)));
 
+/**
+ * งานถูกแก้จากหน้าอื่นหรือผู้ใช้อื่น — ทิ้งค่าที่ค้างในหน้านี้แล้วแสดงผลล่าสุดจากเซิร์ฟเวอร์
+ *
+ * ต้องทิ้งค่าในหน้า ไม่งั้น watch ของ payload จะส่งค่าค้างกลับไปทับสิ่งที่อีกหน้าเลือกทันทีที่โหลดเสร็จ
+ */
+async function adoptLatest(err) {
+  if (err?.response?.data?.code !== "import_session_changed") return false;
+  adoptions += 1;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  loadedFor = null;
+  await query.refetch();
+  // ถ้าผลที่โหลดมาเท่าของเดิมทุกตัวอักษร watch ของ session จะไม่ทำงาน — ใส่ค่าเองให้แน่ใจ
+  applySession(session.value);
+  return true;
+}
+
 async function saveDecisions() {
   clearTimeout(saveTimer);
   saveTimer = null;
+  // ทีละคำขอ: คำขอถัดไปต้องส่งลายนิ้วมือจากคำตอบของคำขอก่อนหน้า ไม่งั้นจะถูกปฏิเสธเพราะตัวเอง
+  if (pendingSave) await pendingSave.catch(() => {});
   const body = payload.value;
   if (!editable.value || body === lastSent) return;
   lastSent = body;
   busy.value = true;
   actionError.value = "";
-  pendingSave = api.put(`/import-sessions/${id.value}/decisions`, { decisions: JSON.parse(body) });
+  pendingSave = api.put(`/import-sessions/${id.value}/decisions`, { decisions: JSON.parse(body), fingerprint: shownFingerprint });
   try {
     const { data } = await pendingSave;
+    // ผลตรวจชุดนี้มาจากสิ่งที่เพิ่งส่ง — คำขอถัดไป (ถ้าผู้ใช้เลือกต่อระหว่างรอ) ต้องอ้างชุดนี้
+    shownFingerprint = data.fingerprint ?? null;
     // คำตอบของคำขอเก่าที่มาถึงหลังผู้ใช้เลือกต่อแล้ว ไม่ทับกล่องเลือก (applySession เก็บค่าในหน้าไว้)
     queryClient.setQueryData(keys.importSession(id.value), data);
   } catch (err) {
     lastSent = "";
     actionError.value = errorMessage(err, t("บันทึกการตัดสินใจไม่สำเร็จ"));
+    await adoptLatest(err);
   } finally {
     pendingSave = null;
     busy.value = false;
@@ -124,6 +162,13 @@ watch(payload, (next) => {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveDecisions, 700);
 });
+
+/** ส่งค่าที่ค้างให้เสร็จ — false = งานถูกแก้จากที่อื่นระหว่างนั้น และหน้าโหลดผลล่าสุดมาแทนแล้ว */
+async function flushedWithoutChange() {
+  const before = adoptions;
+  await flushPending();
+  return adoptions === before;
+}
 
 /** ออกจากหน้าระหว่างที่ยังไม่ได้ส่ง — ส่งให้เสร็จก่อน งานจะรออยู่เมื่อกลับมา */
 async function flushPending() {
@@ -151,7 +196,8 @@ onBeforeUnmount(() => {
 let lastFieldErrors = {};
 async function run(label, request, after) {
   lastFieldErrors = {};
-  await flushPending();
+  // งานถูกแก้จากที่อื่นระหว่างส่งค่าที่ค้าง — หยุด ให้ผู้ใช้ตรวจผลล่าสุดก่อน ไม่ทำต่อบนสิ่งที่ยังไม่ได้เห็น
+  if (!(await flushedWithoutChange())) return null;
   busy.value = true;
   actionError.value = "";
   try {
@@ -163,7 +209,8 @@ async function run(label, request, after) {
   } catch (err) {
     lastFieldErrors = fieldErrors(err);
     actionError.value = errorMessage(err, label);
-    toastError(actionError.value);
+    // งานถูกแก้จากที่อื่น: ข้อความอยู่ในกล่องเหนือสรุปพร้อมผลล่าสุด ไม่ต้องแจ้งซ้ำ
+    if (!(await adoptLatest(err))) toastError(actionError.value);
     return null;
   } finally {
     busy.value = false;
@@ -194,6 +241,9 @@ async function createFiscalYears(years) {
 const preview = computed(() => validation.value?.preview ?? null);
 const writeCount = computed(() => preview.value?.writes ?? 0);
 async function commit() {
+  // ส่งค่าที่ค้างและจำลายนิ้วมือ "ก่อน" ถาม — สิ่งที่ยืนยันต้องเป็นสรุปชุดที่กล่องยืนยันแสดง
+  if (!(await flushedWithoutChange())) return;
+  const seen = shownFingerprint;
   const p = preview.value ?? {};
   const extra = [
     p.contracts?.length ? t("สัญญาใหม่ {0}", [p.contracts.map((c) => c.contract_no).join(", ")]) : "",
@@ -205,7 +255,7 @@ async function commit() {
     { title: t("ยืนยันบันทึกงานนำเข้านี้"), confirmText: t("ยืนยันบันทึก") }
   );
   if (!ok) return;
-  const data = await run(t("บันทึกไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/commit`), async (result) => {
+  const data = await run(t("บันทึกไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/commit`, { fingerprint: seen }), async (result) => {
     if (result.status !== "completed") return;
     await refreshFiscalYears();
     // การนำเข้าครั้งเดียวเขียนหลายชนิด — ล้างแต่ละแคชครั้งเดียว (#180)
