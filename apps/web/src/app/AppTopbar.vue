@@ -19,11 +19,12 @@ import { t } from "../lib/locale";
  * ยาวๆ อยู่ — พื้นหลังใช้ความโปร่งบวก backdrop-blur เพื่อให้ยังรู้ว่ามีเนื้อหา
  * เลื่อนอยู่ข้างใต้ แต่ตัวหนังสือบนแถบยังอ่านออก
  */
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   CalendarRange,
   ChevronRight,
+  KeyRound,
   LogOut,
   Menu,
   Monitor,
@@ -37,6 +38,7 @@ import { findActiveItem } from "./navigation";
 import { APP_NAME_SHORT } from "./brand";
 import { authState } from "../store/auth";
 import { logout as endSession } from "../store/session";
+import ChangePasswordDialog from "./ChangePasswordDialog.vue";
 import {
   activeFiscalYear,
   fiscalYearState,
@@ -78,6 +80,8 @@ const DENSITY_OPTIONS = [
 // (เดิมโหลดจาก Sidebar ซึ่งไม่ได้แสดงค่านี้อีกต่อไป) — component นี้อยู่ในทุกหน้า
 // หลังล็อกอิน ทุกหน้าจึงมีปีงบพร้อมใช้เสมอโดยไม่ต้องเรียกซ้ำในแต่ละหน้า
 onMounted(loadFiscalYears);
+
+const passwordOpen = ref(false);
 
 async function logout() {
   await endSession();
@@ -267,9 +271,12 @@ async function logout() {
           <UiSegmented :model-value="locale" :options="[{ value: 'th', label: 'ไทย' }, { value: 'en', label: 'English' }]" label="Language / ภาษา" block @update:model-value="changeLanguage" />
           <p class="text-2xs text-ink-mute mt-1">{{ t("เปลี่ยนภาษาแล้วโหลดหน้านี้ใหม่") }}</p>
         </div>
-        <UiMenuItem tone="danger" separated @select="logout">
+        <UiMenuItem separated @select="passwordOpen = true">
+          <template #icon><KeyRound :size="15" /></template> {{ t("เปลี่ยนรหัสผ่านของฉัน") }} </UiMenuItem>
+        <UiMenuItem tone="danger" @select="logout">
           <template #icon><LogOut :size="15" /></template> {{ t("ออกจากระบบ") }} </UiMenuItem>
       </UiMenu>
     </div>
+    <ChangePasswordDialog v-model:open="passwordOpen" />
   </header>
 </template>

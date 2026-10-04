@@ -19,8 +19,10 @@ const requireAuth = require("./require-auth");
 const { readToken } = requireAuth;
 const revokedSessions = require("./revoked-sessions");
 const { passwordVersion } = require("./current-user");
+const { passwordField } = require("./password-policy");
+const { actorOf, recordAudit } = require("../shared/audit");
 const { validate } = require("../shared/validate");
-const { unauthorized } = require("../shared/http-error");
+const { badRequest, unauthorized } = require("../shared/http-error");
 const { noStore } = require("../shared/cache");
 const { SESSION_COOKIE, sessionCookieOptions } = require("./session-cookie");
 const { logger } = require("../shared/logger");
@@ -51,6 +53,22 @@ const loginLimiter = rateLimit({
     });
   },
 });
+
+/**
+ * ออก token ใหม่ให้บัญชีนี้และตั้ง cookie ของ session — ใช้ทั้งตอนล็อกอินและหลังเปลี่ยนรหัสผ่านของตัวเอง
+ * @param {{ id: number, username: string, role: string, password: string }} user แถวผู้ใช้จากฐาน (password = hash)
+ */
+function issueSession(res, user) {
+  const token = jwt.sign(
+    // pwv = ลายนิ้วมือของรหัสผ่าน — เปลี่ยนรหัสผ่านแล้ว token นี้ใช้ไม่ได้ (#208, current-user.js)
+    // jti = เลขประจำ token: ล็อกอินสองครั้งในวินาทีเดียวกันต้องไม่ได้ token เดียวกัน ไม่งั้นออกจากระบบแล้ว
+    // ล็อกอินใหม่ทันทีจะได้ token ที่เพิ่งถูกเพิกถอนกลับมา (#240)
+    { id: user.id, username: user.username, role: user.role, pwv: passwordVersion(user.password), jti: crypto.randomUUID() },
+    process.env.JWT_SECRET,
+    { expiresIn: "8h" }
+  );
+  res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
+}
 
 const loginBody = z.object({
   username: z.string({ error: "กรุณากรอกชื่อผู้ใช้" }).trim().min(1, "กรุณากรอกชื่อผู้ใช้").max(50),
@@ -86,16 +104,7 @@ router.post(
       throw unauthorized("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", { code: "invalid_credentials" });
     }
 
-    const token = jwt.sign(
-      // pwv = ลายนิ้วมือของรหัสผ่าน — เปลี่ยนรหัสผ่านแล้ว token นี้ใช้ไม่ได้ (#208, current-user.js)
-      // jti = เลขประจำ token: ล็อกอินสองครั้งในวินาทีเดียวกันต้องไม่ได้ token เดียวกัน ไม่งั้นออกจากระบบแล้ว
-      // ล็อกอินใหม่ทันทีจะได้ token ที่เพิ่งถูกเพิกถอนกลับมา (#240)
-      { id: user.id, username: user.username, role: user.role, pwv: passwordVersion(user.password), jti: crypto.randomUUID() },
-      process.env.JWT_SECRET,
-      { expiresIn: "8h" }
-    );
-
-    res.cookie(SESSION_COOKIE, token, sessionCookieOptions());
+    issueSession(res, user);
 
     logger.info("ล็อกอินสำเร็จ", { request_id: req.id, user: user.username, role: user.role });
 
@@ -117,6 +126,87 @@ router.get("/me", requireAuth, (req, res) => {
   noStore(res);
   res.json({ user: { id: req.user.id, username: req.user.username, role: req.user.role } });
 });
+
+// ============================================================
+// PUT /api/auth/password — ผู้ใช้เปลี่ยนรหัสผ่านของตัวเอง
+//
+// เดิมมีแต่ผู้ดูแลตั้งรหัสให้ผ่านหน้าผู้ใช้ รหัสที่ผู้ดูแลรู้จึงเป็นรหัสถาวรของทุกคน และผู้ใช้ที่สงสัยว่ารหัส
+// หลุดทำอะไรเองไม่ได้ ต้องยืนยันรหัสปัจจุบันเสมอ — session ที่เปิดค้างบนเครื่องใช้ร่วมกันต้องเปลี่ยนรหัสของ
+// เจ้าของบัญชีไม่ได้ และจำกัดจำนวนครั้งที่ลองผิดเหมือนหน้าล็อกอิน
+//
+// เปลี่ยนแล้ว token เดิมทุกใบของบัญชีนี้ใช้ไม่ได้ทันที (pwv ใน current-user.js) จึงออกใบใหม่ให้ session นี้
+// เครื่องอื่นที่ล็อกอินค้างไว้ต้องล็อกอินใหม่ด้วยรหัสใหม่
+// ============================================================
+const passwordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  // นับต่อบัญชี ไม่ใช่ต่อ IP: โรงพยาบาลออกเน็ตผ่าน IP เดียวกัน คนหนึ่งลองผิดต้องไม่ล็อกทุกคน และ session ที่
+  // ถูกคัดลอกไปต้องเดารหัสได้จำกัดต่อบัญชี ไม่ใช่ได้โควตาใหม่ทุก IP — ด่านนี้จึงอยู่หลัง requireAuth
+  keyGenerator: (req) => `password:${req.user.id}`,
+  handler: (req, res) => {
+    res.status(429).json({
+      type: "about:blank",
+      title: "ลองเปลี่ยนรหัสผ่านบ่อยเกินไป",
+      status: 429,
+      code: "too_many_attempts",
+      detail: "กรุณารอ 15 นาทีแล้วลองใหม่ หรือติดต่อผู้ดูแลระบบ",
+    });
+  },
+});
+
+const changePasswordBody = z.object({
+  current_password: z.string({ error: "กรุณากรอกรหัสผ่านปัจจุบัน" }).min(1, "กรุณากรอกรหัสผ่านปัจจุบัน").max(200),
+  new_password: passwordField,
+});
+
+router.put(
+  "/password",
+  requireAuth,
+  passwordLimiter,
+  validate({ body: changePasswordBody }),
+  asyncHandler(async (req, res) => {
+    const { current_password: current, new_password: next } = req.body;
+    const [rows] = await db.query("SELECT id, username, role, password FROM users WHERE id = ?", [req.user.id]);
+    const user = rows[0];
+    if (!user) throw unauthorized("บัญชีนี้ถูกเปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่", { code: "account_removed" });
+
+    if (!(await bcrypt.compare(current, user.password))) {
+      logger.warn("เปลี่ยนรหัสผ่านไม่สำเร็จ: รหัสปัจจุบันไม่ถูกต้อง", { request_id: req.id, user: user.username });
+      throw badRequest("รหัสผ่านปัจจุบันไม่ถูกต้อง", {
+        code: "wrong_current_password",
+        errors: [{ field: "current_password", message: "รหัสผ่านปัจจุบันไม่ถูกต้อง" }],
+      });
+    }
+    if (current === next) {
+      throw badRequest("รหัสผ่านใหม่ต้องต่างจากรหัสผ่านปัจจุบัน", {
+        code: "same_password",
+        errors: [{ field: "new_password", message: "รหัสผ่านใหม่ต้องต่างจากรหัสผ่านปัจจุบัน" }],
+      });
+    }
+
+    const hash = await bcrypt.hash(next, 10);
+    // transaction เดียว: ถ้ารหัสเปลี่ยนแล้วแต่บันทึกประวัติล้ม ผู้ใช้จะเห็นว่า "ไม่สำเร็จ" ทั้งที่รหัสเดิมใช้ไม่ได้แล้ว
+    // และ token ที่ถืออยู่ก็ตายไปด้วย (pwv) — ต้องสำเร็จทั้งคู่หรือไม่เปลี่ยนเลย
+    await db.withTransaction(async (conn) => {
+      await conn.query("UPDATE users SET password = ? WHERE id = ?", [hash, user.id]);
+      // ไม่เก็บรหัสผ่านหรือ hash ในประวัติ (ADR-0035 ข้อ 3)
+      await recordAudit(conn, actorOf(req), [{
+        action: "update", entity: "user", entityId: user.id, entityKey: user.username,
+        summary: `${user.username} เปลี่ยนรหัสผ่านของตัวเอง`,
+        before: null, after: { password_changed: true },
+      }]);
+    });
+
+    issueSession(res, { ...user, password: hash });
+    logger.info("เปลี่ยนรหัสผ่านของตัวเอง", { request_id: req.id, user: user.username });
+
+    noStore(res);
+    res.json({ message: "เปลี่ยนรหัสผ่านแล้ว" });
+  })
+);
 
 // ============================================================
 // POST /api/auth/logout
