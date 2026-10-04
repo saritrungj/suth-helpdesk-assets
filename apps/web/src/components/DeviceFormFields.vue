@@ -266,27 +266,32 @@ async function reset() {
 }
 onMounted(reset);
 
+/**
+ * ปัญหาของทุกช่องในครั้งเดียว — เดิมคืนปัญหาแรกอย่างเดียว ผู้ใช้ต้องกดบันทึกซ้ำทีละช่องจนกว่าจะครบ (#249)
+ * @returns {Array<{ field: string, message: string }>}
+ */
 function validate() {
-  if (!form.value.serial_number.trim()) return { field: "serial_number", message: t("กรอกหมายเลข Serial ของเครื่องก่อน") };
-  if (!form.value.brand_id) return { field: "brand_id", message: t("เลือกยี่ห้อของเครื่องก่อน") };
+  const problems = [];
+  if (!form.value.serial_number.trim()) problems.push({ field: "serial_number", message: t("กรอกหมายเลข Serial ของเครื่องก่อน") });
+  if (!form.value.brand_id) problems.push({ field: "brand_id", message: t("เลือกยี่ห้อของเครื่องก่อน") });
   // เฉพาะตอนเพิ่มเครื่องใหม่ — การแก้ไขเครื่องเดิมไม่แตะสถานะการติดตั้ง ซึ่งมี
   // เส้นทางของตัวเองที่หน้าตรวจยืนยัน (ADR-0018 Q18)
   if (!isEdit.value && !form.value.installation_status) {
-    return { field: "installation_status", message: t("เลือกว่าเครื่องนี้ติดตั้งแล้วหรือยัง") };
+    problems.push({ field: "installation_status", message: t("เลือกว่าเครื่องนี้ติดตั้งแล้วหรือยัง") });
   }
   if (form.value.price_override !== "" && Number(form.value.price_override) < 0) {
-    return { field: "price_override", message: t("ราคาต่อหน้าติดลบไม่ได้") };
+    problems.push({ field: "price_override", message: t("ราคาต่อหน้าติดลบไม่ได้") });
   }
-  return "";
+  return problems;
 }
 
 async function submit() {
   if (saving.value || !ready.value) return false;
   errors.value = {};
-  const problem = validate();
-  if (problem) {
-    formError.value = problem.message;
-    errors.value = { [problem.field]: problem.message };
+  const problems = validate();
+  if (problems.length) {
+    formError.value = problems.map((problem) => problem.message).join(" · ");
+    errors.value = Object.fromEntries(problems.map((problem) => [problem.field, problem.message]));
     return false;
   }
 
