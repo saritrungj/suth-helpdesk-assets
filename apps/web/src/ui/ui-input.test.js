@@ -22,3 +22,18 @@ describe("UiInput นอก UiField", () => {
     expect(input.attributes("aria-describedby")).toBeUndefined();
   });
 });
+
+describe("UiInput — แป้นพิมพ์บนมือถือ", () => {
+  // หน้าบันทึกจำนวนพิมพ์ใส่ inputmode="numeric" ให้ช่อง type="text" (รับตัวเลขที่วางมาพร้อมจุลภาค)
+  // เดิมค่านี้ถูกทับเป็นว่าง มือถือจึงขึ้นแป้นตัวอักษร (#249)
+  test("inputmode ที่ผู้เรียกใส่มาไปถึง input", () => {
+    const input = mount(UiInput, { attrs: { inputmode: "numeric" } }).find("input");
+    expect(input.attributes("inputmode")).toBe("numeric");
+  });
+
+  test("ไม่ใส่มา: type number ได้ decimal, tel ได้ tel, text ไม่มี", () => {
+    expect(mount(UiInput, { props: { type: "number" } }).find("input").attributes("inputmode")).toBe("decimal");
+    expect(mount(UiInput, { props: { type: "tel" } }).find("input").attributes("inputmode")).toBe("tel");
+    expect(mount(UiInput).find("input").attributes("inputmode")).toBeUndefined();
+  });
+});

@@ -344,3 +344,15 @@ test("drawer in fullscreen traps focus and returns to the row without losing scr
   await expect(edit).toBeFocused();
   await page.getByRole("button", { name: "ย่อตาราง", exact: true }).click();
 });
+
+// กดบันทึกโดยขาดหลายช่อง เดิมบอกทีละข้อ ต้องกดบันทึกซ้ำจนกว่าจะครบ (#249)
+test("add device reports every missing field at once", async ({ page }) => {
+  const state = await assetFixture(page);
+  await page.goto("/admin/add-asset");
+  await page.getByRole("button", { name: "บันทึกและกลับไปหน้าทะเบียน", exact: true }).click();
+
+  for (const message of ["กรอกหมายเลข Serial ของเครื่องก่อน", "เลือกยี่ห้อของเครื่องก่อน", "เลือกว่าเครื่องนี้ติดตั้งแล้วหรือยัง"]) {
+    await expect(page.getByText(message, { exact: false }).first()).toBeVisible();
+  }
+  expect(state.writes).toHaveLength(0);
+});
