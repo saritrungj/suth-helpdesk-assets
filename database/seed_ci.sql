@@ -72,6 +72,17 @@ SET @fy_be_year  = CAST(@fy_ce_end + 543 AS CHAR);
 SET @fy_start_month = CONCAT(@fy_ce_start, '-10');
 SET @fy_end_month   = CONCAT(LPAD(@fy_ce_end, 4, '0'), '-09');
 
+-- วันเริ่มของข้อมูลตั้งต้น (สัญญา ช่วงรับผิดชอบ ช่วงคิดเงิน ที่ตั้งแรก)
+--
+-- ข้อมูลด้านล่างย้อนหลังจากวันที่รันได้ถึง 3 เดือน (ช่วงรับผิดชอบที่ปิดไปแล้ว ยอดเดือนก่อน)
+-- ถ้าเริ่มทุกอย่างที่ต้นปีงบปัจจุบันเสมอ การรันช่วง ต.ค.–ธ.ค. จะได้วันปิดก่อนวันเริ่ม แล้วล้มที่
+-- chk_device_service_period_order ก่อนเทสใดจะเริ่ม (#233) ช่วงนั้นจึงเริ่มจากต้นปีงบก่อนหน้า
+-- ปีงบที่ seed สร้างยังเป็นปีงบของวันที่รันเสมอ — ยอดเดือนก่อนที่ตกปีงบก่อนจึงมีราคา แต่ไม่อยู่ใน
+-- ปีงบใด เป็นเคสขอบเดียวกับที่หมายเหตุด้านล่างพูดถึง
+SET @fy_start_date = CAST(CONCAT(@fy_start_month, '-01') AS DATE);
+SET @months_into_fy = PERIOD_DIFF(DATE_FORMAT(@today, '%Y%m'), CONCAT(@fy_ce_start, '10'));
+SET @data_start = DATE_SUB(@fy_start_date, INTERVAL IF(@months_into_fy < 3, 1, 0) YEAR);
+
 -- เดือนที่มียอดพิมพ์: เดือนนี้กับเดือนก่อนหน้า ตามวันที่รันจริง — ปกติทั้งคู่อยู่ใน
 -- ปีงบเดียวกัน ยกเว้นช่วงข้ามปีงบพอดี (รันวันที่ 1 ต.ค.) ซึ่งเดือนก่อนหน้าจะตกปีงบ
 -- ก่อน เป็นเคสขอบที่ยอมรับได้ ไม่ใช่บั๊กของ seed นี้
@@ -115,10 +126,10 @@ INSERT INTO contracts
 (id, contract_no, effective_from, effective_to)
 VALUES
 (1, CONCAT('SUTH-CI-', @fy_be_year),
- STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'),
+ @data_start,
  LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d'))),
 (2, CONCAT('SUTH-CI-ALT-', @fy_be_year),
- STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'),
+ @data_start,
  LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d')));
 
 INSERT INTO contract_price_line (contract_id, category_id, price_per_page)
@@ -156,11 +167,11 @@ VALUES
 INSERT INTO device_service_period
 (device_id, effective_from, effective_to, verified_by, verified_at)
 VALUES
-(1, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
-(2, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
-(3, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
-(4, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), DATE_SUB(@today, INTERVAL 1 MONTH), NULL, CURRENT_TIMESTAMP),
-(5, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), DATE_SUB(@today, INTERVAL 3 MONTH), NULL, CURRENT_TIMESTAMP);
+(1, @data_start, NULL, NULL, CURRENT_TIMESTAMP),
+(2, @data_start, NULL, NULL, CURRENT_TIMESTAMP),
+(3, @data_start, NULL, NULL, CURRENT_TIMESTAMP),
+(4, @data_start, DATE_SUB(@today, INTERVAL 1 MONTH), NULL, CURRENT_TIMESTAMP),
+(5, @data_start, DATE_SUB(@today, INTERVAL 3 MONTH), NULL, CURRENT_TIMESTAMP);
 
 -- interval เก่า (ปิดแล้ว) + interval ปัจจุบัน (effective_to = NULL) ของ device 3
 -- effective_from ยึดจากวันที่รันจริงเช่นกัน ไม่ตรึงวันที่ตายตัว
@@ -208,7 +219,7 @@ INSERT INTO device_meter (device_id, category_id)
 SELECT d.id, mc.id FROM devices d CROSS JOIN meter_category mc WHERE mc.code = 'bw';
 
 INSERT INTO device_service_period (device_id, effective_from, effective_to, verified_by, verified_at)
-SELECT d.id, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP
+SELECT d.id, @data_start, NULL, NULL, CURRENT_TIMESTAMP
 FROM devices d WHERE d.id >= 7;
 
 -- ------------------------------------------------------------------------------
@@ -255,16 +266,16 @@ INSERT INTO device_meter (device_id, category_id)
 SELECT d.id, mc.id FROM devices d CROSS JOIN meter_category mc WHERE d.id IN (31, 32) AND mc.code = 'bw';
 
 INSERT INTO device_service_period (device_id, effective_from, effective_to, verified_by, verified_at) VALUES
-(31, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP),
-(32, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL, NULL, CURRENT_TIMESTAMP);
+(31, @data_start, NULL, NULL, CURRENT_TIMESTAMP),
+(32, @data_start, NULL, NULL, CURRENT_TIMESTAMP);
 
 INSERT INTO device_location_history
 (device_id, building_id, floor_id, location, division_id, department_id, effective_from, effective_to)
 VALUES
 (31, 1, 1, 'เคาน์เตอร์ยาผู้ป่วยนอก', 1, 2,
- STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), STR_TO_DATE(CONCAT(@month_this, '-01'), '%Y-%m-%d')),
+ @data_start, STR_TO_DATE(CONCAT(@month_this, '-01'), '%Y-%m-%d')),
 (31, 2, 2, 'ห้องจ่ายยา', 2, 3, STR_TO_DATE(CONCAT(@month_this, '-01'), '%Y-%m-%d'), NULL),
-(32, 1, 1, 'เคาน์เตอร์ยาผู้ป่วยนอก', 1, 2, STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'), NULL),
+(32, 1, 1, 'เคาน์เตอร์ยาผู้ป่วยนอก', 1, 2, @data_start, NULL),
 (32, 2, 2, 'ห้องเก็บยา', 2, 3, STR_TO_DATE(CONCAT(@month_prev, '-01'), '%Y-%m-%d'), NULL);
 
 INSERT INTO print_transactions (device_id, meter_id, month, pages) VALUES
@@ -287,7 +298,7 @@ SELECT
   d.id,
   d.contract_id,
   d.price_override,
-  STR_TO_DATE(CONCAT(@fy_start_month, '-01'), '%Y-%m-%d'),
+  @data_start,
   LAST_DAY(STR_TO_DATE(CONCAT(@fy_end_month, '-01'), '%Y-%m-%d')),
   'ช่วงตั้งต้นของชุดทดสอบ'
 FROM devices d
