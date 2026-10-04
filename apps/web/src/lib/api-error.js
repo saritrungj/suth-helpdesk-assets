@@ -55,7 +55,7 @@ export function errorMessage(error, fallback = t("เกิดข้อผิด
     };
     return messages[data?.code] ?? fallback;
   }
-  if (data?.title) return data.title;
+  if (data?.title) return withDetail(data.title, data.detail, error.response.status);
 
   // เผื่อ endpoint ที่ยังไม่ได้ย้ายมาใช้รูปแบบใหม่ (การนำเข้าไฟล์บางส่วน)
   if (data?.error) return data.error;
@@ -66,6 +66,18 @@ export function errorMessage(error, fallback = t("เกิดข้อผิด
   if (error?.code === "ERR_NETWORK") return t("ติดต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่าย");
 
   return fallback;
+}
+
+/**
+ * ต่อ detail ของ API ท้าย title — detail คือขั้นต่อไปที่ผู้ใช้ทำได้ ("ย้ายหรือลบข้อมูลที่อ้างถึงก่อน")
+ *
+ * เดิมแสดงแค่ title ผู้ใช้รู้ว่าทำไม่ได้ แต่ไม่รู้ว่าต้องทำอะไรต่อ (#238) ยกเว้นสองกลุ่มที่ detail
+ * ไม่ใช่ขั้นต่อไปของผู้ใช้: 5xx (ข้อความสำหรับผู้ดูแลระบบ) และ 401 (หน้าเว็บพาไปล็อกอินเองอยู่แล้ว)
+ */
+function withDetail(title, detail, status) {
+  if (typeof detail !== "string" || !detail.trim() || detail === title) return title;
+  if (status >= 500 || status === 401) return title;
+  return `${title}${title.includes(" — ") ? " · " : " — "}${detail}`;
 }
 
 /**

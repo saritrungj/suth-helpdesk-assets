@@ -290,7 +290,7 @@ async function remove(row) {
   const label = [own, ...parents].join(" · ");
 
   const confirmed = await askConfirm(
-    t("“{0}” จะถูกลบออกจากระบบ และรายการที่อ้างถึงอยู่อาจแสดงผลไม่ครบ", [label]),
+    t("ลบ “{0}” ออกจากระบบ? ถ้ายังมีรายการอื่นอ้างถึงอยู่จะลบไม่ได้", [label]),
     {
       title: t("ลบ{0}นี้", [props.itemNoun]),
       confirmText: t("ลบ{0}", [props.itemNoun]),

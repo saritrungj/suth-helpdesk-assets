@@ -434,7 +434,7 @@ async function openMove(id) {
 
 async function remove(asset) {
   const confirmed = await askConfirm(
-    t("เครื่อง Serial “{0}” จะถูกลบออกจากทะเบียน จำนวนพิมพ์ที่บันทึกไว้จะไม่ถูกนับในรายงานอีก", [asset.serial_number]),
+    t("ลบเครื่อง Serial “{0}” ออกจากทะเบียน? ลบได้เฉพาะเครื่องที่ยังไม่มีจำนวนพิมพ์บันทึกไว้ — เครื่องที่เลิกใช้แล้วให้เปลี่ยนสถานะเป็น “ปลดระวาง” แทน", [asset.serial_number]),
     { title: t("ลบเครื่องนี้ออกจากทะเบียน"), confirmText: t("ลบเครื่องนี้"), danger: true }
   );
   if (!confirmed) return;
@@ -445,7 +445,9 @@ async function remove(asset) {
     await Promise.all([loadAssets(), invalidateAfterWrite(queryClient, "device")]);
   } catch (err) {
     console.error(err);
-    toastError(errorMessage(err, t("ลบไม่สำเร็จ — เครื่องนี้อาจมีจำนวนพิมพ์บันทึกไว้แล้ว")));
+    // เครื่องที่มียอดพิมพ์ลบไม่ได้ (รายงานย้อนหลังจะเพี้ยน) — บอกทางที่ทำได้จริงแทนข้อความกลางของ API
+    const referenced = err?.response?.data?.code === "still_referenced";
+    toastError(referenced ? t("ลบเครื่องนี้ไม่ได้ เพราะมีจำนวนพิมพ์หรือข้อมูลอื่นอ้างถึงอยู่ — เปลี่ยนสถานะเป็น “ปลดระวาง” แทน") : errorMessage(err, t("ลบเครื่องไม่สำเร็จ กรุณาลองใหม่")));
   }
 }
 
