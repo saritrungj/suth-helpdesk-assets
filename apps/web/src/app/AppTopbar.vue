@@ -57,7 +57,7 @@ const isAdmin = computed(() => authState.user?.role === "admin");
 
 const roleLabel = computed(
   () =>
-    ({ admin: t("ผู้ดูแลระบบ"), staff: t("เจ้าหน้าที่"), viewer: t("ผู้อ่าน") })[authState.user?.role] ??
+    ({ admin: t("ผู้ดูแลระบบ"), staff: t("เจ้าหน้าที่"), viewer: t("ดูอย่างเดียว") })[authState.user?.role] ??
     authState.user?.role ??
     ""
 );

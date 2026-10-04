@@ -35,7 +35,7 @@ test("print usage import icon opens the guided vendor-file import", async ({ pag
   await prototypeFixture(page, "admin");
   await importSessionFixture(page);
   await page.goto("/print-transactions");
-  await page.getByRole("link", { name: "นำเข้าจำนวนพิมพ์", exact: true }).click();
+  await page.getByRole("main").getByRole("link", { name: "นำเข้าไฟล์จากผู้ให้เช่า", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/import$/);
   await expect(page.getByTestId("import-sessions")).toBeVisible();
 });
@@ -54,7 +54,7 @@ test("print usage import refreshes the open month grid without a reload", async 
   const cell = page.getByRole("textbox", { name: "จำนวนพิมพ์ของ SUTH-001", exact: true }).first();
   await expect(cell).toHaveValue("");
 
-  await page.getByRole("link", { name: "นำเข้าจำนวนพิมพ์", exact: true }).click();
+  await page.getByRole("main").getByRole("link", { name: "นำเข้าไฟล์จากผู้ให้เช่า", exact: true }).click();
   await page.locator('input[type="file"]').setInputFiles({ name: "meter-report.xlsx", mimeType: "application/octet-stream", buffer: Buffer.from("x") });
   await page.getByRole("combobox", { name: "ตัดสินชื่อ ศูนย์ ก (EMC)" }).selectOption({ label: "สร้างอาคารใหม่ชื่อนี้" });
   await page.getByRole("combobox", { name: "หมวดมิเตอร์ของรุ่น ES5112" }).selectOption({ label: "A4 เลเซอร์ ขาวดำ" });

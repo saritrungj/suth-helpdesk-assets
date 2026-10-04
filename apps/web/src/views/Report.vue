@@ -416,7 +416,7 @@ onMounted(async () => {
   <div>
     <UiPageHeader
       :title="t(&quot;รายงานสรุปการพิมพ์&quot;)"
-      :description="t(&quot;เลขมิเตอร์ของแต่ละเครื่องในปีงบ {0} — เครื่องที่ย้ายกลางปีแยกเป็นแถวตามที่ตั้ง&quot;, [displayYearBE])"
+      :description="t(&quot;จำนวนพิมพ์รายเดือนของแต่ละเครื่องในปีงบ {0} — เครื่องที่ย้ายกลางปีแยกเป็นแถวตามที่ตั้ง&quot;, [displayYearBE])"
     />
 
     <!--

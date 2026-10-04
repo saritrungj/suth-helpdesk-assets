@@ -24,7 +24,7 @@ describe("CSV รายละเอียดของหน้าภาพรว
 
   test("มีปีงบประมาณกำกับทุกแถว — ไฟล์ที่เทียบหลายปีงบต้องแยกออกว่าแถวไหนเป็นปีไหน", () => {
     const csv = dashboardCsv([reading({ month: "2025-10" }), reading({ month: "2025-09" })]);
-    expect(cells(csv, 0).slice(0, 2)).toEqual(["เดือน", "ปีงบประมาณ"]);
+    expect(cells(csv, 0).slice(0, 2)).toEqual(["เดือน (ค.ศ.)", "ปีงบประมาณ"]);
     // ก.ย. กับ ต.ค. ของปีปฏิทินเดียวกันอยู่คนละปีงบ (ADR-0001)
     expect(cells(csv, 1).slice(0, 2)).toEqual(["2025-10", "2569"]);
     expect(cells(csv, 2).slice(0, 2)).toEqual(["2025-09", "2568"]);

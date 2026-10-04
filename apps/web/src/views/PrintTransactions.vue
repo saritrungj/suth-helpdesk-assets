@@ -996,7 +996,7 @@ onUnmounted(unregisterFiscalYearGuard);
             </li>
             <li class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-line-strong shrink-0" aria-hidden="true"></span>
-              <span class="text-ink-mute"> {{ t("ยังไม่เริ่ม") }} </span>
+              <span class="text-ink-mute"> {{ t("ยังไม่กรอก") }} </span>
               <span class="numeral font-semibold text-ink">{{ formatCount(progress.pending) }}</span>
             </li>
           </ul>
@@ -1055,7 +1055,7 @@ onUnmounted(unregisterFiscalYearGuard);
           />
         </UiField>
         <UiTooltip v-if="canImport" :content="t(&quot;นำเข้าจำนวนพิมพ์จาก Excel หรือ CSV&quot;)">
-          <UiButton variant="secondary" icon-only :label="t(&quot;นำเข้าจำนวนพิมพ์&quot;)" to="/admin/import">
+          <UiButton variant="secondary" icon-only :label="t(&quot;นำเข้าไฟล์จากผู้ให้เช่า&quot;)" to="/admin/import">
             <FileUp :size="16" />
           </UiButton>
         </UiTooltip>
