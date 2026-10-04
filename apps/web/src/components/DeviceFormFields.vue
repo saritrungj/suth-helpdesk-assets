@@ -157,9 +157,12 @@ const contractOptions = computed(() =>
 /** หมวดมิเตอร์หลัก — ไม่รวมหมวดสี ซึ่งเป็นมิเตอร์ที่สองของเครื่อง */
 const primaryCategories = computed(() => meterCategories.value.filter((c) => !c.is_color));
 
+/** มีราคาพิเศษเฉพาะเครื่องหรือไม่ — 0 บาทก็นับว่ามี */
+const hasPriceOverride = computed(() => form.value.price_override !== "" && form.value.price_override !== null);
+
 /** ราคาที่จะถูกใช้จริงถ้าบันทึกตามที่กรอกอยู่ตอนนี้ — แสดงให้เห็นก่อนกดบันทึก */
 const effectivePriceHint = computed(() => {
-  if (form.value.price_override !== "" && form.value.price_override !== null) {
+  if (hasPriceOverride.value) {
     return t("จะใช้ราคาพิเศษเฉพาะเครื่อง {0} บาท/หน้า แทนราคาตามสัญญา", [formatUnitPrice(form.value.price_override)]);
   }
   const contract = contracts.value.find((c) => Number(c.id) === Number(form.value.contract_id));
@@ -463,7 +466,10 @@ defineExpose({ reset, submit, saving, loading, ready, discardDraft });
       <fieldset class="grid grid-cols-1 sm:grid-cols-2 gap-4" :class="grouped ? 'rounded-lg border border-line-soft bg-surface p-4' : 'pt-5 border-t border-line-soft'">
         <legend class="eyebrow" :class="grouped ? 'float-left w-full col-span-full' : 'mb-2'"> {{ t("สัญญาและราคา") }} </legend>
 
-        <UiField :label="t(&quot;สัญญาที่ผูกอยู่&quot;)">
+        <UiField
+          :label="t(&quot;สัญญาที่ผูกอยู่&quot;)"
+          :hint="loading || form.contract_id || hasPriceOverride ? '' : t(&quot;ยังไม่ผูกสัญญา — เครื่องที่ไม่มีราคาจะบันทึกจำนวนพิมพ์ไม่ได้&quot;)"
+        >
           <UiCombobox
             v-model="form.contract_id"
             :options="contractOptions"

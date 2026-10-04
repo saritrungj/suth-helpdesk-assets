@@ -1182,5 +1182,7 @@
   "ราคาเฉลี่ยต่อหน้า": "Average price per page",
   "หลังหัก 2% · ไม่รวมค่าเช่าและ VAT": "After 2% deduction · excludes rent and VAT",
   "ต้องตรวจ": "Needs review",
-  "ไม่มียอดพิมพ์ในปีงบนี้ ({0} เครื่อง)": "No printing this fiscal year ({0} devices)"
+  "ไม่มียอดพิมพ์ในปีงบนี้ ({0} เครื่อง)": "No printing this fiscal year ({0} devices)",
+  "ยังไม่มีราคาต่อหน้าของเดือนนี้": "No price per page for this month yet",
+  "ยังไม่ผูกสัญญา — เครื่องที่ไม่มีราคาจะบันทึกจำนวนพิมพ์ไม่ได้": "No contract linked — print counts cannot be saved for a device with no price"
 }
