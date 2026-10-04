@@ -98,6 +98,12 @@ const DASH_AND_SPACE_PATTERN = "-–—\\s";
 /** ตรวจว่าซีเรียลเป็นขีดกลางล้วน ช่องว่าง หรืออักขระล่องหน (Zero-width) ล้วนหรือไม่ */
 const DASH_OR_EMPTY_SERIAL_REGEX = new RegExp(`^[${DASH_AND_SPACE_PATTERN}${ZERO_WIDTH_CHARS}]+$`);
 
+/** แถวนี้มีเลขซีเรียลจริงหรือไม่ — ว่าง ขีดกลางล้วน และอักขระล่องหนล้วน นับว่าไม่มี */
+function hasSerial(row) {
+  const serial = String(row.serial_number ?? "").trim();
+  return Boolean(serial) && !DASH_OR_EMPTY_SERIAL_REGEX.test(serial);
+}
+
 /**
  * รูปแบบข้อความตัวแทน "ไม่มีข้อมูล" ในภาษาไทย เช่น -, --, --- หรือ -ไม่มี-
  * ซึ่งไม่ใช่สูตรคำนวณและปลอดภัยที่จะใช้ในฟิลด์เสริมอย่างชื่อรุ่นหรือตำแหน่ง
@@ -246,6 +252,8 @@ function planRegistryImport(input) {
 
   const entries = Object.fromEntries(NAME_KINDS.map((kind) => [kind, new Map()]));
   for (const row of rows) {
+    // แถวไม่มี Serial ถูกข้ามแน่นอน — ชื่อในแถวนั้นจึงไม่ควรถูกถามหรือสร้าง (#229)
+    if (!hasSerial(row)) continue;
     for (const kind of NAME_KINDS) {
       const text = normalizeName(row[kind]);
       if (!text) continue;
@@ -331,13 +339,17 @@ function planRegistryImport(input) {
     const serial = String(row.serial_number ?? "").trim();
     const existing = serial ? deviceBySerial.get(serial.toUpperCase()) : undefined;
 
-    if (!serial || DASH_OR_EMPTY_SERIAL_REGEX.test(serial)) {
+    if (!hasSerial(row)) {
+      // ไม่แตะชั้น แผนก สัญญา หรือรุ่น: แถวนี้ไม่มีวันถูกบันทึก ของที่มันอ้างถึงจึงไม่ควรเข้าแผน
+      // หรือบล็อกไฟล์ทั้งไฟล์ (#229)
       reasons.push("ไม่มีเลขซีเรียล");
-    } else {
-      const serialStarter = checkFormulaStarter(serial);
-      if (serialStarter) {
-        reasons.push(formulaProblem("เลขซีเรียล", serialStarter));
-      }
+      planned.push({ source: row, existing: undefined, reasons, notes, key: null, values: { brand_id: null, building_id: null, division_id: null } });
+      continue;
+    }
+
+    const serialStarter = checkFormulaStarter(serial);
+    if (serialStarter) {
+      reasons.push(formulaProblem("เลขซีเรียล", serialStarter));
     }
 
     const modelStarter = checkFormulaStarter(row.model, { allowPlaceholder: true });
