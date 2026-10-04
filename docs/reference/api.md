@@ -10,6 +10,7 @@ prefix และความรับผิดชอบ — รายละเ�
 |---|---|---|
 | `POST /api/auth/login` | ไม่ | ตรวจรหัสผ่าน ตั้ง cookie แล้วคืนข้อมูลผู้ใช้ (ไม่คืน token) |
 | `GET /api/auth/me` | ใช่ | บอกว่าตอนนี้เป็นใคร — เว็บเรียกตอนเปิดหน้าเพราะอ่าน cookie เองไม่ได้ |
+| `PUT /api/auth/password` | ใช่ | ผู้ใช้เปลี่ยนรหัสผ่านของตัวเอง — body `{ current_password, new_password }` รหัสปัจจุบันผิดตอบ 400 `wrong_current_password` สำเร็จแล้ว token เดิมทุกใบของบัญชีใช้ไม่ได้และ session นี้ได้ cookie ใหม่ จำกัดการลองผิด 10 ครั้งต่อ 15 นาที |
 | `POST /api/auth/logout` | ไม่ | ลบ cookie ทิ้งและเพิกถอน token ที่ส่งมา — token นั้นได้ 401 `signed_out` จนหมดอายุ ([ADR-0038](../decisions/0038-revoke-session-on-logout.md)) เรียกได้แม้ token หมดอายุแล้ว |
 
 เส้นอื่นทั้งหมดต้องล็อกอิน

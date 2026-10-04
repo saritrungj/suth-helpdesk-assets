@@ -1178,5 +1178,15 @@
   "จำนวนพิมพ์หลังหัก 2%": "Pages after 2% deduction",
   "จำนวนพิมพ์รวม": "Total pages",
   "ค่าพิมพ์ (บาท)": "Cost (THB)",
-  "ค่าพิมพ์สะสม": "Cumulative cost"
+  "ค่าพิมพ์สะสม": "Cumulative cost",
+  "เปลี่ยนรหัสผ่านของฉัน": "Change my password",
+  "เปลี่ยนแล้วใช้รหัสใหม่ในการเข้าสู่ระบบครั้งถัดไป": "Use the new password the next time you sign in",
+  "รหัสผ่านปัจจุบัน": "Current password",
+  "ยืนยันรหัสผ่านใหม่": "Confirm new password",
+  "กรอกรหัสผ่านปัจจุบัน": "Enter your current password",
+  "รหัสผ่านใหม่ต้องมีอย่างน้อย {0} ตัวอักษร": "The new password must be at least {0} characters",
+  "รหัสผ่านใหม่สองช่องไม่ตรงกัน": "The two new password fields do not match",
+  "เปลี่ยนรหัสผ่านแล้ว — เครื่องอื่นที่ล็อกอินค้างไว้ต้องเข้าสู่ระบบใหม่": "Password changed — other devices that are still signed in must sign in again",
+  "เปลี่ยนรหัสผ่านไม่สำเร็จ กรุณาลองใหม่": "Could not change the password. Please try again",
+  "บันทึกรหัสผ่านใหม่": "Save new password"
 }

@@ -25,7 +25,8 @@ const requireAdmin = require("../auth/require-admin");
 const { validate, idParam, requiredText } = require("../shared/validate");
 const { notFound, badRequest } = require("../shared/http-error");
 const { noStore } = require("../shared/cache");
-const { USER_ROLES, PASSWORD_MIN_LENGTH } = require("@suth/domain");
+const { USER_ROLES } = require("@suth/domain");
+const { passwordField, optionalPasswordField } = require("../auth/password-policy");
 
 router.use(requireAuth);
 router.use(requireAdmin);
@@ -35,10 +36,7 @@ const SAFE_FIELDS = "id, username, role, created_at";
 
 const BCRYPT_ROUNDS = 10;
 
-const passwordField = z
-  .string()
-  .min(PASSWORD_MIN_LENGTH, `รหัสผ่านต้องมีอย่างน้อย ${PASSWORD_MIN_LENGTH} ตัวอักษร`)
-  .max(72, "รหัสผ่านยาวเกินไป");
+// กฎเดียวกับตอนผู้ใช้เปลี่ยนรหัสผ่านเอง (auth/password-policy.js)
 
 const roleField = z.enum(USER_ROLES, {
   error: `สิทธิ์ต้องเป็นหนึ่งใน ${USER_ROLES.join(", ")}`,
@@ -55,7 +53,7 @@ const createBody = z.object({
 const updateBody = z.object({
   username: requiredText("ชื่อผู้ใช้", 50),
   role: roleField,
-  password: z.union([passwordField, z.literal(""), z.null(), z.undefined()]).transform((v) => v || null),
+  password: optionalPasswordField,
 });
 
 /**
