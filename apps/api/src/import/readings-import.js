@@ -13,7 +13,7 @@
 
 const { badRequest } = require("../shared/http-error");
 const { assertReadingsPriced } = require("../devices/meters");
-const { MAX_PAGES_PER_MONTH, normalizeMonth } = require("@suth/domain");
+const { MAX_PAGES_PER_MONTH, normalizeMonth, formatMonthTH } = require("@suth/domain");
 const { parseVendorWorkbook, comparableContractNo } = require("./vendor-meter");
 const { normalizeName } = require("../master-data/names");
 const { serialIndex } = require("./registry-plan");
@@ -322,7 +322,7 @@ async function checkWrittenReadings(conn, candidates, months) {
       row: row.row,
       serial_number: row.serial_number,
       month: row.month,
-      reason: `เลขต้นงวด ${gap.meter_start} ไม่เท่าเลขสิ้นงวด ${gap.previous_end} ของงวด ${gap.previous_month}`,
+      reason: `เลขต้นงวด ${gap.meter_start} ไม่เท่าเลขสิ้นงวด ${gap.previous_end} ของงวด ${formatMonthTH(gap.previous_month)}`,
     });
   }
 

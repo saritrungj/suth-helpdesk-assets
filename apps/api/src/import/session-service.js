@@ -21,7 +21,7 @@ const crypto = require("crypto");
 const db = require("../shared/db");
 const { ApiError, badRequest, conflict } = require("../shared/http-error");
 const { logger } = require("../shared/logger");
-const { fiscalYearOfMonth, getFiscalYearRange } = require("@suth/domain");
+const { fiscalYearOfMonth, getFiscalYearRange, formatMonthTH } = require("@suth/domain");
 const { today } = require("../devices/contract-history");
 const { readAllSheets } = require("./workbook");
 const { validateDecisions } = require("./decisions");
@@ -491,7 +491,7 @@ function buildValidation({ info, plan, described, contracts, readings, reconcili
   const sheetCount = info.registry?.sheets.length ?? info.raw.length;
   const kindLabel = { meter_report: "รายงานมิเตอร์", registry: "ทะเบียนเครื่อง", readings_template: "เทมเพลตยอดรายเดือน" }[info.kind];
   add("file", "ok", `อ่านไฟล์ได้: ${kindLabel} ${sheetCount} แผ่น`,
-    fiscalYears.months.length ? `งวด ${fiscalYears.months[0]} ถึง ${fiscalYears.months.at(-1)}` : null);
+    fiscalYears.months.length ? `งวด ${formatMonthTH(fiscalYears.months[0])} ถึง ${formatMonthTH(fiscalYears.months.at(-1))}` : null);
 
   for (const contract of contracts) {
     if (contract.planned && contract.state === "ok") {
