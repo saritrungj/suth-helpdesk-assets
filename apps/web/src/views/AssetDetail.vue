@@ -445,8 +445,8 @@ const hasUsage = computed(() => usageSeries.value.some((series) => series.values
             </p>
 
             <p class="text-2xs text-ink-mute mt-1">
-              <MapPin :size="11" class="inline align-[-1px]" aria-hidden="true" /> {{ t("ตั้งแต่") }} {{ entry.effective_from }}
-              <template v-if="entry.effective_to"> {{ t("ถึง") }} {{ entry.effective_to }}</template>
+              <MapPin :size="11" class="inline align-[-1px]" aria-hidden="true" /> {{ t("ตั้งแต่") }} {{ formatDate(String(entry.effective_from).slice(0, 10)) }}
+              <template v-if="entry.effective_to"> {{ t("ถึง") }} {{ formatDate(String(entry.effective_to).slice(0, 10)) }}</template>
               <span v-else class="text-brand-ink font-medium"> {{ t("· ที่ตั้งปัจจุบัน") }} </span>
             </p>
           </li>

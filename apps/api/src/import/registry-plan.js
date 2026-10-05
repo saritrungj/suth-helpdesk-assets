@@ -17,7 +17,7 @@
 //   - เครื่องที่มีสัญญาต้องรู้หมวดมิเตอร์ ไม่งั้นยอดพิมพ์ของเดือนแรกหาราคาไม่ได้ (ADR-0021)
 //   - สถานะการติดตั้งยืนยันย้อนหลังได้เฉพาะเมื่อไฟล์ระบุวันติดตั้ง (ADR-0018 Q21)
 
-const { MAX_LENGTH, monthIndex, formulaStarter, ZERO_WIDTH_CHARS } = require("@suth/domain");
+const { MAX_LENGTH, monthIndex, formulaStarter, ZERO_WIDTH_CHARS, formatDateTH } = require("@suth/domain");
 const { normalizeName, nameKey, createNameResolver } = require("../master-data/names");
 const { comparableContractNo } = require("./vendor-meter");
 const { requiredPrice } = require("../shared/validate");
@@ -403,7 +403,7 @@ function planRegistryImport(input) {
     // วันก่อนเริ่มสัญญาใช้วันเริ่มสัญญาแทน — เดือนก่อนสัญญาไม่มีราคา ยอดของเดือนนั้นบันทึกไม่ได้เลย
     let installedOn = row.installed_on || today;
     if (row.installation === "installed" && contract && monthIndex(installedOn.slice(0, 7)) < monthIndex(contract.effective_from.slice(0, 7))) {
-      notes.push(`วันติดตั้ง ${installedOn} อยู่ก่อนเดือนเริ่มสัญญา — เริ่มนับยอดที่วันเริ่มสัญญา ${contract.effective_from}`);
+      notes.push(`วันติดตั้ง ${formatDateTH(installedOn)} อยู่ก่อนเดือนเริ่มสัญญา — เริ่มนับยอดที่วันเริ่มสัญญา ${contract.effective_from}`);
       installedOn = contract.effective_from;
     }
 

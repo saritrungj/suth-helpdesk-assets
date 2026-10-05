@@ -35,6 +35,7 @@ const {
   fiscalYearMonths,
   computeCoverage,
   currentMonth,
+  formatMonthTH,
 } = require("@suth/domain");
 
 router.use(requireAuth);
@@ -236,7 +237,7 @@ async function auditReadingChanges(conn, actor, changes) {
     entity: "print_reading",
     entityId: change.deviceId,
     entityKey: change.month,
-    summary: `จำนวนพิมพ์ ${serialOf.get(change.deviceId) ?? change.deviceId} เดือน ${change.month}: ${show(change.before)} → ${show(change.after)}`,
+    summary: `จำนวนพิมพ์ ${serialOf.get(change.deviceId) ?? change.deviceId} เดือน ${formatMonthTH(change.month)}: ${show(change.before)} → ${show(change.after)}`,
     before: change.before === null ? null : { pages: change.before },
     after: change.after === null ? null : { pages: change.after },
   })));
