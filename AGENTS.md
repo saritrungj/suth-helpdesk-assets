@@ -4,7 +4,7 @@
 
 ## อ่านก่อนแก้ (trigger → ไฟล์)
 
-- เขียนโค้ดใน `apps/api` หรือ `apps/web` → [`docs/reference/coding-standards.md`](docs/reference/coding-standards.md) (รูปแบบ ชั้นพื้นฐาน API บทบาทโฟลเดอร์เว็บ ห้ามใช้สี Tailwind ดิบ ชื่อไฟล์)
+- เขียนหรือรีวิวโค้ดใน `apps/api` หรือ `apps/web` → [`docs/reference/coding-standards.md`](docs/reference/coding-standards.md) (รูปแบบ ชั้นพื้นฐาน API บทบาทโฟลเดอร์เว็บ ห้ามใช้สี Tailwind ดิบ ชื่อไฟล์)
 - feature, domain rule, report, role → `docs/explanation/domain.md`
 - โครงสร้างโค้ดหรือ API boundary → `docs/explanation/architecture.md`
 - environment, schema, migration, seed, import → `docs/how-to/`
