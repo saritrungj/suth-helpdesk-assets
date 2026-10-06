@@ -29,7 +29,7 @@ require("dotenv").config();
 
 const db = require("./src/shared/db");
 const { logger, requestLogger } = require("./src/shared/logger");
-const { ApiError, PROBLEM_JSON, notFound, fromDatabaseError, fromRequestError } = require("./src/shared/http-error");
+const { ApiError, PROBLEM_JSON, notFound, tooManyRequests, fromDatabaseError, fromRequestError } = require("./src/shared/http-error");
 const { noStore } = require("./src/shared/cache");
 const { findSchemaGaps, describeGaps } = require("./src/shared/schema-check");
 const { jwtSecretProblem } = require("./src/auth/jwt-secret");
@@ -94,17 +94,8 @@ app.use(
     max: Number(process.env.RATE_LIMIT_PER_MINUTE || 600),
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req, res) => {
-      res
-        .status(429)
-        .type(PROBLEM_JSON)
-        .json({
-          type: "about:blank",
-          title: "มีคำขอเข้ามาถี่เกินไป",
-          status: 429,
-          code: "rate_limited",
-          detail: "กรุณารอสักครู่แล้วลองใหม่",
-        });
+    handler: (req, res, next) => {
+      next(tooManyRequests("มีคำขอเข้ามาถี่เกินไป", { detail: "กรุณารอสักครู่แล้วลองใหม่" }));
     },
   })
 );
