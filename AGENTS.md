@@ -133,7 +133,7 @@ Issue ของ repo นี้อยู่ใน GitHub Issues (`saritrungj/suth
 
 ### Domain docs
 
-Single-context — ADR อยู่ที่ `docs/decisions/` (ไม่ใช่ `docs/adr/`) ยังไม่มี `CONTEXT.md` ดู `docs/agents/domain.md`
+Single-context — glossary อยู่ที่ `CONTEXT.md`, ADR อยู่ที่ `docs/decisions/` (ไม่ใช่ `docs/adr/`) ดู `docs/agents/domain.md`
 
 ### Bug fixing and diff review
 
