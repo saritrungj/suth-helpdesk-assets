@@ -96,6 +96,9 @@ const notFound = (title = "ไม่พบข้อมูลที่ต้อ�
 /** ชนกับข้อมูลที่มีอยู่แล้ว เช่น serial ซ้ำ */
 const conflict = (title, options) => new ApiError(409, title, { code: "conflict", ...options });
 
+/** คำขอถี่เกินโควตาของตัวจำกัดอัตรา — ให้เรียก next(tooManyRequests(...)) จาก handler ของ express-rate-limit */
+const tooManyRequests = (title, options) => new ApiError(429, title, { code: "rate_limited", ...options });
+
 /**
  * แปลง error ของ mysql2 ที่รู้จักให้เป็น ApiError ที่อ่านรู้เรื่อง
  *
@@ -193,5 +196,6 @@ module.exports = {
   forbidden,
   notFound,
   conflict,
+  tooManyRequests,
   fromDatabaseError,
 };

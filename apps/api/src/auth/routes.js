@@ -22,7 +22,7 @@ const { passwordVersion } = require("./current-user");
 const { passwordField } = require("./password-policy");
 const { actorOf, recordAudit } = require("../shared/audit");
 const { validate } = require("../shared/validate");
-const { badRequest, unauthorized } = require("../shared/http-error");
+const { badRequest, unauthorized, tooManyRequests } = require("../shared/http-error");
 const { noStore } = require("../shared/cache");
 const { SESSION_COOKIE, sessionCookieOptions } = require("./session-cookie");
 const { logger } = require("../shared/logger");
@@ -43,14 +43,13 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  handler: (req, res) => {
-    res.status(429).json({
-      type: "about:blank",
-      title: "พยายามเข้าสู่ระบบบ่อยเกินไป",
-      status: 429,
-      code: "too_many_attempts",
-      detail: "กรุณารอ 15 นาทีแล้วลองใหม่ หรือติดต่อผู้ดูแลระบบ",
-    });
+  handler: (req, res, next) => {
+    next(
+      tooManyRequests("พยายามเข้าสู่ระบบบ่อยเกินไป", {
+        code: "too_many_attempts",
+        detail: "กรุณารอ 15 นาทีแล้วลองใหม่ หรือติดต่อผู้ดูแลระบบ",
+      })
+    );
   },
 });
 
@@ -146,14 +145,13 @@ const passwordLimiter = rateLimit({
   // นับต่อบัญชี ไม่ใช่ต่อ IP: โรงพยาบาลออกเน็ตผ่าน IP เดียวกัน คนหนึ่งลองผิดต้องไม่ล็อกทุกคน และ session ที่
   // ถูกคัดลอกไปต้องเดารหัสได้จำกัดต่อบัญชี ไม่ใช่ได้โควตาใหม่ทุก IP — ด่านนี้จึงอยู่หลัง requireAuth
   keyGenerator: (req) => `password:${req.user.id}`,
-  handler: (req, res) => {
-    res.status(429).json({
-      type: "about:blank",
-      title: "ลองเปลี่ยนรหัสผ่านบ่อยเกินไป",
-      status: 429,
-      code: "too_many_attempts",
-      detail: "กรุณารอ 15 นาทีแล้วลองใหม่ หรือติดต่อผู้ดูแลระบบ",
-    });
+  handler: (req, res, next) => {
+    next(
+      tooManyRequests("ลองเปลี่ยนรหัสผ่านบ่อยเกินไป", {
+        code: "too_many_attempts",
+        detail: "กรุณารอ 15 นาทีแล้วลองใหม่ หรือติดต่อผู้ดูแลระบบ",
+      })
+    );
   },
 });
 
