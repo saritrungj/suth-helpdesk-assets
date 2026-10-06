@@ -22,7 +22,7 @@
 
 รีวิว diff ทุกไฟล์แยกเป็นสามรอบ เพื่อไม่ให้ความสนใจเรื่องหนึ่งกลบอีกเรื่องหนึ่ง
 
-1. **Repository standards** — โครงสร้าง, naming, design tokens, API conventions และกฎในเอกสารที่เกี่ยวข้อง
+1. **Repository standards** — โครงสร้าง, naming, design tokens, API conventions และกฎในเอกสารที่เกี่ยวข้อง โดยเริ่มจาก [coding-standards](../reference/coding-standards.md)
 2. **Specification** — คำขอและ acceptance criteria ครบหรือไม่ มี partial implementation, wrong behavior หรือ scope creep หรือไม่
 3. **Security and robustness** — input/query ที่เชื่อไม่ได้, auth/role, error และ empty state, race/stale state, prototype inheritance และข้อมูลละเอียดอ่อน
 
