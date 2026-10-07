@@ -180,8 +180,8 @@ test.describe("หน้าภาพรวมการพิมพ์", () => {
 
     await card.getByRole("radio", { name: "ตาราง", exact: true }).click();
     const chartTable = card.getByRole("table", { name: "ค่าตัวเลขของกราฟด้านบน" });
-    await expect(chartTable.getByRole("row", { name: /ตุลาคม 2568\s+1,500\s+300\s+0/ })).toBeVisible();
-    await expect(chartTable.getByRole("row", { name: /ธันวาคม 2568\s+1,450\s+570\s+0/ })).toBeVisible();
+    await expect(chartTable.getByRole("row", { name: /ตุลาคม 2568\s+1,800\s+1,500\s+300\s+0/ })).toBeVisible();
+    await expect(chartTable.getByRole("row", { name: /ธันวาคม 2568\s+2,020\s+1,450\s+570\s+0/ })).toBeVisible();
   });
 
   test("กรองด้วยฝ่าย: ตัวเลขสำคัญ กราฟ ตาราง แผงรายละเอียด และไฟล์ Excel เป็นชุดเดียวกัน", async ({ page }) => {

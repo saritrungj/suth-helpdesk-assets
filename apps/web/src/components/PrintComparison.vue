@@ -4,7 +4,8 @@ import { t } from "../lib/locale";
 import { formatBahtValue, formatCompact, formatCount } from "../lib/format";
 import { UiCard, UiEmpty, UiField, UiFilterBar, UiSegmented, UiSkeleton } from "../ui";
 import UiStockChart from "../ui/UiStockChart.vue";
-import { dimensionLabel, metricValue, monthText, monthsWithData } from "./comparison";
+import { dimensionLabel, monthText, monthsWithData } from "./comparison";
+import { comparisonPlot, costNote } from "./comparison-plot";
 import { comparisonTitle } from "./comparison-export";
 
 /**
@@ -60,18 +61,9 @@ watch([() => props.model, () => props.loading, () => props.scopeText, () => prop
 const shown = computed(() => (props.loading ? settled.value : { model: props.model, caption: props.scopeText, selected: props.selected }));
 const title = computed(() => comparisonTitle(shown.value.model));
 
-const series = computed(() => {
-  const byKey = new Map(shown.value.model.entries.map((entry) => [entry.key, entry]));
-  return shown.value.selected
-    .map((key) => byKey.get(key))
-    .filter(Boolean)
-    .map((entry) => ({
-      key: entry.key,
-      label: entry.displayLabel ?? entry.label,
-      values: entry.monthly.map((summary) => metricValue(summary, shown.value.model.metric)),
-      slot: props.slots.get(entry.key),
-    }));
-});
+const plot = computed(() => comparisonPlot(shown.value.model, shown.value.selected, props.slots));
+const series = computed(() => plot.value.series);
+const scopeCostNote = computed(() => shown.value.model.metric === "cost" ? costNote(shown.value.model.scope) : "");
 const hasChart = computed(() => series.value.some((s) => s.values.some((value) => value !== null)));
 // เส้นที่มีจุดเดียวไม่บอกอะไร — เดือนเดียวให้อ่านสัดส่วนจากตาราง (เดิมเป็นแท่งแนวนอนซึ่งซ้ำกับตาราง)
 const singleMonth = computed(() => shown.value.model.months.length < 2);
@@ -106,6 +98,9 @@ const pointLabel = (key) => (isYears.value ? monthText(key) : monthText(key, { l
       <UiEmpty v-else-if="singleMonth" compact data-testid="compare-single-month"
         :title="t('ช่วงที่เลือกมีข้อมูลเดือนเดียว')"
         :description="t('ดูสัดส่วนของแต่ละรายการในตารางด้านล่าง หรือเลือกช่วงเวลาอย่างน้อย 2 เดือนเพื่อดูเป็นเส้นรายเดือน')" />
+      <UiEmpty v-else-if="!hasChart && scopeCostNote" compact
+        :title="t('ค่าพิมพ์ยังคำนวณไม่ได้')"
+        :description="scopeCostNote" />
       <UiEmpty v-else-if="!hasChart" compact
         :title="t('เลือกรายการในตารางด้านล่างเพื่อแสดงบนกราฟ')"
         :description="t('เลือกได้สูงสุด 5 รายการ เทียบกันบนแกนเดือนเดียวกัน')" />
@@ -114,6 +109,7 @@ const pointLabel = (key) => (isYears.value ? monthText(key) : monthText(key, { l
         :axis-label="axisLabel"
         :point-label="pointLabel"
         :series="series"
+        :notes="plot.notes"
         :format-value="formatValue"
         :format-axis="formatCompact"
         :unit="unit"
@@ -124,6 +120,8 @@ const pointLabel = (key) => (isYears.value ? monthText(key) : monthText(key, { l
       />
 
       <template #footer>
+        <p v-if="series.some((item) => item.reference)" class="mb-1 text-xs text-ink-soft">{{ t("เส้นประรวมทุกกลุ่มในตัวกรอง ไม่เปลี่ยนตามรายการที่เลือกบนกราฟ") }}</p>
+        <p v-if="scopeCostNote" class="mb-1 text-xs text-warn-ink" data-testid="compare-cost-note">{{ scopeCostNote }}</p>
         <div class="flex flex-wrap justify-between gap-2 text-xs text-ink-mute">
           <span>{{ t("เลือก{0}ในตารางด้านล่างเพื่อแสดงบนกราฟ (สูงสุด 5 รายการ)", [noun]) }}</span>
           <span v-if="isYears">{{ t("แสดง {0} เดือนของปีงบ · มีข้อมูล {1} เดือน", [formatCount(shown.model.months.length), formatCount(monthsWithData(shown.model))]) }}</span>

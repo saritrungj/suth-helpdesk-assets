@@ -27,7 +27,7 @@ const props = defineProps({
   axisLabel: { type: Function, default: (key) => String(key) },
   /** ป้ายเต็มในกล่องค่าและตาราง */
   pointLabel: { type: Function, default: null },
-  /** [{ key, label, values: (number|null)[] ตาม domain, slot?: 1–8, area?: พื้นไล่สีใต้เส้น (เส้นเดียว = มีเสมอ) }] */
+  /** [{ key, label, values: (number|null)[], slot?: 1–8, area?: boolean, reference?: เส้นอ้างอิงสี ink แบบเส้นประ }] */
   series: { type: Array, default: () => [] },
   /** เครื่องหมายบนเส้นแรก [{ index, text, tone: "warn" }] */
   markers: { type: Array, default: () => [] },
@@ -75,7 +75,7 @@ function rgba(color, alpha = 1) {
 const painted = computed(() =>
   props.series.map((s, index) => ({
     ...s,
-    color: colors.value.series[((s.slot ?? index + 1) - 1) % colors.value.series.length],
+    color: s.reference ? colors.value.ink : colors.value.series[((s.slot ?? index + 1) - 1) % colors.value.series.length],
   }))
 );
 const single = computed(() => painted.value.length === 1);
@@ -136,12 +136,13 @@ function chartOptions() {
   };
 }
 
-const isArea = (s) => single.value || Boolean(s.area);
+const isArea = (s) => !s.reference && (single.value || Boolean(s.area));
 
 function seriesOptions(s) {
   const common = {
     color: rgba(s.color),
-    lineWidth: 2,
+    lineWidth: s.reference ? 3 : 2,
+    lineStyle: s.reference ? LineStyle.Dashed : LineStyle.Solid,
     pointMarkersVisible: true,
     pointMarkersRadius: 3,
     crosshairMarkerRadius: 5,
@@ -226,7 +227,7 @@ function onCrosshair(param) {
     index,
     left: Math.min(Math.max(param.point.x + 14, 8), Math.max(8, width - 196)),
     top: 8,
-    rows: painted.value.map((s) => ({ key: s.key, label: s.label, color: s.color, value: s.values[index] })),
+    rows: painted.value.map((s) => ({ key: s.key, label: s.label, reference: s.reference, color: s.color, value: s.values[index] })),
     note: props.notes[index] ?? "",
   };
 }
@@ -300,9 +301,9 @@ const ariaSummary = computed(() => {
 <template>
   <div ref="root" class="flex flex-col min-w-0" :aria-busy="loading">
     <div v-if="!single || showTableToggle" class="flex flex-wrap items-center justify-between gap-2 mb-2">
-      <ul v-if="!single" class="flex flex-wrap items-center gap-x-4 gap-y-1.5 list-none min-w-0">
+      <ul v-if="!single || painted.some((s) => s.reference)" class="flex flex-wrap items-center gap-x-4 gap-y-1.5 list-none min-w-0">
         <li v-for="s in painted" :key="s.key ?? s.label" class="flex items-center gap-1.5 min-w-0 text-xs text-ink-soft">
-          <span class="inline-block w-3 h-0.5 rounded-full shrink-0" :style="{ background: s.color }" aria-hidden="true"></span>
+          <span class="inline-block w-3 shrink-0 border-t-2" :style="{ borderColor: s.color, borderStyle: s.reference ? 'dashed' : 'solid' }" aria-hidden="true"></span>
           <span class="truncate">{{ s.label }}</span>
         </li>
       </ul>
@@ -334,7 +335,7 @@ const ariaSummary = computed(() => {
         <p v-for="row in tip.rows" :key="row.key ?? row.label" class="flex items-center justify-between gap-2">
           <span class="flex items-center gap-1.5 min-w-0 text-ink-soft">
             <span class="inline-block w-2 h-2 rounded-full shrink-0" :style="{ background: row.color }" aria-hidden="true"></span>
-            <span class="truncate">{{ single ? t("ค่า") : row.label }}</span>
+            <span :class="row.reference ? 'whitespace-normal' : 'truncate'">{{ single && !row.reference ? t("ค่า") : row.label }}</span>
           </span>
           <span class="numeral font-medium text-ink whitespace-nowrap">{{ show(row.value) }}<template v-if="unit && row.value !== null && row.value !== undefined"> {{ unit }}</template></span>
         </p>

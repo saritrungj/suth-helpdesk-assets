@@ -1188,5 +1188,11 @@
   "รหัสผ่านใหม่สองช่องไม่ตรงกัน": "The two new password fields do not match",
   "เปลี่ยนรหัสผ่านแล้ว — เครื่องอื่นที่ล็อกอินค้างไว้ต้องเข้าสู่ระบบใหม่": "Password changed — other devices that are still signed in must sign in again",
   "เปลี่ยนรหัสผ่านไม่สำเร็จ กรุณาลองใหม่": "Could not change the password. Please try again",
-  "บันทึกรหัสผ่านใหม่": "Save new password"
+  "บันทึกรหัสผ่านใหม่": "Save new password",
+  "รวมทุกกลุ่มในตัวกรอง": "Total of all groups in the filters",
+  "เส้นประรวมทุกกลุ่มในตัวกรอง ไม่เปลี่ยนตามรายการที่เลือกบนกราฟ": "The dashed total includes all filtered groups, regardless of the groups selected on the chart",
+  "ค่าพิมพ์ยังคำนวณไม่ได้: ไม่มีราคา {0} รายการ": "Print cost cannot be calculated: {0} records have no price",
+  "ค่าพิมพ์เฉพาะรายการที่มีราคา: ไม่มีราคา {0} รายการ": "Print cost includes only priced records: {0} records have no price",
+  "ค่าพิมพ์ยังคำนวณไม่ได้": "Print cost cannot be calculated",
+  "ข้อมูลราคาไม่ครบ": "Incomplete pricing data"
 }

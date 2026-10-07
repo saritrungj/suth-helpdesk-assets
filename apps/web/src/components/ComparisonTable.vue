@@ -6,6 +6,7 @@ import { formatBahtValue, formatCount } from "../lib/format";
 import { UiButton, UiCard, UiCheckbox, UiDataTable } from "../ui";
 import UiSparkline from "../ui/UiSparkline.vue";
 import { averagePerDevice, dimensionLabel, metricLabel, metricValue } from "./comparison";
+import { costNote } from "./comparison-plot";
 
 /**
  * ComparisonTable — ตารางรายละเอียดใต้พื้นที่เปรียบเทียบ แบบรายการหุ้น (watchlist) (#212)
@@ -117,10 +118,14 @@ const columns = computed(() => {
       <template #cell-rawPages="{ row }">{{ noData(row.summary) ? "—" : formatCount(row.summary.rawPages) }}</template>
       <template #cell-cost="{ row }">
         {{ money(row.summary.cost) }}
+        <span v-if="costNote(row.summary)" class="block text-xs text-warn-ink">{{ costNote(row.summary) }}</span>
       </template>
       <template #cell-devices="{ row }">{{ formatCount(row.summary.devices) }}</template>
       <template #cell-pagesPerDevice="{ row }">{{ averagePerDevice(row.summary, "rawPages") == null ? "—" : formatCount(averagePerDevice(row.summary, "rawPages")) }}</template>
-      <template #cell-costPerDevice="{ row }">{{ money(averagePerDevice(row.summary, "cost")) }}</template>
+      <template #cell-costPerDevice="{ row }">
+        {{ money(averagePerDevice(row.summary, "cost")) }}
+        <span v-if="row.summary.unpriced" class="block text-xs text-warn-ink">{{ t("ข้อมูลราคาไม่ครบ") }}</span>
+      </template>
       <template #actions="{ row }">
         <UiButton size="sm" variant="ghost" :disabled="loading || noData(row.summary)" :aria-label="t('ดูรายละเอียดของ {0}', [row.displayLabel])" @click="emit('details', row)">
           {{ t("ดูรายละเอียด") }}<template #trailing><ArrowUpRight :size="14" /></template>

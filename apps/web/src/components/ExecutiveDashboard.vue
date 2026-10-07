@@ -14,6 +14,7 @@ import DashboardFilters from './DashboardFilters.vue';
 import ExecutiveDetails from './ExecutiveDetails.vue';
 import ExportMenu from './ExportMenu.vue';
 import PrintComparison from './PrintComparison.vue';
+import { costNote } from './comparison-plot';
 import OverviewTrend from './OverviewTrend.vue';
 import ComparisonTable from './ComparisonTable.vue';
 import TopShareCard from './TopShareCard.vue';
@@ -460,7 +461,7 @@ const devicesHint = computed(() => {
   if (!o || scoped || !o.totals?.installed_active_devices) return '';
   return t('จาก {0} เครื่องที่ติดตั้งแล้ว', [formatCount(o.totals.installed_active_devices)]);
 });
-const costHint = computed(() => [t('ไม่รวมค่าเช่าและ VAT'), compareHint.value].filter(Boolean).join(' · '));
+const costHint = computed(() => [costNote(shownStats.value.totals), t('ไม่รวมค่าเช่าและ VAT'), compareHint.value].filter(Boolean).join(' · '));
 
 const settledTable = ref(null);
 watch([model, periodText, ready], ([value, period, isReady]) => {
