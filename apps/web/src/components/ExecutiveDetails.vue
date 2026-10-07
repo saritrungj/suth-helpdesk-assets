@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { t } from '../lib/locale';
 import { formatMonth } from '../lib/locale-format';
-import { formatBahtValue, formatCount, formatNetPages } from '../lib/format';
+import { formatBahtValue, formatCount } from '../lib/format';
 import { errorMessage } from '../lib/api-error';
 import { groupReport, reportTotals, scopeReport } from './executive-report';
 import { conditionsSheet, detailSheet, exportFilename, saveWorkbook, standardNotes } from './comparison-export';
@@ -66,10 +66,9 @@ async function exportRows() {
   <UiDrawer :open="open" size="lg" :title="title" :description="context" @update:open="emit('update:open', $event)">
     <template #body>
       <div class="flex flex-col gap-5">
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-5 border-b border-line-soft">
+        <div class="grid grid-cols-2 gap-4 pb-5 border-b border-line-soft">
           <UiMetric :label="t('ค่าพิมพ์')" :value="money(totals.cost)" :unit="t('บาท')" />
           <UiMetric :label="t('จำนวนพิมพ์')" :value="formatCount(totals.rawPages)" :unit="t('หน้า')" />
-          <UiMetric :label="t('จำนวนพิมพ์หลังหัก 2%')" :value="formatNetPages(totals.pages)" :unit="t('หน้า')" />
         </div>
         <UiSegmented v-model="group" :options="options" :label="t('แบ่งตาม')" size="sm" />
         <UiInput v-model="search" :placeholder="t('ค้นหาในรายละเอียด')" :aria-label="t('ค้นหาในรายละเอียด')" />
@@ -77,14 +76,14 @@ async function exportRows() {
         <div v-else class="overflow-x-auto">
           <table class="w-full text-sm">
             <caption class="sr-only">{{ title }}</caption>
-            <thead><tr class="border-b border-line text-ink-mute"><th scope="col" class="text-left py-3">{{ options.find(option => option.value === group)?.label }}</th><th scope="col" class="text-right px-3">{{ t('จำนวนพิมพ์') }}</th><th scope="col" class="text-right px-3">{{ t('จำนวนพิมพ์หลังหัก 2%') }}</th><th scope="col" class="text-right">{{ t('บาท') }}</th></tr></thead>
+            <thead><tr class="border-b border-line text-ink-mute"><th scope="col" class="text-left py-3">{{ options.find(option => option.value === group)?.label }}</th><th scope="col" class="text-right px-3">{{ t('จำนวนพิมพ์') }}</th><th scope="col" class="text-right">{{ t('บาท') }}</th></tr></thead>
             <tbody><tr v-for="row in groups" :key="row.key" class="border-b border-line-soft">
               <th scope="row" class="py-3 text-left font-medium text-ink"><RouterLink v-if="group === 'device' && row.key !== 'unassigned'" :to="`/assets/${row.key}`" class="underline text-brand-ink">{{ label(row) }}</RouterLink><span v-else>{{ label(row) }}</span><span class="block text-xs font-normal text-ink-mute mt-1">{{ t('{0} รายการ', [formatCount(row.rows.length)]) }}</span></th>
-              <td class="text-right px-3 numeral">{{ formatCount(row.rawPages) }}</td><td class="text-right px-3 numeral">{{ formatNetPages(row.pages) }}</td><td class="text-right numeral whitespace-nowrap">{{ money(row.cost) }}</td>
+              <td class="text-right px-3 numeral">{{ formatCount(row.rawPages) }}</td><td class="text-right numeral whitespace-nowrap">{{ money(row.cost) }}</td>
             </tr></tbody>
           </table>
         </div>
-        <p class="text-xs text-ink-mute">{{ t('เงินคิดจากรายการรายเครื่องรายเดือน · คิดจากจำนวนพิมพ์หลังหัก 2%') }}</p>
+        <p class="text-xs text-ink-mute">{{ t('เงินคิดจากรายการรายเครื่องรายเดือน') }}</p>
         <UiAlert v-if="exportError" tone="danger">{{ exportError }}</UiAlert>
       </div>
     </template>

@@ -88,7 +88,7 @@ const CARDS = computed(() => [
     format: formatBahtValue,
     headline: headline(costValues.value, formatBahtValue),
     series: [
-      { key: "cost", label: t("ค่าพิมพ์ (หลังหัก 2%)"), values: costValues.value, slot: 1, area: true },
+      { key: "cost", label: t("ค่าพิมพ์"), values: costValues.value, slot: 1, area: true },
       ...(invoiceValues.value ? [{ key: "invoice", label: t("ตามใบแจ้งหนี้ (รวมค่าเช่า + VAT)"), values: invoiceValues.value, slot: 3 }] : []),
     ],
   },

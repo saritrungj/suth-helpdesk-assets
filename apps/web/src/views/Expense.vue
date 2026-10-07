@@ -12,9 +12,8 @@ import { t } from "../lib/locale";
  * ใช้ตอนตรวจใบแจ้งหนี้จากผู้ให้เช่า: กางจากสัญญา -> เครื่องในสัญญา -> ยอดรายเดือน
  * ของเครื่องนั้น จนถึงตัวเลขที่เอาไปเทียบกับเอกสารได้ตรงบรรทัด
  *
- * ทุกยอดในหน้านี้เป็น "ยอดสุทธิหลังหัก 2%" ตามกฎธุรกิจที่ยืนยันแล้ว และเขียนกำกับไว้
- * ทุกที่ที่แสดง เพราะเป็นตัวเลขที่ถูกส่งต่อไปยังงานการเงิน การไม่บอกว่าหักแล้ว
- * ทำให้มีโอกาสถูกหักซ้ำอีกรอบ
+ * ค่าพิมพ์คงฐานคำนวณตาม ADR-0017/0022; #273 ซ่อนข้อความหัก 2% บนจอเท่านั้น
+ * จำนวนพิมพ์ยังเป็นค่าที่บันทึก ส่วนคำอธิบายฐานคิดเงินและค่าทั้งหมดในไฟล์ส่งออกคงเดิม
  *
  * ยอดของแต่ละเดือนอยู่ใต้สัญญาที่คิดเงินเดือนนั้นจริง (ADR-0023) ยอดรวมของหน้าจึงเท่า
  * ค่าใช้จ่ายบนแดชบอร์ดเสมอ และแต่ละสัญญามียอดตามใบแจ้งหนี้รวมค่าเช่าคงที่และ VAT
@@ -340,7 +339,7 @@ onMounted(() => {
       class="card grid grid-cols-1 divide-y sm:divide-y-0 sm:divide-x divide-line-soft mb-4"
       :class="anyInvoiceExtras ? 'sm:grid-cols-4' : 'sm:grid-cols-3'"
     >
-      <UiStat plain :label="t('ค่าพิมพ์รวม')" :unit="t(&quot;บาท&quot;)" :hint="t('หลังหัก 2% · ไม่รวมค่าเช่าและ VAT')" :loading="loading">
+      <UiStat plain :label="t('ค่าพิมพ์รวม')" :unit="t(&quot;บาท&quot;)" :hint="t('ไม่รวมค่าเช่าและ VAT')" :loading="loading">
         {{ formatBahtValue(printTotal) }}
       </UiStat>
 
@@ -356,7 +355,7 @@ onMounted(() => {
         {{ formatBahtValue(invoiceTotal) }}
       </UiStat>
 
-      <UiStat plain :label="t(&quot;จำนวนพิมพ์รวม&quot;)" :unit="t(&quot;หน้า&quot;)" :hint="t(&quot;ก่อนหัก 2%&quot;)" tone="ink" :loading="loading">
+      <UiStat plain :label="t(&quot;จำนวนพิมพ์รวม&quot;)" :unit="t(&quot;หน้า&quot;)" tone="ink" :loading="loading">
         {{ formatCount(grandTotalPages) }}
       </UiStat>
 

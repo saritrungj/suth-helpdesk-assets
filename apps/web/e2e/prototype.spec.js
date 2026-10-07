@@ -291,13 +291,14 @@ test("expense Excel export carries the search context and the on-screen amounts"
   expect(rows[0]).toEqual(["SUTH-2569", "0.45", "ราคาตามสัญญา", "SUTH-001", "SUTH Printer", "Office 400", 1000, 360]);
 });
 
-test("expense price, discount and unit copy is translated while the amounts stay the same", async ({ page }) => {
+test("expense price and unit copy is translated while the amounts stay the same", async ({ page }) => {
   await prototypeFixture(page);
   await page.addInitScript(() => localStorage.setItem("suth-language", "en"));
   await page.goto("/expense");
   await expect(page.getByText("Total print cost", { exact: true })).toBeVisible();
-  // ช่วงเวลาอยู่ในตัวเลือกช่วงเวลาแล้ว ใต้ตัวเลขสรุปจึงเหลือคำอธิบายส่วนลด
-  await expect(page.getByText(/After 2% deduction/)).toBeVisible();
+  // #273 ซ่อนคำอธิบายส่วนลดบนจอ แต่ขอบเขตค่าเช่าและ VAT ยังชัดเจน
+  await expect(page.getByText("Excludes rent and VAT", { exact: true })).toBeVisible();
+  await expect(page.locator("#main-content")).not.toContainText(/2%/);
   // ราคาต่อหน้าอยู่ในแถวเครื่อง ไม่ได้อยู่ที่หัวสัญญา จึงต้องกางสัญญาก่อน
   await page.getByRole("button", { name: "Expand all", exact: true }).click();
   await expect(page.getByText(/Effective price\s+0\.45\s+THB\/page/)).toBeVisible();
