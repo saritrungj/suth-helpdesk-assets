@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { GitCompareArrows, PanelRightOpen, RefreshCw } from 'lucide-vue-next';
-import { useBuildings, useContracts, useDepartments, useDivisions, useMonthlyKpi, useOverview, useReadingMonths } from '../api/queries';
+import { useBuildings, useContracts, useDepartments, useDivisions, useInstallationSummary, useMonthlyKpi, useOverview, useReadingMonths } from '../api/queries';
 import { fiscalYearOfMonth } from '@suth/domain';
 import { activeFiscalYear, activeFiscalYearRange, fiscalYearMonths, fiscalYearState, setActiveFiscalYear } from '../store/fiscalYear';
 import { t } from '../lib/locale';
@@ -441,6 +441,15 @@ const overviewQuery = useOverview(overviewParams);
 const overviewData = computed(() => overviewQuery.data.value ?? null);
 const trendMonths = computed(() => (view.value.months.length ? [...view.value.months].sort() : primaryMonths.value));
 const trendInvoice = computed(() => (view.value.contracts.length <= 1 ? overviewData.value?.invoice_series ?? [] : []));
+const installationParams = computed(() => ({
+  contract_ids: view.value.contracts.length ? [...view.value.contracts].sort((a, b) => a === 'unassigned' ? 1 : b === 'unassigned' ? -1 : Number(a) - Number(b)).join(',') : undefined,
+}));
+const installationQuery = useInstallationSummary(installationParams, { enabled: isOverview });
+const installationCounts = computed(() => installationQuery.isError.value ? null : installationQuery.data.value);
+const installationValue = (key) => {
+  const value = installationCounts.value?.[key];
+  return Number.isInteger(value) && value >= 0 ? formatCount(value) : '—';
+};
 /*
  * "จาก N เครื่องที่ติดตั้งแล้ว" — บอกขนาดของทั้งหมด ไม่บอกปัญหา (#221: เครื่องที่ไม่มีการพิมพ์อยู่ในกระดิ่ง)
  * ตัวเลขนี้มาจาก API ซึ่งกรองได้แค่สัญญาเดียว ถ้ากรองฝ่าย/แผนก/อาคาร/เครื่อง หรือหลายสัญญา จึงไม่แสดง แทนที่จะแสดงตัวเลขผิดขอบเขต
@@ -479,7 +488,10 @@ function openDetails(group = 'department', entry = null) {
   detailGroup.value = entry ? 'device' : (yearMode.value ? 'fiscalYear' : group);
   detailOpen.value = true;
 }
-function reload() { report.refetch(); }
+function reload() {
+  report.refetch();
+  if (isOverview) installationQuery.refetch();
+}
 
 /* --------------------------------------------------------------------------
    ส่งออก — Excel เป็นรายงาน CSV เป็นข้อมูลดิบ ทั้งคู่ใช้ตัวกรองชุดเดียวกับจอ
@@ -589,11 +601,24 @@ function runCsv() {
         :delta="kpi.cost.delta" delta-inverse :hint="costHint" :trend="kpi.cost.trend" />
       <UiStat tone="ink" :label="t('จำนวนพิมพ์รวม')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
         :delta="kpi.pages.delta" delta-inverse :trend="kpi.pages.trend" />
-      <UiStat tone="ink" :label="t('ราคาเฉลี่ยต่อหน้า')" :value="kpi.perPage.value === null ? '—' : formatBahtValue(kpi.perPage.value)" :unit="t('บาท')" :loading="loading && !settledStats"
+      <template v-if="isOverview">
+        <UiStat tone="ink" :label="t('ติดตั้งแล้ว')" :value="installationValue('installed')" :unit="t('เครื่อง')" :loading="installationQuery.isPending.value"
+          :hint="t('สถานะทะเบียนปัจจุบัน · สัญญาปัจจุบันที่เลือก')" />
+        <UiStat tone="ink" :label="t('ยังไม่ได้ติดตั้ง')" :value="installationValue('not_installed')" :unit="t('เครื่อง')" :loading="installationQuery.isPending.value"
+          :hint="t('สถานะทะเบียนปัจจุบัน · สัญญาปัจจุบันที่เลือก')" />
+      </template>
+      <UiStat v-else tone="ink" :label="t('ราคาเฉลี่ยต่อหน้า')" :value="kpi.perPage.value === null ? '—' : formatBahtValue(kpi.perPage.value)" :unit="t('บาท')" :loading="loading && !settledStats"
         :delta="kpi.perPage.delta" delta-inverse />
-      <UiStat tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"
+      <UiStat v-if="!isOverview" tone="ink" :label="t('เครื่องที่มีการพิมพ์')" :value="statsReady ? formatCount(shownStats.totals.devices) : '—'" :unit="t('เครื่อง')" :loading="loading && !settledStats"
         :hint="devicesHint" />
     </section>
+    <UiAlert v-if="isOverview && installationQuery.isError.value" tone="danger" class="mb-4">
+      {{ t('โหลดสถานะการติดตั้งไม่สำเร็จ') }}
+      <template #actions><UiButton variant="secondary" @click="installationQuery.refetch()">{{ t('ลองใหม่') }}</UiButton></template>
+    </UiAlert>
+    <p v-else-if="isOverview && installationCounts?.unverified > 0" class="mb-4 text-sm text-ink-mute">
+      {{ t('ยังไม่ตรวจยืนยันการติดตั้ง {0} เครื่อง — ไม่รวมในสองจำนวนข้างต้น', [formatCount(installationCounts.unverified)]) }}
+    </p>
 
     <template v-if="isOverview">
       <OverviewTrend :cost="costTrend" :pages="pagesTrend" :months="trendMonths"

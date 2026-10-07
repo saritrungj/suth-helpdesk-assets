@@ -56,6 +56,7 @@ export const keys = {
   monthlyKpi: (params) => ["dashboard", "monthly-kpi", params],
   summaryByBuilding: (params) => ["dashboard", "summary-by-building", params],
   overview: (params) => ["dashboard", "overview", params],
+  installationSummary: (params) => ["dashboard", "installation-summary", params],
   coverage: (fiscalYearId) => ["print-transactions", "coverage", fiscalYearId],
 
   // ยอดพิมพ์ของ "หนึ่งเดือน ทุกเครื่อง" — เดือนต้องอยู่ใน key
@@ -160,6 +161,17 @@ export function useOverview(params) {
     queryKey: key,
     queryFn: () => get("/dashboard/overview", unref(params) ?? {}),
     placeholderData: (previous) => previous,
+    ...LIVE,
+  });
+}
+
+/** Current installation state is separate from historical usage (#274). */
+export function useInstallationSummary(params, { enabled = true } = {}) {
+  return useQuery({
+    queryKey: computed(() => keys.installationSummary(unref(params) ?? {})),
+    queryFn: () => get("/dashboard/installation-summary", unref(params) ?? {}),
+    enabled: computed(() => Boolean(unref(enabled))),
+    // Do not carry counts from the previous contract scope into the next one.
     ...LIVE,
   });
 }

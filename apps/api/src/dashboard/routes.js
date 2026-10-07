@@ -19,6 +19,7 @@ const requireAuth = require("../auth/require-auth");
 router.use(requireAuth);
 
 router.use(require("./overview"));
+router.use(require("./installation-summary"));
 router.use(require("./reports"));
 router.use(require("./by-department"));
 
