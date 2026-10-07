@@ -4,7 +4,7 @@ import { t } from "../lib/locale";
 // Presentation only. Session, API errors and redirect behavior remain unchanged.
 import { ref, useTemplateRef, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowRight, Eye, EyeOff, ExternalLink, Mail, Phone } from "lucide-vue-next";
+import { Eye, EyeOff, ExternalLink, Mail, Phone } from "lucide-vue-next";
 import api from "../services/api";
 import { errorMessage } from "../lib/api-error";
 import { setAuth } from "../store/auth";
@@ -92,7 +92,7 @@ async function login() {
           </header>
 
           <form class="login__fields" :aria-busy="loading" @submit.prevent="login">
-            <UiField :label="t(&quot;ชื่อผู้ใช้&quot;)" field-id="login-username">
+            <UiField :label="t(&quot;ชื่อผู้ใช้&quot;)" field-id="login-username" prominent>
               <UiInput
                 ref="usernameEl"
                 v-model="username"
@@ -107,7 +107,7 @@ async function login() {
               />
             </UiField>
 
-            <UiField :label="t(&quot;รหัสผ่าน&quot;)" field-id="current-password">
+            <UiField :label="t(&quot;รหัสผ่าน&quot;)" field-id="current-password" prominent>
               <div class="relative">
                 <UiInput
                   v-model="password"
@@ -124,13 +124,14 @@ async function login() {
                 <button
                   type="button"
                   class="login__password-toggle"
+                  :class="showPassword && 'login__password-toggle--visible'"
                   :aria-label="showPassword ? t(&quot;ซ่อนรหัสผ่าน&quot;) : t(&quot;แสดงรหัสผ่าน — คำเตือน: รหัสผ่านจะปรากฏบนหน้าจอ&quot;)"
                   :aria-pressed="showPassword"
                   aria-controls="current-password"
                   :disabled="loading"
                   @click="showPassword = !showPassword"
                 >
-                  <component :is="showPassword ? EyeOff : Eye" :size="18" aria-hidden="true" />
+                  <component :is="showPassword ? EyeOff : Eye" :size="20" aria-hidden="true" />
                 </button>
               </div>
             </UiField>
@@ -139,7 +140,6 @@ async function login() {
 
             <UiButton type="submit" variant="primary" size="lg" block :loading="loading" class="login__submit">
               {{ loading ? t("กำลังเข้าสู่ระบบ…") : t("เข้าสู่ระบบ") }}
-              <ArrowRight v-if="!loading" :size="18" aria-hidden="true" />
             </UiButton>
           </form>
 
@@ -239,6 +239,7 @@ async function login() {
   color: var(--ink-mute);
 }
 .login__password-toggle:hover { color: var(--ink); background: var(--surface-2); }
+.login__password-toggle--visible { color: var(--brand-ink); background: var(--brand-soft); }
 .login__submit { min-height: 3rem; margin-top: 0.25rem; }
 .login__access {
   margin-top: 1.75rem;

@@ -55,6 +55,7 @@ const DB_SPECS = [
   "axe-pages.spec.js",
   "default-fiscal-year.spec.js",
   "fiscal-year-cache.spec.js",
+  "installation-summary-api.spec.js",
   "import-session.spec.js",
   "billing-shapes.spec.js",
   "contract-edit.spec.js",

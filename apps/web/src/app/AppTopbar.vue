@@ -216,7 +216,7 @@ async function logout() {
           <button
             type="button"
             class="flex items-center gap-2 h-8 pl-1 pr-2 rounded-lg hover:bg-chrome-hover transition-colors"
-            :aria-label="t(&quot;บัญชีของ {0}&quot;, [authState.user?.username ?? ''])"
+            :aria-label="`${t(&quot;บัญชีของ {0}&quot;, [authState.user?.username ?? ''])} — ${roleLabel}`"
           >
             <span
               class="grid place-items-center shrink-0 w-7 h-7 rounded-lg bg-brand-soft text-brand-ink"
@@ -224,8 +224,13 @@ async function logout() {
             >
               <UserRound :size="15" />
             </span>
-            <span class="hidden sm:block text-sm font-medium text-ink-soft truncate max-w-[8rem]">
-              {{ authState.user?.username }}
+            <span class="hidden sm:flex items-center gap-2 min-w-0">
+              <span class="text-sm font-medium text-ink truncate max-w-[8rem]" :title="authState.user?.username">
+                {{ authState.user?.username }}
+              </span>
+              <UiBadge :tone="isAdmin ? 'accent' : 'neutral'" size="sm" class="shrink-0">
+                {{ roleLabel }}
+              </UiBadge>
             </span>
           </button>
         </template>

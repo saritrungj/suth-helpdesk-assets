@@ -39,7 +39,7 @@ const SEVERITY = {
     label: t("น่าตรวจสอบ"),
     icon: Info,
     edge: "border-line",
-    tint: "bg-surface-2",
+    tint: "bg-surface",
     ink: "text-ink-soft",
   },
 };
@@ -155,7 +155,7 @@ const hasItems = computed(() => props.items.length > 0);
         >
           <component :is="group.icon" class="size-3.5" aria-hidden="true" />
           {{ group.label }}
-          <span class="text-ink-mute font-normal normal-case tracking-normal">· {{ group.items.length }}</span>
+          <span class="text-ink-mute font-normal normal-case tracking-normal">({{ group.items.length }} {{ t("รายการ") }})</span>
         </h3>
 
         <!--

@@ -2,15 +2,16 @@
 import { computed } from "vue";
 import { ArrowUpRight } from "lucide-vue-next";
 import { t } from "../lib/locale";
-import { formatBahtValue, formatCount, formatNetPages } from "../lib/format";
+import { formatBahtValue, formatCount } from "../lib/format";
 import { UiButton, UiCard, UiCheckbox, UiDataTable } from "../ui";
 import UiSparkline from "../ui/UiSparkline.vue";
 import { averagePerDevice, dimensionLabel, metricLabel, metricValue } from "./comparison";
+import { costNote } from "./comparison-plot";
 
 /**
  * ComparisonTable — ตารางรายละเอียดใต้พื้นที่เปรียบเทียบ แบบรายการหุ้น (watchlist) (#212)
  *
- * แถวเดียวกับที่กราฟวาด แต่แสดงครบทุกตัวเลข — ยอดพิมพ์จริง หน้าสุทธิหลังหัก 2% ค่าใช้จ่าย
+ * แถวเดียวกับที่กราฟวาด — จำนวนพิมพ์และค่าพิมพ์; ฐานคิดเงินยังอยู่ในไฟล์ส่งออก
  * จำนวนเครื่อง และค่าเฉลี่ย — พร้อม:
  *   - ช่องติ๊กสีเดียวกับเส้น เลือกว่ารายการไหนอยู่บนกราฟ (สูงสุด `max` รายการ)
  *   - สัดส่วนของรายการนั้นในยอดรวมของขอบเขตที่เลือก
@@ -57,7 +58,6 @@ const columns = computed(() => {
   list.push({ key: "label", label: props.model.view === "overall" ? t("เดือน") : dimensionLabel(props.model.dimension), value: (row) => row.displayLabel, sortable: props.model.view !== "overall" });
   list.push(
     { key: "rawPages", label: t("จำนวนพิมพ์"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.rawPages) },
-    { key: "netPages", label: t("จำนวนพิมพ์หลังหัก 2%"), align: "right", value: (row) => (noData(row.summary) ? null : row.summary.netPages) },
     { key: "cost", label: t("ค่าพิมพ์ (บาท)"), align: "right", value: (row) => row.summary.cost },
   );
   // ลำดับแบบรายการหุ้น: ชื่อ → ตัวเลข → สัดส่วน → รูปทรงรายเดือน แล้วค่อยค่าเฉลี่ย
@@ -116,13 +116,16 @@ const columns = computed(() => {
         <UiSparkline :values="trendOf(row)" :color="isPicked(row) ? colorOf(row) : ''" class="text-ink-mute" />
       </template>
       <template #cell-rawPages="{ row }">{{ noData(row.summary) ? "—" : formatCount(row.summary.rawPages) }}</template>
-      <template #cell-netPages="{ row }">{{ noData(row.summary) ? "—" : formatNetPages(row.summary.netPages) }}</template>
       <template #cell-cost="{ row }">
         {{ money(row.summary.cost) }}
+        <span v-if="costNote(row.summary)" class="block text-xs text-warn-ink">{{ costNote(row.summary) }}</span>
       </template>
       <template #cell-devices="{ row }">{{ formatCount(row.summary.devices) }}</template>
       <template #cell-pagesPerDevice="{ row }">{{ averagePerDevice(row.summary, "rawPages") == null ? "—" : formatCount(averagePerDevice(row.summary, "rawPages")) }}</template>
-      <template #cell-costPerDevice="{ row }">{{ money(averagePerDevice(row.summary, "cost")) }}</template>
+      <template #cell-costPerDevice="{ row }">
+        {{ money(averagePerDevice(row.summary, "cost")) }}
+        <span v-if="row.summary.unpriced" class="block text-xs text-warn-ink">{{ t("ข้อมูลราคาไม่ครบ") }}</span>
+      </template>
       <template #actions="{ row }">
         <UiButton size="sm" variant="ghost" :disabled="loading || noData(row.summary)" :aria-label="t('ดูรายละเอียดของ {0}', [row.displayLabel])" @click="emit('details', row)">
           {{ t("ดูรายละเอียด") }}<template #trailing><ArrowUpRight :size="14" /></template>
