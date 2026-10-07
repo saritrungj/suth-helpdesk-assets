@@ -412,25 +412,34 @@ async function onMonthSaved() {
  * ทำให้ต้องเลื่อนซ้ายขวาระหว่างพิมพ์ ซึ่งเป็นวิธีที่ดีที่สุดในการกรอกผิดแถว
  */
 const entryColumns = computed(() => [
-  { key: "serial_number", label: "Serial", width: "11rem" },
+  { key: "serial_number", label: "Serial", width: "9rem" },
+  {
+    key: "building_name",
+    label: t("ตึก/ชั้น"),
+    value: (d) => [d.building_name, d.floor_name].filter(Boolean).join(" / ") || "—",
+  },
+  {
+    key: "division_name",
+    label: t("ฝ่าย/แผนก"),
+    value: (d) => [d.division_name, d.department_name].filter(Boolean).join(" / ") || "—",
+  },
   {
     key: "location",
-    // บรรทัดเดียว "อาคาร ชั้น · จุดที่ตั้ง" — คนกรอกยอดหาเครื่องจากที่ตั้ง ส่วนแผนกยังค้นหาได้จากช่องค้นหา
-    label: t("ที่ตั้ง"),
-    value: (d) => [[d.building_name, d.floor_name].filter(Boolean).join(" "), d.location].filter(Boolean).join(" · ") || "—",
+    label: t("รายละเอียดตำแหน่ง"),
+    value: (d) => d.location || "—",
   },
   {
     key: "previous_month",
     label: previousMonth.value ? formatMonth(previousMonth.value) : t("เดือนก่อนหน้า"),
     align: "right",
-    width: "9rem",
+    width: "7rem",
     value: (d) => previousPages.value[d.id] ?? null,
   },
   {
     key: "entry",
     label: filters.value.month ? formatMonth(filters.value.month) : t("จำนวนพิมพ์"),
     align: "right",
-    width: "9rem",
+    width: "8rem",
     sortable: false,
     value: (d) => monthPages.value[d.id] ?? null,
   },
@@ -1153,8 +1162,14 @@ onUnmounted(unregisterFiscalYearGuard);
           sticky-first
           :row-class="row => draft.has(row.id) ? 'bg-brand-soft' : ''"
         >
+          <template #cell-building_name="{ value }">
+            <span class="w-28 whitespace-normal break-words line-clamp-2" :title="value">{{ value }}</span>
+          </template>
+          <template #cell-division_name="{ value }">
+            <span class="w-32 whitespace-normal break-words line-clamp-2" :title="value">{{ value }}</span>
+          </template>
           <template #cell-location="{ value }">
-            <span class="block max-w-sm truncate" :title="value">{{ value }}</span>
+            <span class="w-36 whitespace-normal break-words line-clamp-2" :title="value">{{ value }}</span>
           </template>
           <!-- inline-flex + min-h-6: ข้อ 2.5.8 บังคับพื้นที่กด 24x24 ส่วนตัวอักษร
                บรรทัดเดียวสูงแค่ 17px และลิงก์นี้ไม่เข้าข้อยกเว้น "อยู่ในประโยค"
