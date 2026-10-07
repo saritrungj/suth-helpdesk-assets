@@ -6,6 +6,7 @@ import { yearLabel } from "../lib/locale-format";
 import { fiscalYearOfMonth } from "@suth/domain";
 import { t } from "../lib/locale";
 import { errorMessage } from "../lib/api-error";
+import { compareRegistryLocations } from "./registry-detail-order";
 
 /**
  * AssetList — ทะเบียนเครื่องพิมพ์ทั้งหมด
@@ -315,7 +316,7 @@ const columns = [
   },
   { key: "building_name", label: t("อาคาร") },
   { key: "floor_name", label: t("ชั้น") },
-  { key: "location", label: t("ตำแหน่งที่ตั้ง") },
+  { key: "location", label: t("ตำแหน่งที่ตั้ง"), compareRows: compareRegistryLocations },
   { key: "division_name", label: t("ฝ่าย"), hidden: true },
   { key: "department_name", label: t("แผนก") },
   { key: "contract_no", label: t("สัญญา") },
@@ -367,6 +368,11 @@ async function refreshAfterSave() {
     // ถ้าแถวที่เพิ่งแก้หายจากผลลัพธ์ ให้กลับออกจากเต็มจอเพื่อให้ผู้ใช้เห็นเหตุผล
     // และช่องค้นหาที่จะรับโฟกัส แทนการค้างอยู่กับตารางที่เปลี่ยนไปโดยไม่มีคำอธิบาย
     await table.value?.collapseExpanded({ restoreFocus: false });
+  } else if (loaded && moveOpen.value) {
+    // Moving changes Detail, so the active sorted row may be on another page.
+    // Keep the drawer's return target attached to the same device after refresh.
+    await table.value?.revealRow(activeAssetId.value);
+    moveTrigger.value = table.value?.$el.querySelector(`[data-device-actions="${CSS.escape(String(activeAssetId.value))}"]`) ?? null;
   }
   refreshing.value = false;
   await nextTick();
@@ -588,6 +594,7 @@ onMounted(async () => {
       preserve-page-on-refresh
       :rows="filteredAssets"
       :columns="columns"
+      :default-sort="{ key: 'location', dir: 'asc' }"
       :loading="loading"
       row-key="id"
       export-filename="assets"
@@ -679,7 +686,7 @@ onMounted(async () => {
         </UiButton>
         <UiMenu :label="row.serial_number">
           <template #trigger>
-            <UiButton size="sm" variant="ghost" icon-only :label="t('การกระทำเพิ่มเติม {0}', [row.serial_number])" @focus="moveTrigger = $event.currentTarget"><MoreHorizontal :size="16" /></UiButton>
+            <UiButton size="sm" variant="ghost" icon-only :data-device-actions="row.id" :label="t('การกระทำเพิ่มเติม {0}', [row.serial_number])" @focus="moveTrigger = $event.currentTarget"><MoreHorizontal :size="16" /></UiButton>
           </template>
           <UiMenuItem @select="openMove(row.id)"><template #icon><Move :size="15" /></template>{{ t("ย้ายเครื่อง") }}</UiMenuItem>
           <UiMenuItem tone="danger" separated @select="remove(row)"><template #icon><Trash2 :size="15" /></template>{{ t("ลบเครื่องนี้") }}</UiMenuItem>

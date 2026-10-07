@@ -38,8 +38,10 @@ import { t } from "../lib/locale";
  *     ในตารางเอง
  *
  * นิยามคอลัมน์: { key, label, align?, sortable?, hidden?, alwaysExport?, width?,
- *                 value?: (row) => any, csv?: (row) => any, sortValue?: (row) => any }
+ *                 value?: (row) => any, csv?: (row) => any, sortValue?: (row) => any,
+ *                 compareRows?: (a, b, direction) => number }
  *   sortValue ใช้เมื่อค่าที่แสดงเรียงไม่ได้ตรงๆ เช่น "—" ปนกับตัวเลข
+ *   compareRows เป็น opt-in สำหรับกฎเรียงเฉพาะหน้า รับ asc/desc เพื่อรักษา blank-last และ stable ties
  */
 import { computed, getCurrentInstance, nextTick, ref, useTemplateRef, watch } from "vue";
 import { readSession, writeSession } from "../lib/session-memory";
@@ -168,15 +170,18 @@ const fullscreenContext = computed(() => {
  */
 const searchTerm = refDebounced(search, 180);
 
-const sortKey = ref(props.columns.some(column => column.key === remembered?.sortKey) ? remembered.sortKey : props.defaultSort?.key ?? null);
-const sortDir = ref(["asc", "desc"].includes(remembered?.sortDir) ? remembered.sortDir : props.defaultSort?.dir ?? "asc");
+const rememberedSort = props.columns.some(column => column.key === remembered?.sortKey && column.sortable !== false)
+  && ["asc", "desc"].includes(remembered?.sortDir);
+const restoringDefaultSort = Boolean(props.defaultSort && remembered && !rememberedSort);
+const sortKey = ref(rememberedSort ? remembered.sortKey : props.defaultSort?.key ?? null);
+const sortDir = ref(rememberedSort ? remembered.sortDir : props.defaultSort?.dir ?? "asc");
 const currentPage = ref(1);
 const pageSize = ref(props.pageSizeOptions.includes(remembered?.pageSize) ? remembered.pageSize : props.defaultPageSize);
 const hiddenKeys = ref(new Set(Array.isArray(remembered?.hidden)
   ? remembered.hidden.filter((key) => props.columns.some((c) => c.key === key))
   : props.columns.filter((c) => c.hidden).map((c) => c.key)));
 // หน้าที่จำไว้ใช้ได้หลังแถวมาถึงแล้วเท่านั้น — ตอนเปิดหน้าตารางยังว่างและมีหน้าเดียว
-let pendingPage = Number.isSafeInteger(remembered?.page) && remembered.page > 1 ? remembered.page : 0;
+let pendingPage = !restoringDefaultSort && Number.isSafeInteger(remembered?.page) && remembered.page > 1 ? remembered.page : 0;
 
 if (memoryKey) {
   watch([localSearch, sortKey, sortDir, currentPage, pageSize, hiddenKeys], () => {
@@ -246,6 +251,7 @@ const sortedRows = computed(() => {
   const collator = new Intl.Collator("th", { numeric: true, sensitivity: "base" });
 
   return [...searchedRows.value].sort((a, b) => {
+    if (typeof col.compareRows === "function") return col.compareRows(a, b, sortDir.value);
     const sortOf = (row) => (typeof col.sortValue === "function" ? col.sortValue(row) : cellValue(row, col));
     const va = sortOf(a);
     const vb = sortOf(b);
@@ -383,8 +389,19 @@ async function exportExcel() {
     context,
   }));
 }
+/** Opt-in: a saved row can move to another page when its sort value changes. */
+async function revealRow(key) {
+  const index = sortedRows.value.findIndex((row) => row[props.rowKey] === key);
+  if (index < 0) return false;
+  currentPage.value = Math.floor(index / pageSize.value) + 1;
+  await nextTick();
+  scrollBox.value?.querySelectorAll("tbody tr")[index % pageSize.value]?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+  return true;
+}
+
 defineExpose({
   containsRow: (key) => searchedRows.value.some((row) => row[props.rowKey] === key),
+  revealRow,
   collapseExpanded,
 });
 </script>
