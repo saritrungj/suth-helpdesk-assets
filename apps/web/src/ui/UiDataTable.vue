@@ -73,6 +73,7 @@ import UiTooltip from "./UiTooltip.vue";
 
 const tableRoot = useTemplateRef("tableRoot");
 const scrollBox = useTemplateRef("scrollBox");
+const rowCards = useTemplateRef("rowCards");
 const tableFooter = useTemplateRef("tableFooter");
 const props = defineProps({
   rows: { type: Array, default: () => [] },
@@ -395,7 +396,12 @@ async function revealRow(key) {
   if (index < 0) return false;
   currentPage.value = Math.floor(index / pageSize.value) + 1;
   await nextTick();
-  scrollBox.value?.querySelectorAll("tbody tr")[index % pageSize.value]?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+  const pageIndex = index % pageSize.value;
+  const visibleRow = [
+    scrollBox.value?.querySelectorAll("tbody tr")[pageIndex],
+    rowCards.value?.children[pageIndex],
+  ].find((element) => element?.getClientRects().length);
+  visibleRow?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
   return true;
 }
 
@@ -641,7 +647,7 @@ defineExpose({
       </slot>
     </div>
 
-    <ul v-else class="sm:hidden flex flex-col gap-2 list-none">
+    <ul v-else ref="rowCards" class="sm:hidden flex flex-col gap-2 list-none">
       <li
         v-for="(row, pageIndex) in paginatedRows"
         :key="row[rowKey]"

@@ -92,28 +92,32 @@ test("remembered valid Detail sort preserves its page, and filtering returns to 
   expect(state.writes).toEqual([]);
 });
 
-test("moving a device follows its new sorted page and restores visible keyboard focus", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  const state = await assetFixture(page);
-  state.rows.push(...Array.from({ length: 25 }, (_, i) => ({ ...state.rows[0], id: 46 + i, serial_number: `SUTH-${String(46 + i).padStart(3, "0")}` })));
-  await page.goto("/assets");
-  const trigger = page.getByRole("button", { name: "การกระทำเพิ่มเติม SUTH-001", exact: true });
-  await trigger.click();
-  await page.getByRole("menuitem", { name: "ย้ายเครื่อง", exact: true }).click();
-  const drawer = page.getByRole("dialog", { name: "ย้ายเครื่อง", exact: true });
-  await drawer.getByRole("textbox", { name: "ตำแหน่งที่ตั้ง", exact: true }).fill("New counter");
-  await drawer.getByRole("button", { name: "ย้ายเครื่อง", exact: true }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "ย้ายเครื่อง", exact: true }).click();
-  await expect(drawer.getByText("ย้ายเรียบร้อย — ประวัติด้านล่างอัปเดตแล้ว")).toBeVisible();
-  await drawer.getByRole("button", { name: "ปิด", exact: true }).click();
-  await expect(drawer).not.toBeVisible();
-  await expect(trigger).toBeFocused();
-  const box = await trigger.boundingBox();
-  expect(box.y).toBeGreaterThanOrEqual(0);
-  expect(box.y + box.height).toBeLessThanOrEqual(800);
-  await expect(tableFor(page).getByRole("columnheader", { name: "ตำแหน่งที่ตั้ง", exact: true })).toHaveAttribute("aria-sort", "ascending");
-  expect(state.writes[0]).toMatchObject({ path: "devices/1/move", body: { location: "New counter" } });
-});
+for (const width of [1280, 390]) {
+  test(`moving a device follows its new sorted page and restores visible keyboard focus at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const state = await assetFixture(page);
+    state.rows.push(...Array.from({ length: 25 }, (_, i) => ({ ...state.rows[0], id: 46 + i, serial_number: `SUTH-${String(46 + i).padStart(3, "0")}` })));
+    await page.goto("/assets");
+    const trigger = page.getByRole("button", { name: "การกระทำเพิ่มเติม SUTH-001", exact: true });
+    await trigger.click();
+    await page.getByRole("menuitem", { name: "ย้ายเครื่อง", exact: true }).click();
+    const drawer = page.getByRole("dialog", { name: "ย้ายเครื่อง", exact: true });
+    await drawer.getByRole("textbox", { name: "ตำแหน่งที่ตั้ง", exact: true }).fill("New counter");
+    await drawer.getByRole("button", { name: "ย้ายเครื่อง", exact: true }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "ย้ายเครื่อง", exact: true }).click();
+    await expect(drawer.getByText("ย้ายเรียบร้อย — ประวัติด้านล่างอัปเดตแล้ว")).toBeVisible();
+    await drawer.getByRole("button", { name: "ปิด", exact: true }).click();
+    await expect(drawer).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    const box = await trigger.boundingBox();
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(800);
+    if (width >= 640) {
+      await expect(tableFor(page).getByRole("columnheader", { name: "ตำแหน่งที่ตั้ง", exact: true })).toHaveAttribute("aria-sort", "ascending");
+    }
+    expect(state.writes[0]).toMatchObject({ path: "devices/1/move", body: { location: "New counter" } });
+  });
+}
 
 for (const theme of ["light", "dark"]) {
   for (const width of [1280, 1440]) {

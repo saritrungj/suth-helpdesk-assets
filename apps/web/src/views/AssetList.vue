@@ -372,7 +372,8 @@ async function refreshAfterSave() {
     // Moving changes Detail, so the active sorted row may be on another page.
     // Keep the drawer's return target attached to the same device after refresh.
     await table.value?.revealRow(activeAssetId.value);
-    moveTrigger.value = table.value?.$el.querySelector(`[data-device-actions="${CSS.escape(String(activeAssetId.value))}"]`) ?? null;
+    const actions = table.value?.$el.querySelectorAll(`[data-device-actions="${CSS.escape(String(activeAssetId.value))}"]`);
+    moveTrigger.value = Array.from(actions ?? []).find((element) => element.getClientRects().length) ?? null;
   }
   refreshing.value = false;
   await nextTick();
