@@ -27,6 +27,8 @@ const props = defineProps({
   required: { type: Boolean, default: false },
   /** วาง label ไว้ซ้ายของช่องกรอกแทนด้านบน สำหรับฟอร์มตัวกรองที่พื้นที่แนวตั้งจำกัด */
   inline: { type: Boolean, default: false },
+  /** เน้นชื่อช่องในฟอร์มหลัก โดยคงรูปแบบตัวกรองและฟอร์มอื่นตามเดิม */
+  prominent: { type: Boolean, default: false },
 });
 
 const uid = useId();
@@ -88,8 +90,8 @@ provideField({
     <label
       v-if="label"
       :for="id"
-      class="block text-xs font-medium text-ink-soft select-none"
-      :class="inline ? 'shrink-0' : 'mb-1.5'"
+      class="block select-none"
+      :class="[inline ? 'shrink-0' : 'mb-1.5', prominent ? 'text-lg font-semibold text-ink' : 'text-xs font-medium text-ink-soft']"
     >
       {{ label }}
       <span v-if="required" class="text-danger-ink" aria-hidden="true">*</span>
