@@ -445,6 +445,15 @@ const entryColumns = computed(() => [
   },
 ]);
 
+// Keep the existing workbook contract while separating location fields on screen.
+const entryExportColumns = computed(() => entryColumns.value
+  .filter((column) => !["building_name", "division_name"].includes(column.key))
+  .map((column) => column.key === "location" ? {
+    ...column,
+    label: t("ที่ตั้ง"),
+    value: (d) => [[d.building_name, d.floor_name].filter(Boolean).join(" "), d.location].filter(Boolean).join(" · ") || "—",
+  } : column));
+
 async function init() {
   loading.value = true;
   pageError.value = "";
@@ -1149,6 +1158,7 @@ onUnmounted(unregisterFiscalYearGuard);
         <UiDataTable
           :rows="filteredDevices"
           :columns="entryColumns"
+          :export-columns="entryExportColumns"
           :loading="loading"
           row-key="id"
           export-filename="print-transactions-month"

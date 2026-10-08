@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { prototypeFixture } from "./prototype-fixture.js";
+import { readFile } from "node:fs/promises";
+import * as XLSX from "xlsx";
 
 const LONG_LOCATION = "จุดบริการผู้ป่วยนอกและประสานการรักษาต่อเนื่อง ".repeat(5).trim();
 
@@ -78,4 +80,51 @@ test("entry paste preserves device identity through sort, page, hidden columns a
   expect(state.writes[0]).toMatchObject({ month: "2026-08", items: [
     { device_id: 5, pages: 501 }, { device_id: 4, pages: 401 },
   ] });
+});
+
+test("entry workbook retains baseline columns, combined location, blank and zero values across filtered pages", async ({ page }) => {
+  await entryFixture(page);
+  await page.route(/\/api\/print-transactions\?/, route => {
+    const month = new URL(route.request().url()).searchParams.get("month");
+    return route.fulfill({ json: month === "2026-07"
+      ? [{ device_id: 1, pages: 123 }, { device_id: 3, pages: 0 }]
+      : [{ device_id: 1, pages: 456 }, { device_id: 3, pages: 0 }] });
+  });
+  await page.goto("/print-transactions?month=2026-08");
+  const table = page.getByRole("table", { name: "บันทึกจำนวนพิมพ์รายเดือน", exact: true });
+  await expect(table.locator("tbody tr")).toHaveCount(20);
+  await page.getByRole("textbox", { name: "ค้นหา", exact: true }).fill("ENTRY");
+  await table.getByRole("button", { name: "Serial", exact: true }).click();
+  await table.getByRole("button", { name: "Serial", exact: true }).click();
+  await page.getByRole("button", { name: "หน้าถัดไป", exact: true }).click();
+  await expect(table.locator("tbody tr").first().getByRole("link", { name: "ENTRY-05", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "คอลัมน์", exact: true }).click();
+  await page.getByRole("checkbox", { name: "ฝ่าย/แผนก", exact: true }).click();
+  await page.keyboard.press("Escape");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Excel", exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^print-transactions-month.*\.xlsx$/);
+  const workbook = XLSX.read(await readFile(await download.path()), { type: "buffer" });
+  const [header, ...rows] = XLSX.utils.sheet_to_json(workbook.Sheets["ข้อมูล"], { header: 1, defval: null });
+  expect(header).toEqual(["Serial", "ที่ตั้ง", "ก.ค. 2569", "ส.ค. 2569"]);
+  expect(rows).toHaveLength(25);
+  expect(rows.map(row => row[0])).toEqual(Array.from({ length: 25 }, (_, i) => `ENTRY-${String(25 - i).padStart(2, "0")}`));
+  expect(rows.find(row => row[0] === "ENTRY-01")).toEqual(["ENTRY-01", `อาคารผู้ป่วยนอก ชั้น 2 · ${LONG_LOCATION}`, 123, 456]);
+  expect(rows.find(row => row[0] === "ENTRY-02")).toEqual(["ENTRY-02", "—", null, null]);
+  expect(rows.find(row => row[0] === "ENTRY-03")).toEqual(["ENTRY-03", "อาคารผู้ป่วยนอก ชั้น 2 · จุดบริการ 3", 0, 0]);
+  const context = XLSX.utils.sheet_to_json(workbook.Sheets["บริบทรายงาน"], { header: 1 });
+  expect(context).toContainEqual(["ปีงบประมาณ", "2569"]);
+  expect(context).toContainEqual(["ช่วงเวลา", "ส.ค. 2569"]);
+  expect(context).toContainEqual(["ค้นหา", "ENTRY"]);
+  expect(workbook.Sheets["ข้อมูล"]["!autofilter"].ref).toBe("A1:D26");
+  await page.getByRole("button", { name: "คอลัมน์", exact: true }).click();
+  await page.getByRole("checkbox", { name: "รายละเอียดตำแหน่ง", exact: true }).click();
+  await page.keyboard.press("Escape");
+  const hiddenDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Excel", exact: true }).click();
+  const hiddenWorkbook = XLSX.read(await readFile(await (await hiddenDownloadPromise).path()), { type: "buffer" });
+  const [hiddenHeader, ...hiddenRows] = XLSX.utils.sheet_to_json(hiddenWorkbook.Sheets["ข้อมูล"], { header: 1, defval: null });
+  expect(hiddenHeader).toEqual(["Serial", "ก.ค. 2569", "ส.ค. 2569"]);
+  expect(hiddenRows).toEqual(rows.map(([serial, , previous, current]) => [serial, previous, current]));
 });

@@ -6,6 +6,8 @@ The behavior checks and fixture data live in [entry-location-columns.spec.js](..
 
 ## Monthly entry, 1280×800
 
+The workbook regression preserves the original four file columns (Serial, combined location, previous month, selected month), full filtered row scope, report context, and distinct blank/zero cells. New building/division display columns do not change the workbook; hiding the existing location column still omits it from the file as before.
+
 | Theme | Before | After |
 |---|---|---|
 | Light | ![Entry before, light](entry-before-1280-light.png) | ![Entry after, light](entry-after-1280-light.png) |

@@ -85,6 +85,8 @@ const props = defineProps({
   pageSizeOptions: { type: Array, default: () => [10, 20, 50, 100] },
   defaultPageSize: { type: Number, default: 20 },
   exportContext: { type: Array, default: () => [] },
+  /** Optional file columns; omitted callers export their display columns as before. */
+  exportColumns: { type: Array, default: null },
   exportFilename: { type: String, default: "data" },
   emptyText: { type: String, default: t("ยังไม่มีข้อมูลในตารางนี้") },
   emptyHint: { type: String, default: "" },
@@ -367,7 +369,7 @@ const { busy: exporting, error: exportError, run: runExport } = useExportTask();
 async function exportExcel() {
   // จับคอลัมน์ แถว และคำค้นไว้ก่อน await — เปลี่ยนตัวกรองระหว่างสร้างไฟล์ ไฟล์ยังเป็นชุดที่กด
   // คอลัมน์ที่ซ่อนไว้เพื่อลดความรกบนจอแต่ยังต้องอยู่ในไฟล์ (alwaysExport) ส่งออกเสมอ
-  const cols = props.columns.filter((c) => !hiddenKeys.value.has(c.key) || c.alwaysExport);
+  const cols = (props.exportColumns ?? props.columns).filter((c) => !hiddenKeys.value.has(c.key) || c.alwaysExport);
   const header = cols.map((c) => c.label);
 
   const body = sortedRows.value.map((row) =>
