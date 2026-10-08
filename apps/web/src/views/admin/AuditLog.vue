@@ -8,7 +8,7 @@
  * ตัวกรองส่งไปที่เซิร์ฟเวอร์ (ประวัติโตได้ไม่จำกัด) แล้วโหลดทีละ 200 แถว — ตารางค้นหา/เรียงในชุดที่โหลดแล้ว
  * ค่าเริ่มต้นดู 30 วันล่าสุด
  */
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { History } from "lucide-vue-next";
 import api from "../../services/api";
 import { errorMessage } from "../../lib/api-error";
@@ -17,11 +17,30 @@ import { formatDateTime } from "../../lib/locale-format";
 import { t } from "../../lib/locale";
 import { UiAlert, UiBadge, UiButton, UiDataTable, UiField, UiFilterBar, UiInput, UiPageHeader, UiSelect } from "../../ui";
 import { auditActionOf, auditEntityOptions, auditValueText } from "../../components/audit-log";
+import { usePageState } from "../../composables/use-page-state";
 
 const bangkokDate = (offsetDays = 0) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date(Date.now() + offsetDays * 86400000));
 
-const filters = ref({ entity: "", user_id: "", q: "", from: bangkokDate(-30), to: bangkokDate() });
+const defaults = { entity: "", user_id: "", q: "", from: bangkokDate(-30), to: bangkokDate() };
+const filters = ref({ ...defaults });
+// คืนก่อนติด watcher โหลดข้อมูล — จำเฉพาะตัวกรอง ไม่จำประวัติหรือหน้าตาราง (#283)
+usePageState({ filters });
+const saved = filters.value;
+const validDate = (value) => {
+  if (value === "") return true;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+// sessionStorage เป็น input ที่เชื่อไม่ได้: allow-list และเลือกออกมาเพียงห้าคีย์
+filters.value = {
+  entity: auditEntityOptions().some(({ value }) => value === saved?.entity) ? saved.entity : "",
+  user_id: typeof saved?.user_id === "string" && /^[1-9]\d*$/.test(saved.user_id) && Number.isSafeInteger(Number(saved.user_id)) ? saved.user_id : "",
+  q: typeof saved?.q === "string" && saved.q.trim().length <= 100 ? saved.q : "",
+  from: validDate(saved?.from) ? saved.from : defaults.from,
+  to: validDate(saved?.to) ? saved.to : defaults.to,
+};
 const rows = ref([]);
 const total = ref(0);
 const page = ref(1);
@@ -58,6 +77,7 @@ async function load({ append = false } = {}) {
 }
 
 let timer = null;
+onBeforeUnmount(() => clearTimeout(timer));
 watch(filters, () => {
   clearTimeout(timer);
   timer = setTimeout(() => load(), 350);
