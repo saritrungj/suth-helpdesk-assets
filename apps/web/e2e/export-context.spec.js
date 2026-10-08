@@ -13,7 +13,8 @@ test("failed reports explain the disabled export without hovering, then recover"
   expect(description).toBeTruthy();
   const note = page.locator(`[id="${description}"]`);
   await expect(note).toContainText("ปีงบ");
-  await note.focus();
+  await page.getByRole("button", { name: "โหลดข้อมูลใหม่", exact: true }).focus();
+  await page.keyboard.press("Tab");
   await expect(note).toBeFocused();
   state.fail = false;
   await page.getByRole("button", { name: "ลองใหม่", exact: true }).click();
@@ -90,7 +91,8 @@ test("expense export states its file scope and explains an unmatched search", as
   const note = page.locator(`[id="${description}"]`);
   await expect(note).toContainText("NO-SUCH-DEVICE");
   await expect(note).toContainText("ปีงบประมาณ");
-  await note.focus();
+  await page.getByRole("button", { name: "พับทั้งหมด", exact: true }).focus();
+  await page.keyboard.press("Tab");
   await expect(note).toBeFocused();
   await search.fill("");
   await expect(button).toBeEnabled();

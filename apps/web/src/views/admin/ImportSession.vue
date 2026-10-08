@@ -253,27 +253,27 @@ async function commit() {
   if (!canConfirm.value) return;
   confirming.value = true;
   try {
-  // ส่งค่าที่ค้างและจำลายนิ้วมือ "ก่อน" ถาม — สิ่งที่ยืนยันต้องเป็นสรุปชุดที่กล่องยืนยันแสดง
-  if (!(await flushedWithoutChange())) return;
-  const seen = shownFingerprint;
-  const p = preview.value ?? {};
-  const extra = [
-    p.contracts?.length ? t("สัญญาใหม่ {0}", [p.contracts.map((c) => c.contract_no).join(", ")]) : "",
-    p.fiscal_years?.length ? t("ปีงบ {0}", [p.fiscal_years.join(", ")]) : "",
-  ].filter(Boolean).join(" · ");
-  const ok = await askConfirm(
-    t("บันทึก {0} รายการตามสรุปด้านบน{1} — บันทึกทั้งหมดพร้อมกัน ถ้าผิดพลาดหรือข้อมูลในระบบเปลี่ยนไประหว่างนี้ จะไม่บันทึกเลยสักรายการ",
-      [formatCount(writeCount.value), extra ? ` (${extra})` : ""]),
-    { title: t("ยืนยันบันทึกงานนำเข้านี้"), confirmText: t("ยืนยันบันทึก") }
-  );
-  if (!ok) return;
-  const data = await run(t("บันทึกไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/commit`, { fingerprint: seen }), async (result) => {
-    if (result.status !== "completed") return;
-    await refreshFiscalYears();
-    // การนำเข้าครั้งเดียวเขียนหลายชนิด — ล้างแต่ละแคชครั้งเดียว (#180)
-    await invalidateAfterWrites(queryClient, ["device", "usage", "contracts", "fiscal-years", "buildings", "floors", "divisions", "departments", "brands"]);
-  });
-  if (data?.status === "completed") toastSuccess(t("บันทึกงานนำเข้าเรียบร้อย"));
+    // ส่งค่าที่ค้างและจำลายนิ้วมือ "ก่อน" ถาม — สิ่งที่ยืนยันต้องเป็นสรุปชุดที่กล่องยืนยันแสดง
+    if (!(await flushedWithoutChange())) return;
+    const seen = shownFingerprint;
+    const p = preview.value ?? {};
+    const extra = [
+      p.contracts?.length ? t("สัญญาใหม่ {0}", [p.contracts.map((c) => c.contract_no).join(", ")]) : "",
+      p.fiscal_years?.length ? t("ปีงบ {0}", [p.fiscal_years.join(", ")]) : "",
+    ].filter(Boolean).join(" · ");
+    const ok = await askConfirm(
+      t("บันทึก {0} รายการตามสรุปด้านบน{1} — บันทึกทั้งหมดพร้อมกัน ถ้าผิดพลาดหรือข้อมูลในระบบเปลี่ยนไประหว่างนี้ จะไม่บันทึกเลยสักรายการ",
+        [formatCount(writeCount.value), extra ? ` (${extra})` : ""]),
+      { title: t("ยืนยันบันทึกงานนำเข้านี้"), confirmText: t("ยืนยันบันทึก") }
+    );
+    if (!ok) return;
+    const data = await run(t("บันทึกไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/commit`, { fingerprint: seen }), async (result) => {
+      if (result.status !== "completed") return;
+      await refreshFiscalYears();
+      // การนำเข้าครั้งเดียวเขียนหลายชนิด — ล้างแต่ละแคชครั้งเดียว (#180)
+      await invalidateAfterWrites(queryClient, ["device", "usage", "contracts", "fiscal-years", "buildings", "floors", "divisions", "departments", "brands"]);
+    });
+    if (data?.status === "completed") toastSuccess(t("บันทึกงานนำเข้าเรียบร้อย"));
   } finally {
     confirming.value = false;
   }

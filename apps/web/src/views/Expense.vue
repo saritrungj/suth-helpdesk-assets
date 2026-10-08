@@ -340,10 +340,10 @@ onMounted(() => {
           <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;พับทั้งหมด&quot;)" @click="collapseAll"><ChevronsDownUp :size="15" /></UiButton>
         </UiTooltip>
         <div class="flex flex-col items-start gap-1 min-w-0 max-w-xs">
-        <UiButton size="sm" variant="secondary" :disabled="Boolean(exportBlockedReason)" :loading="exporting" :aria-describedby="exportDescriptionId" data-testid="expense-export" @click="exportExcel">
-          <template #icon><Download :size="15" /></template>
-          {{ searching ? t("Excel เฉพาะผลค้นหา ({0} เครื่อง)", [formatCount(foundDevices)]) : "Excel" }}
-        </UiButton>
+          <UiButton size="sm" variant="secondary" :disabled="Boolean(exportBlockedReason)" :loading="exporting" :aria-describedby="exportDescriptionId" data-testid="expense-export" @click="exportExcel">
+            <template #icon><Download :size="15" /></template>
+            {{ searching ? t("Excel เฉพาะผลค้นหา ({0} เครื่อง)", [formatCount(foundDevices)]) : "Excel" }}
+          </UiButton>
         <p :id="exportDescriptionId" :tabindex="exportMessage ? 0 : undefined" class="text-xs text-ink-soft break-words max-w-full" aria-live="polite">
           <span v-if="exportMessage" class="block font-medium">{{ exportMessage }}</span>
           <span>{{ t("ขอบเขตไฟล์: {0}", [exportScope]) }}</span>

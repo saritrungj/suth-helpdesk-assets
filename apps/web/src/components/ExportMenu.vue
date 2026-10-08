@@ -34,24 +34,24 @@ const emit = defineEmits(["excel", "csv"]);
 
 <template>
   <div class="flex flex-col items-start gap-1 min-w-0 max-w-xs">
-  <UiMenu :label="t('รูปแบบไฟล์')">
-    <template #trigger>
-      <UiButton variant="primary" :disabled="disabled || busy" :loading="busy" :aria-describedby="described ? descriptionId : undefined">
-        <template #icon><Download :size="16" /></template>
-        {{ t("ส่งออก") }}
-        <template #trailing><ChevronDown :size="15" /></template>
-      </UiButton>
-    </template>
+    <UiMenu :label="t('รูปแบบไฟล์')">
+      <template #trigger>
+        <UiButton variant="primary" :disabled="disabled || busy" :loading="busy" :aria-describedby="described ? descriptionId : undefined">
+          <template #icon><Download :size="16" /></template>
+          {{ t("ส่งออก") }}
+          <template #trailing><ChevronDown :size="15" /></template>
+        </UiButton>
+      </template>
 
-    <UiMenuItem @select="emit('excel')">
-      <template #icon><FileSpreadsheet :size="15" /></template>
-      {{ t("Excel — รายงานหลายแผ่น") }}
-    </UiMenuItem>
-    <UiMenuItem @select="emit('csv')">
-      <template #icon><Table2 :size="15" /></template>
-      {{ t("CSV — ข้อมูลรายละเอียด") }}
-    </UiMenuItem>
-  </UiMenu>
+      <UiMenuItem @select="emit('excel')">
+        <template #icon><FileSpreadsheet :size="15" /></template>
+        {{ t("Excel — รายงานหลายแผ่น") }}
+      </UiMenuItem>
+      <UiMenuItem @select="emit('csv')">
+        <template #icon><Table2 :size="15" /></template>
+        {{ t("CSV — ข้อมูลรายละเอียด") }}
+      </UiMenuItem>
+    </UiMenu>
     <p v-if="described" :id="descriptionId" :tabindex="disabled || busy ? 0 : undefined" class="text-xs text-ink-soft break-words max-w-full" aria-live="polite">
       <span v-if="message" class="block font-medium">{{ message }}</span>
       <span v-if="scope">{{ t("ขอบเขตไฟล์: {0}", [scope]) }}</span>
