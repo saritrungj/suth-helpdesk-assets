@@ -1,6 +1,26 @@
 import { test, expect } from "@playwright/test";
 import { importReviewFixture } from "./import-review-fixture.js";
 
+test("clearing a decision during a save is retained and checked as an explicit unresolved choice", async ({ page }) => {
+  const state = await importReviewFixture(page);
+  await page.goto("/admin/import/41");
+  const choice = page.getByRole("combobox", { name: "ตัดสินชื่อ Review building" });
+  const commit = page.getByTestId("import-commit");
+  await expect(commit).toBeEnabled();
+  state.delay = 1200;
+  await choice.selectOption("alias:1");
+  await expect.poll(() => state.puts.length).toBe(1);
+  await choice.selectOption("");
+  await expect(commit).toBeDisabled();
+  await expect.poll(() => state.puts.length).toBe(2);
+  await expect.poll(() => state.revision).toBe(3);
+  await expect(choice).toHaveValue("");
+  await expect(commit).toBeDisabled();
+  await expect(page.getByTestId("import-preview")).toHaveCount(0);
+  expect(state.puts[1].decisions.names?.building?.["Review building"]).toBeUndefined();
+  expect(state.commits).toHaveLength(0);
+});
+
 test("editing a decision immediately hides old preview and disables confirmation until checked", async ({ page }) => {
   const state = await importReviewFixture(page);
   await page.goto("/admin/import/41");
