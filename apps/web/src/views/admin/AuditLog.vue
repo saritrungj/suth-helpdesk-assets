@@ -134,6 +134,7 @@ const columns = [
     </UiAlert>
 
     <UiDataTable
+      :remember-state="false"
       :rows="rows"
       :columns="columns"
       :loading="loading && !rows.length"

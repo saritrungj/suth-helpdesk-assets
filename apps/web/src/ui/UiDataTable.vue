@@ -76,6 +76,8 @@ const scrollBox = useTemplateRef("scrollBox");
 const rowCards = useTemplateRef("rowCards");
 const tableFooter = useTemplateRef("tableFooter");
 const props = defineProps({
+  /** ปิดสำหรับหน้าที่ต้องโหลดตารางใหม่เสมอและจำเพียงตัวกรองภายนอก */
+  rememberState: { type: Boolean, default: true },
   rows: { type: Array, default: () => [] },
   columns: { type: Array, required: true },
   rowKey: { type: String, default: "id" },
@@ -131,7 +133,7 @@ const props = defineProps({
  */
 const route = getCurrentInstance()?.appContext.config.globalProperties.$route;
 const tableIdentity = props.stateKey || (props.exportFilename !== "data" ? props.exportFilename : "") || props.caption;
-const memoryKey = route?.name && tableIdentity ? `table:${String(route.name ?? route.path)}:${tableIdentity}` : "";
+const memoryKey = props.rememberState && route?.name && tableIdentity ? `table:${String(route.name ?? route.path)}:${tableIdentity}` : "";
 const remembered = memoryKey ? readSession(memoryKey, null) : null;
 const { expanded, expandError, toggleExpanded, collapseExpanded } = useFullscreen(tableRoot);
 const toolsInline = computed(() => !props.toolsTarget || expanded.value);

@@ -100,3 +100,26 @@ for (const mode of ["same-owner expiry", "new-owner expiry", "logout"]) {
     await assertFilters(page, mode === "same-owner expiry" ? selected : { entity: "", user_id: "", q: "" });
   });
 }
+
+test("audit table pagination is not persisted alongside filters", async ({ page }) => {
+  await fixture(page);
+  const rows = Array.from({ length: 60 }, (_, index) => ({ id: index + 1, occurred_at: "2026-10-08T05:00:00Z", username: "synthetic-actor", action: "update", summary: `Synthetic audit ${index + 1}`, before: null, after: null }));
+  await page.route(/\/api\/audit-log(?:\?.*)?$/, (route) => route.fulfill({ json: { rows, total: rows.length } }));
+  await page.goto("/admin/audit-log");
+  await page.getByRole("combobox", { name: "จำนวนรายการต่อหน้า" }).selectOption("10");
+  // รอให้ browser dispatch change และ Vue watchers แล้ว ก่อนตรวจ storage
+  await expect(page.getByRole("combobox", { name: "จำนวนรายการต่อหน้า" })).toHaveValue("10");
+  await page.locator('aside a[href="/assets"]').click();
+  expect(await page.evaluate(() => sessionStorage.getItem("suth:table:AuditLog:audit-log"))).toBeNull();
+  await page.locator('aside a[href="/admin/audit-log"]').click();
+  await expect(page.getByRole("combobox", { name: "จำนวนรายการต่อหน้า" })).toHaveValue("50");
+});
+
+test("malformed memory query envelope cannot break an audit URL", async ({ page }) => {
+  await fixture(page);
+  await page.goto("/admin/audit-log");
+  await page.evaluate(() => sessionStorage.setItem("suth:state:AuditLog", JSON.stringify({ query: null, values: { filters: { q: "old" } } })));
+  await page.goto("/admin/audit-log?unknown=1");
+  await expect(page.getByRole("heading", { name: "ประวัติการแก้ไข", exact: true })).toBeVisible();
+  await assertFilters(page, { q: "" });
+});
