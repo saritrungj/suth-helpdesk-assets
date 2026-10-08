@@ -37,6 +37,18 @@ npm run test:e2e --workspace @suth/web -- wcag.spec.js contrast-helper.spec.js
 ต้องเปิด API/เว็บ local สำหรับชุดหน้าจอ; `skipped` ไม่ใช่ `passed`
 เทส sticky save bar สร้าง draft ในหน่วยความจำและบล็อกคำขอเขียน API ก่อนเริ่ม แล้วทิ้ง draft หลังตรวจ
 
+## โฟกัสเมื่อเปลี่ยนหน้า (#284)
+
+เมื่อ path เปลี่ยนสำเร็จ รวม Back/Forward และปลายทาง redirect แอปย้ายโฟกัสไป `h1`
+ของเนื้อหาใหม่หลัง render; ถ้าไม่มีหัวเรื่องใช้ `main` โดยใช้ `tabindex="-1"` จึงไม่เพิ่ม
+จุดหยุด Tab และ `preventScroll` เพื่อคงการเลื่อนของ router. การเปิดหน้าแรกคง autofocus
+ของ Login; query/hash การโหลดข้อมูลและการเปิด/ปิด dialog ไม่เรียกกลไกนี้.
+การคืน focus ของ dialog เป็นหน้าที่ overlay เดิม.
+
+หลักฐานอัตโนมัติ: `apps/web/e2e/route-focus.spec.js` ตรวจคีย์บอร์ด ชื่อหน้า Back/Forward
+และ scroll บน 1440×900/1280×800; `use-route-focus.test.js` ตรวจ lazy render, fallback,
+redirect และ navigation ที่ abort/cancel/error. ยังไม่ได้ฟังการประกาศชื่อหน้าด้วย NVDA/JAWS/VoiceOver.
+
 ## ทำไมเขียนเอง ไม่ใช้เครื่องมือสำเร็จรูป
 
 รอบแรกใช้เครื่องมือที่มีอยู่โดยไม่เพิ่ม dependency ตัวตรวจที่เขียนเองมีขอบเขตจำกัด
