@@ -25,7 +25,7 @@ export function usePageState(refs, { key = "" } = {}) {
   const storageKey = `state:${String(route.name)}${key ? `:${key}` : ""}`;
   const saved = readSession(storageKey, null);
   const ownRoute = ownQuery(route.query);
-  if (isPlainObject(saved?.values) && !hasActionQuery(route.query) && (!Object.keys(ownRoute).length || sameQuery(ownRoute, saved.query))) {
+  if (isPlainObject(saved?.values) && !hasActionQuery(route.query) && (!Object.keys(ownRoute).length || (isPlainObject(saved.query) && sameQuery(ownRoute, saved.query)))) {
     for (const [name, target] of Object.entries(refs)) {
       if (Object.hasOwn(saved.values, name)) target.value = revive(saved.values[name], target.value);
     }
