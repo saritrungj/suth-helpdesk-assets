@@ -110,8 +110,8 @@ export function initialChoices(preview, previous = { names: {}, models: {} }) {
   for (const kind of NAME_KINDS) {
     names[kind] = {};
     for (const entry of preview.unresolved?.[kind] ?? []) {
-      // ค่าว่างที่ผู้ดูแลเพิ่งล้างไว้ต้องชนะคำตอบเก่าเช่นเดียวกับตัวเลือกอื่น
-      names[kind][entry.name] = own(previous.names?.[kind], entry.name) ?? choiceFromDecision(entry.decision);
+      // สิ่งที่ผู้ดูแลเลือกไว้ชนะ ถ้ายังไม่ได้เลือก ใช้สิ่งที่ระบบจับคู่ให้ (เช่น ชื่อทางการของรายการใหม่)
+      names[kind][entry.name] = own(previous.names?.[kind], entry.name) || choiceFromDecision(entry.decision);
     }
   }
   // ชื่อทางการเริ่มเป็นชื่อในไฟล์ ผู้ดูแลแก้เป็นชื่อจริงได้ (เช่น เติม "อาคาร" นำหน้า ตัด "(EMC)")
