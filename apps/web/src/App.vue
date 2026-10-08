@@ -13,8 +13,10 @@ import { documentTitle } from "./app/brand";
 import MainLayout from "./layouts/MainLayout.vue";
 import { findActiveItem } from "./app/navigation";
 import { UiConfirm, UiToaster } from "./ui";
+import { useRouteFocus } from "./composables/use-route-focus";
 
 const route = useRoute();
+useRouteFocus();
 
 const layout = computed(() => (route.meta.layout === "auth" ? AuthLayout : MainLayout));
 
