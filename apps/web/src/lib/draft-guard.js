@@ -56,6 +56,7 @@ export function createDraftGuard({
       ok = await confirm(describe(count, consequence), {
         title,
         confirmText: options.confirmText ?? t("ทำต่อโดยไม่บันทึก"),
+        ...(options.cancelText ? { cancelText: options.cancelText } : {}),
         danger: true,
       });
     } finally {
