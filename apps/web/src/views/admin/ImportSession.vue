@@ -76,6 +76,9 @@ let loadedFor = null;
 let saveTimer = null;
 let pendingSave = null;
 let lastSent = "";
+// Unlike lastSent (an in-flight request), this payload has a completed server preview.
+const reviewedPayload = ref("");
+const confirming = ref(false);
 /**
  * ลายนิ้วมือของผลตรวจที่กล่องเลือกในหน้านี้ตรงกับมัน — ส่งกลับไปกับการแก้และการยืนยัน (#227)
  *
@@ -97,6 +100,16 @@ function applySession(data) {
   const unsent = loadedFor === data.id && JSON.stringify(decisionsPayload(choices, acknowledged)) !== lastSent;
   if (data.validation?.registry) {
     const next = initialChoices(data.validation.registry, unsent ? choices : { names: {}, models: {}, renames: {} });
+    if (unsent) {
+      // Only an explicitly cleared pending decision overrides automatic matching.
+      // Untouched empty fields still use the server's matches as before.
+      const sent = JSON.parse(lastSent || reviewedPayload.value || "{}");
+      for (const [kind, names] of Object.entries(next.names)) {
+        for (const name of Object.keys(names)) {
+          if (choices.names[kind]?.[name] === "" && Object.hasOwn(sent.names?.[kind] ?? {}, name)) names[name] = "";
+        }
+      }
+    }
     choices.names = next.names;
     choices.models = next.models;
     choices.renames = next.renames;
@@ -106,12 +119,16 @@ function applySession(data) {
     Object.assign(acknowledged, data.decisions?.acknowledged ?? {});
     loadedFor = data.id;
     lastSent = JSON.stringify(decisionsPayload(choices, acknowledged));
+    reviewedPayload.value = lastSent;
     shownFingerprint = data.fingerprint ?? null;
   }
 }
 watch(session, applySession, { immediate: true });
 
 const payload = computed(() => JSON.stringify(decisionsPayload(choices, acknowledged)));
+const decisionsDirty = computed(() => payload.value !== reviewedPayload.value);
+const previewCurrent = computed(() => !decisionsDirty.value && !busy.value);
+const canConfirm = computed(() => editable.value && session.value?.can_commit && previewCurrent.value && !confirming.value);
 
 /**
  * งานถูกแก้จากหน้าอื่นหรือผู้ใช้อื่น — ทิ้งค่าที่ค้างในหน้านี้แล้วแสดงผลล่าสุดจากเซิร์ฟเวอร์
@@ -145,6 +162,7 @@ async function saveDecisions() {
     const { data } = await pendingSave;
     // ผลตรวจชุดนี้มาจากสิ่งที่เพิ่งส่ง — คำขอถัดไป (ถ้าผู้ใช้เลือกต่อระหว่างรอ) ต้องอ้างชุดนี้
     shownFingerprint = data.fingerprint ?? null;
+    reviewedPayload.value = body;
     // คำตอบของคำขอเก่าที่มาถึงหลังผู้ใช้เลือกต่อแล้ว ไม่ทับกล่องเลือก (applySession เก็บค่าในหน้าไว้)
     queryClient.setQueryData(keys.importSession(id.value), data);
   } catch (err) {
@@ -167,13 +185,14 @@ watch(payload, (next) => {
 async function flushedWithoutChange() {
   const before = adoptions;
   await flushPending();
-  return adoptions === before;
+  return adoptions === before && !decisionsDirty.value;
 }
 
 /** ออกจากหน้าระหว่างที่ยังไม่ได้ส่ง — ส่งให้เสร็จก่อน งานจะรออยู่เมื่อกลับมา */
 async function flushPending() {
-  if (saveTimer) await saveDecisions();
   if (pendingSave) await pendingSave.catch(() => {});
+  // Explicit actions retry a failed decision save before validating/confirming it.
+  if (saveTimer || decisionsDirty.value) await saveDecisions();
 }
 onBeforeRouteLeave(async () => {
   await flushPending();
@@ -241,27 +260,33 @@ async function createFiscalYears(years) {
 const preview = computed(() => validation.value?.preview ?? null);
 const writeCount = computed(() => preview.value?.writes ?? 0);
 async function commit() {
-  // ส่งค่าที่ค้างและจำลายนิ้วมือ "ก่อน" ถาม — สิ่งที่ยืนยันต้องเป็นสรุปชุดที่กล่องยืนยันแสดง
-  if (!(await flushedWithoutChange())) return;
-  const seen = shownFingerprint;
-  const p = preview.value ?? {};
-  const extra = [
-    p.contracts?.length ? t("สัญญาใหม่ {0}", [p.contracts.map((c) => c.contract_no).join(", ")]) : "",
-    p.fiscal_years?.length ? t("ปีงบ {0}", [p.fiscal_years.join(", ")]) : "",
-  ].filter(Boolean).join(" · ");
-  const ok = await askConfirm(
-    t("บันทึก {0} รายการตามสรุปด้านบน{1} — บันทึกทั้งหมดพร้อมกัน ถ้าผิดพลาดหรือข้อมูลในระบบเปลี่ยนไประหว่างนี้ จะไม่บันทึกเลยสักรายการ",
-      [formatCount(writeCount.value), extra ? ` (${extra})` : ""]),
-    { title: t("ยืนยันบันทึกงานนำเข้านี้"), confirmText: t("ยืนยันบันทึก") }
-  );
-  if (!ok) return;
-  const data = await run(t("บันทึกไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/commit`, { fingerprint: seen }), async (result) => {
-    if (result.status !== "completed") return;
-    await refreshFiscalYears();
-    // การนำเข้าครั้งเดียวเขียนหลายชนิด — ล้างแต่ละแคชครั้งเดียว (#180)
-    await invalidateAfterWrites(queryClient, ["device", "usage", "contracts", "fiscal-years", "buildings", "floors", "divisions", "departments", "brands"]);
-  });
-  if (data?.status === "completed") toastSuccess(t("บันทึกงานนำเข้าเรียบร้อย"));
+  if (!canConfirm.value) return;
+  confirming.value = true;
+  try {
+    // ส่งค่าที่ค้างและจำลายนิ้วมือ "ก่อน" ถาม — สิ่งที่ยืนยันต้องเป็นสรุปชุดที่กล่องยืนยันแสดง
+    if (!(await flushedWithoutChange())) return;
+    const seen = shownFingerprint;
+    const p = preview.value ?? {};
+    const extra = [
+      p.contracts?.length ? t("สัญญาใหม่ {0}", [p.contracts.map((c) => c.contract_no).join(", ")]) : "",
+      p.fiscal_years?.length ? t("ปีงบ {0}", [p.fiscal_years.join(", ")]) : "",
+    ].filter(Boolean).join(" · ");
+    const ok = await askConfirm(
+      t("บันทึก {0} รายการตามสรุปด้านบน{1} — บันทึกทั้งหมดพร้อมกัน ถ้าผิดพลาดหรือข้อมูลในระบบเปลี่ยนไประหว่างนี้ จะไม่บันทึกเลยสักรายการ",
+        [formatCount(writeCount.value), extra ? ` (${extra})` : ""]),
+      { title: t("ยืนยันบันทึกงานนำเข้านี้"), confirmText: t("ยืนยันบันทึก") }
+    );
+    if (!ok) return;
+    const data = await run(t("บันทึกไม่สำเร็จ"), () => api.post(`/import-sessions/${id.value}/commit`, { fingerprint: seen }), async (result) => {
+      if (result.status !== "completed") return;
+      await refreshFiscalYears();
+      // การนำเข้าครั้งเดียวเขียนหลายชนิด — ล้างแต่ละแคชครั้งเดียว (#180)
+      await invalidateAfterWrites(queryClient, ["device", "usage", "contracts", "fiscal-years", "buildings", "floors", "divisions", "departments", "brands"]);
+    });
+    if (data?.status === "completed") toastSuccess(t("บันทึกงานนำเข้าเรียบร้อย"));
+  } finally {
+    confirming.value = false;
+  }
 }
 
 async function abandon() {
@@ -310,6 +335,12 @@ const notOwner = computed(() => session.value && authState.user && session.value
 const dashboardFy = computed(() => fiscalYearForMonths(fiscalYearState.list, session.value?.result?.months ?? []));
 const openDuplicates = computed(() => (session.value?.duplicates ?? []).filter((d) => d.status !== "completed"));
 const completedDuplicates = computed(() => (session.value?.duplicates ?? []).filter((d) => d.status === "completed"));
+async function showPreviewDetails() {
+  await nextTick();
+  const heading = document.getElementById("import-preview-heading");
+  heading?.focus({ preventScroll: true });
+  heading?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 </script>
 
 <template>
@@ -393,20 +424,16 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
       </UiCard>
 
       <template v-if="validation">
+        <div class="import-review-layout">
+        <div class="min-w-0">
         <UiCard class="mb-4">
           <ImportAutoSummary v-if="validation.auto && editable" :auto="validation.auto" class="mb-3 pb-3 border-b border-line-soft" />
           <p class="text-sm font-semibold text-ink mb-2">{{ t("สิ่งที่ต้องทำก่อนบันทึก") }}</p>
           <ImportChecklist :items="validation.checklist" :busy="busy" :editable="editable" @action="onChecklistAction" />
-          <ImportPreview v-if="editable && preview && session.can_commit" :preview="preview" class="mt-4" />
-          <div v-if="editable" class="flex flex-wrap justify-end gap-2 mt-4">
-            <p v-if="busy" class="text-sm text-ink-mute mr-auto" role="status">{{ t("กำลังบันทึกการเลือกและตรวจใหม่…") }}</p>
-            <UiButton v-if="!session.can_commit" variant="secondary" :disabled="busy" data-testid="import-auto-resolve" @click="autoResolve">
-              <template #icon><Sparkles :size="15" /></template>{{ t("ให้ระบบเลือกส่วนที่เหลือ") }}
-            </UiButton>
-            <UiButton variant="primary" :disabled="!session.can_commit || busy" :loading="busy && session.status === 'processing'" data-testid="import-commit" @click="commit">
-              <template #icon><Upload :size="15" /></template>{{ session.can_commit ? t("ยืนยันบันทึก {0} รายการ", [formatCount(writeCount)]) : t("ยืนยันบันทึก") }}
-            </UiButton>
-          </div>
+          <section v-if="editable && preview && session.can_commit && previewCurrent" class="mt-4">
+            <h2 id="import-preview-heading" tabindex="-1" class="text-base font-semibold text-ink mb-2 import-preview-heading">{{ t("รายละเอียดก่อนยืนยัน") }}</h2>
+            <ImportPreview :preview="preview" />
+          </section>
         </UiCard>
 
         <section v-if="validation.contracts?.length" id="section-contracts" class="mb-4">
@@ -432,6 +459,30 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
           <h2 class="text-base font-semibold text-ink mb-2">{{ t("เลขมิเตอร์") }}</h2>
           <ImportReadings :readings="validation.readings" :reconciliation="validation.reconciliation" />
         </section>
+        </div>
+        <aside v-if="editable" class="import-review-summary self-start min-w-0 mb-4" :aria-label="t('สรุปก่อนยืนยัน')" data-testid="import-review-summary">
+          <UiCard>
+            <h2 class="text-base font-semibold text-ink mb-2">{{ t("สรุปก่อนยืนยัน") }}</h2>
+            <p v-if="!previewCurrent" class="text-sm text-ink-soft" role="status">{{ busy && confirming ? t("กำลังบันทึกงานนำเข้า…") : actionError && !busy ? t("ตรวจตัวเลือกใหม่ไม่สำเร็จ — กดตรวจอีกครั้ง") : t("กำลังบันทึกการเลือกและตรวจใหม่…") }}</p>
+            <template v-else-if="session.can_commit && preview">
+              <p class="text-sm text-ink mb-2">{{ t("พร้อมบันทึก {0} รายการ", [formatCount(writeCount)]) }}</p>
+              <p class="text-sm text-ink-soft">{{ t("เครื่องใหม่ {0} · เติมข้อมูล {1}", [formatCount(preview.devices?.create ?? 0), formatCount(preview.devices?.fill ?? 0)]) }}</p>
+              <p class="text-sm text-ink-soft">{{ t("ยอดใหม่ {0} · แทนที่ {1}", [formatCount(preview.readings?.new ?? 0), formatCount(preview.readings?.overwrite ?? 0)]) }}</p>
+              <p class="text-xs text-ink-mute mt-2">{{ t("ข้าม {0} · ยอดไม่เปลี่ยน {1}", [formatCount(registry?.summary?.skip ?? 0), formatCount(validation.readings?.counts?.unchanged ?? 0)]) }}</p>
+              <UiButton variant="ghost" size="sm" class="mt-2" @click="showPreviewDetails">{{ t("ดูรายละเอียดก่อนยืนยัน") }}</UiButton>
+            </template>
+            <p v-else class="text-sm text-ink-soft">{{ t("ตรวจรายการที่ยังไม่ครบก่อนยืนยัน") }}</p>
+            <div class="flex flex-col gap-2 mt-3">
+              <UiButton v-if="!session.can_commit" variant="secondary" :disabled="busy || confirming" data-testid="import-auto-resolve" @click="autoResolve">
+                <template #icon><Sparkles :size="15" /></template>{{ t("ให้ระบบเลือกส่วนที่เหลือ") }}
+              </UiButton>
+              <UiButton variant="primary" :disabled="!canConfirm" :loading="busy && confirming" data-testid="import-commit" @click="commit">
+                <template #icon><Upload :size="15" /></template>{{ session.can_commit && previewCurrent ? t("ยืนยันบันทึก {0} รายการ", [formatCount(writeCount)]) : t("ยืนยันบันทึก") }}
+              </UiButton>
+            </div>
+          </UiCard>
+        </aside>
+        </div>
       </template>
 
       <UiCard>
@@ -441,3 +492,11 @@ const completedDuplicates = computed(() => (session.value?.duplicates ?? []).fil
     </template>
   </div>
 </template>
+
+<style scoped>
+.import-preview-heading { scroll-margin-top: calc(var(--shell-topbar-height) + 1rem); }
+@media (min-width: 1200px) and (min-height: 600px) {
+  .import-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) 18rem; gap: 1rem; }
+  .import-review-summary { position: sticky; top: calc(var(--shell-topbar-height) + 1rem); }
+}
+</style>

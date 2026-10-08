@@ -22,7 +22,7 @@ import { t } from "../lib/locale";
  * ยอดรวมของสองร้อยเครื่องที่บวกด้วย float จะคลาดจากการคำนวณมือ (ดู ADR และ
  * packages/domain/money.cjs)
  */
-import { computed, onActivated, onMounted, ref, watch } from "vue";
+import { computed, onActivated, onMounted, ref, useId, watch } from "vue";
 import { exportSheet } from "../lib/export-xlsx";
 import { useExportTask } from "../composables/useExportTask";
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, Printer, ReceiptText, Search, TriangleAlert } from "lucide-vue-next";
@@ -243,6 +243,19 @@ async function loadExpense() {
  * คำค้นถูกบันทึกไว้ในแผ่น "บริบทรายงาน" ด้วย คนที่เปิดไฟล์ทีหลังจึงรู้ว่าไม่ใช่ชุดเต็ม
  */
 const { busy: exporting, error: exportError, run: runExport } = useExportTask();
+const exportDescriptionId = useId();
+const exportBlockedReason = computed(() => {
+  if (loading.value) return t("กำลังโหลดข้อมูลสำหรับส่งออก");
+  if (loadError.value) return t("โหลดข้อมูลไม่สำเร็จ — ลองใหม่ก่อนส่งออก");
+  if (!contracts.value.length) return t("ไม่มีข้อมูลสัญญาให้ส่งออกในช่วงที่เลือก");
+  if (searching.value && !foundDevices.value) return t("ไม่มีเครื่องตรงคำค้น — เปลี่ยนหรือล้างคำค้นก่อนส่งออก");
+  return "";
+});
+const exportMessage = computed(() => exporting.value ? t("กำลังสร้างไฟล์ส่งออก") : exportBlockedReason.value);
+const exportScope = computed(() => [
+  ...reportContext({ months: monthSelection.value, filters: { search: search.value } }).map(([label, value]) => `${label}: ${value}`),
+  searching.value ? t("เฉพาะเครื่องที่ตรงคำค้น") : t("ทุกเครื่องในสัญญา"),
+].join(" · "));
 
 async function exportExcel() {
   const header = [
@@ -326,10 +339,16 @@ onMounted(() => {
         <UiTooltip :content="t(&quot;พับทั้งหมด&quot;)">
           <UiButton size="sm" variant="ghost" icon-only :label="t(&quot;พับทั้งหมด&quot;)" @click="collapseAll"><ChevronsDownUp :size="15" /></UiButton>
         </UiTooltip>
-        <UiButton size="sm" variant="secondary" :disabled="!contracts.length || loading || !!loadError || (searching && !foundDevices)" :loading="exporting" data-testid="expense-export" @click="exportExcel">
-          <template #icon><Download :size="15" /></template>
-          {{ searching ? t("Excel เฉพาะผลค้นหา ({0} เครื่อง)", [formatCount(foundDevices)]) : "Excel" }}
-        </UiButton>
+        <div class="flex flex-col items-start gap-1 min-w-0 max-w-xs">
+          <UiButton size="sm" variant="secondary" :disabled="Boolean(exportBlockedReason)" :loading="exporting" :aria-describedby="exportDescriptionId" data-testid="expense-export" @click="exportExcel">
+            <template #icon><Download :size="15" /></template>
+            {{ searching ? t("Excel เฉพาะผลค้นหา ({0} เครื่อง)", [formatCount(foundDevices)]) : "Excel" }}
+          </UiButton>
+        <p :id="exportDescriptionId" :tabindex="exportMessage ? 0 : undefined" class="text-xs text-ink-soft break-words max-w-full" aria-live="polite">
+          <span v-if="exportMessage" class="block font-medium">{{ exportMessage }}</span>
+          <span>{{ t("ขอบเขตไฟล์: {0}", [exportScope]) }}</span>
+        </p>
+        </div>
       </div>
     </div>
 

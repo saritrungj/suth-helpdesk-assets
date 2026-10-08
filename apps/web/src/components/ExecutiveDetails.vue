@@ -34,6 +34,9 @@ const title = computed(() => props.scope ? t('รายละเอียดข�
 
 /** ชื่อไฟล์และเงื่อนไขของแผงนี้ — ทั้ง Excel และ CSV ใช้ขอบเขตเดียวกับที่เห็นในลิ้นชัก */
 const filename = computed(() => exportFilename(['print-usage-details', props.scope?.dimension, group.value]));
+const exportScope = computed(() => [props.context, props.scope?.label || t('ทั้งหมด'),
+  t('แบ่งตาม: {0}', [options.value.find(option => option.value === group.value)?.label]),
+  search.value.trim() ? t('ค้นหา: {0}', [search.value]) : '', t('ข้อมูลในรายละเอียดนี้')].filter(Boolean).join(' · '));
 
 function exportCsv() {
   exportError.value = '';
@@ -89,7 +92,7 @@ async function exportRows() {
     </template>
     <template #footer>
       <span class="mr-auto text-xs text-ink-mute">{{ t('{0} รายการ', [formatCount(visibleRows.length)]) }}</span>
-      <ExportMenu :disabled="!visibleRows.length" :busy="exporting" :reason="t('ไม่มีรายการให้ส่งออก')" @excel="exportRows" @csv="exportCsv" />
+      <ExportMenu :disabled="!visibleRows.length" :busy="exporting" :reason="t('ไม่มีรายการให้ส่งออก')" :scope="exportScope" @excel="exportRows" @csv="exportCsv" />
     </template>
   </UiDrawer>
 </template>
