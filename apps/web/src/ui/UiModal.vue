@@ -63,7 +63,7 @@ const SIZES = {
                sm:w-[calc(100%-2rem)] sm:rounded-lg sm:max-h-[85dvh]
                data-[state=open]:animate-slide-up sm:data-[state=open]:animate-pop-in"
         :class="SIZES[size] ?? SIZES.md"
-        :aria-describedby="description ? undefined : 'undefined'"
+        v-bind="description ? {} : { 'aria-describedby': undefined }"
         @escape-key-down="persistent && $event.preventDefault()"
         @pointer-down-outside="persistent && $event.preventDefault()"
       >
