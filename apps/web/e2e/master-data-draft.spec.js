@@ -76,6 +76,7 @@ test("ฟอร์มที่ไม่ได้แก้ปิดได้ท�
   await page.keyboard.press("Escape");
   await expect(created.dialog).toBeHidden();
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "เพิ่มยี่ห้อ", exact: true }).first()).toBeFocused();
 
   await page.getByRole("button", { name: "แก้ไข SUTH Printer", exact: true }).click();
   const edit = page.getByRole("dialog", { name: "แก้ไขยี่ห้อ" });
@@ -142,8 +143,10 @@ test("บันทึกล้มเหลวคงค่าที่กรอ�
   await dialog.getByRole("button", { name: "เพิ่มยี่ห้อ", exact: true }).click();
   await expect(dialog).toBeHidden();
 
+  // เปิดซ้ำทันทีหลังบันทึก: ต้องเป็นฟอร์มสะอาดที่ปิดได้ ไม่ค้างสถานะบันทึกของรอบก่อน
   const reopened = await openCreate(page);
   await expect(reopened.name).toHaveValue("");
+  await expect(reopened.dialog.getByRole("button", { name: "ยกเลิก", exact: true })).toBeEnabled();
   await page.keyboard.press("Escape");
   await expect(reopened.dialog).toBeHidden();
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
@@ -184,7 +187,7 @@ test("หน้าต่างที่ไม่มีคำอธิบาย�
   expect((await new AxeBuilder({ page }).include('[role="alertdialog"]').analyze()).violations.map((v) => v.id)).toEqual([]);
 });
 
-test("หน้าต่างที่มีคำอธิบายอ้าง id ที่มีอยู่จริงและไม่ซ้ำ ข้อความตรงกับที่แสดง และคืนโฟกัสเมื่อปิด", async ({ page }) => {
+test("หน้าต่างที่มีคำอธิบายอ้าง id ที่มีอยู่จริงและไม่ซ้ำ ข้อความตรงกับที่แสดง", async ({ page }) => {
   await assetFixture(page);
   await page.goto("/assets");
   const account = page.getByRole("button", { name: /^บัญชีของ/ });

@@ -64,6 +64,16 @@ describe("createDraftGuard", () => {
     expect(options.danger).toBe(true);
   });
 
+  test("ผู้เรียกตั้งชื่อปุ่มยกเลิกเองได้ ไม่ส่งมาก็ไม่แตะค่าเริ่มต้นของกล่องถาม", async () => {
+    const { guard, confirm } = setup({ count: 1, answer: false });
+
+    await guard("", { cancelText: "แก้ไขต่อ" });
+    await guard("");
+
+    expect(confirm.mock.calls[0][1].cancelText).toBe("แก้ไขต่อ");
+    expect(confirm.mock.calls[1][1]).not.toHaveProperty("cancelText");
+  });
+
   test("ถามอยู่แล้วถูกเรียกซ้ำ — ต้องไม่เปิดกล่องถามซ้อนกันสองใบ", async () => {
     const state = { count: 2 };
     let release;

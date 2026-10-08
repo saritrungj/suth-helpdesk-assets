@@ -99,7 +99,10 @@ const isEditing = computed(() => editingId.value !== null);
  * ฟอร์มที่กรอกค้างไว้ต้องไม่หายเงียบๆ (#278) — ทุกทางปิด (Esc คลิกพื้นหลัง ปุ่มปิด ปุ่มยกเลิก)
  * ผ่าน requestClose ที่เดียว ระหว่างบันทึกปิดไม่ได้ เพราะผลของคำขอยังไม่กลับมา
  */
-const { ready: draftReady, dirty, capture } = useDraftSnapshot(computed(() => form));
+// เทียบเป็นข้อความ: ค่าที่โหลดมาเป็นตัวเลข (รหัสอาคาร ปีงบ) แต่ช่องกรอกส่งกลับเป็นข้อความ
+// เลือกค่าเดิมกลับมาจึงต้องไม่นับเป็นการแก้
+const draftValues = computed(() => props.fields.map((field) => String(form[field.key] ?? "")));
+const { ready: draftReady, dirty, capture } = useDraftSnapshot(draftValues);
 const confirmDiscard = createDraftGuard({
   dirtyCount: () => (dirty.value ? 1 : 0),
   discard: capture,
@@ -279,6 +282,8 @@ async function submit() {
 
     capture();
     dialogOpen.value = false;
+    // ปล่อยสถานะบันทึกทันทีที่เขียนสำเร็จ — ถ้าค้างไว้ถึงตอนโหลดรายการใหม่ ฟอร์มที่เปิดซ้ำจะปิดไม่ได้
+    saving.value = false;
     await invalidateRelatedCaches();
     await load();
     await props.onChanged?.();
