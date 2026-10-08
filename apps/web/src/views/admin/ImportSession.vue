@@ -100,6 +100,16 @@ function applySession(data) {
   const unsent = loadedFor === data.id && JSON.stringify(decisionsPayload(choices, acknowledged)) !== lastSent;
   if (data.validation?.registry) {
     const next = initialChoices(data.validation.registry, unsent ? choices : { names: {}, models: {}, renames: {} });
+    if (unsent) {
+      // Only an explicitly cleared pending decision overrides automatic matching.
+      // Untouched empty fields still use the server's matches as before.
+      const sent = JSON.parse(lastSent || reviewedPayload.value || "{}");
+      for (const [kind, names] of Object.entries(next.names)) {
+        for (const name of Object.keys(names)) {
+          if (choices.names[kind]?.[name] === "" && Object.hasOwn(sent.names?.[kind] ?? {}, name)) names[name] = "";
+        }
+      }
+    }
     choices.names = next.names;
     choices.models = next.models;
     choices.renames = next.renames;
