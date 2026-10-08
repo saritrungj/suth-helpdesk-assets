@@ -27,7 +27,7 @@
 import { expect, test } from "@playwright/test";
 import { reasonToSkip, resolveAssetDetailUrl, signIn } from "./fixtures.js";
 import { CONTRAST_HELPERS } from "./contrast-helper.js";
-import { PAGES } from "./pages.js";
+import { DB_PAGES as PAGES } from "./pages.js";
 
 /** ค่าขั้นต่ำตาม WCAG 2.2 ระดับ AA */
 const AA_TEXT = 4.5;

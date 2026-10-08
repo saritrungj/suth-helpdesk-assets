@@ -349,6 +349,8 @@ async function showPreviewDetails() {
       <template #icon><ArrowLeft :size="15" /></template> {{ t("งานนำเข้าทั้งหมด") }}
     </UiButton>
 
+    <UiPageHeader v-if="query.isPending.value || query.isError.value" :title="t('งานนำเข้า #{0}', [route.params.id])" />
+
     <div v-if="query.isPending.value" class="flex flex-col gap-3"><UiSkeleton v-for="n in 5" :key="n" height="3rem" /></div>
 
     <UiAlert v-else-if="query.isError.value" tone="danger">

@@ -80,8 +80,8 @@ export const MASTERS = {
  * @param {{ rows?: object[] }} [options]
  * @returns state — ตั้ง `delay` (ms) หรือ `fail` เพื่อทดสอบสถานะโหลด/ผิดพลาด และอ่าน `requests`
  */
-export async function comparisonFixture(page, { rows = COMPARISON_ROWS } = {}) {
-  const base = await prototypeFixture(page, "viewer");
+export async function comparisonFixture(page, { rows = COMPARISON_ROWS, role = "viewer" } = {}) {
+  const base = await prototypeFixture(page, role);
   // overviewComparison = เดือนของช่วงก่อนหน้าที่ API จริงคำนวณให้ (ยาวเท่ากัน อยู่ในปีงบเดียวกัน)
   const state = { ...base, delay: 0, fail: false, requests: [], masterRequests: [], overviewComparison: null };
   const json = (route, data, status = 200) => route.fulfill({ status, json: data });

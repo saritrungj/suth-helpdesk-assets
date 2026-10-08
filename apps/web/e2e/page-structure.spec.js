@@ -18,7 +18,7 @@
 
 import { expect, test } from "@playwright/test";
 import { reasonToSkip, resolveAssetDetailUrl, signIn } from "./fixtures.js";
-import { PAGES } from "./pages.js";
+import { DB_PAGES as PAGES } from "./pages.js";
 
 /**
  * ทุกหน้าหลังล็อกอิน — ต้องเพิ่มที่นี่ทุกครั้งที่เพิ่มหน้าใหม่
