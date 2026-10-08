@@ -379,6 +379,9 @@ const scopeCaption = computed(() => {
   return total <= 3 ? active.map((filter) => `${filter.label}: ${filter.text}`).join(' · ') : t('ตัวกรอง {0} รายการ', [formatCount(total)]);
 });
 const scopeText = computed(() => [yearsText.value, periodText.value, scopeCaption.value, metricText.value].join(' · '));
+const exportScope = computed(() => [yearsText.value, periodText.value,
+  activeFilters.value.length ? activeFilters.value.map((filter) => `${filter.label}: ${filter.text}`).join(' · ') : t('ทุกหน่วยงาน'),
+  t('ข้อมูลทั้งหมดที่ตรงตัวกรอง')].join(' · '));
 
 /* --------------------------------------------------------------------------
    ตัวเลขสำคัญ — ขอบเขตเดียวกับกราฟ ตาราง และไฟล์ เพราะอ่านจาก rows ชุดเดียวกัน
@@ -498,7 +501,8 @@ function reload() {
    ส่งออก — Excel เป็นรายงาน CSV เป็นข้อมูลดิบ ทั้งคู่ใช้ตัวกรองชุดเดียวกับจอ
    -------------------------------------------------------------------------- */
 const blockedReason = computed(() => {
-  if (!ready.value) return t('รอข้อมูลโหลดเสร็จ');
+  if (failed.value) return t('โหลดข้อมูลไม่สำเร็จ — ลองใหม่ก่อนส่งออก');
+  if (loading.value) return t('กำลังโหลดข้อมูลสำหรับส่งออก');
   if (!exportRows.value.length) return t('ยังไม่มีการพิมพ์ในขอบเขตที่เลือก');
   return '';
 });
@@ -579,7 +583,7 @@ function runCsv() {
         </UiButton>
         <!-- ส่งออกทั้งขอบเขตที่ตัวกรองเลือกไว้ ไม่ใช่เฉพาะสิ่งที่กราฟวาด จึงเป็นปุ่มของหน้า
              ไม่ใช่ปุ่มของการ์ดกราฟ -->
-        <ExportMenu :disabled="Boolean(blockedReason)" :reason="blockedReason" :busy="exportBusy" @excel="runExcel" @csv="runCsv" />
+        <ExportMenu :disabled="Boolean(blockedReason)" :reason="blockedReason" :scope="exportScope" :busy="exportBusy" @excel="runExcel" @csv="runCsv" />
       </template>
     </UiPageHeader>
 
