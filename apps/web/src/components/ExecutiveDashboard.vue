@@ -503,7 +503,7 @@ function reload() {
 const blockedReason = computed(() => {
   if (failed.value) return t('โหลดข้อมูลไม่สำเร็จ — ลองใหม่ก่อนส่งออก');
   if (loading.value) return t('กำลังโหลดข้อมูลสำหรับส่งออก');
-  if (!exportRows.value.length) return t('ยังไม่มีการพิมพ์ในขอบเขตที่เลือก');
+  if (!exportRows.value.length) return t('ไม่มีข้อมูลพิมพ์ให้ส่งออกในขอบเขตที่เลือก');
   return '';
 });
 

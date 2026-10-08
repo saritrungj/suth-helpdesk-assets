@@ -1209,6 +1209,7 @@
   "ค่าพิมพ์ยังคำนวณไม่ได้": "Print cost cannot be calculated",
   "ข้อมูลราคาไม่ครบ": "Incomplete pricing data",
   "กำลังสร้างไฟล์ส่งออก": "Preparing the export file",
+  "ไม่มีข้อมูลพิมพ์ให้ส่งออกในขอบเขตที่เลือก": "No print data to export in the selected scope",
   "ขอบเขตไฟล์: {0}": "File scope: {0}",
   "ข้อมูลทั้งหมดที่ตรงตัวกรอง": "All data matching the filters",
   "โหลดข้อมูลไม่สำเร็จ — ลองใหม่ก่อนส่งออก": "Data could not be loaded — retry before exporting",

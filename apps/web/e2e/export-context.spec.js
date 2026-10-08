@@ -32,7 +32,8 @@ test("loading and empty reports have different visible explanations", async ({ p
   const button = page.getByRole("button", { name: "ส่งออก", exact: true }).first();
   await expect(button).toBeDisabled();
   await expect(page.getByText("กำลังโหลดข้อมูลสำหรับส่งออก", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("ยังไม่มีการพิมพ์ในขอบเขตที่เลือก", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("ไม่มีข้อมูลพิมพ์ให้ส่งออกในขอบเขตที่เลือก", { exact: true })).toBeVisible();
+  await expect(page.getByText("ยังไม่มีการพิมพ์ในขอบเขตที่เลือก", { exact: true })).toHaveCount(1);
   await expect(button).toBeDisabled();
   await expect(page.getByText("กำลังโหลดข้อมูลสำหรับส่งออก", { exact: true })).toHaveCount(0);
 });
