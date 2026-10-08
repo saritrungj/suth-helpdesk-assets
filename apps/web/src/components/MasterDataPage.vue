@@ -29,6 +29,8 @@ import { invalidateAfterWrite, changeKindForEndpoint } from "../api/invalidate";
 import { markForRevalidation, takeRevalidationHeaders } from "../api/http-cache";
 import { toastError, toastSuccess } from "../store/toast";
 import { errorMessage } from "../lib/api-error";
+import { createDraftGuard } from "../lib/draft-guard";
+import { useDraftSnapshot } from "../lib/use-draft-snapshot";
 import {
   UiAlert,
   UiButton,
@@ -92,6 +94,23 @@ const formError = ref("");
 const saving = ref(false);
 
 const isEditing = computed(() => editingId.value !== null);
+
+/**
+ * ฟอร์มที่กรอกค้างไว้ต้องไม่หายเงียบๆ (#278) — ทุกทางปิด (Esc คลิกพื้นหลัง ปุ่มปิด ปุ่มยกเลิก)
+ * ผ่าน requestClose ที่เดียว ระหว่างบันทึกปิดไม่ได้ เพราะผลของคำขอยังไม่กลับมา
+ */
+const { ready: draftReady, dirty, capture } = useDraftSnapshot(computed(() => form));
+const confirmDiscard = createDraftGuard({
+  dirtyCount: () => (dirty.value ? 1 : 0),
+  discard: capture,
+  describe: () => t("ข้อมูลที่กรอกในฟอร์มนี้ยังไม่ได้บันทึก ปิดแล้วจะหายทั้งหมด"),
+});
+
+async function requestClose() {
+  if (saving.value) return;
+  const ok = await confirmDiscard("", { confirmText: t("ทิ้งการแก้ไข"), cancelText: t("แก้ไขต่อ") });
+  if (ok) dialogOpen.value = false;
+}
 
 /**
  * คอลัมน์ที่อ้างถึงข้อมูลชุดอื่น (ชั้น -> อาคาร, แผนก -> ฝ่าย) มาจาก API เป็น id
@@ -173,6 +192,8 @@ function openCreate() {
   editingId.value = null;
   formError.value = "";
   for (const field of props.fields) form[field.key] = "";
+  capture();
+  draftReady.value = true;
   dialogOpen.value = true;
 }
 
@@ -180,6 +201,8 @@ function openEdit(row) {
   editingId.value = row.id;
   formError.value = "";
   for (const field of props.fields) form[field.key] = row[field.key] ?? "";
+  capture();
+  draftReady.value = true;
   dialogOpen.value = true;
 }
 
@@ -235,6 +258,7 @@ function payload() {
 }
 
 async function submit() {
+  if (saving.value) return;
   const problem = validate();
   if (problem) {
     formError.value = problem;
@@ -253,6 +277,7 @@ async function submit() {
       toastSuccess(t("เพิ่ม{0}เรียบร้อย", [props.itemNoun]));
     }
 
+    capture();
     dialogOpen.value = false;
     await invalidateRelatedCaches();
     await load();
@@ -390,7 +415,8 @@ onMounted(async () => {
     </UiDataTable>
 
     <UiModal
-      v-model:open="dialogOpen"
+      :open="dialogOpen"
+      @update:open="$event ? (dialogOpen = true) : requestClose()"
       :title="isEditing ? t(&quot;แก้ไข{0}&quot;, [itemNoun]) : t(&quot;เพิ่ม{0}&quot;, [itemNoun])"
       size="sm"
     >
@@ -418,7 +444,6 @@ onMounted(async () => {
             :placeholder="field.placeholder"
             :step="field.step"
             :min="field.min"
-            @enter="submit"
           />
         </UiField>
 
@@ -431,12 +456,13 @@ onMounted(async () => {
 
         <UiAlert v-if="formError" tone="danger">{{ formError }}</UiAlert>
 
-        <!-- ปุ่ม submit ที่ซ่อนไว้ ทำให้กด Enter ในช่องไหนก็บันทึกได้ตามที่คนคาดหวังจากฟอร์ม -->
+        <!-- ปุ่ม submit ที่ซ่อนไว้ ทำให้กด Enter ในช่องไหนก็บันทึกได้ตามที่คนคาดหวังจากฟอร์ม
+             ไม่ผูก @enter ของช่องกรอกซ้ำ: มันยิงตอนปล่อยปุ่ม ซึ่งรวมถึง Enter ที่เพิ่งใช้ตอบ "แก้ไขต่อ" (#278) -->
         <button type="submit" class="hidden" tabindex="-1" aria-hidden="true"></button>
       </form>
 
       <template #footer>
-        <UiButton variant="secondary" :disabled="saving" @click="dialogOpen = false"> {{ t("ยกเลิก") }} </UiButton>
+        <UiButton variant="secondary" :disabled="saving" @click="requestClose"> {{ t("ยกเลิก") }} </UiButton>
         <UiButton variant="primary" :loading="saving" @click="submit">
           {{ isEditing ? t("บันทึกการแก้ไข") : t("เพิ่ม{0}", [itemNoun]) }}
         </UiButton>

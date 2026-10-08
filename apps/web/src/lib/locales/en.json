@@ -1219,5 +1219,8 @@
   "ทุกเครื่องในสัญญา": "All devices in contracts",
   "แบ่งตาม: {0}": "Grouped by: {0}",
   "ค้นหา: {0}": "Search: {0}",
-  "ข้อมูลในรายละเอียดนี้": "Data in these details"
+  "ข้อมูลในรายละเอียดนี้": "Data in these details",
+  "ข้อมูลที่กรอกในฟอร์มนี้ยังไม่ได้บันทึก ปิดแล้วจะหายทั้งหมด": "What you entered in this form is not saved. Closing it will discard everything.",
+  "ทิ้งการแก้ไข": "Discard changes",
+  "แก้ไขต่อ": "Keep editing"
 }
