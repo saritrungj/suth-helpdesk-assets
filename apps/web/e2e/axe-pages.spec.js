@@ -1,6 +1,6 @@
 // apps/web/e2e/axe-pages.spec.js
 //
-// axe-core บนทุกหน้าใน PAGES (pages.js) — ชุดเดียวกับที่ wcag.spec.js ใช้ —
+// axe-core บน DB_PAGES (pages.js) — ชุดเดียวกับที่ wcag.spec.js ใช้ —
 // เฟสสองของ #64
 //
 // เฟสแรก (axe-fixture.spec.js) รันเฉพาะสถานะที่ fixture คุมอยู่แล้ว เพราะตอนนั้น
@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { reasonToSkip, resolveAssetDetailUrl, signIn } from "./fixtures.js";
-import { PAGES } from "./pages.js";
+import { DB_PAGES as PAGES } from "./pages.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE_PATH = path.join(HERE, "axe-baseline-pages.json");
@@ -65,6 +65,8 @@ for (const target of PAGES) {
 
     const results = await new AxeBuilder({ page }).analyze();
     const ids = results.violations.map((violation) => violation.id).sort();
+    await test.info().attach("axe-full-page", { body: JSON.stringify(results, null, 2), contentType: "application/json" });
+    test.info().annotations.push({ type: "axe-findings", description: JSON.stringify(ids) });
 
     if (updating) {
       collected[target.name] = ids;

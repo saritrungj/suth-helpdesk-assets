@@ -2,9 +2,8 @@
 //
 // axe-core บนสถานะที่ fixture คุมอยู่แล้ว (ไม่ต้องมี API/ฐานข้อมูล) — เฟสแรกของ #64
 //
-// เฟสสอง (ทุกหน้าใน PAGES ของ wcag.spec.js ที่ต้องล็อกอินจริง) รอฐานข้อมูลของ CI
-// (#63) กลไก baseline ด้านล่างเขียนไว้ให้ขยายได้ตรงๆ — เพิ่ม state ใหม่ในลิสต์
-// ด้านล่าง หรือทำสคริปต์เดียวกันนี้ชี้ไปที่ PAGES แทน ไม่ต้องออกแบบใหม่
+// ชุดฐานข้อมูลอยู่ใน axe-pages.spec.js (DB_PAGES); full-page HTTP fixtures
+// ของ Compare/import/AuditLog อยู่ใน accessibility-pages.spec.js โดยไม่ใช้ whitelist.
 //
 // ## แบ่งงานกับตัววัด contrast ที่เขียนเอง
 //
@@ -98,6 +97,8 @@ for (const state of STATES) {
     await state.setup(page);
     const results = await new AxeBuilder({ page }).analyze();
     const ids = results.violations.map((violation) => violation.id).sort();
+    await test.info().attach("axe-full-page", { body: JSON.stringify(results, null, 2), contentType: "application/json" });
+    test.info().annotations.push({ type: "axe-findings", description: JSON.stringify(ids) });
 
     if (updating) {
       collected[state.name] = ids;

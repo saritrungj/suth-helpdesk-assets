@@ -115,7 +115,7 @@ function headline(row) {
         <table class="w-full text-sm [&_th]:pr-4 [&_td]:pr-4">
           <thead>
             <tr class="border-b border-line-soft text-left text-ink-mute">
-              <th class="py-2">{{ t("ไฟล์") }}</th><th>{{ t("สถานะ") }}</th><th>{{ t("เจ้าของ") }}</th><th>{{ t("สร้างเมื่อ") }}</th><th>{{ t("ใช้ล่าสุด") }}</th><th>{{ t("สรุป") }}</th><th></th>
+              <th class="py-2">{{ t("ไฟล์") }}</th><th>{{ t("สถานะ") }}</th><th>{{ t("เจ้าของ") }}</th><th>{{ t("สร้างเมื่อ") }}</th><th>{{ t("ใช้ล่าสุด") }}</th><th>{{ t("สรุป") }}</th><th><span class="sr-only">{{ t("การกระทำ") }}</span></th>
             </tr>
           </thead>
           <tbody>

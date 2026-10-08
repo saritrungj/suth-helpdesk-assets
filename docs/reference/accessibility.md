@@ -10,18 +10,54 @@
 
 | ไฟล์ | ขอบเขต |
 | --- | --- |
-| `apps/web/e2e/wcag.spec.js` | route หลังล็อกอิน 16 หน้า + แท็บแผนกและนำเข้า รวม 18 สถานะเริ่มต้น; contrast สองธีม รวม sidebar |
+| `apps/web/e2e/wcag.spec.js` | 17 targets ใน `DB_PAGES`; contrast สองธีม รวม sidebar |
 | `apps/web/e2e/login-wcag.spec.js` | หน้าล็อกอิน ลงลึกกว่า เพราะเป็นหน้าเดียวที่คนนอกเปิดเจอ และเป็นด่านเดียวที่ถ้าใช้ไม่ได้ก็ใช้ทั้งระบบไม่ได้ |
 | `apps/web/e2e/page-structure.spec.js` | landmark, ปุ่มที่ไม่มีชื่อ, error ใน console |
 | `apps/web/e2e/asset-drawer.spec.js` | ทะเบียนและแผงแก้ไข/ย้าย: โฟกัสในแผง, dirty/pending, สิทธิ์, zoom 200% และ density สามระดับ |
 | `apps/web/e2e/asset-evidence.spec.js` | ภาพหลักฐานของทะเบียน ค่าเริ่มต้นสองชุด (ไทย-สว่าง, อังกฤษ-มืด ที่ 1440) ครบสองภาษา สองธีม สามขนาดเมื่อตั้ง `SUTH_EVIDENCE_FULL=1` ไม่ใช่ pixel regression |
 | `apps/web/e2e/contrast-helper.spec.js` | regression ของตัววัดด้วย CSS จริงใน Chromium โดยไม่ต้องมี API/ฐานข้อมูล |
-| `apps/web/e2e/axe-fixture.spec.js` | axe-core บนสถานะที่ fixture คุม (ทะเบียน, แผงแก้ไข, แผงย้าย) — ไม่ต้องมี API/ฐานข้อมูล เฟส 1 ของ #64 |
-| `apps/web/e2e/axe-pages.spec.js` | axe-core บนทุกหน้าใน `PAGES` (`apps/web/e2e/pages.js`) — ชุดเดียวกับ wcag.spec.js ต้องมี API/ฐานข้อมูลจริง เฟส 2 ของ #64 |
+| `apps/web/e2e/axe-fixture.spec.js` | 5 สถานะ: ทะเบียน, แผงแก้ไข, แผงย้าย, ภาพรวมเลือกฝ่าย, ภาพรวมค่าใช้จ่าย; HTTP fixtures |
+| `apps/web/e2e/axe-pages.spec.js` | axe-core บน 17 targets ใน `DB_PAGES` — ชุดเดียวกับ wcag.spec.js ต้องมี API/ฐานข้อมูลจริง |
+| `apps/web/e2e/accessibility-pages.spec.js` | full-page axe บน Compare, Import list/detail, AuditLog ผ่าน HTTP fixtures; ตารางสถานะด้านล่าง |
 
-รายการ URL ที่รันจริงอยู่ใน `PAGES` ของ `wcag.spec.js` เป็น source of truth
+รายการกลางอยู่ใน `PAGES` ของ `apps/web/e2e/pages.js`: 21 targets แบ่งเป็น `DB_PAGES` 17 targets เดิม (รวมแท็บนำเข้า) และ `FIXTURE_PAGES` 4 เส้นทางปัจจุบัน
 หน้ารายละเอียดเลือกเครื่องที่มีจริงจาก API; ถ้าไม่มีเครื่องจะรายงาน skipped ไม่สร้างข้อมูล
 เมนูซ้อน modal สถานะ error/empty และทุก role ยังไม่ได้ครอบคลุมทั้งหมด
+
+### Full-page HTTP-fixture sweep (#282)
+
+| Route | Role ที่ตรวจ | สถานะ |
+| --- | --- | --- |
+| `/compare` | viewer ครบทุกสถานะ; admin/staff เพิ่มสถานะข้อมูล | data, empty, loading, error |
+| `/admin/import` | admin | data, empty, loading, error |
+| `/admin/import/41` (id สังเคราะห์) | admin | data, missing (404), loading, error (503) |
+| `/admin/audit-log` | admin | data, empty, loading, error |
+
+16 route/state pairs × 2 ธีม × 2 viewport (1440×900, 1280×800) = 64 full-page scans;
+เพิ่ม Compare admin/staff อีก 2 scans และ inventory regression อีก 1 รวม 67 tests.
+loading ค้าง response ที่ HTTP boundary จนตรวจเสร็จ; ทุกสถานะยืนยัน URL, API request
+และเนื้อหาที่มองเห็นก่อนสแกน ไม่ข้ามเพราะข้อมูล fixture ไม่ตรงรูปแบบ. รายงาน axe เต็มและ
+ภาพหน้าจอแนบใน Playwright artifacts; หลักฐานปิดงานถาวรอยู่ใน PR ของ #282.
+ชุดนี้ไม่ใช้ baseline whitelist และไม่ปิด axe rules. ชุดฐานข้อมูลเดิมและ baseline ทั้งสองไฟล์ยังคงเดิม.
+
+ผลตรวจ #282 วันที่ 8 ต.ค. 2569: รอบแรกพบ `empty-table-header` ที่คอลัมน์การกระทำ
+ในรายการงานนำเข้า และ `page-has-heading-one` ที่รายละเอียดงานระหว่าง loading/404/503.
+แก้โดยเพิ่มชื่อคอลัมน์สำหรับโปรแกรมอ่านหน้าจอและใช้ `UiPageHeader` ระหว่างโหลด/ผิดพลาด
+แล้วตรวจซ้ำทั้งสองธีม/สองขนาดจอ. ไม่เพิ่ม finding ใดเข้า whitelist และไม่ลบ IDs ใน baseline เดิม.
+ผลผ่านของ sweep นี้ไม่ยืนยันว่า findings ใน baseline เก่าถูกแก้ทั้งหมด เพราะเป็นคนละขอบเขตข้อมูล.
+รอบเดียวกันตรวจ `axe-pages.spec.js` ครบ 17 targets บน seed ของฐานชั่วคราว และ
+`axe-fixture.spec.js` ครบ 5 สถานะ: ไม่พบ violation IDs ในขอบเขตที่วัดครั้งนี้.
+ผล axe เต็มแนบกับแต่ละ test; ยังเก็บ baseline เก่าไว้ ไม่ลบรายการจากผลผ่านเพียงรอบเดียว.
+
+```bash
+npm run test:e2e --workspace @suth/web -- accessibility-pages.spec.js --project=fixture
+```
+
+การตรวจนี้เป็น axe/DOM automation; keyboard และ interactive states ตรวจแยกใน
+`route-focus.spec.js`, `audit-filter-memory.spec.js`, `import-review.spec.js`,
+`import-export-accessibility.spec.js` และ regression ของ comparison.
+ยังไม่ได้ตรวจด้วย NVDA/JAWS/VoiceOver, Windows High Contrast จริง, password manager จริง
+หรือ usability กับผู้ใช้จริง จึงไม่ใช่การรับรอง WCAG ทั้งระบบ.
 
 ```bash
 npm run test:e2e --workspace @suth/web
@@ -70,9 +106,8 @@ redirect และ navigation ที่ abort/cancel/error. ยังไม่�
 
 **สถานะปัจจุบัน:** ครบทั้งสองเฟสแล้ว
 
-- **เฟส 1** (`axe-fixture.spec.js`) — สถานะที่ fixture คุมอยู่แล้ว (ทะเบียน,
-  แผงแก้ไข, แผงย้ายเครื่อง) ไม่ต้องมี API/ฐานข้อมูล อยู่ในโปรเจกต์ `fixture`
-- **เฟส 2** (`axe-pages.spec.js`) — ทุกหน้าใน `PAGES` (`apps/web/e2e/pages.js`
+- **เฟส 1** (`axe-fixture.spec.js`) — 5 สถานะที่ fixture คุมอยู่แล้ว ไม่ต้องมี API/ฐานข้อมูล อยู่ในโปรเจกต์ `fixture`; #282 เพิ่ม full-page sweep แยกตามตารางด้านบน
+- **เฟส 2** (`axe-pages.spec.js`) — ทุกหน้าใน `DB_PAGES` (`apps/web/e2e/pages.js`
   — ชุดเดียวกับที่ `wcag.spec.js` ใช้) ต้องมี API/ฐานข้อมูลจริง (#63) อยู่ในโปรเจกต์ `db`
   `PAGES` แยกไว้เป็นโมดูลกลางไม่ใช่ export จากไฟล์ .spec.js ตรงๆ — import ค่าคงที่
   จากไฟล์ .spec.js จะลาก `test()` ทั้งไฟล์นั้นติดมาโดยไม่ตั้งใจ (module side effect
@@ -84,11 +119,11 @@ redirect และ navigation ที่ abort/cancel/error. ยังไม่�
 ข้อมูลจริงจากฐาน CI CI แดงเฉพาะตัวใหม่ที่ยังไม่เคยอยู่ในไฟล์ของเฟสนั้น เพื่อให้ไล่
 เก็บหนี้เดิมทีละตัวได้โดยไม่ต้องบล็อกทุก PR จนกว่าจะแก้หมด
 
-เฟส 1 เจอ `color-contrast` หนึ่งจุดบนทะเบียน/แผงแก้ไข/แผงย้าย (`.opacity-80`,
+ผลที่บันทึกตอนเริ่ม #64 (ประวัติ baseline ไม่ใช่รายการ findings ปัจจุบัน): เฟส 1 เจอ `color-contrast` หนึ่งจุดบนทะเบียน/แผงแก้ไข/แผงย้าย (`.opacity-80`,
 4.15:1 จากที่ต้องการ 4.5:1) เฟส 2 เจอ `color-contrast` บนเกือบทุกหน้า (จุดเดียวกัน)
 และ `role-img-alt` เพิ่มบนแดชบอร์ด/รายละเอียดเครื่อง/เปรียบเทียบรายเดือน (กราฟ
-chart.js ที่ยังไม่มี accessible name) ทั้งหมดเป็นหนี้เดิมที่ยังไม่เคยถูกตัววัด
-contrast ของเราจับ เพราะอยู่นอกขอบเขตปัจจุบันของ `contrast-helper.js`
+Chart.js ในเวลานั้นที่ยังไม่มี accessible name) baseline ยังเก็บ IDs เดิมไว้จนกว่าจะตรวจซ้ำและมีเหตุผลราย finding; ไม่ได้แปลว่ากราฟปัจจุบันยังใช้ Chart.js. ในเวลานั้นตัววัด
+contrast ของเรายังไม่จับจุดเหล่านี้ เพราะอยู่นอกขอบเขตของ `contrast-helper.js`
 
 ---
 
