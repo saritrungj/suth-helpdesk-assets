@@ -3,6 +3,12 @@ import { assetFixture } from "./asset-fixture.js";
 import { CONTRAST_HELPERS } from "./contrast-helper.js";
 
 async function auditContrast(page, scope) {
+  // Contrast needs the settled page, including the route fade on an ancestor.
+  await page.locator(scope).first().evaluate(async el => {
+    const animations = [];
+    for (let node = el; node; node = node.parentElement) animations.push(...node.getAnimations());
+    await Promise.all(animations.map(animation => animation.finished.catch(() => {})));
+  });
   const result = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText(${JSON.stringify(scope)});`);
   expect(result.measured).toBeGreaterThan(0);
   expect(result.unsupported).toEqual([]);
@@ -19,16 +25,17 @@ for (const mode of ["light", "dark"]) {
       await page.goto("/login");
       const username = page.getByLabel("ชื่อผู้ใช้", { exact: true });
       const password = page.getByLabel("รหัสผ่าน", { exact: true });
-      await auditContrast(page, ".login__form");
+      await auditContrast(page, ".auth-card");
       await username.fill("synthetic-user");
       await password.fill("fixture-only");
-      await auditContrast(page, ".login__form");
+      await auditContrast(page, ".auth-card");
       await page.screenshot({ path: testInfo.outputPath("login.png") });
       const sizes = await username.evaluate((input) => ({
         label: parseFloat(getComputedStyle(input.labels[0]).fontSize),
         input: parseFloat(getComputedStyle(input).fontSize),
       }));
-      expect(sizes.label).toBeGreaterThan(sizes.input);
+      expect(sizes.label).toBe(14);
+      expect(sizes.input).toBe(16);
       await expect(page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).locator("svg")).toHaveCount(0);
       await expect(username).toHaveAttribute("autocomplete", "username");
       await expect(password).toHaveAttribute("autocomplete", "current-password");
@@ -37,7 +44,7 @@ for (const mode of ["light", "dark"]) {
       await expect(toggle).toBeFocused();
       await page.keyboard.press("Space");
       await expect(password).toHaveAttribute("type", "text");
-      await expect(page.getByRole("button", { name: "ซ่อนรหัสผ่าน", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("button", { name: "ซ่อนรหัสผ่าน", exact: true })).not.toHaveAttribute("aria-pressed");
       await page.screenshot({ path: testInfo.outputPath("password-visible.png") });
       await page.keyboard.press("Enter");
       await expect(password).toHaveAttribute("type", "password");

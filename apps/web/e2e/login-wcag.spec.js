@@ -92,11 +92,11 @@ for (const mode of ["light", "dark"]) {
 test(`1.4.3 [${mode}] ฟอร์มรวม placeholder และค่าที่กรอก`, async ({ page }) => {
   await openLogin(page, mode);
   // Measure the settled form, not one arbitrary frame of its entrance fade.
-  await page.locator(".login__form").evaluate(async (el) => {
+  await page.locator(".auth-card").evaluate(async (el) => {
     await Promise.all(el.getAnimations().map((animation) => animation.finished.catch(() => {})));
   });
   const audit = async () => {
-    const report = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText('.login__form');`);
+    const report = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText('.auth-card');`);
     expect(report.measured).toBeGreaterThan(0);
     expect(report.unsupported, "พื้นฟอร์มต้องเป็นพื้นทึบที่วัดได้").toEqual([]);
     expect(report.failures, JSON.stringify(report.failures, null, 2)).toEqual([]);
@@ -109,30 +109,9 @@ test(`1.4.3 [${mode}] ฟอร์มรวม placeholder และค่าท
 
 test(`1.4.3 [${mode}] ทั้งหน้ารวมส่วนช่วยเหลือที่เปิดแล้ว`, async ({ page }) => {
   await openLogin(page, mode);
-  // DashboardHero uses --surface with --aurora-1..3, not the always-dark page palette.
-  const palette = await page.evaluate(() => {
-    const probe = document.createElement("div");
-    document.body.append(probe);
-    try {
-      probe.style.backgroundColor = "var(--surface)";
-      const groundMatches = getComputedStyle(document.querySelector(".login")).backgroundColor
-        === getComputedStyle(probe).backgroundColor;
-      const layersMatch = [1, 2, 3].map((layer) => {
-        probe.style.backgroundImage = layer === 3
-          ? "radial-gradient(ellipse, var(--aurora-3) 0%, transparent 68%)"
-          : `radial-gradient(circle, var(--aurora-${layer}) 0%, transparent 70%)`;
-        return getComputedStyle(document.querySelector(`.aurora__layer--${layer}`)).backgroundImage
-          === getComputedStyle(probe).backgroundImage;
-      });
-      return { groundMatches, layersMatch };
-    } finally {
-      probe.remove();
-    }
-  });
-  expect(palette).toEqual({ groundMatches: true, layersMatch: [true, true, true] });
   await page.screenshot({ path: `e2e/screens/login-${mode}.png`, fullPage: true });
-  await page.locator(".login__access summary").click();
-  await expect(page.getByRole("heading", { name: /ติดต่อฝ่าย/ })).toBeVisible();
+  await page.getByRole("button", { name: "ลืมรหัสผ่าน?", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "ติดต่อแผนกสารสนเทศ" })).toBeVisible();
   const report = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText();`);
   expect(report.measured).toBeGreaterThanOrEqual(9);
   expect(report.unsupported, "หน้าล็อกอินใช้พื้นทึบที่วัดได้ทั้งหมด").toEqual([]);
@@ -152,7 +131,7 @@ test(`1.4.11 [${mode}] ขอบช่องกรอกต่างจากพ
       const el = document.querySelector(selector);
       const style = getComputedStyle(el);
       // พื้นหลังที่ขอบวางอยู่บนคือพื้นของแผงฟอร์ม ไม่ใช่พื้นของตัว input เอง
-      const panel = composite([getComputedStyle(document.querySelector(".login__panel")).backgroundColor]);
+      const panel = composite([getComputedStyle(document.querySelector(".auth-card")).backgroundColor]);
       return {
         selector,
         width: style.borderTopWidth,
@@ -215,7 +194,9 @@ test("2.4.7 + 2.4.11 กด Tab ไล่ทั้งหน้า ต้อง�
       const el = document.activeElement;
       if (!el || el === document.body) return null;
 
-      const style = getComputedStyle(el);
+      // UiCheckbox keeps the native input transparent; measure the visible adjacent box.
+      const indicator = el.matches('input[type="checkbox"]') ? el.nextElementSibling : el;
+      const style = getComputedStyle(indicator);
       const box = el.getBoundingClientRect();
 
       // 2.4.11 — จุดกึ่งกลางของสิ่งที่โฟกัสอยู่ต้องยังเป็นตัวมันเอง
@@ -237,7 +218,7 @@ test("2.4.7 + 2.4.11 กด Tab ไล่ทั้งหน้า ต้อง�
       return {
         id: el.id || el.getAttribute("aria-label") || (el.textContent || "").trim().slice(0, 24),
         indicator: hasOutline ? `outline ${style.outlineWidth} ${style.outlineColor}` : hasRing ? `ring ${style.boxShadow.slice(0, 40)}` : "ไม่มี",
-        hasIndicator: hasOutline || hasRing,
+        hasIndicator: Number(style.opacity) > 0 && (hasOutline || hasRing),
         inViewport:
           box.bottom > 0 && box.right > 0 && box.top < innerHeight && box.left < innerWidth,
         covered: atCentre ? !(el.contains(atCentre) || atCentre.contains(el)) : true,
@@ -409,19 +390,10 @@ test("3.1.1 + 2.4.2 + 1.1.1 ภาษาของหน้า ชื่อหน
     expect(image.alt, `<img src="${image.src}"> ไม่มี alt`).not.toBeNull();
   }
 
-  // Shared Dashboard artwork is decorative and cannot intercept form clicks.
-  await expect(page.locator(".aurora--hero")).toHaveAttribute("aria-hidden", "true");
-  await expect(page.locator(".aurora--hero")).toHaveCSS("pointer-events", "none");
-  await expect(page.locator(".aurora__layer").first()).toHaveCSS("animation-name", "none");
-  await expect(page.locator("canvas")).toHaveCount(0);
-  const main = await page.locator(".login__main").boundingBox();
-  const brand = await page.locator(".login__brand").boundingBox();
-  const logo = await page.locator(".login__logo").boundingBox();
-  expect(brand.width / main.width).toBeCloseTo(0.55, 2);
-  expect(logo.width / logo.height).toBeCloseTo(1200 / 676, 2);
-  const brandSurface = await page.locator(".login__brand").evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(brandSurface).toBe("oklch(1 0 0)");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("เข้าสู่ระบบ");
+  await expect(page.locator("canvas, .aurora")).toHaveCount(0);
+  const logo = await page.locator(".auth-logo img").boundingBox();
+  expect(logo.width / logo.height).toBeCloseTo(880 / 495, 2);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("SUTH Helpdesk Assets");
 });
 
 /* ==========================================================================

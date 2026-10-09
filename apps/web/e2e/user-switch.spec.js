@@ -15,7 +15,7 @@ async function signOut(page) {
 
 async function signInAs(page, state, user) {
   state.nextUser = user;
-  await page.getByLabel("ชื่อผู้ใช้").fill(user.username);
+  await page.getByLabel("ชื่อผู้ใช้", { exact: true }).fill(user.username);
   await page.getByLabel("รหัสผ่าน", { exact: true }).fill("fixture-only");
   await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
   await expect(page).not.toHaveURL(/\/login/);

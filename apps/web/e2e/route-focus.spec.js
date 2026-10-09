@@ -86,9 +86,9 @@ test("initial login retains username autofocus and a final redirect focuses once
   await fixture(page);
   await page.route(/\/api\/auth\/me$/, (route) => route.fulfill({ status: 401, json: { title: "กรุณาเข้าสู่ระบบ", code: "no_token" } }));
   await page.goto("/login");
-  await expect(page.getByLabel("ชื่อผู้ใช้")).toBeFocused();
+  await expect(page.getByLabel("ชื่อผู้ใช้", { exact: true })).toBeFocused();
   expect(await page.evaluate(() => window.pageFocusEvents)).toEqual([]);
-  await page.getByLabel("ชื่อผู้ใช้").fill("admin");
+  await page.getByLabel("ชื่อผู้ใช้", { exact: true }).fill("admin");
   await page.getByLabel("รหัสผ่าน", { exact: true }).fill("fixture-only");
   await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
   await expect(page.locator("main h1")).toBeFocused();

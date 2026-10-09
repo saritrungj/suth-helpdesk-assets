@@ -33,7 +33,7 @@ test("หน้าเข้าสู่ระบบส่ง LCP/FCP/TTFB ไป
   await page.goto("/login");
   await expect(page.getByRole("button", { name: "เข้าสู่ระบบ" })).toBeVisible();
   // LCP สรุปผลเมื่อผู้ใช้เริ่มโต้ตอบ — คลิกช่องชื่อผู้ใช้เหมือนคนจริง
-  await page.getByLabel("ชื่อผู้ใช้").click();
+  await page.getByLabel("ชื่อผู้ใช้", { exact: true }).click();
   // รอให้ไลบรารีโหลดและรายงานค่าแรกเข้าคิว
   await page.waitForTimeout(500);
 

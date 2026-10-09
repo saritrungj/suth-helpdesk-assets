@@ -241,15 +241,17 @@ contrast ของเรายังไม่จับจุดเหล่า�
 
 ## หน้าล็อกอิน
 
-### Layout ปัจจุบัน (9 กันยายน 2026)
+### Login #298 (9 ตุลาคม 2026)
 
-บนจอ desktop แบ่งเป็นพื้นที่แบรนด์ 55% กับพื้นที่ฟอร์ม 45% ฝั่งแบรนด์ใช้ `/brand/suth-horizontal.webp` เต็มภาพบนพื้นขาวคงที่ทั้งสองธีม และฝั่งฟอร์มใช้พื้นทึบตามธีม AuroraCanvas variant `hero` ยังคงเป็นภาพประดับ `aria-hidden` ที่ไม่รับ pointer events และไม่เคลื่อนไหว การกางส่วนช่วยเหลือ ขั้นตอนยืนยันตัวตน และ handler ของ error/session ไม่เปลี่ยน
+แบบที่ตรวจรับและกฎ responsive อยู่ที่ [design-system — หน้า Login](../explanation/design-system.md#หน้า-login-แบบที่เจ้าของงานรับ-2026-10-09) ฟอร์มใช้ component กลางและเก็บ id/autocomplete ของชื่อผู้ใช้กับรหัสผ่านเดิม ส่งกดซ้ำไม่ได้ระหว่างรอ และแสดงข้อความผิดพลาดจาก API ผ่าน `role="alert"`
 
-ช่องกรอกและปุ่มหลักสูงอย่างน้อย 48px ไม่เรียกคีย์บอร์ดบนมือถือทันทีที่เปิดหน้า และภาพไม่ยืดถูกล็อกด้วยเทสอัตราส่วน เทสยังตรวจ contrast, keyboard, pending/error, viewport 320/390/768/1440px และบันทึกภาพไว้ใน `apps/web/e2e/screens/`
+คำเตือน Caps Lock อยู่ใต้รหัสผ่านใน live region `role="status"` ที่ติดตั้งไว้ตลอด รับสถานะจาก `getModifierState("CapsLock")` ของเหตุการณ์จริง ไม่เดาจากตัวพิมพ์ใหญ่หรือ Shift ฟัง keydown/keyup ทั้งหน้า จึงคงคำเตือนเมื่อพิมพ์ต่อหรือย้ายโฟกัส; pointerdown เปิดคำเตือนได้อย่างเดียว และถอด listener เมื่อออกจากหน้า ไม่ย้ายโฟกัสเพื่อประกาศข้อความ
 
-แนวทางนี้เป็นการประยุกต์จาก [USWDS Sign-in](https://designsystem.digital.gov/templates/authentication-pages/sign-in/), [GOV.UK Password input](https://design-system.service.gov.uk/components/password-input/) และ [W3C Accessible Authentication](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) ไม่ใช่การรับรองว่าผ่าน WCAG ทั้งระบบ
+ปุ่มแสดงรหัสผ่านมีชื่อเปลี่ยนตามการกระทำถัดไปและไม่ใส่ `aria-pressed` ซ้ำ ซ่อนปุ่มที่ Microsoft Edge เติมเองด้วย `::-ms-reveal` ช่องจำชื่อผู้ใช้มีพื้นที่กด 24px และวงโฟกัสบนกล่องที่เห็นจริง; เก็บเฉพาะชื่อผู้ใช้หลังเลือกเอง ไม่เก็บรหัสผ่าน การเลิกเลือกจะล้างชื่อที่จำทันที กล่องช่วยเหลือเปิดโดยไม่ย้ายโฟกัสและมีลิงก์โทรตามช่องทางที่ยืนยันใน `app/brand.js`
 
-ชุด `login.spec.js` และ `login-wcag.spec.js` ผ่านรวม 30 เคสหลังเปลี่ยน layout ครอบคลุมสองธีม การกางส่วนช่วยเหลือ contrast การใช้คีย์บอร์ด สถานะกำลังส่ง/ผิดพลาด และ viewport 320, 390, 768, 1440px โดยตรวจว่าปุ่มหลักอยู่ในจอเริ่มต้น ยังไม่ได้ทดสอบกับ NVDA, Windows forced-colors หรือ Voice Control จริง
+เทส Login ตรวจ layout ที่ 1920×940, 1440×900, 1366×650, 1280×600, 925×501, 768×1024, 390×844, 390×664, 360×640 และ 320×568 ทั้งสองธีม รวมถึงจอเตี้ยที่ต้องเลื่อนได้, contrast, keyboard, pending/error, การจำชื่อผู้ใช้ และการคืน palette หลังเข้าสู่ระบบ หลักฐานภาพอยู่ใน `apps/web/e2e/.artifacts/` และ `apps/web/e2e/screens/` ผลของรอบ implementation อยู่ใน `STATE.md`
+
+ต้นแบบตรวจ Caps Lock ด้วยแป้นจริงบน Chromium/Windows และปุ่มรูปตาบน Edge 154 แล้ว; unit test ตรวจขอบเขต modifier state และ E2E ตรวจว่าไม่เดาจาก Shift/เหตุการณ์ปลอม ซึ่งไม่แทนการตรวจแป้นจริง ยังไม่ได้ตรวจ Firefox, Safari, อุปกรณ์จริง, โปรแกรมอ่านหน้าจอ, โปรแกรมจัดการรหัสผ่าน, Voice Control หรือ Windows forced-colors จริง ไม่ถือเป็นการรับรอง WCAG ทั้งระบบ
 
 หน้านี้มีเทสของตัวเองเพิ่มอีกชุด เพราะเป็นหน้าเดียวที่คนนอกองค์กรเปิดเจอได้
 และเป็นด่านเดียวที่ถ้าใช้ไม่ได้ก็คือใช้ทั้งระบบไม่ได้ ไม่มีทางอ้อม

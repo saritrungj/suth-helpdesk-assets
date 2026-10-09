@@ -92,7 +92,7 @@ for (const mode of ["same-owner expiry", "new-owner expiry", "logout"]) {
       await expect(page).toHaveURL(/\/login\?redirect=/);
     }
     state.nextUser = { id: mode === "new-owner expiry" ? 2 : 1, username: "admin", role: "admin" };
-    await page.getByLabel("ชื่อผู้ใช้").fill("admin");
+    await page.getByLabel("ชื่อผู้ใช้", { exact: true }).fill("admin");
     await page.getByLabel("รหัสผ่าน", { exact: true }).fill("fixture-only");
     await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
     await expect(page).not.toHaveURL(/\/login/);
