@@ -199,22 +199,34 @@ function render() {
 
 /* ตัวเลขเหนือจุด — วางด้วยพิกัดจริงของตัววาดกราฟ คำนวณใหม่เมื่อขนาดเปลี่ยน */
 const pointTags = ref([]);
-function layoutPointTags() {
+async function layoutPointTags() {
   const s = painted.value[0];
   if (!props.pointLabels || !chart.value || !handles[0] || !s) {
     pointTags.value = [];
     return;
   }
   const scale = chart.value.timeScale();
-  pointTags.value = s.values.flatMap((value, index) => {
+  const width = scale.width();
+  const tags = s.values.flatMap((value, index) => {
     if (value === null || value === undefined) return [];
     const x = scale.timeToCoordinate(timeOf(index));
     const y = handles[0].priceToCoordinate(Number(value));
     // Coordinates outside the visible plot remain valid library coordinates.
     // They must not create labels outside the chart after resize.
-    const width = scale.width();
     return x === null || y === null || x < 0 || x > width ? []
-      : [{ index, x: Math.min(Math.max(x, 16), Math.max(16, width - 16)), y, text: axisText(value) }];
+      : [{ index, x, y, text: axisText(value) }];
+  });
+  pointTags.value = tags;
+  const renderedTags = pointTags.value;
+  await nextTick();
+  // A newer resize/data update may have replaced this render while awaiting DOM.
+  if (pointTags.value !== renderedTags || !root.value) return;
+  const labels = root.value.querySelectorAll('[data-testid="stock-chart-point"]');
+  pointTags.value = tags.flatMap((tag, index) => {
+    const halfWidth = (labels[index]?.getBoundingClientRect().width ?? 0) / 2 + 1;
+    // Values remain available in the tooltip/table when a label cannot fit.
+    if (halfWidth * 2 > width) return [];
+    return [{ ...tag, x: Math.min(Math.max(tag.x, halfWidth), width - halfWidth) }];
   });
 }
 

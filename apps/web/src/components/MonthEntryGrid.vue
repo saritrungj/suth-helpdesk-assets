@@ -509,7 +509,7 @@ defineExpose({ isDirty, dirtyCount, discard });
         <div
           v-if="isDirty && canEdit"
           ref="saveBar"
-          class="entry-savebar z-20 px-3 sm:px-6 py-3 border-t border-line bg-surface-float/95 backdrop-blur
+          class="entry-savebar z-20 px-3 sm:px-6 py-3 border-t border-line bg-surface-float
                  flex flex-wrap items-center gap-3 shadow-e3"
           :class="saveBarTarget === 'body' ? 'sticky bottom-0 -mx-3 sm:-mx-6 mt-3' : 'shrink-0 mt-2 rounded-lg border'"
           data-print="hide"

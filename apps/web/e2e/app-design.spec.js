@@ -5,6 +5,25 @@ import { appDesignFixture } from "./app-design-fixture.js";
 import { PAGES } from "./pages.js";
 import { CONTRAST_HELPERS } from "./contrast-helper.js";
 
+test("long monthly point labels stay inside the chart after a narrow resize", async ({ page }) => {
+  await appDesignFixture(page, { url: "/dashboard" });
+  await page.route(/\/api\/dashboard\/monthly-kpi(?:\?.*)?$/, route => route.fulfill({ json:
+    Array.from({ length: 12 }, (_, index) => ({
+      month: `${index < 3 ? 2025 : 2026}-${String((index + 9) % 12 + 1).padStart(2, "0")}`,
+      total_pages: 12345, total_cost: 12345,
+    })),
+  }));
+  await page.reload();
+  await expect(page.getByTestId("stock-chart-point").first()).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 640 });
+  await expect.poll(() => page.getByTestId("stock-chart-point").evaluateAll(nodes => nodes.filter(node => {
+    const label = node.getBoundingClientRect();
+    const chart = node.closest('[role="figure"]').getBoundingClientRect();
+    return label.left < chart.left - 1 || label.right > chart.right + 1;
+  }).map(node => node.textContent))).toEqual([]);
+  expect(await page.getByTestId("stock-chart-point").count()).toBeGreaterThan(0);
+});
+
 test("mobile navigation contains focus, closes with Escape and returns to its opener", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await assetFixture(page, "staff");

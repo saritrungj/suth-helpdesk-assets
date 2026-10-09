@@ -20,18 +20,24 @@
 ## การตรวจสอบ
 
 - `npm run verify` ผ่าน: Web 348, API 296, domain 73, root scripts 12; API opt-in เดิมข้าม 1 เคสเพราะไม่มี SUTH_API_TOKEN
-- Chromium fixture 401/401; Firefox 155 และ WebKit 26.6 focused parity 83/83 ต่อ engine ไม่มี skip/flaky
+- Chromium fixture 402/402; Firefox 155 และ WebKit 26.6 focused parity 84/84 ต่อ engine ไม่มี skip/flaky
 - `npm run verify:db` ผ่าน 201/201 ไม่มี skip/flaky บนฐาน QA ชั่วคราวแยก; harness ล้าง MySQL หลังตรวจ
-- Build และ initial JavaScript gzip budget ผ่าน 196.3/200 KiB; `git diff --check` ผ่าน
+- Build และ initial JavaScript gzip budget ผ่าน 196.4/200 KiB; `git diff --check` ผ่าน
 - เคส QA เดิมที่พบ field width 196px และ checkbox 18px กลับมาผ่านหลังแก้โดยไม่ลด assertions; rendered fields ≥200px, controls ≥24px และปุ่ม submit อยู่ในจอ 320×640px
 
 ยังไม่ได้ตรวจด้วย NVDA/JAWS/VoiceOver, password manager จริง, Voice Control หรืออุปกรณ์มือถือจริง ผล automated tests ไม่ใช่การรับรอง WCAG ทั้งระบบ
+
+## รีวิวและการแก้รอบแรก
+
+Candidateแรก11282750b8849e9923423542238c565e9af027ef ถูกรีวิวกับ baseเดิม พบป้ายกราฟยาวยังล้นเพราะ clampเฉพาะจุดกึ่งกลาง16px พิสูจน์แดงด้วยค่า1.23หมื่นที่320pxแล้วแก้เป็นวัดDOMจริง มีguardไม่ให้ผลrenderเก่าทับresizeใหม่ และคงค่าครบในtooltip/table แถบบันทึกเปลี่ยนเป็นพื้นทึบตามdesign-system ตรวจชุดรวมและฐานQAซ้ำผ่านตามรายการข้างบน
+
+Standards/Spec/Security+Domain agents หยุดด้วยaccount usage limitก่อนจบทุกverdict ข้อความระหว่างทางของSpecระบุยังไม่พบfinding แต่ไม่ใช่ผลอนุมัติครบ ด่านรีวิวcandidateล่าสุดจึงยังไม่ผ่านและยังไม่ได้push/เปิดPR ไม่ได้merge/deploy
 
 ## สถานะส่งมอบและขั้นตอนถัดไป
 
 ไฟล์นี้บันทึกพร้อม candidate commit; ดู commit จาก `git log -1` การรีวิวต้องใช้ SHA ที่จับด้วย `D:/ai-playbook/scripts/review-candidate.mjs` หลัง working tree สะอาด ตาม policy ของ skill
 
-ขั้นตอนถัดไป: รีวิว candidate ที่ตรวจครบผ่าน Standards/Spec และ Security/Domain แล้วตรวจ `--expect` ก่อน push feature branch ยืนยัน remote SHA และเปิด PR ตาม authority ข้างต้น หลักฐานหลังรีวิวและ PR URL เก็บใน PR/ignored output เพื่อไม่เพิ่ม commit ที่ยังไม่รีวิว
+ขั้นตอนถัดไป: เมื่อagentsใช้งานได้ ให้รีวิวรอบสองcandidateล่าสุดกับbaseเดิม71da92acbce61f31af0629bb9c24eb948f812098 ผ่านStandards/SpecและSecurity/Domain ตามpolicyสูงสุดสองรอบ แล้วตรวจ `--expect` ก่อนpushผ่านpre-push hook ยืนยันremoteSHAและเปิดPRตามauthorityข้างต้น หลักฐานหลังรีวิวและ PR URL เก็บใน PR/ignored output เพื่อไม่เพิ่ม commit ที่ยังไม่รีวิว
 
 Checkpoint ต้นแบบ `e2e8704` บน `feat/294-login-prototype` ยังเป็น local checkpoint; ไฟล์ production และต้นฉบับโลโก้ที่ต้องส่งมอบรวมใน candidate นี้ ไม่ถือว่า checkpoint local เข้าถึงได้จากเครื่องอื่นก่อน push
 

@@ -282,6 +282,6 @@ import { UiButton, UiCard, UiDataTable, UiField, UiInput } from "../ui";
 
 Login R7 กับทุกหน้าหลังเข้าสู่ระบบใช้ `canvas-wash` ผืนเดียวกัน: peach/mint/blue ในธีมสว่าง และแสง teal/blue จางบนพื้นเข้มในธีมมืด sidebar โปร่งต่อกับ workspace ไม่มีแผ่นพื้นแยกสีหรือมุม inverted L การ์ด ตาราง ฟอร์ม และเมนูใช้พื้นทึบ
 
-แถบบนเป็นบริเวณเดียวที่ใช้ blur พร้อมพื้นทึบสำรองเมื่อไม่รองรับหรือเลือก reduced transparency; forced colors และการพิมพ์ใช้พื้นเรียบ พื้นหลังไม่เคลื่อนไหว transition ของหน้าและลิ้นชักเคารพ reduced motion ส่วน `AuroraCanvas` เป็นส่วนประกอบเก่า ไม่ใช้ใน Login ปัจจุบัน
+ใน shared shell แถบบนใช้ blur พร้อมพื้นทึบสำรองเมื่อไม่รองรับหรือเลือก reduced transparency; แถบบันทึกใช้พื้นทึบ ส่วน overlay ของ dialog/command palette ใช้พฤติกรรมของ UI primitives เดิม forced colors และการพิมพ์ใช้พื้นเรียบ พื้นหลังไม่เคลื่อนไหว transition ของหน้าและลิ้นชักเคารพ reduced motion ส่วน `AuroraCanvas` เป็นส่วนประกอบเก่า ไม่ใช้ใน Login ปัจจุบัน
 
 ตัววัดข้อความใช้ `--canvas-wash-worst` เป็นขอบเขตสีที่แย่ที่สุด ไม่ถือว่าตัวอักษรบน gradient ผ่านเพียงเพราะอยู่บนพื้นสวย สีกราฟแปดช่องและความหมายของสถานะคงชุดเดิม
