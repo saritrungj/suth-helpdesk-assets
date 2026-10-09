@@ -284,6 +284,9 @@
      n-500 วัดได้ 3.3:1 (ดู e2e/login-wcag.spec.js ที่ล็อกค่านี้ไว้) */
   --field-line: var(--ocean-600);
   --field-line-strong: var(--ocean-750);  /* ขอบตอน hover — ต้องเข้มกว่าปกติ */
+  /* Delineate secondary controls without making decorative table/card lines heavy. */
+  --button-line: var(--field-line);
+  --button-line-strong: var(--field-line-strong);
 
   /* ข้อความรองต้องผ่านทั้งบนการ์ดและ peach ที่ขอบพื้น ไม่ใช่เฉพาะขาว */
   --ink: var(--ocean-930);
@@ -575,6 +578,8 @@
   --color-line-soft: var(--line-soft);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-button-line: var(--button-line);
+  --color-button-line-strong: var(--button-line-strong);
 
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);

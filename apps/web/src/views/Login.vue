@@ -124,6 +124,6 @@ async function login() {
         </form>
       </UiCard>
     </main>
-    <footer class="auth-copyright">© {{ copyrightYear }} {{ ORG_NAME }}</footer>
+    <footer class="auth-copyright"><span>© {{ copyrightYear }} {{ OWNER_TEAM }}</span> <span>{{ ORG_NAME }}</span></footer>
   </div>
 </template>

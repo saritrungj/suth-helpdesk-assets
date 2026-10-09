@@ -6,6 +6,42 @@ import { importReviewFixture } from "./import-review-fixture.js";
 import { PAGES } from "./pages.js";
 import { CONTRAST_HELPERS } from "./contrast-helper.js";
 
+for (const mode of ["light", "dark"]) {
+  test(`accepted R7 identity and secondary button boundaries remain clear: ${mode}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("suth-ui-mode", value), mode);
+    const state = await assetFixture(page);
+    state.user = null;
+    await page.goto("/login");
+    const logo = page.locator(".auth-logo img");
+    await expect(logo).toBeVisible();
+    expect((await logo.boundingBox()).width).toBeCloseTo(440, 2);
+    const footer = page.locator(".auth-copyright");
+    await expect(footer).toContainText("ฝ่ายเทคโนโลยีสารสนเทศ");
+    await expect(footer).toContainText("โรงพยาบาลมหาวิทยาลัยเทคโนโลยีสุรนารี");
+    const toggle = page.locator(".auth-theme");
+    await expect(toggle).toHaveCSS("border-radius", "50%");
+    const edge = await toggle.evaluate(el => ({ border: getComputedStyle(el).borderColor, fill: getComputedStyle(el).backgroundColor }));
+    const ratio = await page.evaluate(`${CONTRAST_HELPERS} contrast.ratio(contrast.rgba(${JSON.stringify(edge.border)}), contrast.rgba(${JSON.stringify(edge.fill)}));`);
+    expect(ratio).toBeGreaterThanOrEqual(3);
+    await page.setViewportSize({ width: 1366, height: 768 });
+    expect((await logo.boundingBox()).width).toBeCloseTo(440, 2);
+    await expect(footer).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    state.user = { id: 1, username: "admin", role: "admin" };
+    await page.goto("/dashboard");
+    const secondary = page.getByRole("link", { name: "เปรียบเทียบ", exact: true });
+    await expect(secondary).toBeVisible();
+    for (const hovered of [false, true]) {
+      if (hovered) await secondary.hover();
+      await expect.poll(async () => {
+        const colors = await secondary.evaluate(el => ({ border: getComputedStyle(el).borderColor, fill: getComputedStyle(el).backgroundColor }));
+        return page.evaluate(`${CONTRAST_HELPERS} contrast.ratio(contrast.rgba(${JSON.stringify(colors.border)}), contrast.rgba(${JSON.stringify(colors.fill)}));`);
+      }).toBeGreaterThanOrEqual(3);
+    }
+  });
+}
+
 test("import create-name fields follow the workspace grid on tablet and desktop", async ({ page }) => {
   for (const mode of ["light", "dark"]) {
     await page.addInitScript(value => localStorage.setItem("suth-ui-mode", value), mode);

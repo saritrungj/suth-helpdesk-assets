@@ -54,7 +54,7 @@ const VARIANTS = {
   primary:
     "btn-primary active:brightness-95",
   secondary:
-    "btn-glass text-ink border-line hover:bg-surface hover:border-line-strong active:bg-surface-2",
+    "btn-glass text-ink border-button-line hover:bg-surface hover:border-button-line-strong active:bg-surface-2",
   ghost:
     "bg-transparent text-ink-mute border-transparent hover:bg-surface-3 hover:text-ink active:bg-surface-3",
   soft: "bg-brand-soft text-brand-ink border-transparent hover:bg-brand-soft-hover",
