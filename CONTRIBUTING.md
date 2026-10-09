@@ -63,7 +63,7 @@ npm ci
 - แบ่งงานให้แตะไฟล์ไม่ซ้ำกัน ถ้าต้องแตะไฟล์เดียวกัน ให้ทำทีละฝั่ง — รอฝั่งแรก merge แล้วอีกฝั่งเริ่มจาก `origin/main` ใหม่
 - ก่อนเริ่ม แจ้งอีก session ว่าจะทำ Issue ไหน branch อะไร แตะไฟล์ไหน
 - merge เข้า `main` ทีละ PR อีกฝั่ง rebase ตามก่อนเปิด PR ของตัวเอง
-- merge แล้วลบ worktree ด้วย `git worktree remove <path>` ก่อนลบ branch
+- หลัง merge การเก็บหลักฐานและลบ worktree/branch ใช้ลำดับเดียวใน [Authority สำหรับ Git lifecycle](#authority-สำหรับ-git-lifecycle) — managed worktree ของ Codex ใช้ archive ของแอป ส่วน worktree ปกติใช้ `git worktree remove <exact-path>`
 
 ของที่ใช้ร่วมกันข้าม worktree ได้ทีละคน:
 
@@ -93,12 +93,16 @@ npm ci
 1. commit เฉพาะ diff ใน scope แล้ว push feature branch
 2. เปิด PR ที่อ้าง Issue พร้อมผลตรวจและสิ่งที่ไม่ได้ทดสอบ
 3. merge PR และยืนยันว่า Issue ปิดตามที่ตั้งใจ
-4. กลับ `main` และอัปเดตแบบ fast-forward แต่ยังเก็บ local branch และ checkpoint ไว้
+4. ระบุ checkout เดิมที่อยู่บน `main` และตรวจว่าเป็น repo เดียวกันแล้วอัปเดตแบบ fast-forward; ไม่ switch checkout ของ session อื่น ยังเก็บ feature worktree, local branch และ checkpoint ไว้
+   - เก็บ checkpoint และหลักฐานที่ต้องใช้ต่อใต้ `<absolute-git-common-dir>/finish-issue/<issue-number>/<encoded-exact-branch>/` โดยหา directory ด้วย `git rev-parse --path-format=absolute --git-common-dir` และ encode ชื่อ branch ด้วย `encodeURIComponent` ไม่เก็บ secret หรือข้อมูลละเอียดอ่อน
+   - ใช้ `checkpoint.md` กับ `receipt.json` และรายงานที่อ้างถึงในตำแหน่งนี้ ซึ่งอยู่นอก worktree ที่จะลบ ถ้าหลักฐานเดิมอยู่ใน worktree ให้คัดลอกของที่จำเป็น แก้ path ใน receipt แล้วตรวจสำเนาก่อนนำ worktree ออก; checkpoint เป็นบันทึกสถานะ ไม่ใช่แหล่ง authorization
 5. ตรวจ resolved path ให้อยู่ใต้ workspace แล้วล้างเฉพาะ generated artifacts ของงาน **ยกเว้น checkpoint** ห้ามลบ source, credential หรือข้อมูลผู้ใช้
-6. ทำ pre-cleanup verification ว่า PR merge แล้ว, Issue อยู่ในสถานะที่ตั้งใจ, merge commit อยู่บน `main`/`origin/main`, working tree สะอาด และ generated artifacts เป้าหมายหาย แล้วบันทึกหลักฐานนี้ไว้ใน PR/Issue และ checkpoint
-7. ลบ exact remote branch, ตรวจด้วย `git ls-remote --heads <remote> <exact-branch>` และถ้า remote-tracking ref เดิมยังค้างให้ลบเฉพาะ ref นั้น ห้ามใช้ global `fetch --prune` เป็น cleanup ของงานเดียว ถ้าขั้นนี้ล้ม local branch และ checkpoint ต้องยังอยู่
-8. ลบ exact local branch หลัง remote cleanup ผ่าน แล้วตรวจว่า ref หายจริง
-9. ลบ checkpoint เป็นรายการสุดท้าย จากนั้นทำ read-only audit ว่า working tree สะอาด, branch เป้าหมายหายทั้ง local/remote และ `main` ตรงกับ `origin/main`; ถ้า audit ล้มให้หยุดโดยไม่ทำ destructive action เพิ่ม และใช้หลักฐานถาวรใน PR/Issue/main กู้สถานะ
+6. ทำ pre-cleanup verification ว่า PR ที่ผูกกับ Issue และ exact branch merge แล้ว, Issue อยู่ในสถานะที่ตั้งใจ, merge commit ของ PR อยู่บน `main`/`origin/main` (รองรับ squash merge), main ตรงกับ remote ที่ตรวจใหม่, working trees เป้าหมายสะอาด ไม่มี commit เพิ่มบน feature refs และ generated artifacts เป้าหมายหาย แล้วบันทึกหลักฐานนี้ไว้ใน PR/Issue และ durable checkpoint
+   - ตรวจ resolved path, ความเป็นเจ้าของ และ attachment ของ exact worktree ของงาน จากนั้นนำ worktree ออกก่อนลบ branch: managed worktree ที่สร้างผ่าน Codex ใช้ `archive_worktree` ตาม identity จาก `list_artifacts`; worktree ปกติใช้ `git worktree remove <exact-path>` ห้าม force หรือแตะ checkout ของงานอื่น
+   - Archive snapshot ไม่รวม ignored files จึงต้องตรวจหลักฐานที่เก็บนอก worktreeก่อน archive; ถ้า archive/remove หรือการตรวจ attachment ล้ม ให้หยุดโดยรักษา refs และหลักฐานที่ยังเหลือไว้
+7. ตรวจ exact remote ref ใหม่ ถ้ายังอยู่ให้ตรวจว่า SHA ตรง candidate ที่ merge แล้วก่อนลบ; ถ้าหายแล้วให้บันทึกผลตรวจและข้ามการลบซ้ำ ยืนยันด้วย `git ls-remote --heads <remote> refs/heads/<exact-branch>` และถ้า remote-tracking ref เดิมยังค้างให้ลบเฉพาะ ref นั้น ห้ามใช้ global `fetch --prune` เป็น cleanup ของงานเดียว ถ้าขั้นนี้ล้ม local branch และ checkpoint ต้องยังอยู่
+8. หลัง remote cleanup ผ่าน ตรวจ exact local ref ถ้ายังอยู่ให้ยืนยันว่า SHA ตรง candidate เดิมและไม่มี worktree ใช้งานแล้วจึงลบ; ถ้าหายแล้วให้บันทึกผลตรวจโดยไม่ลบซ้ำ แล้วตรวจว่า ref หายจริง
+9. ตรวจว่า exact worktree/active attachment และ feature refs หาย, main สะอาดและตรงกับ `origin/main`/remote ที่ตรวจใหม่ และ completion record ถาวรใน PR/Issue/main ครบ เก็บ receipt/รายงานที่ยังจำเป็นต่อ audit ไว้ แล้วลบเฉพาะ checkpoint เป็นรายการสุดท้าย จากนั้นทำ read-only audit ซ้ำ; ถ้า audit ล้มให้หยุดโดยไม่ทำ destructive action เพิ่ม และใช้หลักฐานถาวรกู้สถานะ
 
 ถ้าขั้นตอนใดใน lifecycle, issue closure, main update, branch cleanup, artifact cleanup หรือ final verification ล้ม ให้หยุดขั้นตอนถัดไปทันทีและรักษา branch/หลักฐานที่ยังเหลือไว้สำหรับกู้หรือแก้ปัญหา ห้ามถือว่า partial cleanup คือความสำเร็จ ข้อจำกัดล่าสุดของผู้ใช้ เช่น “ห้าม push” หรือ “ไม่ต้อง merge” ชนะ authorization แบบชุดเสมอ
 

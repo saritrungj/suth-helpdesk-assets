@@ -1,53 +1,48 @@
-# STATE — Issue #298
+# STATE — Issue #301
 
-อัปเดต: 2026-10-09 (Asia/Bangkok)
+อัปเดต: 2026-10-10 (Asia/Bangkok)
 
-## Scope และสถานะ
+## Scope and authority
 
-Implementation ของ [#298](https://github.com/saritrungj/suth-helpdesk-assets/issues/298) ตรวจพฤติกรรมและ checks แล้ว ตาม skill `implement` ที่ผูกกับ `D:/ai-playbook` จบ invocation นี้หลัง independent code-review ของ frozen candidate; ยังไม่ร้องขอ feature push, PR, merge หรือ deploy
+[Issue #301](https://github.com/saritrungj/suth-helpdesk-assets/issues/301) ปรับ finish-issue ให้ resume จากสถานะจริง รักษาหลักฐาน cleanup และตรวจ frozen candidate ตาม playbook D:/ai-playbook
 
-- Branch: `codex/298-login`
-- Worktree: `C:/Users/wayuo/.codex/worktrees/298-login/suth-helpdesk-assets`
-- Frozen base: `71da92acbce61f31af0629bb9c24eb948f812098` (`main` ตอนเริ่มงาน)
-- ต้นแบบที่รับ: `14e2e6789dbb0d99bc7e55768560c3735de42bb3`
-- Do: นำเฉพาะ Login พร้อมภาพ/สไตล์ที่ใช้จริง, เพิ่ม regression และปรับ tests/คำแปล/เอกสารที่ได้รับผล
-- Don't: sidebar, topbar, Dashboard, shared UI components, API, auth policy, roles, session, schema และสีของหน้าหลังเข้าสู่ระบบ
+- Branch: codex/301-finish-issue
+- Worktree: C:/Users/wayuo/.codex/worktrees/finish-issue-research/suth-helpdesk-assets
+- Frozen base: cd6cbaa47be4d1a88a5d929c5f12b307fd82a45b
+- Do: แก้สกิล/docs/inspector/tests; commit, feature push และเปิด PR หลัง verified frozen-candidate review
+- Don't: merge/deploy, auth/secrets/schema, business data, เปลี่ยน API/web/domain หรือ cleanup branch/worktree ของ #298
+- Durable evidence: <git-common-dir>/finish-issue/301/codex%2F301-finish-issue/
 
-## Done criteria และหลักฐาน
+## Acceptance evidence
 
-1. Split/stack ตาม breakpoint และพอดีจอ 10 ขนาดทั้งสองธีม ไม่มีร่องขวา; จอเตี้ยกว่าเนื้อหาขั้นต่ำยังเลื่อนได้ — `login-layout.spec.js`, `login-options.spec.js`
-2. หัวเรื่อง/บรรทัดรอง, แถวจำชื่อผู้ใช้กับลืมรหัสผ่าน, เบอร์ที่ยืนยัน, ผู้ดูแล และลิขสิทธิ์ พ.ศ. — E2E และ [แบบ Login](docs/explanation/design-system.md#หน้า-login-แบบที่เจ้าของงานรับ-2026-10-09)
-3. Caps Lock ใช้สถานะแป้นที่เบราว์เซอร์รายงาน คงคำเตือนผ่านการพิมพ์/โฟกัส ไม่เดาจาก Shift/ตัวพิมพ์ใหญ่ และไม่รับ events ปลอม — unit boundary/composable tests และ E2E; แป้นจริงใน candidate นี้ยังไม่ตรวจซ้ำ
-4. ปุ่มแสดง/ซ่อนรหัสผ่าน, ชื่อปุ่มที่ไม่ซ้ำ `aria-pressed`, autocomplete/id, opted-in username only, pending/error และ redirect — Login E2E, authenticated DB flows; Edge มีปุ่มเดียวหลังพิมพ์จริงผ่าน keyboard automation และเมื่อบังคับ native reveal กลับมาภาพแสดงสองปุ่ม
-5. ไม่เปลี่ยน palette/shell หลังเข้าสู่ระบบ; ภาพ Login ทั้ง 8 ไฟล์ตรงกับต้นแบบทุก byte — E2E palette restore และ Git byte comparison; [brand provenance](docs/assets/brand/README.md)
+1. Resume merged/partial cleanup, source binding และ limits — SKILL.md, CONTRIBUTING; synthetic forward snapshots A/B
+2. Candidate identity/pre-push gate — bound review-candidate.mjs; capture และ reviews ใช้ exact committed candidate
+3. Durable evidence, managed archive และ idempotent exact refs — CONTRIBUTING; fixture ตรวจอ่านหลักฐานหลังลบ worktree
+4. Read-only inspector, report counts/manual gates — inspector regressions; ไม่มี DONE และ grantsAuthority=false
+5. Hook isolation — fixture และ inspector subprocesses ล้าง Git repository-local variables โดยไม่เปลี่ยน process.env; regression ใช้ hook-like environment ชี้ disposable decoy ตรวจ config ไม่เปลี่ยนและ resume ก่อน/หลัง merge ถูกต้อง
+6. Checks + independent review — frozen candidate ต้องผ่าน full required hook และ Standards/Spec/Security แยกกันก่อน push
 
-## Verification (2026-10-09)
+## Delivery scopes and failures
 
-- RED ก่อน implementation: `login-layout.spec.js` ที่ 1920×940 light ล้มเพราะ h1 เดิมเป็น “เข้าสู่ระบบ”
-- `npm test`: API 297 + web 351 + domain 41 + scripts 12 = 701 ผ่าน; ไม่มี skip
-- `npm run build` และ `node scripts/check-bundle-budget.cjs`: ผ่าน, initial JS 196.3/200 KB gzip; repo ไม่มี typecheck script แยก
-- `npm run test:e2e:fixture --workspace @suth/web -- --workers=3 --output ../../output/fixture-artifacts`: 370 ผ่าน, 0 fail/skip; report validator ผ่าน ใช้ preview พอร์ต 5698 เฉพาะงาน
-- `node output/verify-db-isolated.cjs`: 201 ผ่าน, 0 fail/skip/flaky; MySQL ชั่วคราวถูกลบแล้ว ใช้ instance `issue-298` และพอร์ต 3398/3399/5399 แยกจากฐานพัฒนา
-- DB adapter เป็นสำเนา `scripts/verify-db.cjs` ที่เปลี่ยนเพียง require path และที่อยู่ report/artifacts เพื่อไม่ให้ชุด fixture ลบ trace ของ DB; ไม่มีการเปลี่ยน test/assertion/seed หรือพฤติกรรม harness
-- Microsoft Edge: Login/layout/options/identity 43 ผ่าน; ภาพ A/B ของ native reveal เพิ่มเติมอยู่ใน `output/edge-password-reveal{,-forced}.png`
-- `git diff --check`: ผ่าน
+Scope แรกครบสอง review/fix rounds แล้ว แต่ mandatory pre-push เปิดเผย blocker: fixture รับ Git environment ของ hook และเปลี่ยน shared repo config; publication ถูกหยุด ไม่มี PR ค่า config คืนแล้วและ refs/worktrees เดิมปลอดภัย รายงาน: publication-blocker.md
 
-รอบแรกพบ locator ของ details/summary เดิม, ชื่อผู้ใช้ที่ match checkbox ใหม่, คำแปลใหม่ที่ขาด และ trace ชนกัน; ปรับ locator แบบ exact/aria-expanded เพิ่มคำแปล และแยก artifacts แล้ว รอบ fixture ถัดมาพบการวัด contrast ระหว่าง opacity=0 ของ route fade จึงรอ animation ของ ancestor ก่อนวัด โดยคงเกณฑ์ contrast เดิมและรัน fixture ทั้งชุดซ้ำจนผ่าน
+ผู้ใช้อนุมัติ scope ใหม่ให้แก้ Git subprocess isolation, ตรวจและรีวิวใหม่ก่อน feature push/PR ส่วนเดิมยังอยู่ครบสำหรับการรีวิว full diff; ไม่สืบทอด verdict เดิม Counter ของ scope ใหม่นับแยกโดยบันทึก scope แรกไว้ ไม่ reset counter โดยเงียบ
 
-หลักฐานที่สร้างใหม่ได้ไม่ถูก track: `output/unit-final.log`, `output/build-final.log`, `output/fixture-final.log`, `output/fixture-results.json`, `output/verify-db-final.log`, `output/db-results.json`, `output/edge.log`, ภาพใน `output/` และ review receipts ด้านล่าง
+RED: red-hook-isolation.log ยืนยัน fixture เปลี่ยน decoy config; red-hook-ancestry.log ยืนยัน merged route ผิดภายใต้ hook ทั้งคู่ใช้พื้นที่ชั่วคราวแทน repo จริง
+GREEN: green-hook-isolation.tap ตรวจ open/merged child cases และ config คงเดิม; scope2-checks.tap ผ่าน 38/38 ไม่มี fail/skip (26 inspector + 12 existing scripts) ผล full hook และ frozen reviews เก็บแยกใน durable directory
 
-## Review และขั้นต่อไป
+## Checks and limits
 
-รอบแรก (`3a54c191f34510808dfd4efa67747f0fc851cf6d`): Spec และ Security ผ่าน; Standards มี blocker 1 ข้อ เพราะปุ่มช่วยเหลือ/แสดงรหัสผ่านเป็น raw styled button ขัดกฎใช้ `UiButton` กลาง แก้ทั้งสองปุ่มเป็น `UiButton` และคง geometry/ARIA ใน `.auth-*` แล้ว ตรวจซ้ำครบ unit 701, fixture 370, DB 201, Edge 43, native-reveal A/B และ build/budget ก่อน commit candidate ใหม่
+คำสั่งเฉพาะ: node --test --test-reporter=tap .agents/skills/finish-issue/scripts/inspect-state.test.cjs scripts/playwright-report.test.cjs scripts/check-bundle-budget.test.cjs scripts/web-vitals-report.test.cjs
 
-หลักฐานรอบแรกอยู่ใน `output/review-candidate-round1.json` และ `output/review-results-round1.md`; candidate ใหม่ต้องรับ verdict รอบสองของ diff ทั้งหมดเทียบ frozen base เดิม ไม่สืบทอดผลรีวิวรอบแรก
+Required delivery gate: git hook run pre-push และ pre-push ของ feature push จริง รัน unit ทุก workspace, web build, bundle budget และ fixture E2E; ต้องอ่านรายงาน counts/skip และยืนยัน shared config ไม่เปลี่ยน ไม่ bypass hook
 
-Candidate identity / exact diff อยู่ใน `output/review-candidate.json`; independent Standards, Spec และ Security/robustness verdict อยู่ใน `output/review-results.md` หลังจบรอบ review (receipts เป็นไฟล์ ignored ตาม playbook core)
+ไม่ได้ทดสอบ DB/API service flows, live cleanup/archive/recovery, หรือ general model compliance; ไม่มี API/web/domain changes ตัว quick validator มาตรฐานใช้ไม่ได้เพราะไม่มี PyYAML; flat frontmatter และ local targets ตรวจแยก การตั้ง worktree ใช้ npm ci --ignore-scripts ตาม lockfile ไม่อัปเกรด dependencies; npm รายงาน existing advisories ซึ่งไม่ได้แก้ใน scope นี้
 
-ขั้นถัดไปเมื่อ verdict ผ่าน: สั่ง “เปิด PR ของ #298” เพื่ออนุญาต feature push/PR ตาม delivery gate; ยังไม่ merge
+## Current phase and next action
 
-## ขอบเขตที่ไม่ได้ทดสอบ
+Scope ใหม่: verify → freeze complete candidate → capture เทียบ original base → independent review round 1 ทุกมิติ ถ้าแก้หลังรีวิวต้อง candidate ใหม่และนับ round 2 ตาม core
 
-ยังไม่ได้ตรวจ Caps Lock ด้วยแป้นจริงซ้ำบน candidate (Playwright ส่ง CapsLock แล้วสถานะ modifier ไม่เปลี่ยน); ต้นแบบมีหลักฐานแป้นจริง Chromium/Windows อยู่แล้ว Unit test จำลองการส่งสถานะจากเบราว์เซอร์จึงไม่ใช่หลักฐาน hardware
+หลัง review ผ่าน: pre-push --expect → push exact branch → ยืนยัน remote SHA → เปิด PR #301 และแนบ current evidence/limits หยุดก่อน merge
 
-ยังไม่ได้ตรวจ Firefox, Safari, อุปกรณ์จริง, screen reader, โปรแกรมจัดการรหัสผ่าน, Voice Control, Windows forced-colors จริง, production และ migration paths (ไม่มี schema diff) ขอบเขต accessibility อยู่ที่ [หน้าล็อกอิน](docs/reference/accessibility.md#หน้าล็อกอิน)
+Post-review receipts อยู่ใน durable ignored evidence หรือ PR body; ไม่เพิ่ม tracked bookkeeping commit ที่ยังไม่ผ่าน review

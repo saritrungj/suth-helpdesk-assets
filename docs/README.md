@@ -20,6 +20,7 @@
 - [Design system ของหน้าเว็บ](explanation/design-system.md) — สามชั้น token/ui/app ประกอบกันเป็นหน้าตาของระบบยังไง (ดู [ADR-0008](decisions/0008-design-system-tokens-and-ui-kit.md))
 - [กระดานอ้างอิงงานออกแบบ](explanation/design-references.md) — ดูงานของใคร เพราะอะไร และเอามาใช้จริงที่ไฟล์ไหน
 - [แหล่งอ้างอิงภายนอก](explanation/research-sources.md) — มาตรฐานและบทความที่อ้างอิงตอนออกแบบรอบล่าสุด และไปโผล่ที่ไหนในโค้ด
+- [งานวิจัยสำหรับ finish-issue](explanation/finish-issue-research.md) — แหล่งต้นทาง แนวคิดที่ประยุกต์ และกรณีตรวจ workflow
 
 ## how-to — เพื่อทำงานให้เสร็จ
 
