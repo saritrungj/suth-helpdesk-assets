@@ -171,7 +171,7 @@ mockup ที่ผู้ใช้เห็นชอบแล้วใน #51 �
 
 | แหล่ง | สิ่งที่บอก | จุดใช้ในโค้ด |
 |---|---|---|
-| [Linear — How we redesigned the Linear UI](https://linear.app/now/how-we-redesigned-the-linear-ui) | กรอบ "inverted L", ลด visual noise, ไล่ระดับพื้นผิวด้วยความสว่าง | `layouts/MainLayout.vue`, `app/AppSidebar.vue`, `app/AppTopbar.vue`, `--chrome*` ใน `design/tokens.css` |
+| [Linear — How we redesigned the Linear UI](https://linear.app/now/how-we-redesigned-the-linear-ui) | แนวทางประวัติของรอบ #51: inverted L และลด visual noise | inverted L เลิกใช้ใน #294; shell ปัจจุบันใช้ canvas ต่อเนื่องตามหัวข้อ Login R7/app R2 ส่วนหลักลด visual noise ยังใช้ |
 | [Radix Colors — Understanding the scale](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale) | 12 ขั้นแบ่งบทบาท พื้น / ส่วนประกอบ / เส้น / ทึบ / ตัวอักษร | ตารางบทบาทในหัวไฟล์ `design/tokens.css` |
 | [Stripe — Designing accessible color systems](https://stripe.com/blog/accessible-color-systems) | ทุกเฉดสว่างเท่ากันต่อขั้น; ตัวอักษรกับพื้นห่างอย่างน้อยห้าขั้น | สเกล primitive เดิมทำตามอยู่แล้ว บันทึกเป็นกฎใน `design/tokens.css`; `--ink` เข้มขึ้นเป็น n-950 |
 | [Material 3 — Tone-based surfaces](https://m3.material.io/blog/tone-based-surface-color-m3), [Side sheet](https://github.com/material-components/material-components-android/blob/master/docs/components/SideSheet.md) | แยกระดับด้วยโทนของพื้น ไม่ใช่เงาอย่างเดียว | `--sheet-head` / `--sheet-body` ใน `design/tokens.css` |

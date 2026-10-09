@@ -48,8 +48,26 @@ for (const width of [320, 375, 414]) {
   });
 }
 
+test("KPI breakpoint follows the measured workspace at 359 and 360px", async ({ page }) => {
+  await page.setViewportSize({ width: 440, height: 900 });
+  await comparisonFixture(page, { rows: HUGE_ROWS });
+  await page.goto("/dashboard");
+  const workspace = page.locator(".app-workspace");
+  const cards = page.getByRole("region", { name: "สรุปตัวเลขสำคัญ" }).locator(":scope > div");
+  for (const [width, columns] of [[359, 1], [360, 2]]) {
+    // Control the container itself: Firefox can resolve viewport-derived widths
+    // to fractional pixels, which legitimately changes the 359px query result.
+    await workspace.evaluate((el, width) => {
+      el.style.flex = "none";
+      el.style.width = `${width}px`;
+    }, width);
+    await expect.poll(() => workspace.evaluate(el => el.getBoundingClientRect().width)).toBe(width);
+    await expect.poll(() => cards.evaluateAll(nodes => new Set(nodes.map(el => Math.round(el.getBoundingClientRect().left))).size)).toBe(columns);
+  }
+});
+
 // Available workspace chooses columns; a separate app-design test verifies sidebar changes.
-for (const [width, columns] of [[359, 1], [390, 2], [1280, 4]]) {
+for (const [width, columns] of [[320, 1], [390, 2], [1280, 4]]) {
   test(`การ์ดสรุปเรียง ${columns} คอลัมน์ที่ความกว้าง ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await comparisonFixture(page, { rows: HUGE_ROWS });

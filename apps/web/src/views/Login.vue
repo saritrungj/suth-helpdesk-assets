@@ -30,6 +30,7 @@ const passwordEl = useTemplateRef("passwordEl");
 const CHANNEL_ICONS = { phone: Phone, email: Mail, link: ExternalLink };
 const copyrightYear = toBuddhistYear(new Date().getFullYear());
 const logo = computed(() => modeState.current === "dark" ? BRAND_ASSETS.loginNight : BRAND_ASSETS.loginDay);
+const logoSrcset = computed(() => `${modeState.current === "dark" ? BRAND_ASSETS.loginNightSmall : BRAND_ASSETS.loginDaySmall} 440w, ${logo.value} 880w`);
 
 function remember() {
   try {
@@ -74,7 +75,7 @@ async function login() {
       <component :is="modeState.current === 'dark' ? Sun : Moon" :size="20" aria-hidden="true" />
     </UiButton>
     <div class="auth-logo">
-      <img :src="logo" :alt="`${APP_NAME} · ${ORG_NAME}`" width="1200" height="676" fetchpriority="high" decoding="async" />
+      <img :src="logo" :srcset="logoSrcset" sizes="(max-width: 472px) calc(100vw - 32px), 440px" :alt="`${APP_NAME} · ${ORG_NAME}`" width="880" height="495" fetchpriority="high" decoding="async" />
     </div>
     <main class="auth-main">
       <UiCard class="auth-card" flush>

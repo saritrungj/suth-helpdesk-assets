@@ -11,4 +11,4 @@
 
 จุดอ้างในโค้ดอยู่รวมกันที่ `apps/web/src/app/brand.js` ห้ามพิมพ์ path ของ asset ซ้ำใน component ใหม่
 
-ต้นฉบับ `suth-login-day-source.png` และ `suth-login-night-source.png` อยู่ในบ้านนี้ตาม ADR-0015; Login R7 (#294) ใช้ `apps/web/public/brand/suth-login-day.png` และ `suth-login-night.png` ซึ่งเป็นไฟล์ต้นฉบับ day/night ที่ผู้ใช้อนุมัติใน checkpoint `e2e8704` สำเนาสำหรับเว็บคัดลอกแบบ bit-for-bit โดยไม่วาดใหม่หรือปรับสี จุดอ้างยังรวมใน `app/brand.js`; wordmark/sidebar คงบนพื้นขาวเดิม
+ต้นฉบับ `suth-login-day-source.png` และ `suth-login-night-source.png` อยู่ในบ้านนี้ตาม ADR-0015; Login R7 (#294) ใช้ derivatives `suth-login-{day,night}-{440,880}.webp` จากต้นฉบับ day/night ที่ผู้ใช้อนุมัติใน checkpoint `e2e8704` ขนาดต้นฉบับ 1672×941; แปลง RGBA แล้ว resize Lanczos เป็น 440×248 และ 880×495 จากนั้นบันทึก WebP lossless (`method=6`, `exact=True`) ด้วย Pillow ไม่วาดใหม่หรือปรับสี ต้นฉบับเก็บเฉพาะบ้านนี้; srcset เลือกขนาดตามพื้นที่และ DPR ผ่าน BRAND_ASSETS ขนาด day 67,816/203,556 bytes และ night 65,226/196,034 bytes ไม่ใช่หลักฐานว่า LCP ผ่านเกณฑ์โดยยังไม่ได้วัด จุดอ้างยังรวมใน `app/brand.js`; wordmark/sidebar คงบนพื้นขาวเดิม

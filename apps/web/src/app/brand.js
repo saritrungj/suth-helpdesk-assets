@@ -43,8 +43,10 @@ export const OWNER_TEAM = t("ฝ่ายเทคโนโลยีสารส
 export const BRAND_ASSETS = Object.freeze({
   /** ภาพเต็มสำหรับ Login — derivative ขนาดเว็บจากต้นฉบับของผู้ใช้ */
   horizontal: "/brand/suth-horizontal.webp",
-  loginDay: "/brand/suth-login-day.png",
-  loginNight: "/brand/suth-login-night.png",
+  loginDay: "/brand/suth-login-day-880.webp",
+  loginNight: "/brand/suth-login-night-880.webp",
+  loginDaySmall: "/brand/suth-login-day-440.webp",
+  loginNightSmall: "/brand/suth-login-night-440.webp",
   /** ตัดเฉพาะตัวอักษร SUTH จากต้นฉบับเดียวกัน ใช้ใน shell */
   wordmark: "/brand/suth-wordmark.png",
 });

@@ -5,6 +5,34 @@ import { appDesignFixture } from "./app-design-fixture.js";
 import { PAGES } from "./pages.js";
 import { CONTRAST_HELPERS } from "./contrast-helper.js";
 
+test("OKLCH tokens preserve approved colors and the ocean scale is monotonic", async ({ page }) => {
+  await appDesignFixture(page, { url: "/dashboard" });
+  const result = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext("2d");
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    const colors = ["warm-50", "peach-100", "mint-100", "blue-100", "ocean-930", "action-700"].map(token => {
+      probe.style.color = `var(--${token})`;
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = getComputedStyle(probe).color;
+      ctx.fillRect(0, 0, 1, 1);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3);
+    });
+    probe.remove();
+    const style = getComputedStyle(document.documentElement);
+    const lightness = [50, 200, 400, 500, 600, 700, 750, 850, 900, 925, 930, 950, 975].map(step =>
+      Number(style.getPropertyValue(`--ocean-${step}`).match(/oklch\(\s*([\d.]+)/)?.[1]));
+    return { colors, lightness };
+  });
+  const approved = [[251,247,242], [255,207,168], [174,226,223], [201,228,242], [11,31,36], [14,98,114]];
+  result.colors.forEach((color, index) => color.forEach((value, channel) =>
+    expect(Math.abs(value - approved[index][channel])).toBeLessThanOrEqual(1)));
+  expect(result.lightness.every(Number.isFinite)).toBe(true);
+  expect(result.lightness.every((value, index, values) => index === 0 || value < values[index - 1])).toBe(true);
+});
+
 test("long monthly point labels stay inside the chart after a narrow resize", async ({ page }) => {
   await appDesignFixture(page, { url: "/dashboard" });
   await page.route(/\/api\/dashboard\/monthly-kpi(?:\?.*)?$/, route => route.fulfill({ json:

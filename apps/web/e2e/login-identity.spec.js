@@ -17,6 +17,10 @@ for (const mode of ["light", "dark"]) {
       state.user = null;
       await page.addInitScript((value) => localStorage.setItem("suth-ui-mode", value), mode);
       await page.goto("/login");
+      const logo = page.locator(".auth-logo img");
+      await logo.evaluate(img => img.decode());
+      await expect(logo).toHaveAttribute("srcset", /440\.webp 440w, .*880\.webp 880w/);
+      expect(await logo.evaluate(img => img.currentSrc)).toMatch(new RegExp(`suth-login-${mode === "dark" ? "night" : "day"}-(440|880)\\.webp$`));
       const username = page.getByLabel("ชื่อผู้ใช้", { exact: true });
       const password = page.getByLabel("รหัสผ่าน", { exact: true });
       await auditContrast(page, ".auth-card");

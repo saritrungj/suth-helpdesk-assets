@@ -600,7 +600,7 @@ function runCsv() {
     <UiAlert v-if="exportError" tone="danger" class="mb-4">{{ exportError }}</UiAlert>
 
     <p class="text-xs text-ink-mute mb-1.5">{{ shownStats.caption }}</p>
-    <!-- จอแคบกว่า 360px (เช่น iPhone SE รุ่นแรก) การ์ดสองคอลัมน์กว้างไม่พอให้ค่าพิมพ์หลักสิบล้านบาท จึงเรียงคอลัมน์เดียว -->
+    <!-- workspace container ไม่เกิน 359px เรียงคอลัมน์เดียว; วัดพื้นที่หลังหัก scrollbar/sidebar ไม่ใช่ viewport -->
     <section class="workspace-kpis mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
       <UiStat emphasis :label="t('ค่าพิมพ์รวม')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats"
         :delta="kpi.cost.delta" delta-inverse :hint="costHint" :trend="kpi.cost.trend" />
