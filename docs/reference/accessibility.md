@@ -171,6 +171,12 @@ contrast ของเรายังไม่จับจุดเหล่า�
 ตัววัดไม่จำลอง pseudo-element ซ้อนพื้น, sibling overlays, text-shadow หรือ canvas text
 จึงยังต้องตรวจส่วนเหล่านี้แยก หน้าล็อกอินปัจจุบันใช้พื้นทึบและตรวจ contrast ทั้งหน้า รวมส่วนช่วยเหลือที่กางออก
 
+### ขอบเขตสีพื้น R7 (#294)
+
+ตรวจพิกเซลพื้นหลังที่ render จริงเมื่อซ่อนเฉพาะเนื้อหา ที่ 320/1440/2560×900px: ธีมสว่างมี luminance ต่ำสุด 0.74096 มากกว่าขอบเขต peach ที่ประกาศ 0.68713; ธีมมืดมี luminance สูงสุด 0.01868 น้อยกว่าขอบเขต ocean ที่ประกาศ 0.03577 จึงใช้ bound แบบเผื่อความเสี่ยงในตัววัดได้ แยกจากสีข้อความที่ตรวจด้วย browser-side RGBA compositing
+
+ลูกศรช่องเลือกเป็น gradient สองชิ้น 5.6×5.6px ใน padding ขวา 32px ตัววัดยอมรับเฉพาะแบบนี้ และยังรายงานภาพหรือ gradient แบบอื่นว่า unsupported เงาขอบตารางใช้สีที่เข้มที่สุดที่ประกาศ ส่วนปุ่มทึบวัด fill ปัจจุบันรวม hover หลัง transition จบ ไม่ใช้ bound ของ gradient เก่าแทนสีจริง
+
 ### หมายเหตุเรื่องเทส 1.4.10
 
 เทส reflow **ย่อจอหลังจากโหลดหน้าเสร็จแล้ว** ไม่ใช่เปิดหน้าที่ 320px ตั้งแต่แรก
@@ -241,18 +247,13 @@ contrast ของเรายังไม่จับจุดเหล่า�
 
 ## หน้าล็อกอิน
 
-### Layout ปัจจุบัน (9 กันยายน 2026)
+### Layout ปัจจุบัน (9 ตุลาคม 2026, #294)
 
-บนจอ desktop แบ่งเป็นพื้นที่แบรนด์ 55% กับพื้นที่ฟอร์ม 45% ฝั่งแบรนด์ใช้ `/brand/suth-horizontal.webp` เต็มภาพบนพื้นขาวคงที่ทั้งสองธีม และฝั่งฟอร์มใช้พื้นทึบตามธีม AuroraCanvas variant `hero` ยังคงเป็นภาพประดับ `aria-hidden` ที่ไม่รับ pointer events และไม่เคลื่อนไหว การกางส่วนช่วยเหลือ ขั้นตอนยืนยันตัวตน และ handler ของ error/session ไม่เปลี่ยน
+Login R7 เป็นคอลัมน์กลางเดียว กว้างไม่เกิน 440px ใช้โลโก้ day/night ต้นฉบับตามธีมร่วมกับพื้นหลังนิ่งของแอป การ์ดฟอร์มทึบ label 14px input 16px ช่องและปุ่มหลักสูง 52px (46px บนจอแคบ/เตี้ย) และปุ่มแสดงรหัสผ่าน 44px ไม่เรียกคีย์บอร์ดมือถือทันทีที่เปิดหน้า
 
-ช่องกรอกและปุ่มหลักสูงอย่างน้อย 48px ไม่เรียกคีย์บอร์ดบนมือถือทันทีที่เปิดหน้า และภาพไม่ยืดถูกล็อกด้วยเทสอัตราส่วน เทสยังตรวจ contrast, keyboard, pending/error, viewport 320/390/768/1440px และบันทึกภาพไว้ใน `apps/web/e2e/screens/`
+ฟอร์มใช้ชื่อช่องและ autocomplete เดิม เพิ่มข้อความ inline พร้อม aria-invalid/aria-describedby เมื่อว่าง และ focus ช่องแรกที่ผิด ก่อนเรียก API จดจำชื่อผู้ใช้เฉพาะเมื่อเลือกเอง ไม่เก็บรหัสผ่านหรือ session credential และยังเข้าสู่ระบบได้เมื่อ storage ถูกปฏิเสธ Pending ป้องกันส่งซ้ำ ข้อผิดพลาดจาก API รวม 429 คงข้อความเดิมและลองใหม่ได้ ความช่วยเหลือใช้ช่องทางจริงขององค์กร
 
-แนวทางนี้เป็นการประยุกต์จาก [USWDS Sign-in](https://designsystem.digital.gov/templates/authentication-pages/sign-in/), [GOV.UK Password input](https://design-system.service.gov.uk/components/password-input/) และ [W3C Accessible Authentication](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) ไม่ใช่การรับรองว่าผ่าน WCAG ทั้งระบบ
-
-ชุด `login.spec.js` และ `login-wcag.spec.js` ผ่านรวม 30 เคสหลังเปลี่ยน layout ครอบคลุมสองธีม การกางส่วนช่วยเหลือ contrast การใช้คีย์บอร์ด สถานะกำลังส่ง/ผิดพลาด และ viewport 320, 390, 768, 1440px โดยตรวจว่าปุ่มหลักอยู่ในจอเริ่มต้น ยังไม่ได้ทดสอบกับ NVDA, Windows forced-colors หรือ Voice Control จริง
-
-หน้านี้มีเทสของตัวเองเพิ่มอีกชุด เพราะเป็นหน้าเดียวที่คนนอกองค์กรเปิดเจอได้
-และเป็นด่านเดียวที่ถ้าใช้ไม่ได้ก็คือใช้ทั้งระบบไม่ได้ ไม่มีทางอ้อม
+`e2e/app-design.spec.js` ตรวจ reflow ของทุก route ในสองธีมจาก 1440px → 320px และ 1164×501px รวม Login ที่ 320×256px หลัง error/กาง help, mobile focus trap/restore/navigation, reduced motion และ forced colors ส่วน `login-identity.spec.js` กับชุดฐาน QA ตรวจคีย์บอร์ด pending/session/redirect และทุก role หลักฐานภาพสร้างใหม่ใน output โดยไม่ commit
 
 ### 3.3.8 ผ่านด้วยเหตุผลอะไร
 

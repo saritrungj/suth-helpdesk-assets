@@ -19,16 +19,17 @@ for (const mode of ["light", "dark"]) {
       await page.goto("/login");
       const username = page.getByLabel("ชื่อผู้ใช้", { exact: true });
       const password = page.getByLabel("รหัสผ่าน", { exact: true });
-      await auditContrast(page, ".login__form");
+      await auditContrast(page, ".auth-card");
       await username.fill("synthetic-user");
       await password.fill("fixture-only");
-      await auditContrast(page, ".login__form");
+      await auditContrast(page, ".auth-card");
       await page.screenshot({ path: testInfo.outputPath("login.png") });
       const sizes = await username.evaluate((input) => ({
         label: parseFloat(getComputedStyle(input.labels[0]).fontSize),
         input: parseFloat(getComputedStyle(input).fontSize),
       }));
-      expect(sizes.label).toBeGreaterThan(sizes.input);
+      expect(sizes.label).toBeGreaterThanOrEqual(14);
+      expect(sizes.input).toBeGreaterThanOrEqual(16);
       await expect(page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).locator("svg")).toHaveCount(0);
       await expect(username).toHaveAttribute("autocomplete", "username");
       await expect(password).toHaveAttribute("autocomplete", "current-password");

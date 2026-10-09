@@ -210,7 +210,11 @@ function layoutPointTags() {
     if (value === null || value === undefined) return [];
     const x = scale.timeToCoordinate(timeOf(index));
     const y = handles[0].priceToCoordinate(Number(value));
-    return x === null || y === null ? [] : [{ index, x, y, text: axisText(value) }];
+    // Coordinates outside the visible plot remain valid library coordinates.
+    // They must not create labels outside the chart after resize.
+    const width = scale.width();
+    return x === null || y === null || x < 0 || x > width ? []
+      : [{ index, x: Math.min(Math.max(x, 16), Math.max(16, width - 16)), y, text: axisText(value) }];
   });
 }
 

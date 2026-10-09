@@ -28,7 +28,7 @@ for (const language of ["th", "en"]) {
     // ภาพรวมมีกราฟรายเดือนสองกราฟ ส่วนพื้นที่เปรียบเทียบและตารางรายละเอียดอยู่หน้าเปรียบเทียบ (ADR-0033)
     // ทั้งสองภาษา ส่วนกฎ coverage ถูกตรวจแยกด้วย API ด้านล่าง
     await expect(page.getByRole("region", {
-      name: language === "en" ? "Monthly trend" : "แนวโน้มรายเดือน",
+      name: language === "en" ? "Monthly data" : "ข้อมูลรายเดือน",
     })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${language}.png`), fullPage: true });
     await page.goto("/compare");

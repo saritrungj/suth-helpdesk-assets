@@ -39,12 +39,12 @@ defineProps({
 </script>
 
 <template>
-  <header class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 mb-4">
+  <header class="ui-page-header flex flex-wrap items-center justify-between gap-x-6 gap-y-3 mb-4">
     <div class="min-w-0">
       <p v-if="eyebrow" class="eyebrow mb-1">{{ eyebrow }}</p>
 
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 tabindex="-1" class="text-2xl sm:text-3xl font-semibold text-ink tracking-tight">
+        <h1 tabindex="-1" class="ui-page-title font-semibold text-ink tracking-tight">
           {{ title }}
         </h1>
         <slot name="badge" />
@@ -57,7 +57,7 @@ defineProps({
       <slot name="meta" />
     </div>
 
-    <div v-if="$slots.actions" class="flex flex-wrap items-center gap-2" data-print="hide">
+    <div v-if="$slots.actions" class="ui-page-actions flex flex-wrap items-center gap-2" data-print="hide">
       <slot name="actions" />
     </div>
   </header>

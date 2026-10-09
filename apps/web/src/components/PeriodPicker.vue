@@ -312,7 +312,7 @@ watch(open, (isOpen) => {
       <PopoverContent
         align="start"
         :side-offset="6"
-        class="z-[110] w-[21rem] rounded-lg bg-surface-float border border-line-soft shadow-pop overflow-hidden
+        class="z-[110] w-[21rem] max-w-[calc(100vw-2rem)] rounded-lg bg-surface-float border border-line-soft shadow-pop overflow-hidden
                data-[state=open]:animate-pop-in"
       >
         <header class="flex items-baseline justify-between gap-2 px-4 py-3 border-b border-line-soft">

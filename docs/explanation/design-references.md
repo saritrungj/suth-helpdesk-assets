@@ -228,3 +228,16 @@ mockup ที่ผู้ใช้เห็นชอบแล้วใน #51 �
 หน้าเปรียบเทียบปิด `collapsible` เพราะตัวกรองขึ้นกับรูปแบบที่เลือกและมีน้อยจนไม่มี
 อะไรเหลือให้ซ่อน — `UiFilterBar` เคยเรนเดอร์กรอบเปล่าแถมมาในกรณีนี้ ตอนนี้ข้ามแผง
 ไปเลยเมื่อไม่มีตัวกรองขั้นสูงส่งเข้ามา
+
+## Login R7 และ app R2 — 9 ตุลาคม 2026 (#294)
+
+ใช้ข้อสรุปที่ผู้ใช้อนุมัติเป็นข้อกำหนดของหน้าตา ไม่อ้างว่าเป็นแบบที่นิยมที่สุดหรือเพิ่มเอฟเฟกต์ตามอันดับที่ตรวจไม่ได้
+
+| หลักฐานปฐมภูมิ (ตรวจ 2026-10-09) | สิ่งที่ใช้จริง | บ้านของ implementation |
+|---|---|---|
+| [Lucide guide](https://lucide.dev/guide/) | SVG ตระกูลเดียวและ import เฉพาะที่ใช้ คง dependency ที่ล็อกอยู่ | app/navigation.js, AppBrand, Login |
+| [MDN container queries](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Containment/Container_queries) | ใช้ความกว้าง workspace หลัง sidebar เปลี่ยนขนาด | design/layout.css, MainLayout |
+| [W3C reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html) | จอแคบเรียงเนื้อหาใหม่ ตารางข้อมูลสองมิติเลื่อนภายใน | app-design.spec.js, ImportStart, UiStockChart |
+| [W3C modal dialog](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/) | กัก focus, Escape, คืน opener หรือ heading หลังเปลี่ยนหน้า | UiDrawer, UiModal, AppSidebar |
+
+สีและรูปทรงอ้าง prototype checkpoint `e2e8704`; รายละเอียดที่บังคับใช้ต่ออยู่ใน [design-system.md](design-system.md) และ [accessibility.md](../reference/accessibility.md) ความถูกต้องต้องยืนยันกับข้อมูล HTTP fixtures/ฐาน QA และสาม engine ไม่สรุปจากภาพต้นแบบอย่างเดียว

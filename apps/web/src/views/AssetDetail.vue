@@ -255,8 +255,8 @@ const hasUsage = computed(() => usageSeries.value.some((series) => series.values
 
     <template v-if="loading">
       <UiSkeleton class="h-24 w-full rounded-lg mb-4" />
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <UiSkeleton class="h-64 w-full rounded-lg lg:col-span-2" />
+      <div class="workspace-split">
+        <UiSkeleton class="h-64 w-full rounded-lg" />
         <UiSkeleton class="h-64 w-full rounded-lg" />
       </div>
     </template>
@@ -296,10 +296,10 @@ const hasUsage = computed(() => usageSeries.value.some((series) => series.values
         </div>
       </header>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="workspace-split">
         <!-- ยอดพิมพ์ — ใหญ่ที่สุดเพราะเป็นสิ่งที่คนเปิดหน้านี้มาดูบ่อยที่สุด -->
         <UiCard
-          class="lg:col-span-2"
+          class="min-w-0"
           :eyebrow="t(&quot;จำนวนพิมพ์รายเดือน&quot;)"
           :title="
             activeFiscalYear

@@ -29,7 +29,7 @@ import {
 } from "reka-ui";
 import { X } from "lucide-vue-next";
 
-defineProps({
+const props = defineProps({
   /** v-model:open */
   open: { type: Boolean, default: false },
   title: { type: String, required: true },
@@ -37,9 +37,17 @@ defineProps({
   size: { type: String, default: "md" },
   /** ห้ามปิดด้วย Esc/คลิกพื้นหลัง ใช้กับงานที่ปิดกลางคันแล้วข้อมูลเสียหาย */
   persistent: { type: Boolean, default: false },
+  returnFocus: { type: Object, default: null },
 });
 
 defineEmits(["update:open"]);
+
+function restoreFocus(event) {
+  if (props.returnFocus?.isConnected) {
+    event.preventDefault();
+    props.returnFocus.focus({ preventScroll: true });
+  }
+}
 
 const SIZES = {
   sm: "sm:max-w-md",
@@ -58,12 +66,13 @@ const SIZES = {
 
       <DialogContent
         class="fixed z-[101] bg-surface-float shadow-pop border border-line-soft flex flex-col
-               inset-x-0 bottom-0 max-h-[90dvh] rounded-t-2xl
+               inset-x-0 bottom-0 max-h-[90dvh] rounded-t-lg
                sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2
                sm:w-[calc(100%-2rem)] sm:rounded-lg sm:max-h-[85dvh]
                data-[state=open]:animate-slide-up sm:data-[state=open]:animate-pop-in"
         :class="SIZES[size] ?? SIZES.md"
         v-bind="description ? {} : { 'aria-describedby': undefined }"
+        @close-auto-focus="restoreFocus"
         @escape-key-down="persistent && $event.preventDefault()"
         @pointer-down-outside="persistent && $event.preventDefault()"
       >
@@ -94,7 +103,7 @@ const SIZES = {
 
         <footer
           v-if="$slots.footer"
-          class="flex flex-wrap items-center justify-end gap-2 px-5 py-3.5 border-t border-line-soft bg-surface-2 shrink-0 rounded-b-xl pb-[max(0.875rem,env(safe-area-inset-bottom))]"
+          class="flex flex-wrap items-center justify-end gap-2 px-5 py-3.5 border-t border-line-soft bg-surface-2 shrink-0 rounded-b-lg pb-[max(0.875rem,env(safe-area-inset-bottom))]"
         >
           <slot name="footer" />
         </footer>

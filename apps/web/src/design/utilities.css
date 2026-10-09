@@ -149,6 +149,7 @@
    ใช้ background-attachment: local/scroll สองชั้นซ้อนกัน จึงโผล่เฉพาะตอนที่
    ยังมีเนื้อหาเลยขอบออกไป และหายเองเมื่อเลื่อนสุดแล้ว ไม่ต้องใช้ JavaScript */
 @utility scroll-hint-x {
+  --scroll-hint-worst: color-mix(in oklab, var(--ink) 12%, var(--surface));
   background-image: linear-gradient(to right, var(--surface) 30%, transparent),
     linear-gradient(to left, var(--surface) 30%, transparent),
     linear-gradient(to right, color-mix(in oklab, var(--ink) 12%, transparent), transparent),
@@ -176,8 +177,15 @@
 
 /* แถบบนแบบกระจกฝ้า — เนื้อหาเลื่อนผ่านใต้แถบนี้ จึงมีพื้นกึ่งทึบให้อ่านได้ แต่ยังเห็นสีรุ้งผ่านมา */
 @utility chrome-glass {
-  background-color: color-mix(in oklch, var(--canvas) 72%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
+  background-color: var(--canvas);
+  @supports (backdrop-filter: blur(1px)) {
+    background-color: color-mix(in oklab, var(--canvas) 88%, transparent);
+    backdrop-filter: blur(10px);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--canvas);
+    backdrop-filter: none;
+  }
   @media (forced-colors: active) {
     background-color: Canvas;
     backdrop-filter: none;
@@ -186,14 +194,14 @@
 
 /* แถบเมนูบนจอใหญ่ — ผ้าบางสีพื้นทับไล่สีรุ้ง ตัวหนังสือสีจาง (ink-mute) ยังได้ 4.5:1 แม้ตรงมุมที่สีเข้มที่สุด */
 @utility chrome-veil {
-  background-color: color-mix(in oklch, var(--canvas) 60%, transparent);
+  background-color: transparent;
   @media (forced-colors: active) {
     background-color: Canvas;
   }
 }
 
 /* ---------------------------------------------------------------------------
-   ปุ่มหลัก (#213) — ไล่สีแบบแสงเหนือและแสงเรืองจาง ให้เข้ากับพื้นไล่สีรุ้งทั้งสองโหมด
+   ปุ่มหลัก (#294) — teal ทึบและเงาจาง ใช้คู่กับพื้น R7 ทั้งสองโหมด
    ใช้กับ UiButton variant="primary" และปุ่มยืนยันของ UiConfirm เท่านั้น — ปุ่มหลักมีสไตล์เดียวทั้งระบบ
    --------------------------------------------------------------------------- */
 @utility btn-primary {
@@ -203,6 +211,7 @@
   border-color: transparent;
   box-shadow: var(--brand-glow);
   &:hover {
+    background-color: var(--brand-hover);
     background-image: var(--brand-gradient-hover);
     box-shadow: var(--brand-glow-hover);
   }
@@ -211,8 +220,7 @@
   }
 }
 
-/* ปุ่มรองบนพื้นไล่สี — พื้นการ์ดโปร่งเล็กน้อยให้สีรุ้งซึมผ่าน ตัวอักษรยังอยู่บนพื้นเกือบทึบ */
+/* ปุ่มรองใช้พื้นทึบของการ์ด เพื่อรักษาคอนทราสต์โดยไม่เบลอซ้ำทุกปุ่ม */
 @utility btn-glass {
-  background-color: color-mix(in oklab, var(--surface) 82%, transparent);
-  backdrop-filter: blur(8px) saturate(1.3);
+  background-color: var(--surface);
 }

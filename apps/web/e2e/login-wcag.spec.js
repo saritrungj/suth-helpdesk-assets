@@ -92,11 +92,11 @@ for (const mode of ["light", "dark"]) {
 test(`1.4.3 [${mode}] ฟอร์มรวม placeholder และค่าที่กรอก`, async ({ page }) => {
   await openLogin(page, mode);
   // Measure the settled form, not one arbitrary frame of its entrance fade.
-  await page.locator(".login__form").evaluate(async (el) => {
+  await page.locator(".auth-card").evaluate(async (el) => {
     await Promise.all(el.getAnimations().map((animation) => animation.finished.catch(() => {})));
   });
   const audit = async () => {
-    const report = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText('.login__form');`);
+    const report = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText('.auth-card');`);
     expect(report.measured).toBeGreaterThan(0);
     expect(report.unsupported, "พื้นฟอร์มต้องเป็นพื้นทึบที่วัดได้").toEqual([]);
     expect(report.failures, JSON.stringify(report.failures, null, 2)).toEqual([]);
@@ -109,27 +109,8 @@ test(`1.4.3 [${mode}] ฟอร์มรวม placeholder และค่าท
 
 test(`1.4.3 [${mode}] ทั้งหน้ารวมส่วนช่วยเหลือที่เปิดแล้ว`, async ({ page }) => {
   await openLogin(page, mode);
-  // DashboardHero uses --surface with --aurora-1..3, not the always-dark page palette.
-  const palette = await page.evaluate(() => {
-    const probe = document.createElement("div");
-    document.body.append(probe);
-    try {
-      probe.style.backgroundColor = "var(--surface)";
-      const groundMatches = getComputedStyle(document.querySelector(".login")).backgroundColor
-        === getComputedStyle(probe).backgroundColor;
-      const layersMatch = [1, 2, 3].map((layer) => {
-        probe.style.backgroundImage = layer === 3
-          ? "radial-gradient(ellipse, var(--aurora-3) 0%, transparent 68%)"
-          : `radial-gradient(circle, var(--aurora-${layer}) 0%, transparent 70%)`;
-        return getComputedStyle(document.querySelector(`.aurora__layer--${layer}`)).backgroundImage
-          === getComputedStyle(probe).backgroundImage;
-      });
-      return { groundMatches, layersMatch };
-    } finally {
-      probe.remove();
-    }
-  });
-  expect(palette).toEqual({ groundMatches: true, layersMatch: [true, true, true] });
+  await expect(page.locator(".login")).toHaveCSS("background-image", /radial-gradient/);
+  await expect(page.locator(".aurora__layer")).toHaveCount(0);
   await page.screenshot({ path: `e2e/screens/login-${mode}.png`, fullPage: true });
   await page.locator(".login__access summary").click();
   await expect(page.getByRole("heading", { name: /ติดต่อฝ่าย/ })).toBeVisible();
@@ -152,7 +133,7 @@ test(`1.4.11 [${mode}] ขอบช่องกรอกต่างจากพ
       const el = document.querySelector(selector);
       const style = getComputedStyle(el);
       // พื้นหลังที่ขอบวางอยู่บนคือพื้นของแผงฟอร์ม ไม่ใช่พื้นของตัว input เอง
-      const panel = composite([getComputedStyle(document.querySelector(".login__panel")).backgroundColor]);
+      const panel = composite([getComputedStyle(document.querySelector(".auth-card")).backgroundColor]);
       return {
         selector,
         width: style.borderTopWidth,
@@ -409,18 +390,19 @@ test("3.1.1 + 2.4.2 + 1.1.1 ภาษาของหน้า ชื่อหน
     expect(image.alt, `<img src="${image.src}"> ไม่มี alt`).not.toBeNull();
   }
 
-  // Shared Dashboard artwork is decorative and cannot intercept form clicks.
-  await expect(page.locator(".aurora--hero")).toHaveAttribute("aria-hidden", "true");
-  await expect(page.locator(".aurora--hero")).toHaveCSS("pointer-events", "none");
-  await expect(page.locator(".aurora__layer").first()).toHaveCSS("animation-name", "none");
   await expect(page.locator("canvas")).toHaveCount(0);
-  const main = await page.locator(".login__main").boundingBox();
-  const brand = await page.locator(".login__brand").boundingBox();
-  const logo = await page.locator(".login__logo").boundingBox();
-  expect(brand.width / main.width).toBeCloseTo(0.55, 2);
-  expect(logo.width / logo.height).toBeCloseTo(1200 / 676, 2);
-  const brandSurface = await page.locator(".login__brand").evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(brandSurface).toBe("oklch(1 0 0)");
+  const main = await page.locator(".auth-main").boundingBox();
+  const logo = await page.locator(".auth-logo").boundingBox();
+  expect(main.width).toBeLessThanOrEqual(440);
+  expect(logo.width).toBeLessThanOrEqual(main.width + 1);
+  const natural = await page.locator(".auth-logo img").evaluate(async image => {
+    await image.decode();
+    return image.naturalWidth / image.naturalHeight;
+  });
+  expect(logo.width / logo.height).toBeCloseTo(natural, 2);
+  expect(Math.abs((logo.x + logo.width / 2) - (main.x + main.width / 2))).toBeLessThanOrEqual(1);
+  await expect(page.locator(".auth-logo img")).toHaveAttribute("alt", /SUTH Helpdesk Assets/);
+  await expect(page.locator(".auth-copyright")).toContainText("©");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("เข้าสู่ระบบ");
 });
 

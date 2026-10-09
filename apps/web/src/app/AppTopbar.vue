@@ -47,7 +47,7 @@ import {
   setActiveFiscalYear,
 } from "../store/fiscalYear";
 import { modeState, setDensity, setMode } from "../store/theme";
-import { openCommandPalette, openMobileNav } from "../store/ui";
+import { openCommandPalette, openMobileNav, uiState } from "../store/ui";
 import AppNotifications from "./AppNotifications.vue";
 import { UiBadge, UiButton, UiMenu, UiMenuItem, UiSegmented, UiSkeleton } from "../ui";
 
@@ -96,7 +96,7 @@ async function logout() {
 
 <template>
   <header
-    class="sticky top-0 z-30 h-[var(--shell-topbar-height)] shrink-0 flex items-center gap-2 px-3 sm:px-4
+    class="app-topbar sticky top-0 z-30 h-[var(--shell-topbar-height)] shrink-0 flex items-center gap-2 px-3 sm:px-4
            chrome-glass"
     data-print="hide"
   >
@@ -106,6 +106,8 @@ async function logout() {
       size="sm"
       icon-only
       :label="t(&quot;เปิดเมนู&quot;)"
+      data-mobile-nav-trigger
+      :aria-expanded="uiState.mobileNavOpen"
       @click="openMobileNav"
     >
       <Menu :size="18" />
@@ -113,7 +115,7 @@ async function logout() {
 
     <!-- ตำแหน่งปัจจุบัน — แสดงเฉพาะหน้าลูก (meta.breadcrumb เช่นรายละเอียดเครื่อง) ที่ต้องมีลิงก์กลับหน้าแม่
          หน้าหลักไม่แสดง เพราะชื่อหน้าซ้ำกับเมนูข้างที่เลือกอยู่และหัวหน้าอยู่แล้ว (รอบที่ 3 ของ #51) -->
-    <nav v-if="route.meta.breadcrumb" class="min-w-0 flex items-center gap-1.5 text-sm" :aria-label="t(&quot;ตำแหน่งปัจจุบัน&quot;)">
+    <nav v-if="route.meta.breadcrumb" class="app-topbar__breadcrumb min-w-0 flex items-center gap-1.5 text-sm" :aria-label="t(&quot;ตำแหน่งปัจจุบัน&quot;)">
       <span class="hidden sm:inline text-ink-mute truncate">
         {{ activeItem?.groupLabel ?? APP_NAME_SHORT }}
       </span>
@@ -139,7 +141,7 @@ async function logout() {
       <!-- ช่องค้นหาคำสั่ง — บนจอใหญ่แสดงเป็นช่องจริงให้รู้ว่ามีอยู่ บนจอเล็กเหลือแค่ไอคอน -->
       <button
         type="button"
-        class="hidden md:flex items-center gap-2 h-8 pl-2.5 pr-2 rounded-lg border border-line
+        class="app-topbar__search items-center gap-2 h-8 pl-2.5 pr-2 rounded-md border border-line
                bg-surface text-ink-mute text-sm hover:border-line-strong hover:text-ink transition-colors"
         @click="openCommandPalette"
       >
@@ -153,7 +155,7 @@ async function logout() {
       </button>
 
       <UiButton
-        class="md:hidden"
+        class="app-topbar__search-icon"
         variant="ghost"
         size="sm"
         icon-only
@@ -170,7 +172,7 @@ async function logout() {
         <template #trigger>
           <button
             type="button"
-            class="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-brand-line
+            class="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-brand-line
                    bg-brand-soft text-brand-ink text-sm font-semibold
                    hover:bg-brand-soft-hover transition-colors"
           >
@@ -215,16 +217,16 @@ async function logout() {
         <template #trigger>
           <button
             type="button"
-            class="flex items-center gap-2 h-8 pl-1 pr-2 rounded-lg hover:bg-chrome-hover transition-colors"
+            class="flex items-center gap-2 h-8 pl-1 pr-2 rounded-md hover:bg-chrome-hover transition-colors"
             :aria-label="`${t(&quot;บัญชีของ {0}&quot;, [authState.user?.username ?? ''])} — ${roleLabel}`"
           >
             <span
-              class="grid place-items-center shrink-0 w-7 h-7 rounded-lg bg-brand-soft text-brand-ink"
+              class="grid place-items-center shrink-0 w-7 h-7 rounded-md bg-brand-soft text-brand-ink"
               aria-hidden="true"
             >
               <UserRound :size="15" />
             </span>
-            <span class="hidden sm:flex items-center gap-2 min-w-0">
+            <span class="app-topbar__account-name items-center gap-2 min-w-0">
               <span class="text-sm font-medium text-ink truncate max-w-[8rem]" :title="authState.user?.username">
                 {{ authState.user?.username }}
               </span>

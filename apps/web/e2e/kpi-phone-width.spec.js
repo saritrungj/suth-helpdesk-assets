@@ -48,8 +48,8 @@ for (const width of [320, 375, 414]) {
   });
 }
 
-// จำนวนคอลัมน์ของการ์ด: 1 ต่ำกว่า 360px, 2 ตั้งแต่ 360px, 4 ที่จอกว้าง (xl) — กันจุดเปลี่ยนเลื่อนโดยไม่ตั้งใจ
-for (const [width, columns] of [[359, 1], [360, 2], [1280, 4]]) {
+// Available workspace chooses columns; a separate app-design test verifies sidebar changes.
+for (const [width, columns] of [[359, 1], [390, 2], [1280, 4]]) {
   test(`การ์ดสรุปเรียง ${columns} คอลัมน์ที่ความกว้าง ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await comparisonFixture(page, { rows: HUGE_ROWS });

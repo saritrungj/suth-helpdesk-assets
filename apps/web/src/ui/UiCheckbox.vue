@@ -64,7 +64,7 @@ function toggle() {
         :class="
           checked || indeterminate
             ? 'bg-brand border-brand text-brand-on'
-            : 'bg-surface border-line peer-hover:border-line-strong'
+            : 'bg-surface border-field-line peer-hover:border-field-line-strong'
         "
         :style="color && (checked || indeterminate) ? { backgroundColor: color, borderColor: color } : undefined"
       >

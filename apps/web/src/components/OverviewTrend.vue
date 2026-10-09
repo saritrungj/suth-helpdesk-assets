@@ -112,7 +112,7 @@ function select(model, { index }) {
 </script>
 
 <template>
-  <section class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4" role="region" :aria-label="t('แนวโน้มรายเดือน')" :aria-busy="loading">
+  <section class="workspace-grid mb-4" role="region" :aria-label="t('ข้อมูลรายเดือน')" :aria-busy="loading">
     <UiCard v-for="card in CARDS" :key="card.key" :title="card.title" :description="shown.caption" :data-testid="`overview-trend-${card.key}`">
       <p v-if="card.headline" class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 -mt-1 mb-3" data-testid="trend-headline">
         <span class="text-2xl font-semibold text-ink numeral">{{ card.headline.value }}</span>

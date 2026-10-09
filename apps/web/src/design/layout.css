@@ -1,0 +1,91 @@
+/* Responsive contracts shared by routed pages; queries measure the workspace,
+   including user-resized/collapsed navigation, rather than the outer window. */
+.app-workspace { container: workspace / inline-size; }
+.app-content { padding: var(--shell-content-padding); }
+.ui-page-title { font-size: var(--text-3xl); line-height: 1.3; overflow-wrap: anywhere; }
+.workspace-grid { display: grid; gap: var(--stack); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.workspace-kpis { display: grid; gap: .75rem; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.workspace-decision-grid { display: grid; gap: .5rem; align-items: center; grid-template-columns: minmax(0, 1fr) auto minmax(0, 18rem); }
+.workspace-model-grid { display: grid; gap: .5rem; align-items: center; grid-template-columns: minmax(0, 1fr) auto minmax(0, 14rem) auto; }
+.workspace-grid > *, .workspace-split > * { min-width: 0; }
+.workspace-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+.workspace-filters > * { min-width: 0; }
+.workspace-split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--stack); }
+.app-brand { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.app-brand__home { display: flex; align-items: center; gap: .5rem; min-width: 0; flex: 1; padding: .25rem; border-radius: var(--radius-md); }
+.app-brand__home:hover { background: var(--chrome-hover); }
+.app-brand__mark { display: grid; place-items: center; flex: none; width: 3.25rem; height: 2.25rem; padding: .25rem; border: 1px solid var(--line-soft); border-radius: var(--radius-md); background: var(--brand-backdrop); }
+.app-brand__mark img { width: 100%; height: auto; }
+.app-brand__name { min-width: 0; }
+.app-brand--rail .app-brand__home { justify-content: center; }
+.app-brand--rail .app-brand__mark { width: 2.5rem; }
+.app-topbar__search-icon { display: none; }
+.app-topbar__search { display: flex; }
+.app-topbar__account-name { display: flex; }
+@container workspace (max-width: 960px) {
+  .workspace-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.auth-stage { min-height: 100dvh; display: grid; justify-items: center; align-content: center; gap: 1.5rem; padding: 2rem 1.25rem; }
+.auth-theme { position: fixed; top: 1rem; right: 1rem; z-index: 30; width: 2.5rem; height: 2.5rem; }
+.auth-main { width: min(27.5rem, 100%); min-width: 0; }
+.auth-logo { width: min(100%, 27.5rem, max(11.25rem, calc(177.7dvh - 57rem))); }
+.auth-logo img { display: block; width: 100%; height: auto; }
+.auth-card { padding: 2.5rem; box-shadow: var(--elev-2); }
+.auth-intro { margin-bottom: 1.75rem; text-align: center; }
+.auth-intro h1 { font-size: var(--text-2xl); line-height: 1.3; }
+.auth-intro p { margin-top: .375rem; font-size: var(--text-sm); color: var(--ink-mute); }
+.auth-fields { display: grid; gap: 1.25rem; }
+.auth-fields label { font-size: .875rem; }
+.auth-input { min-height: 3.25rem; font-size: 1rem; }
+.auth-password-toggle { position: absolute; right: .25rem; top: 50%; transform: translateY(-50%); width: 2.75rem; height: 2.75rem; display: grid; place-items: center; color: var(--ink-mute); border-radius: var(--radius-md); }
+.auth-password-toggle:hover, .auth-password-toggle[aria-pressed="true"] { background: var(--surface-2); color: var(--brand-ink); }
+.auth-password-toggle:disabled { cursor: not-allowed; }
+.auth-options { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: .5rem 1rem; }
+.auth-options label, .auth-help summary { min-height: 1.75rem; }
+.auth-remember > span:first-child { width: 1.5rem; height: 1.5rem; margin-top: 0; }
+.auth-help { display: contents; }
+.auth-help summary { cursor: pointer; color: var(--brand-ink); font-size: var(--text-sm); font-weight: 500; list-style: none; }
+.auth-help summary::-webkit-details-marker { display: none; }
+.auth-help summary:hover { text-decoration: underline; }
+.auth-help-content { width: 100%; padding: .875rem; border: 1px solid var(--info-line); border-radius: var(--radius-md); background: var(--info-soft); color: var(--info-ink); font-size: var(--text-sm); }
+.auth-help-content h2 { font-size: var(--text-sm); color: inherit; }
+.auth-help-content p { margin-top: .25rem; }
+.auth-submit { min-height: 3.25rem; }
+.auth-copyright { color: var(--ink-mute); text-align: center; font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
+@media (max-width: 639px), (max-height: 760px) {
+  .auth-stage { gap: .5rem; padding: .75rem 1rem; }
+  .auth-card { padding: 1.5rem; }
+  .auth-intro { margin-bottom: 1.25rem; }
+  .auth-fields { gap: 1rem; }
+  .auth-input, .auth-submit { min-height: 2.875rem; }
+}
+@media (max-height: 540px) {
+  .auth-stage { align-content: start; padding-top: 3.75rem; }
+  .auth-theme { position: absolute; }
+}
+@container workspace (max-width: 760px) {
+  .workspace-split, .workspace-grid, .workspace-decision-grid, .workspace-model-grid { grid-template-columns: minmax(0, 1fr); }
+  .app-topbar__search { display: none; }
+  .app-topbar__search-icon { display: inline-flex; }
+  .app-topbar__account-name, .app-topbar__breadcrumb { display: none; }
+}
+@container workspace (max-width: 359px) {
+  .workspace-kpis { grid-template-columns: minmax(0, 1fr); }
+}
+@container workspace (max-width: 540px) {
+  .app-content { padding: 1rem; }
+  .ui-page-title { font-size: var(--text-2xl); }
+  .ui-page-actions { width: 100%; }
+  .workspace-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* Short screens keep all controls reachable instead of pinning over the fields. */
+@media (max-height: 540px) {
+  .app-topbar, .entry-savebar { position: static; }
+}
+@media (pointer: coarse) {
+  .app-navigation a, .app-navigation button, .app-topbar button { min-height: 2.75rem; }
+}
+@media print {
+  .app-workspace { container-type: normal; }
+  .app-content { padding: 0; }
+}

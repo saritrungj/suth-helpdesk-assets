@@ -519,7 +519,6 @@
   "ซ่อนรหัสผ่าน": "Hide password",
   "แสดงรหัสผ่าน — คำเตือน: รหัสผ่านจะปรากฏบนหน้าจอ": "Show password — Warning: your password will be visible on screen.",
   "กำลังเข้าสู่ระบบ…": "Signing in…",
-  "ยังไม่มีบัญชี หรือเข้าใช้งานไม่ได้": "Need an account or having trouble signing in?",
   "ติดต่อ": "Contact",
   "เพื่อขอบัญชีหรือขอความช่วยเหลือในการเข้าสู่ระบบ": "for an account or help signing in.",
   "ที่ตั้งปัจจุบัน": "Current location",
@@ -1219,9 +1218,15 @@
   "เฉพาะเครื่องที่ตรงคำค้น": "Only devices matching the search",
   "ทุกเครื่องในสัญญา": "All devices in contracts",
   "แบ่งตาม: {0}": "Grouped by: {0}",
-  "ค้นหา: {0}": "Search: {0}",
   "ข้อมูลในรายละเอียดนี้": "Data in these details",
   "ข้อมูลที่กรอกในฟอร์มนี้ยังไม่ได้บันทึก ปิดแล้วจะหายทั้งหมด": "What you entered in this form is not saved. Closing it will discard everything.",
   "ทิ้งการแก้ไข": "Discard changes",
-  "แก้ไขต่อ": "Keep editing"
+  "แก้ไขต่อ": "Keep editing",
+  "ข้อมูลระบบ": "About this system",
+  "ดูแลโดย {0}": "Maintained by {0}",
+  "จดจำชื่อผู้ใช้": "Remember username",
+  "ลืมรหัสผ่าน?": "Forgot password?",
+  "เปลี่ยนเป็นโหมดสว่าง": "Switch to light mode",
+  "เปลี่ยนเป็นโหมดมืด": "Switch to dark mode",
+  "ข้อมูลรายเดือน": "Monthly data"
 }

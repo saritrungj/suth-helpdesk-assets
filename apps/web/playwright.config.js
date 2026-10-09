@@ -85,6 +85,11 @@ const MANUAL_SPECS = [
 const anyFolder = (files) => files.map((file) => `**/${file}`);
 
 const desktop = { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } };
+// Opt-in browser parity for fixture tests; DB tests keep their original engine.
+const fixtureBrowser = process.env.SUTH_E2E_BROWSER || "chromium";
+if (!["chromium", "firefox", "webkit"].includes(fixtureBrowser)) {
+  throw new Error("SUTH_E2E_BROWSER must be chromium, firefox or webkit");
+}
 
 /* บนเครื่องคนมักเปิด dev server ค้างไว้อยู่แล้ว `reuseExistingServer` จึงทำให้
    ทุกอย่างเหมือนเดิมทุกประการ ส่วนบน CI ที่ไม่มีใครเปิดอะไรไว้ Playwright จะ
@@ -149,7 +154,7 @@ export default defineConfig({
   },
 
   projects: [
-    { name: "fixture", use: desktop, testIgnore: anyFolder([...DB_SPECS, ...MANUAL_SPECS]) },
+    { name: "fixture", use: { ...desktop, browserName: fixtureBrowser }, testIgnore: anyFolder([...DB_SPECS, ...MANUAL_SPECS]) },
     { name: "db", use: desktop, testMatch: anyFolder(DB_SPECS) },
     { name: "manual", use: desktop, testMatch: anyFolder(MANUAL_SPECS) },
   ],

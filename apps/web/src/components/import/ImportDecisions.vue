@@ -38,7 +38,7 @@ function createAllUnchosen(kind) {
       </div>
       <p class="mb-2 text-xs text-ink-mute">{{ t("ชื่อที่เขียนต่างกันแต่เป็นที่เดียวกัน ให้เลือก “ชื่อเรียกอื่นของ…” ระบบจะจำไว้ ไฟล์ครั้งหน้าไม่ต้องเลือกซ้ำ") }}</p>
       <div class="grid gap-2">
-        <div v-for="entry in registry.unresolved[kind]" :key="entry.name" class="grid gap-2 sm:grid-cols-[1fr_auto_18rem] sm:items-center">
+        <div v-for="entry in registry.unresolved[kind]" :key="entry.name" class="workspace-decision-grid">
           <span class="text-sm text-ink break-words">{{ entry.name }}</span>
           <span class="text-xs text-ink-mute numeral">{{ t("{0} แถว", [formatCount(entry.rows)]) }}</span>
           <UiSelect
@@ -66,7 +66,7 @@ function createAllUnchosen(kind) {
       <p class="text-sm font-semibold text-ink mb-1">{{ t("หมวดมิเตอร์ของแต่ละรุ่น") }}</p>
       <p class="mb-2 text-xs text-ink-mute">{{ t("ใช้คิดเงินตามรายการราคาของสัญญา รุ่นที่เคยลงแล้วระบบเลือกให้ตามเครื่องเดิม") }}</p>
       <div class="grid gap-2">
-        <div v-for="model in models" :key="model.key" class="grid gap-2 sm:grid-cols-[1fr_auto_14rem_auto] sm:items-center">
+        <div v-for="model in models" :key="model.key" class="workspace-model-grid">
           <span class="text-sm text-ink">{{ model.brand }} {{ model.model }}</span>
           <span class="text-xs text-ink-mute numeral">{{ t("{0} เครื่อง", [formatCount(model.rows)]) }}</span>
           <UiSelect

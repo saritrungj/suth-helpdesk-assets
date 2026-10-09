@@ -569,7 +569,7 @@ function runCsv() {
 </script>
 
 <template>
-  <div class="w-full min-w-0 max-w-[calc(100vw-2rem)] overflow-x-clip">
+  <div class="w-full min-w-0">
     <UiPageHeader :title="isOverview ? t('ภาพรวมการพิมพ์') : t('เปรียบเทียบการพิมพ์')">
       <template #actions>
         <UiButton variant="ghost" icon-only :label="t('โหลดข้อมูลใหม่')" :loading="report.isFetching.value" @click="reload">
@@ -601,7 +601,7 @@ function runCsv() {
 
     <p class="text-xs text-ink-mute mb-1.5">{{ shownStats.caption }}</p>
     <!-- จอแคบกว่า 360px (เช่น iPhone SE รุ่นแรก) การ์ดสองคอลัมน์กว้างไม่พอให้ค่าพิมพ์หลักสิบล้านบาท จึงเรียงคอลัมน์เดียว -->
-    <section class="grid grid-cols-1 min-[360px]:grid-cols-2 xl:grid-cols-4 gap-3 mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
+    <section class="workspace-kpis mb-4" :aria-label="t('สรุปตัวเลขสำคัญ')" :aria-busy="loading" :class="loading && settledStats && 'opacity-45'">
       <UiStat emphasis :label="t('ค่าพิมพ์รวม')" :value="failed ? '—' : money(shownStats.totals.cost)" :unit="t('บาท')" :loading="loading && !settledStats"
         :delta="kpi.cost.delta" delta-inverse :hint="costHint" :trend="kpi.cost.trend" />
       <UiStat tone="ink" :label="t('จำนวนพิมพ์รวม')" :value="statsReady ? formatCount(shownStats.totals.rawPages) : '—'" :unit="t('หน้า')" :loading="loading && !settledStats"
@@ -630,7 +630,7 @@ function runCsv() {
         :invoice="trendInvoice" :loading="loading" :failed="failed" :scope-text="trendCaption"
         @details="(entry) => openDetails('device', entry)" />
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 items-start gap-3 mb-4">
+      <div class="workspace-grid items-start mb-4">
         <TopShareCard :title="t('ฝ่ายที่ใช้มากที่สุด ({0})', [unitText])" :data="topDivisions" :format="formatMetric" :loading="loading && !settledStats"
           :more-label="t('เทียบทุกฝ่าย')" :fix-unassigned="{ path: '/assets', query: { missing: 'location', status: 'active' } }" @more="compareBy('division')" />
         <TopShareCard :title="t('เครื่องที่ใช้มากที่สุด ({0})', [unitText])" :data="topDevices" :format="formatMetric" :loading="loading && !settledStats"

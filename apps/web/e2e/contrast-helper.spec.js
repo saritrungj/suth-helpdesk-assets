@@ -31,6 +31,32 @@ test("unsupported gradient is reported instead of counted as measured", async ({
   expect(result.unsupported).toHaveLength(1);
 });
 
+test("a field arrow is measured over its solid fill while arbitrary select images remain unsupported", async ({ page }) => {
+  await page.setContent(`<style>
+    body { background: white }
+    select { color: black; background-color: white; padding-right: 32px }
+    .field-select { background-image: linear-gradient(45deg, transparent 50%, gray 50%), linear-gradient(135deg, gray 50%, transparent 50%); background-size: .35rem .35rem, .35rem .35rem; background-repeat: no-repeat; }
+  </style><select class="field-select" id="arrow"><option>Value</option></select>
+  <select id="image" style="background-image:linear-gradient(white,black)"><option>Value</option></select>`);
+  const results = await page.evaluate(`${CONTRAST_HELPERS} ['arrow', 'image'].map(id => contrast.measureText(document.getElementById(id)));`);
+  expect(results[0].ratio).toBe(21);
+  expect(results[1].unsupported).toBeTruthy();
+});
+
+test("scroll shadows use their darkest declared edge rather than the unshaded field", async ({ page }) => {
+  await page.setContent('<div class="scroll-hint-x" style="--scroll-hint-worst:#808080;background-image:linear-gradient(white,gray)"><span id="text" style="color:black">Value</span></div>');
+  const result = await page.evaluate(`${CONTRAST_HELPERS} contrast.measureText(document.getElementById('text'));`);
+  expect(result.background).toEqual([128, 128, 128]);
+  expect(result.ratio).toBeCloseTo(5.3172, 3);
+});
+
+test("solid primary buttons measure their current fill rather than a legacy gradient bound", async ({ page }) => {
+  await page.setContent('<button class="btn-primary" style="--brand-worst:black;background:#808080;color:white">Action</button>');
+  const result = await page.evaluate(`${CONTRAST_HELPERS} contrast.measureText(document.querySelector('button'));`);
+  expect(result.background).toEqual([128, 128, 128]);
+  expect(result.ratio).toBeCloseTo(3.9494, 3);
+});
+
 test("inactive controls and their labels are excluded, not unrelated text", async ({ page }) => {
   await page.setContent('<button disabled style="opacity:.3"><span>Disabled action</span></button><p style="color:black">Active text</p>');
   const result = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText();`);

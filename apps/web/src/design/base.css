@@ -24,8 +24,7 @@
     line-height: var(--text-base--line-height);
     background-color: var(--canvas);
     color: var(--ink-soft);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    font-synthesis: none;
     text-rendering: optimizeLegibility;
     /* เปิด contextual alternates ให้สระ/วรรณยุกต์ไทยวางตำแหน่งถูกต้อง */
     font-feature-settings: "calt" 1;
@@ -227,6 +226,14 @@
   animation: drawer-enter var(--dur-panel) ease-out;
 }
 
+@keyframes drawer-enter-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.ui-drawer[data-side="left"][data-state="open"] {
+  animation-name: drawer-enter-left;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ui-drawer[data-state="open"] { animation: none; }
+  .ui-drawer[data-state="open"], .ui-drawer[data-side="left"][data-state="open"] { animation: none; }
 }

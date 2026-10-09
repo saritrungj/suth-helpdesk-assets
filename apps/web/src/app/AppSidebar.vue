@@ -12,17 +12,18 @@ import { t } from "../lib/locale";
  * บนจอเล็กแถบนี้กลายเป็นลิ้นชักที่เลื่อนเข้ามาทับเนื้อหา และปิดเองทุกครั้งที่
  * เปลี่ยนหน้า
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-vue-next";
-import { ADMIN_GROUPS, NAV_GROUPS, findActiveGroup, isActiveNav } from "./navigation";
-import { APP_NAME, APP_NAME_SHORT, BRAND_ASSETS, ORG_NAME_SHORT } from "./brand";
+import { Info, PanelLeftClose, PanelLeftOpen } from "lucide-vue-next";
+import { ADMIN_GROUPS, NAV_GROUPS, findActiveGroup } from "./navigation";
+import { APP_NAME, APP_TAGLINE, ORG_NAME, OWNER_TEAM } from "./brand";
 import { authState } from "../store/auth";
 import { NAV_WIDTH, closeMobileNav, isNavGroupOpen, resetNavWidth, setNavWidth, toggleNavCollapsed, toggleNavGroup, uiState } from "../store/ui";
-import { UiTooltip } from "../ui";
+import { UiButton, UiDrawer, UiModal, UiTooltip } from "../ui";
+import AppNavigation from "./AppNavigation.vue";
+import AppBrand from "./AppBrand.vue";
 
 const route = useRoute();
-const isPrintEntry = (item) => item.to === "/print-transactions";
 
 // รายการที่ติด admin ในหมวดทั่วไป (เช่นนำเข้าไฟล์ในงานประจำ) ซ่อนจากบทบาทอื่น — เหมือนช่องค้นหาคำสั่ง
 // เป็นแค่ความสะดวก สิทธิ์จริงอยู่ที่ API
@@ -58,20 +59,17 @@ function toggleGroup(key) {
 // ปิดลิ้นชักทุกครั้งที่เปลี่ยนหน้า — กดเมนูแล้วลิ้นชักต้องหุบเอง
 watch(
   () => route.fullPath,
-  () => {
+  async (path, previousPath) => {
+    const navigatedFromMenu = uiState.mobileNavOpen && path.split("?")[0] !== previousPath?.split("?")[0];
     closeMobileNav();
     openActiveGroup();
+    if (navigatedFromMenu) {
+      await nextTick();
+      mobileReturnFocus.value = document.querySelector("#main-content h1");
+    }
   },
   { immediate: true }
 );
-
-/** สีประจำกลุ่มเมนู — ชื่อคลาสเต็มตัว Tailwind จึงสร้าง utility ให้ (ADR-0008: ใช้ semantic token ไม่ใช้สีดิบ) */
-const GROUP_TONE = {
-  overview: "bg-nav-overview-soft text-nav-overview-ink",
-  routine: "bg-nav-routine-soft text-nav-routine-ink",
-  reports: "bg-nav-reports-soft text-nav-reports-ink",
-  settings: "bg-nav-settings-soft text-nav-settings-ink",
-};
 
 /* ---------- ปรับความกว้างและซ่อนแถบเมนู (#204) ---------- */
 const asideEl = ref(null);
@@ -118,153 +116,46 @@ function onShortcut(event) {
     toggleNavCollapsed();
   }
 }
-onMounted(() => window.addEventListener("keydown", onShortcut));
-onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
+const isDesktop = ref(window.matchMedia("(min-width: 1024px)").matches);
+const aboutOpen = ref(false);
+const aboutReturnFocus = ref(null);
+const mobileReturnFocus = ref(null);
+function openAbout(event) {
+  aboutReturnFocus.value = event.currentTarget;
+  aboutOpen.value = true;
+}
+function focusMain() { document.querySelector("#main-content h1")?.focus({ preventScroll: true }); }
+watch(() => uiState.mobileNavOpen, open => {
+  if (open) mobileReturnFocus.value = document.querySelector("[data-mobile-nav-trigger]");
+});
+let desktopQuery;
+function updateDesktop(event) { isDesktop.value = event.matches; closeMobileNav(); }
+onMounted(() => {
+  window.addEventListener("keydown", onShortcut);
+  desktopQuery = window.matchMedia("(min-width: 1024px)");
+  desktopQuery.addEventListener("change", updateDesktop);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onShortcut);
+  desktopQuery?.removeEventListener("change", updateDesktop);
+});
 </script>
 
 <template>
-  <!-- ฉากหลังของลิ้นชักบนจอเล็ก -->
-  <Transition name="scrim">
-    <div
-      v-if="uiState.mobileNavOpen"
-      class="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px] lg:hidden"
-      @click="closeMobileNav"
-    ></div>
-  </Transition>
-
   <aside
     ref="asideEl"
-    class="fixed lg:sticky top-0 z-50 h-dvh shrink-0 flex flex-col
-           bg-chrome lg:chrome-veil border-r border-chrome-line lg:border-r-0
-           duration-200 ease-out-quart
-           lg:translate-x-0"
+    class="hidden lg:flex sticky top-0 z-40 h-dvh shrink-0 flex-col bg-transparent"
     :class="[
-      uiState.navCollapsed ? 'w-[var(--shell-sidebar-rail-width)]' : 'w-[var(--shell-sidebar-width)] lg:w-[var(--nav-width)]',
-      uiState.mobileNavOpen ? 'translate-x-0 shadow-e3' : '-translate-x-full',
-      dragging ? 'transition-none select-none' : 'transition-[width,transform]',
+      uiState.navCollapsed ? 'w-[var(--shell-sidebar-rail-width)]' : 'w-[var(--nav-width)]',
+      dragging ? 'transition-none select-none' : 'transition-[width] duration-200 ease-out-quart',
     ]"
     :style="{ '--nav-width': `${uiState.navWidth}px` }"
     :aria-label="t(&quot;เมนูหลัก&quot;)"
   >
-    <!-- ตราสัญลักษณ์ -->
-    <!-- พับแล้วจัดทุกอย่างให้อยู่แนวกลางเดียวกับไอคอนเมนู (เดิมโลโก้กับปุ่มกางเยื้องซ้าย) -->
-    <div
-      class="flex items-center gap-2 h-[var(--shell-topbar-height)] px-2.5 shrink-0"
-      :class="uiState.navCollapsed && 'lg:justify-center'"
-    >
-      <UiTooltip
-        :content="uiState.navCollapsed ? `${APP_NAME} · ${ORG_NAME_SHORT}` : ''"
-        side="right"
-      >
-        <RouterLink
-          to="/dashboard"
-          class="flex items-center gap-2 min-w-0 rounded-md p-1 -m-1 hover:bg-chrome-hover transition-colors"
-          :aria-label="uiState.navCollapsed ? `${APP_NAME} · ${ORG_NAME_SHORT}` : undefined"
-        >
-          <span
-            class="grid place-items-center shrink-0 h-9 rounded-md bg-brand-backdrop border border-line-soft overflow-hidden"
-            :class="uiState.navCollapsed ? 'w-10 px-1' : 'w-[4.5rem] px-1.5'"
-          >
-            <img
-              :src="BRAND_ASSETS.wordmark"
-              alt=""
-              class="block w-full h-auto"
-              width="568"
-              height="138"
-              decoding="async"
-            />
-          </span>
-
-          <span v-if="!uiState.navCollapsed" class="min-w-0">
-            <span class="block text-sm font-semibold text-ink leading-tight truncate">
-              {{ APP_NAME_SHORT }}
-            </span>
-            <span class="block text-2xs text-ink-mute leading-tight truncate">
-              {{ ORG_NAME_SHORT }}
-            </span>
-          </span>
-        </RouterLink>
-      </UiTooltip>
-
-      <button
-        type="button"
-        class="lg:hidden ml-auto grid place-items-center w-8 h-8 rounded-md text-ink-mute hover:bg-chrome-hover hover:text-ink transition-colors"
-        :aria-label="t(&quot;ปิดเมนู&quot;)"
-        @click="closeMobileNav"
-      >
-        <X :size="18" aria-hidden="true" />
-      </button>
-    </div>
+    <AppBrand class="h-[var(--shell-topbar-height)] px-2.5 shrink-0" :collapsed="uiState.navCollapsed" @about="openAbout" />
 
     <!-- รายการเมนู -->
-    <nav class="flex-1 overflow-y-auto overscroll-contain px-2.5 py-3 flex flex-col gap-2">
-      <section
-        v-for="(group, index) in visibleGroups"
-        :key="group.key"
-        :class="index > 0 && (uiState.navCollapsed || group.admin) ? 'border-t border-chrome-line pt-2' : ''"
-        :data-nav-group="group.key"
-      >
-        <button
-          v-if="!uiState.navCollapsed"
-          type="button"
-          class="group flex items-center w-full h-8 px-2 rounded-md text-xs font-semibold text-ink-mute
-                 hover:bg-chrome-hover hover:text-ink transition-colors"
-          :aria-expanded="Boolean(openGroups[group.key])"
-          :aria-controls="`nav-group-${group.key}`"
-          @click="toggleGroup(group.key)"
-        >
-          <span class="truncate">{{ group.label }}</span>
-          <ChevronDown
-            :size="15"
-            class="ml-auto shrink-0 transition-transform duration-150"
-            :class="openGroups[group.key] ? 'rotate-0' : '-rotate-90'"
-            aria-hidden="true"
-          />
-        </button>
-
-        <ul
-          v-show="uiState.navCollapsed || openGroups[group.key]"
-          :id="`nav-group-${group.key}`"
-          class="flex flex-col gap-0.5 list-none"
-          :class="!uiState.navCollapsed && 'mt-0.5'"
-        >
-          <li v-for="item in group.items" :key="item.label">
-            <UiTooltip :content="uiState.navCollapsed ? item.label : ''" side="right">
-              <RouterLink
-                :to="item.to"
-                class="group relative flex items-center gap-2.5 rounded-lg px-1.5 h-9 text-sm transition-colors"
-                :class="[
-                  uiState.navCollapsed ? 'justify-center' : '',
-                  isPrintEntry(item)
-                    ? (isActiveNav(item, route)
-                      ? 'bg-brand text-brand-on font-semibold'
-                      : 'bg-brand-soft text-brand-ink font-medium hover:bg-brand-soft-hover')
-                    : (isActiveNav(item, route)
-                      ? 'bg-surface text-ink font-semibold shadow-[0_0_0_1px_var(--chrome-line)]'
-                      : 'text-ink-soft hover:bg-chrome-hover hover:text-ink'),
-                ]"
-                :aria-current="isActiveNav(item, route) ? 'page' : undefined"
-                :aria-label="uiState.navCollapsed ? item.label : undefined"
-              >
-                <!-- สถานะ active มีทั้งรูปทรง, aria-current และสี -->
-                <span
-                  v-if="isActiveNav(item, route)"
-                  class="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
-                  :class="isPrintEntry(item) ? 'bg-brand-on' : 'bg-brand'"
-                  aria-hidden="true"
-                ></span>
-
-                <!-- ไอคอนบนพื้นสีของกลุ่ม (#196) — พับเมนูแล้วยังบอกได้ว่าอยู่กลุ่มไหน -->
-                <span class="grid place-items-center shrink-0 w-7 h-7 rounded-md" :class="isPrintEntry(item) ? 'bg-brand-soft text-brand-ink' : (GROUP_TONE[group.key] ?? GROUP_TONE.overview)">
-                  <component :is="item.icon" :size="16" aria-hidden="true" />
-                </span>
-                <span v-if="!uiState.navCollapsed" class="truncate">{{ item.label }}</span>
-              </RouterLink>
-            </UiTooltip>
-          </li>
-        </ul>
-      </section>
-    </nav>
+    <AppNavigation :groups="visibleGroups" :open-groups="openGroups" :collapsed="uiState.navCollapsed" id-prefix="desktop" @toggle-group="toggleGroup" />
 
     <!-- ปุ่มพับ — เฉพาะจอใหญ่ที่แถบเมนูอยู่ประจำที่ -->
     <div class="hidden lg:block shrink-0 border-t border-chrome-line px-2.5 py-2">
@@ -274,7 +165,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
       >
         <button
           type="button"
-          class="flex items-center gap-2.5 w-full h-9 rounded-lg text-sm text-ink-mute
+          class="flex items-center gap-2.5 w-full h-9 rounded-md text-sm text-ink-mute
                  hover:bg-chrome-hover hover:text-ink transition-colors"
           :class="uiState.navCollapsed ? 'justify-center' : 'px-2.5'"
           :aria-pressed="uiState.navCollapsed"
@@ -291,6 +182,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
         </button>
       </UiTooltip>
     </div>
+    <UiButton v-if="uiState.navCollapsed" variant="ghost" icon-only :label="t('ข้อมูลระบบ')" class="self-center mb-2" @click="openAbout"><Info :size="18" aria-hidden="true" /></UiButton>
     <!-- ลากเพื่อปรับความกว้าง (#204) — ลากแคบสุดพับเหลือไอคอน ดับเบิลคลิกคืนค่าเริ่มต้น ลูกศรซ้าย/ขวาปรับทีละ 16px -->
     <div
       class="hidden lg:block absolute top-0 right-0 h-full w-1.5 -mr-0.5 cursor-col-resize z-10
@@ -309,15 +201,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
       @keydown="onResizeKey"
     ></div>
   </aside>
+  <UiDrawer v-if="!isDesktop" :open="uiState.mobileNavOpen" :title="t('เมนูหลัก')" size="sm" side="left" :return-focus="mobileReturnFocus" @update:open="closeMobileNav" @focus-fallback="focusMain">
+    <AppBrand class="mb-3" @about="openAbout" />
+    <AppNavigation :groups="visibleGroups" :open-groups="openGroups" id-prefix="mobile" @toggle-group="toggleGroup" />
+  </UiDrawer>
+  <UiModal v-model:open="aboutOpen" :title="APP_NAME" :description="APP_TAGLINE" size="sm" :return-focus="aboutReturnFocus">
+    <p class="text-sm text-ink">{{ ORG_NAME }}</p>
+    <p class="mt-3 text-sm text-ink-mute">{{ t('ดูแลโดย {0}', [OWNER_TEAM]) }}</p>
+  </UiModal>
 </template>
-
-<style scoped>
-.scrim-enter-active,
-.scrim-leave-active {
-  transition: opacity 0.2s var(--ease-out-quart);
-}
-.scrim-enter-from,
-.scrim-leave-to {
-  opacity: 0;
-}
-</style>

@@ -45,10 +45,19 @@ export function createContrastTools() {
       // วัดกับจุดนั้นแทนการยอมแพ้ ผ่านที่จุดแย่สุด = ผ่านทุกจุดของพื้น
       // ปุ่มหลักไล่สี (.btn-primary, #213) ประกาศปลายที่คอนทราสต์ต่ำสุดไว้ใน --brand-worst แบบเดียวกัน
       const worst = node.classList?.contains("canvas-wash") ? s.getPropertyValue("--canvas-wash-worst").trim()
-        : node.classList?.contains("btn-primary") ? s.getPropertyValue("--brand-worst").trim() : "";
+        : node.classList?.contains("btn-primary") && s.backgroundImage !== "none" ? s.getPropertyValue("--brand-worst").trim()
+        : node.classList?.contains("scroll-hint-x") ? s.getPropertyValue("--scroll-hint-worst").trim() : "";
       // กระจกฝ้า (.chrome-glass, ปุ่มรอง .btn-glass) มีพื้นกึ่งทึบของตัวเอง blur แค่ทำให้พื้นข้างหลังนุ่มลง ไม่ทำให้เข้มขึ้น
       const glass = node.classList?.contains("chrome-glass") || node.classList?.contains("btn-glass");
-      if ((s.backgroundImage !== "none" && !worst) || s.filter !== "none" ||
+      // UiSelect's two 0.35rem arrow triangles live in its reserved right padding,
+      // outside the value text. They do not change the solid field background.
+      const selectArrow = node.matches("select.field-select") &&
+        s.backgroundSize === "5.6px 5.6px, 5.6px 5.6px" &&
+        s.backgroundRepeat.split(",").every(value => value.trim() === "no-repeat") &&
+        parseFloat(s.paddingRight) >= 32 &&
+        /^linear-gradient\(45deg,/.test(s.backgroundImage) &&
+        s.backgroundImage.includes("linear-gradient(135deg,");
+      if ((s.backgroundImage !== "none" && !worst && !selectArrow) || s.filter !== "none" ||
           s.mixBlendMode !== "normal" || (s.backdropFilter !== "none" && !glass)) {
         return { unsupported: "image, filter or blend requires a separate visual measurement" };
       }

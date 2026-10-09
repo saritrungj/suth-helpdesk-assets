@@ -132,7 +132,7 @@ test("โปรแกรมจัดการรหัสผ่านต้อ�
 test("id ต้องคงที่ ไม่ใช่เลขที่เปลี่ยนทุกครั้งที่โหลด", async ({ page }) => {
   // id ที่มาจากตัวนับตอนรัน (เช่น f-v-0) เปลี่ยนได้เมื่อลำดับการสร้าง component
   // เปลี่ยน ทำให้โปรแกรมจัดการรหัสผ่านเติมรหัสให้ได้บ้างไม่ได้บ้าง
-  const ids = await page.locator("form input").evaluateAll((els) => els.map((el) => el.id));
+  const ids = await page.locator("form input:not([type=checkbox])").evaluateAll((els) => els.map((el) => el.id));
   expect(ids).toEqual(["login-username", "current-password"]);
 
   for (const id of ids) {

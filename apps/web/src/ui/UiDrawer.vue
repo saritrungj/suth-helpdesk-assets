@@ -14,6 +14,7 @@ const props = defineProps({
   title: { type: String, required: true },
   description: { type: String, default: "" },
   size: { type: String, default: "md" },
+  side: { type: String, default: "right", validator: value => ["left", "right"].includes(value) },
   pending: { type: Boolean, default: false },
   returnFocus: { type: Object, default: null },
 });
@@ -43,8 +44,9 @@ function restoreFocus(event) {
       <!-- ม่านจางกว่าของ dialog — NN/g: แผงแก้ไขแถวไม่ควรบังข้อมูลที่ใช้อ้างอิง (รอบที่ 3 ของ #51) -->
       <DialogOverlay class="fixed inset-0 z-[100] bg-scrim-panel data-[state=open]:animate-fade-in" />
       <DialogContent
-        class="ui-drawer fixed inset-y-0 right-0 z-[101] flex flex-col max-w-full bg-sheet-body border-l border-line shadow-pop"
-        :class="size === 'lg' ? 'w-[640px]' : 'w-[560px]'"
+        class="ui-drawer fixed inset-y-0 z-[101] flex flex-col max-w-full bg-sheet-body border-line shadow-pop"
+        :class="[size === 'sm' ? 'w-[320px]' : size === 'lg' ? 'w-[640px]' : 'w-[560px]', side === 'left' ? 'left-0 border-r' : 'right-0 border-l']"
+        :data-side="side"
         :aria-busy="pending || undefined"
         @escape-key-down="requestClose"
         @pointer-down-outside="requestClose"

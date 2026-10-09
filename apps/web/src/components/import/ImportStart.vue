@@ -98,7 +98,7 @@ function headline(row) {
     <p v-if="uploading" class="text-sm text-ink-soft" role="status">{{ autoCommit ? t("กำลังอัปโหลด ตรวจ และเตรียมข้อมูล… ไฟล์ใหญ่อาจใช้เวลาครึ่งนาที") : t("กำลังอัปโหลดและตรวจไฟล์…") }}</p>
     <UiAlert v-if="uploadError" tone="danger">{{ uploadError }}</UiAlert>
 
-    <section class="rounded-lg border border-line-soft p-3" data-testid="import-sessions">
+    <section class="min-w-0 rounded-lg border border-line-soft p-3" data-testid="import-sessions">
       <div class="flex flex-wrap items-center gap-2 mb-2">
         <p class="text-sm font-semibold text-ink mr-auto">
           {{ showClosed ? t("งานนำเข้าทั้งหมด") : t("งานนำเข้าที่ยังไม่เสร็จ") }}
@@ -111,7 +111,7 @@ function headline(row) {
         <template #actions><UiButton size="sm" variant="secondary" @click="sessions.refetch()">{{ t("ลองใหม่") }}</UiButton></template>
       </UiAlert>
       <p v-else-if="!rows.length" class="text-sm text-ink-mute">{{ t("ไม่มีงานที่ค้างอยู่") }}</p>
-      <div v-else class="overflow-x-auto">
+      <div v-else class="relative overflow-x-auto">
         <table class="w-full text-sm [&_th]:pr-4 [&_td]:pr-4">
           <thead>
             <tr class="border-b border-line-soft text-left text-ink-mute">
