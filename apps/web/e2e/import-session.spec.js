@@ -146,6 +146,40 @@ test("ไฟล์รายงานมิเตอร์ → สร้างส
   await expect(page.getByText(file.contractNo)).toBeVisible();
 });
 
+test("นำเข้าไฟล์เดิมซ้ำ — ไม่มียอดใหม่ ไม่เขียนทับ บันทึกไม่ได้ และค่าพิมพ์ของสัญญาเท่าเดิม (#309)", async ({ page }) => {
+  test.skip(process.env.SUTH_E2E_DISPOSABLE_DB !== "1", "ต่อจากเทสก่อนหน้าที่สร้างสัญญาและเครื่องถาวร — รันเฉพาะฐานชั่วคราวของ verify:db");
+  test.setTimeout(180000);
+  const file = syntheticFile(`A${run}`);
+  test.skip(!(await contractInSystem(file.contractNo)), "ต้องมีผลของเทสนำเข้าครั้งแรกในฐานก่อน");
+
+  const totalOf = async () => {
+    const years = await apiFetch("/fiscal-years");
+    const fy = (Array.isArray(years) ? years : years.data ?? []).find((y) => y.start_month <= file.months[0] && file.months[0] <= y.end_month);
+    const expense = await apiFetch(`/expense/${fy.id}?month=${file.months.join(",")}`);
+    return Number(expense.contracts.find((c) => c.contract_no === file.contractNo).total_cost);
+  };
+  const before = await totalOf();
+
+  const id = await upload(page, "meter-report.xlsx", file.buffer);
+
+  try {
+    // ทุกยอดในไฟล์มีอยู่ในระบบแล้วและเท่าเดิม — ไม่มีรายการใหม่หรือเขียนทับ
+    const rows = file.months.length * 4;
+    await expect(item(page, `ยอดมิเตอร์: ใหม่ 0 · เขียนทับ 0 · ไม่เปลี่ยน ${rows}`)).toBeVisible({ timeout: 30000 });
+    await expect(item(page, "ไม่มีอะไรใหม่ในไฟล์นี้")).toHaveAttribute("data-state", "blocking");
+    await expect(page.getByTestId("import-commit")).toBeDisabled();
+
+    // ด่านอยู่ที่ API ด้วย ไม่ใช่แค่ปุ่ม — งานนี้บันทึกไม่ได้
+    const detail = await apiFetch(`/import-sessions/${id}`);
+    expect(detail.can_commit).toBe(false);
+
+    expect(await totalOf()).toBe(before);
+  } finally {
+    // งานที่บันทึกไม่ได้ค้างเป็น "ต้องทำต่อ" — ปิดไว้ ไม่งั้นตารางงานค้างของหน้านำเข้าโผล่ในเทสอื่นของชุดนี้
+    await apiFetch(`/import-sessions/${id}/abandon`, { method: "POST", body: JSON.stringify({ reason: "เทสนำเข้าซ้ำ #309" }) });
+  }
+});
+
 test("ออกจากหน้ากลางงานแล้วกลับมา — ไฟล์ ผลตรวจ และสิ่งที่เลือกไว้ยังอยู่ ทั้งกลับจากรายการงานค้างและรีเฟรช", async ({ page }) => {
   const file = syntheticFile(`B${run}`);
   const id = await upload(page, "meter-report-b.xlsx", file.buffer);
