@@ -53,7 +53,7 @@ function createAllUnchosen(kind) {
           <UiInput
             v-if="choices.names[kind][entry.name] === 'create'"
             v-model="choices.renames[kind][entry.name]"
-            class="sm:col-start-3"
+            class="workspace-decision-rename"
             :placeholder="entry.name"
             :aria-label="t('ชื่อที่จะใช้ในระบบสำหรับ {0}', [entry.name])"
             :disabled="!editable"

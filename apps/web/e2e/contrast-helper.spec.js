@@ -35,12 +35,16 @@ test("a field arrow is measured over its solid fill while arbitrary select image
   await page.setContent(`<style>
     body { background: white }
     select { color: black; background-color: white; padding-right: 32px }
-    .field-select { background-image: linear-gradient(45deg, transparent 50%, gray 50%), linear-gradient(135deg, gray 50%, transparent 50%); background-size: .35rem .35rem, .35rem .35rem; background-repeat: no-repeat; }
+    .field-select { background-image: linear-gradient(45deg, transparent 50%, gray 50%), linear-gradient(135deg, gray 50%, transparent 50%); background-position: calc(100% - 1.05rem) center, calc(100% - .7rem) center; background-size: .35rem .35rem, .35rem .35rem; background-repeat: no-repeat; }
   </style><select class="field-select" id="arrow"><option>Value</option></select>
-  <select id="image" style="background-image:linear-gradient(white,black)"><option>Value</option></select>`);
-  const results = await page.evaluate(`${CONTRAST_HELPERS} ['arrow', 'image'].map(id => contrast.measureText(document.getElementById(id)));`);
+  <select id="image" style="background-image:linear-gradient(white,black)"><option>Value</option></select>
+  <select class="field-select" id="over-text" style="background-position: left center, left center"><option>Value</option></select>
+  <select class="field-select" id="wrong-stops" style="background-image:linear-gradient(45deg, white, black),linear-gradient(135deg, black, white)"><option>Value</option></select>`);
+  const results = await page.evaluate(`${CONTRAST_HELPERS} ['arrow', 'image', 'over-text', 'wrong-stops'].map(id => contrast.measureText(document.getElementById(id)));`);
   expect(results[0].ratio).toBe(21);
   expect(results[1].unsupported).toBeTruthy();
+  expect(results[2].unsupported).toBeTruthy();
+  expect(results[3].unsupported).toBeTruthy();
 });
 
 test("scroll shadows use their darkest declared edge rather than the unshaded field", async ({ page }) => {

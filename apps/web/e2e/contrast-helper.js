@@ -53,10 +53,11 @@ export function createContrastTools() {
       // outside the value text. They do not change the solid field background.
       const selectArrow = node.matches("select.field-select") &&
         s.backgroundSize === "5.6px 5.6px, 5.6px 5.6px" &&
+        s.backgroundPosition === "calc(100% - 16.8px) 50%, calc(100% - 11.2px) 50%" &&
+        s.backgroundOrigin.split(",").every(value => value.trim() === "padding-box") &&
         s.backgroundRepeat.split(",").every(value => value.trim() === "no-repeat") &&
         parseFloat(s.paddingRight) >= 32 &&
-        /^linear-gradient\(45deg,/.test(s.backgroundImage) &&
-        s.backgroundImage.includes("linear-gradient(135deg,");
+        /^linear-gradient\(45deg, rgba\(0, 0, 0, 0\) 50%, (.+) 50%\), linear-gradient\(135deg, \1 50%, rgba\(0, 0, 0, 0\) 50%\)$/.test(s.backgroundImage);
       if ((s.backgroundImage !== "none" && !worst && !selectArrow) || s.filter !== "none" ||
           s.mixBlendMode !== "normal" || (s.backdropFilter !== "none" && !glass)) {
         return { unsupported: "image, filter or blend requires a separate visual measurement" };

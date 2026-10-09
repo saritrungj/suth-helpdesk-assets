@@ -2,8 +2,37 @@ import { expect, test } from "@playwright/test";
 import { assetFixture } from "./asset-fixture.js";
 import { comparisonFixture } from "./comparison-fixture.js";
 import { appDesignFixture } from "./app-design-fixture.js";
+import { importReviewFixture } from "./import-review-fixture.js";
 import { PAGES } from "./pages.js";
 import { CONTRAST_HELPERS } from "./contrast-helper.js";
+
+test("import create-name fields follow the workspace grid on tablet and desktop", async ({ page }) => {
+  for (const mode of ["light", "dark"]) {
+    await page.addInitScript(value => localStorage.setItem("suth-ui-mode", value), mode);
+    await importReviewFixture(page);
+    await page.goto("/admin/import/41");
+    const rename = page.getByRole("textbox", { name: "ชื่อที่จะใช้ในระบบสำหรับ Review building" });
+    await expect(rename).toBeVisible();
+    for (const width of [720, 980, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const layout = await rename.evaluate(el => {
+        const grid = el.closest(".workspace-decision-grid");
+        const box = el.getBoundingClientRect();
+        const select = grid.querySelector("select").getBoundingClientRect();
+        return {
+          workspace: document.querySelector(".app-workspace").getBoundingClientRect().width,
+          columns: getComputedStyle(grid).gridTemplateColumns.split(" ").length,
+          sameColumn: Math.abs(box.left - select.left) < 1 && Math.abs(box.width - select.width) < 1,
+          contained: box.right <= grid.getBoundingClientRect().right + 1,
+        };
+      });
+      expect(layout.columns).toBe(layout.workspace <= 760 ? 1 : 3);
+      expect(layout.sameColumn).toBe(true);
+      expect(layout.contained).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  }
+});
 
 test("OKLCH tokens preserve approved colors and the ocean scale is monotonic", async ({ page }) => {
   await appDesignFixture(page, { url: "/dashboard" });
