@@ -108,3 +108,34 @@ test("งานถูกแก้จากหน้าอื่น — กดย
   await expect(page.getByRole("combobox", { name: "หมวดมิเตอร์ของรุ่น ES5112" })).toHaveValue("3");
   expect(server.decisions.models["oki|es5112"].meter_category_id).toBe(3);
 });
+
+// #318 — ชุด WCAG ไม่เคยเห็นหน้านี้ตอนมีงานค้าง ตารางเจ็ดคอลัมน์จึงดันทั้งหน้าให้เลื่อนซ้ายขวาที่ 320px
+test("รายการงานที่ยังไม่เสร็จอ่านได้ครบที่จอ 320px โดยหน้าไม่เลื่อนซ้ายขวา (1.4.10)", async ({ page }, testInfo) => {
+  await assetFixture(page, "admin");
+  await importSessionFixture(page);
+  await openUploadedSession(page);
+
+  await page.goto("/admin/import");
+  const sessions = page.getByTestId("import-sessions");
+  await expect(sessions.getByTestId("import-session-row")).toHaveCount(1);
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.waitForTimeout(500);
+  await sessions.scrollIntoViewIfNeeded();
+  await testInfo.attach("import-sessions-320", { body: await page.screenshot(), contentType: "image/png" });
+
+  const size = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(size.scrollWidth, "หน้าต้องไม่เลื่อนซ้ายขวา").toBeLessThanOrEqual(size.clientWidth + 1);
+
+  // ทุกช่องของงานค้างต้องอยู่ในจอ ไม่ใช่ซ่อนอยู่ทางขวา
+  const row = sessions.getByTestId("import-session-card");
+  await expect(row).toHaveCount(1);
+  await expect(sessions.getByRole("table")).toBeHidden();
+  for (const text of ["meter-report.xlsx", "admin", "ยังต้องทำอีก 2 ข้อ"]) {
+    await expect(row.getByText(text).first()).toBeInViewport();
+  }
+  await expect(row.getByRole("link", { name: "ทำต่อ" })).toBeInViewport();
+});

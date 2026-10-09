@@ -98,7 +98,7 @@ function headline(row) {
     <p v-if="uploading" class="text-sm text-ink-soft" role="status">{{ autoCommit ? t("กำลังอัปโหลด ตรวจ และเตรียมข้อมูล… ไฟล์ใหญ่อาจใช้เวลาครึ่งนาที") : t("กำลังอัปโหลดและตรวจไฟล์…") }}</p>
     <UiAlert v-if="uploadError" tone="danger">{{ uploadError }}</UiAlert>
 
-    <section class="rounded-lg border border-line-soft p-3" data-testid="import-sessions">
+    <section class="min-w-0 rounded-lg border border-line-soft p-3" data-testid="import-sessions">
       <div class="flex flex-wrap items-center gap-2 mb-2">
         <p class="text-sm font-semibold text-ink mr-auto">
           {{ showClosed ? t("งานนำเข้าทั้งหมด") : t("งานนำเข้าที่ยังไม่เสร็จ") }}
@@ -111,7 +111,8 @@ function headline(row) {
         <template #actions><UiButton size="sm" variant="secondary" @click="sessions.refetch()">{{ t("ลองใหม่") }}</UiButton></template>
       </UiAlert>
       <p v-else-if="!rows.length" class="text-sm text-ink-mute">{{ t("ไม่มีงานที่ค้างอยู่") }}</p>
-      <div v-else class="overflow-x-auto">
+      <!-- จอแคบกว่า sm แสดงเป็นการ์ดแบบเดียวกับ UiDataTable — เจ็ดคอลัมน์ล้นจอ 320px (#318) -->
+      <div v-else class="hidden sm:block overflow-x-auto">
         <table class="w-full text-sm [&_th]:pr-4 [&_td]:pr-4">
           <thead>
             <tr class="border-b border-line-soft text-left text-ink-mute">
@@ -139,6 +140,32 @@ function headline(row) {
           </tbody>
         </table>
       </div>
+      <ul v-if="!sessions.isPending.value && !sessions.isError.value && rows.length" class="sm:hidden flex flex-col gap-2 list-none">
+        <li v-for="row in rows" :key="row.id" class="card p-3" data-testid="import-session-card">
+          <p class="text-sm font-medium text-ink break-all">{{ row.file_name }}</p>
+          <dl class="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-3 gap-y-1.5 mt-2">
+            <dt class="text-xs text-ink-mute">{{ t("สถานะ") }}</dt>
+            <dd class="text-sm text-right min-w-0"><UiBadge :tone="statusOf(row.status).tone" dot>{{ statusOf(row.status).label }}</UiBadge></dd>
+            <dt class="text-xs text-ink-mute">{{ t("เจ้าของ") }}</dt>
+            <dd class="text-sm text-ink-soft text-right min-w-0 break-words">{{ row.owner.username }}</dd>
+            <dt class="text-xs text-ink-mute">{{ t("สร้างเมื่อ") }}</dt>
+            <dd class="numeral text-sm text-ink-soft text-right min-w-0">{{ formatDateTime(row.created_at) }}</dd>
+            <dt class="text-xs text-ink-mute">{{ t("ใช้ล่าสุด") }}</dt>
+            <dd class="numeral text-sm text-ink-soft text-right min-w-0">
+              {{ formatDateTime(row.last_activity_at) }}
+              <span v-if="row.last_activity_by" class="block text-xs text-ink-mute">{{ row.last_activity_by.username }}</span>
+            </dd>
+            <dt class="text-xs text-ink-mute">{{ t("สรุป") }}</dt>
+            <dd class="text-sm text-ink-soft text-right min-w-0 break-words">{{ headline(row) }}</dd>
+          </dl>
+          <div class="flex justify-end mt-3 pt-3 border-t border-line-soft">
+            <UiButton size="sm" variant="secondary" :to="`/admin/import/${row.id}`">
+              <template #icon><FolderOpen :size="14" /></template>
+              {{ ["draft", "ready", "failed"].includes(row.status) ? t("ทำต่อ") : t("ดู") }}
+            </UiButton>
+          </div>
+        </li>
+      </ul>
     </section>
   </div>
 </template>
