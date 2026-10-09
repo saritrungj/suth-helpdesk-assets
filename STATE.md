@@ -28,4 +28,8 @@ Gradient RGB bound [211,227,204] และ stacked saturation ≤1.56 bound [191
 
 ## ขั้นตอนต่อไป
 
+Frozen review รอบ 1 (eff6c17) พบ SHOULD-FIX ตาม ADR-0008: แทนค่า hex/RGB ของสามสีด้วย OKLCH primitives และ semantic refs โดยคง rendered sRGB เดิม Security ไม่มี finding; Spec ให้เปิดเผยข้อจำกัด dark content ใต้กระจกเป็น manual pre-merge gate ต้องตรวจและรีวิว candidate หลังแก้รอบ 2 ก่อน push
+
 ตรึง complete committed candidate ตรวจ Standards/Spec/Security แบบอ่านอย่างเดียว (WIP review ไม่นับเป็น approval) ผ่าน identity gate และ full pre-push verify แล้ว push SHA เดียวกับที่ตรวจ เปิด PR พร้อมหลักฐาน/ข้อจำกัด หยุดก่อน merge ไม่มีอำนาจ deploy หรือลบ branch/worktree ในขั้นตอนนี้
+
+หลังแก้ OKLCH: build ผ่าน, built focused 14/14 ผ่าน ไม่มี skip, native gradient/nested glass bounds ผ่าน, dark/Login controlled pixel ทั้งห้าตัวอย่างตรง baseline ภาพ implementation 6 ภาพถ่ายใหม่จาก build ปัจจุบัน (289-oklch-captures.log) การ interpolate gradient กำหนด in srgb เพื่อคงพื้นที่สีของแบบที่เลือก ตรวจ endpoints แบบ opaque เพื่อไม่ปน quantization ของ premultiplied alpha และตรวจ alpha .85/.8 แยกตรงค่าเดิม

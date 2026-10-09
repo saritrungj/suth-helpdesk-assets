@@ -19,9 +19,14 @@ test("approved cream/peach/mint canvas includes a conservative glass contrast bo
     return { canvas: s.backgroundColor, wash: s.backgroundImage,
       bound: s.getPropertyValue("--canvas-wash-glass-worst").trim() };
   });
-  expect(styles.canvas).toBe("rgb(255, 250, 245)");
-  expect(styles.wash).toContain("255, 227, 204");
-  expect(styles.wash).toContain("211, 239, 238");
+  expect(await renderedColor(page, styles.canvas)).toEqual([255, 250, 245, 1]);
+  const endpoints = styles.wash.match(/oklch\([^)]+\)/g);
+  expect(endpoints).toHaveLength(2);
+  // Read the opaque endpoint to avoid 8-bit premultiplied-alpha quantization.
+  expect(await renderedColor(page, endpoints[0].replace(/\s*\/[^)]+/, ""))).toEqual([255, 227, 204, 1]);
+  expect(await renderedColor(page, endpoints[1].replace(/\s*\/[^)]+/, ""))).toEqual([211, 239, 238, 1]);
+  expect(endpoints[0]).toMatch(/\/\s*0\.85\)/);
+  expect(endpoints[1]).toMatch(/\/\s*0\.8\)/);
   expect(await renderedColor(page, styles.bound)).toEqual([191, 222, 177, 1]);
   const report = await page.evaluate(`${CONTRAST_HELPERS} contrast.auditText();`);
   expect(report.measured).toBeGreaterThan(0);

@@ -37,6 +37,10 @@
    ค่าเหล่านี้เหมือนกันทั้งสองโหมด ตัวที่สลับตามโหมดคือชั้น semantic ด้านล่าง
    --------------------------------------------------------------------------- */
 :root {
+  /* #289 approved sRGB endpoints, represented in OKLCH per ADR-0008. */
+  --cream-50: oklch(0.9875682699 0.0085204148 67.7268501307);
+  --peach-100: oklch(0.9327948336 0.0434492341 61.6607238182);
+  --mint-100: oklch(0.9315433438 0.0293492179 194.0331876730);
   /* Neutral ink and indigo for analytical workspaces. */
   --slate-50: oklch(0.985 0.002 270);
   --slate-100: oklch(0.965 0.004 270);
@@ -398,10 +402,10 @@
    ผ่าน saturation matrix แล้วปัดลง — สูตรใน docs/explanation/design-system.md */
 @media screen and (forced-colors: none) {
   :root[data-mode="light"]:not(:has(.auth-stage)) {
-    --canvas: #FFFAF5;
+    --canvas: var(--cream-50);
     --canvas-wash:
-      radial-gradient(ellipse 70% 85% at 0% 0%, rgb(255 227 204 / .85), transparent 72%),
-      radial-gradient(ellipse 70% 85% at 100% 100%, rgb(211 239 238 / .8), transparent 72%);
+      radial-gradient(ellipse 70% 85% at 0% 0% in srgb, oklch(from var(--peach-100) l c h / .85), transparent 72%),
+      radial-gradient(ellipse 70% 85% at 100% 100% in srgb, oklch(from var(--mint-100) l c h / .8), transparent 72%);
     /* ขอบล่างราย channel ของสามสี แม้ gradient ซ้อนกัน */
     --canvas-wash-worst: rgb(211 227 204);
     --canvas-wash-glass-worst: rgb(191 222 177);
