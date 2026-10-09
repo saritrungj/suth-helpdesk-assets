@@ -41,12 +41,90 @@ Middleware ฝั่ง API เป็นขอบเขตความปลอ�
 
 กฎหัก 2% และการปัดเงินอยู่ใน [ADR-0017](../decisions/0017-two-percent-page-deduction.md) และ [ADR-0022](../decisions/0022-round-at-invoice-line-and-allocate.md) คำศัพท์อยู่ใน [CONTEXT.md](../../CONTEXT.md)
 
+```mermaid
+flowchart TD
+  subgraph count["① นับหน้า"]
+    reading(["เลขมิเตอร์ต้นงวด<br/>และสิ้นงวด"])
+    pages["จำนวนพิมพ์<br/>จำนวนเต็ม"]
+    net["จำนวนพิมพ์หลังหัก 2%<br/>มีทศนิยมได้ ไม่ปัด"]
+    reading -->|"สิ้นงวด − ต้นงวด<br/>หรือกรอกจำนวนเอง"| pages
+    pages -->|"× 0.98"| net
+  end
+
+  subgraph pick["② เลือกราคา"]
+    price{"ช่วงการคิดเงิน<br/>ของเครื่องในงวดนี้<br/>ให้ราคาไหน"}
+    special["ราคาพิเศษเฉพาะเครื่อง<br/>เฉพาะมิเตอร์ขาวดำ"]
+    line["รายการราคาของสัญญา<br/>ตามหมวดมิเตอร์<br/>เมื่องวดอยู่ในอายุสัญญา"]
+    reject["ปฏิเสธตอนบันทึก<br/>หรือนำเข้า"]
+    price -->|"มีราคาพิเศษ<br/>ในช่วงนั้น"| special
+    price -->|"ไม่มี"| line
+    price -->|"หาราคาไม่ได้"| reject
+  end
+
+  subgraph bill["③ คิดเงิน"]
+    group["รวมจำนวนพิมพ์หลังหัก 2%<br/>ของมิเตอร์ที่สัญญา<br/>หมวดมิเตอร์ ราคา<br/>และงวดเดียวกัน"]
+    invoice["ยอดตามใบแจ้งหนี้<br/>ปัดครึ่งขึ้นเป็นสตางค์<br/>ปัดครั้งที่ 1"]
+    group -->|"× ราคาต่อหน้า"| invoice
+  end
+
+  subgraph split["④ แบ่งกลับ"]
+    cost["ค่าพิมพ์<br/>ของแต่ละมิเตอร์"]
+    breakdown(["ยอดของเครื่อง แผนก<br/>อาคาร หรือเดือน"])
+    cost -->|"รวม"| breakdown
+  end
+
+  subgraph charge["⑤ เรียกเก็บ"]
+    contract["ยอดตามใบแจ้งหนี้<br/>ทุกรายการราคา<br/>บวกค่าเช่าคงที่"]
+    total(["ยอดตามใบแจ้งหนี้รวม VAT<br/>ปัด VAT ครั้งเดียว<br/>ปัดครั้งที่ 2"])
+    contract -->|"บวก VAT"| total
+  end
+
+  net --> price
+  special --> group
+  line --> group
+  invoice -->|"ตัดลงเป็นสตางค์<br/>แล้วแจกเศษให้<br/>ส่วนที่เศษมากสุด"| cost
+  invoice --> contract
+
+  classDef value fill:#ffffff,stroke:#8c959f,color:#1f2328
+  classDef choice fill:#ddf4ff,stroke:#0969da,color:#1f2328
+  classDef rounding fill:#fff8c5,stroke:#9a6700,stroke-width:2px,color:#1f2328
+  classDef stop fill:#ffebe9,stroke:#cf222e,color:#1f2328
+  class reading,pages,net,special,line,group,cost,breakdown,contract value
+  class price choice
+  class invoice,total rounding
+  class reject stop
+  classDef stage fill:none,stroke:#8c959f,stroke-dasharray:4 3
+  class count,pick,bill,split,charge stage
+```
+
+กรอบเหลืองคือจุดที่เงินถูกปัด กรอบแดงคือยอดที่ระบบไม่รับ
+
+| ขั้น | คิดต่อ | กฎอยู่ที่ |
+|---|---|---|
+| ① นับหน้า | มิเตอร์ต่องวด | [ADR-0017](../decisions/0017-two-percent-page-deduction.md), [ADR-0023](../decisions/0023-contract-term-price-lines-and-meters.md) |
+| ② เลือกราคา | มิเตอร์ต่องวด | [ADR-0019](../decisions/0019-effective-pricing-history.md), [ADR-0021](../decisions/0021-contract-price-applies-on-save.md) |
+| ③ คิดเงิน | สัญญา หมวดมิเตอร์ และราคาเดียวกัน ต่องวด | [ADR-0022](../decisions/0022-round-at-invoice-line-and-allocate.md) |
+| ④ แบ่งกลับ | มิเตอร์ต่องวด แล้วรวมตามมุมที่รายงานต้องการ | [ADR-0022](../decisions/0022-round-at-invoice-line-and-allocate.md) |
+| ⑤ เรียกเก็บ | สัญญาต่องวด | [ADR-0023](../decisions/0023-contract-term-price-lines-and-meters.md) |
+
+เงินถูกปัดสองจุดเท่านั้น คือที่ยอดตามใบแจ้งหนี้ของรายการราคา และที่ VAT ของสัญญา ตัวอย่างรายการราคา 0.365 บาทต่อหน้า มีสามมิเตอร์ในงวดเดียวกัน:
+
+| มิเตอร์ | จำนวนพิมพ์ | หลังหัก 2% | ส่วนก่อนปัด (บาท) | ตัดลง | แจกเศษ | ค่าพิมพ์ |
+|---|---:|---:|---:|---:|---:|---:|
+| ก | 101 | 98.98 | 36.1277 | 36.12 | +0.01 | 36.13 |
+| ข | 103 | 100.94 | 36.8431 | 36.84 | — | 36.84 |
+| ค | 37 | 36.26 | 13.2349 | 13.23 | +0.01 | 13.24 |
+| รวม | 241 | 236.18 | 86.2057 | 86.19 | +0.02 | **86.21** |
+
+ยอดตามใบแจ้งหนี้คือ 236.18 × 0.365 = 86.2057 ปัดเป็น 86.21 บาท ถ้าปัดทีละมิเตอร์แล้วบวกจะได้ 86.20 ซึ่งไม่ตรงใบแจ้งหนี้ เศษสองสตางค์จึงแจกให้มิเตอร์ ก และ ค ที่มีเศษมากที่สุด
+
 - `(meter_id, month)` ต้องไม่ซ้ำ เครื่องหนึ่งมีหลายมิเตอร์ได้ และการบันทึกเดือนเดิมคือการ update ยอดเดิม
-- จำนวนหน้าสุทธิเท่ากับ `pages × 0.98` (หัก 2% ตามกฎธุรกิจ)
+- จำนวนพิมพ์หลังหัก 2% เท่ากับจำนวนพิมพ์ × 0.98 (`pages × 0.98`)
 - ราคามาจากราคาเฉพาะเครื่องของช่วงนั้นก่อน มิฉะนั้นใช้รายการราคาของสัญญาตามหมวดมิเตอร์เมื่อเดือนอยู่ในอายุสัญญา ([ADR-0019](../decisions/0019-effective-pricing-history.md), [ADR-0021](../decisions/0021-contract-price-applies-on-save.md))
-- ทางเขียนทุกทางปฏิเสธยอดที่หาราคาไม่ได้ จึงไม่มีสถานะรอราคาในรายงาน
-- รวมหน้าสุทธิของรายการราคาเดียวกันในงวด คูณราคา ปัดเป็นสตางค์ แล้วกระจายเศษกลับรายมิเตอร์ด้วย largest remainder ([ADR-0022](../decisions/0022-round-at-invoice-line-and-allocate.md))
-- ยอดตามใบแจ้งหนี้รวมค่าพิมพ์ ค่าเช่าคงที่ของทุกเดือนในอายุสัญญา และ VAT ที่ปัดครั้งเดียวจากยอดก่อน VAT
+- สัญญาที่ใช้หาราคาคือสัญญาของช่วงการคิดเงินที่ครอบงวดนั้น ไม่ใช่สัญญาปัจจุบันของเครื่อง
+- ทางเขียนทุกทางปฏิเสธยอดที่หาราคาไม่ได้ ยอดที่ไม่มีราคาจึงเหลือได้เฉพาะข้อมูลเก่าก่อน [ADR-0021](../decisions/0021-contract-price-applies-on-save.md) ซึ่งรายงานนับแยกไว้
+- รวมจำนวนพิมพ์หลังหัก 2% ของรายการราคาเดียวกันในงวด คูณราคา ปัดเป็นสตางค์ แล้วกระจายเศษกลับรายมิเตอร์ด้วย largest remainder ([ADR-0022](../decisions/0022-round-at-invoice-line-and-allocate.md))
+- ยอดตามใบแจ้งหนี้รวม VAT รวมค่าพิมพ์ ค่าเช่าคงที่ของทุกงวดในอายุสัญญา และ VAT ที่ปัดครั้งเดียวจากยอดก่อน VAT สัญญาที่เริ่มกลางเดือนเริ่มเก็บค่าเช่าในงวดถัดไป ([ADR-0023](../decisions/0023-contract-term-price-lines-and-meters.md))
 
 ## ประวัติการย้ายเครื่อง
 

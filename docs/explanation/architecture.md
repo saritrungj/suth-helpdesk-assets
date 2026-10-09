@@ -4,15 +4,69 @@
 
 ## ภาพรวมระบบ
 
-```text
-Vue SPA (:5173)
-    │ Axios + httpOnly session cookie
-    ▼
-Express API (:3000)
-    │ mysql2 connection pool
-    ▼
-MySQL
+รูปทั้งสองวาดตาม [C4 model](https://c4model.com/) ระดับ 1 และ 2 ระดับที่ลึกกว่านั้นให้อ่านจากโค้ด
+
+### ระบบกับสิ่งรอบข้าง (C4 ระดับ 1)
+
+```mermaid
+flowchart TD
+  admin(["ผู้ดูแล · admin<br/>จัดการเครื่อง สัญญา<br/>ผู้ใช้ และการนำเข้า"])
+  staff(["เจ้าหน้าที่ · staff<br/>บันทึกยอดรายเดือน"])
+  viewer(["ผู้ตรวจ · viewer<br/>ดูอย่างเดียว"])
+  vendor(["ผู้ให้เช่าเครื่อง<br/>อยู่นอกระบบ"])
+  system["ระบบทะเบียนเครื่อง<br/>ยอดพิมพ์ และค่าใช้จ่าย<br/>รันในเครือข่ายโรงพยาบาล"]
+  files[/"ไฟล์มิเตอร์รายงวด"/]
+  export[/"ไฟล์ส่งออก Excel"/]
+
+  admin --> system
+  staff --> system
+  viewer --> system
+  vendor -->|"ส่งให้ผู้ดูแล"| files
+  files -->|"ผู้ดูแลนำเข้า<br/>ผ่านหน้าเว็บ"| system
+  system --> export
+
+  classDef person fill:#ddf4ff,stroke:#0969da,color:#1f2328
+  classDef core fill:#fff8c5,stroke:#9a6700,stroke-width:2px,color:#1f2328
+  classDef outside fill:#ffffff,stroke:#8c959f,color:#1f2328
+  class admin,staff,viewer person
+  class system core
+  class vendor,files,export outside
 ```
+
+ระบบไม่เชื่อมกับระบบอื่นโดยอัตโนมัติ ข้อมูลเข้าออกผ่านไฟล์ที่คนถือเท่านั้น
+
+### ส่วนที่รันแยกกัน (C4 ระดับ 2)
+
+```mermaid
+flowchart TD
+  user(["ผู้ใช้ทุกบทบาท"])
+  script(["สคริปต์และชุดทดสอบ"])
+
+  subgraph system["ระบบ"]
+    web["เว็บ · Vue SPA<br/>apps/web<br/>แสดงผลและรับข้อมูล"]
+    api["API · Express<br/>apps/api<br/>ตรวจสิทธิ์ ตรวจข้อมูลขาเข้า<br/>อ่านเขียนฐานข้อมูล"]
+    db[("MySQL<br/>database<br/>ข้อบังคับและ view คิดเงิน")]
+    domain["กฎธุรกิจร่วม<br/>packages/domain<br/>ปีงบ เดือน เงิน"]
+  end
+
+  user -->|"เบราว์เซอร์"| web
+  web -->|"HTTP API · cookie<br/>suth_session"| api
+  script -->|"Authorization<br/>Bearer"| api
+  api -->|"mysql2<br/>connection pool"| db
+  web -.->|"import"| domain
+  api -.->|"import"| domain
+
+  classDef person fill:#ddf4ff,stroke:#0969da,color:#1f2328
+  classDef part fill:#ffffff,stroke:#8c959f,color:#1f2328
+  classDef gate fill:#fff8c5,stroke:#9a6700,stroke-width:2px,color:#1f2328
+  classDef stage fill:none,stroke:#8c959f,stroke-dasharray:4 3
+  class user,script person
+  class web,db,domain part
+  class api gate
+  class system stage
+```
+
+API เป็นทางเดียวเข้าฐานข้อมูลและเป็นที่เดียวที่บังคับสิทธิ์ จึงเป็นกรอบเหลือง ดู [ADR-0012](../decisions/0012-remove-mcp-server.md) เส้นประคือการ import โค้ด ไม่ใช่การเรียกผ่านเครือข่าย
 
 ระบบทำงานภายในโรงพยาบาล ข้อมูลไม่ออกนอกเครือข่าย จึงไม่พึ่ง managed service ใดๆ
 
@@ -36,7 +90,7 @@ docs/              เอกสารชุดนี้
 
 ## โค้ดฝั่ง API แบ่งตามความสามารถ
 
-`apps/api/index.js` เป็น entry ที่ mount route เท่านั้น โค้ดจริงอยู่ใน `apps/api/src/` แบ่งเป็นโฟลเดอร์ตามสิ่งที่ระบบทำ — `auth/`, `devices/`, `print-usage/`, `expense/`, `dashboard/`, `contracts/`, `master-data/`, `users/`, `import/` และ `shared/`
+`apps/api/index.js` เป็น entry ที่ mount route เท่านั้น โค้ดจริงอยู่ใน [`apps/api/src/`](../../apps/api/src/) แบ่งเป็นโฟลเดอร์ตามสิ่งที่ระบบทำ เช่น `devices/` และ `print-usage/` โดยมี `shared/` เป็นชั้นพื้นฐานที่ทุกโฟลเดอร์ใช้ รายชื่อปัจจุบันให้ดูจากโฟลเดอร์นั้นโดยตรง
 
 เหตุผลคือชื่อโฟลเดอร์ควรบอกว่าระบบนี้ทำอะไร ไม่ใช่บอกว่าเขียนด้วยอะไร และการแก้ความสามารถหนึ่งควรเปิดโฟลเดอร์เดียว ไม่ใช่ไล่เปิดสามโฟลเดอร์ตามชนิดของไฟล์
 
