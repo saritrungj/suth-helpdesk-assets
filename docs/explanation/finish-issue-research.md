@@ -105,4 +105,4 @@ Inspector ไม่รับรอง ownership, attachment, acceptance หร�
 
 มีการตรวจ code regression ด้วย temporary Git repositories/local bare remotes และ forward test แบบอ่านอย่างเดียวสองสถานการณ์ โดยให้ agent อิสระใช้สกิลเก่าและใหม่ ทั้งคู่รับรู้สถานะ merge ได้ รุ่นใหม่ระบุตำแหน่งหลักฐาน, managed archive และขีดจำกัด retry ชัดขึ้น ผลนี้เป็นหลักฐานเฉพาะการตัดสินจาก snapshots ไม่ใช่ benchmark ความสำเร็จทั่วไป รายงานและ traces ของแต่ละรอบอยู่ใน ignored output
 
-ยังไม่ได้รัน live cleanup/archive หรือ full application suites การส่งมอบร่างนี้ติดตามใน [Issue #301](https://github.com/saritrungj/suth-helpdesk-assets/issues/301); candidate/check/review และ publication status ใช้หลักฐานของงานนั้น ไม่ถือว่าบันทึกวิจัยนี้อนุมัติการส่งหรือ cleanup
+ยังไม่ได้รัน live cleanup/archive การส่งมอบร่างนี้ติดตามใน [Issue #301](https://github.com/saritrungj/suth-helpdesk-assets/issues/301); candidate/check/review และ publication status ใช้หลักฐานของงานนั้น ไม่ถือว่าบันทึกวิจัยนี้อนุมัติการส่งหรือ cleanup

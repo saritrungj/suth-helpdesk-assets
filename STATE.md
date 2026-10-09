@@ -1,10 +1,10 @@
 # STATE — Issue #301
 
-อัปเดต: 2026-10-09 (Asia/Bangkok)
+อัปเดต: 2026-10-10 (Asia/Bangkok)
 
 ## Scope and authority
 
-[Issue #301](https://github.com/saritrungj/suth-helpdesk-assets/issues/301) ปรับ finish-issue ให้ resume จากสถานะจริง รักษาหลักฐาน cleanup และตรวจ frozen candidate ตาม playbook D:/ai-playbook ใช้สกิลรุ่นที่แก้ใน worktree นี้เดินงานจริง
+[Issue #301](https://github.com/saritrungj/suth-helpdesk-assets/issues/301) ปรับ finish-issue ให้ resume จากสถานะจริง รักษาหลักฐาน cleanup และตรวจ frozen candidate ตาม playbook D:/ai-playbook
 
 - Branch: codex/301-finish-issue
 - Worktree: C:/Users/wayuo/.codex/worktrees/finish-issue-research/suth-helpdesk-assets
@@ -15,26 +15,34 @@
 
 ## Acceptance evidence
 
-1. Resume merged/partial cleanup, source binding และ limits — SKILL.md, CONTRIBUTING; synthetic forward snapshots A/B ทั้งรุ่นเก่าและใหม่
-2. Candidate identity และ pre-push gate — bound review-candidate.mjs; captured JSON และ verdict ของ candidate จะเก็บใน durable evidence หลัง commit
-3. Durable checkpoint/receipt/reports, managed archive และ idempotent exact refs — CONTRIBUTING; fixture ทดสอบลบ worktree แล้วยังอ่านหลักฐานได้
-4. Read-only inspector, report counts และ unresolved manual gates — 25 inspector regressions; ไม่มี phase DONE และ grantsAuthority=false
-5. Checks + independent review — 37 tests ผ่าน, 0 fail/skip (25 inspector + 12 existing script tests), syntax/diff checks และ 55 local link targets ผ่าน; frozen delivery reviews ต้องยืนยัน candidate นี้ก่อน push
+1. Resume merged/partial cleanup, source binding และ limits — SKILL.md, CONTRIBUTING; synthetic forward snapshots A/B
+2. Candidate identity/pre-push gate — bound review-candidate.mjs; capture และ reviews ใช้ exact committed candidate
+3. Durable evidence, managed archive และ idempotent exact refs — CONTRIBUTING; fixture ตรวจอ่านหลักฐานหลังลบ worktree
+4. Read-only inspector, report counts/manual gates — inspector regressions; ไม่มี DONE และ grantsAuthority=false
+5. Hook isolation — fixture และ inspector subprocesses ล้าง Git repository-local variables โดยไม่เปลี่ยน process.env; regression ใช้ hook-like environment ชี้ disposable decoy ตรวจ config ไม่เปลี่ยนและ resume ก่อน/หลัง merge ถูกต้อง
+6. Checks + independent review — frozen candidate ต้องผ่าน full required hook และ Standards/Spec/Security แยกกันก่อน push
+
+## Delivery scopes and failures
+
+Scope แรกครบสอง review/fix rounds แล้ว แต่ mandatory pre-push เปิดเผย blocker: fixture รับ Git environment ของ hook และเปลี่ยน shared repo config; publication ถูกหยุด ไม่มี PR ค่า config คืนแล้วและ refs/worktrees เดิมปลอดภัย รายงาน: publication-blocker.md
+
+ผู้ใช้อนุมัติ scope ใหม่ให้แก้ Git subprocess isolation, ตรวจและรีวิวใหม่ก่อน feature push/PR ส่วนเดิมยังอยู่ครบสำหรับการรีวิว full diff; ไม่สืบทอด verdict เดิม Counter ของ scope ใหม่นับแยกโดยบันทึก scope แรกไว้ ไม่ reset counter โดยเงียบ
+
+RED: red-hook-isolation.log ยืนยัน fixture เปลี่ยน decoy config; red-hook-ancestry.log ยืนยัน merged route ผิดภายใต้ hook ทั้งคู่ใช้พื้นที่ชั่วคราวแทน repo จริง
+GREEN: green-hook-isolation.tap ตรวจ open/merged child cases และ config คงเดิม; scope2-checks.tap ผ่าน 38/38 ไม่มี fail/skip (26 inspector + 12 existing scripts) ผล full hook และ frozen reviews เก็บแยกใน durable directory
 
 ## Checks and limits
 
-คำสั่งชุดตรวจ: node --test --test-reporter=tap .agents/skills/finish-issue/scripts/inspect-state.test.cjs scripts/playwright-report.test.cjs scripts/check-bundle-budget.test.cjs scripts/web-vitals-report.test.cjs; report ใน durable checks.tap
+คำสั่งเฉพาะ: node --test --test-reporter=tap .agents/skills/finish-issue/scripts/inspect-state.test.cjs scripts/playwright-report.test.cjs scripts/check-bundle-budget.test.cjs scripts/web-vitals-report.test.cjs
 
-Live read-only inspector กับ #298/#300 ยืนยัน PR merged และ Issue closed แล้ว เสนอ update-main ตามสถานะปัจจุบัน โดยไม่แก้ main, refs หรือ worktree ของ #298
+Required delivery gate: git hook run pre-push และ pre-push ของ feature push จริง รัน unit ทุก workspace, web build, bundle budget และ fixture E2E; ต้องอ่านรายงาน counts/skip และยืนยัน shared config ไม่เปลี่ยน ไม่ bypass hook
 
-ยังไม่ได้รัน full application/API/web/domain/DB/browser suites, live archive/delete/recovery หรือ general model-compliance benchmark ตัว quick validator มาตรฐานรันไม่ได้เพราะไม่มี PyYAML และไม่รองรับ legacy invocation flag เดิม; ตรวจ flat frontmatter และ local links แยก ไม่ติดตั้ง dependency
+ไม่ได้ทดสอบ DB/API service flows, live cleanup/archive/recovery, หรือ general model compliance; ไม่มี API/web/domain changes ตัว quick validator มาตรฐานใช้ไม่ได้เพราะไม่มี PyYAML; flat frontmatter และ local targets ตรวจแยก การตั้ง worktree ใช้ npm ci --ignore-scripts ตาม lockfile ไม่อัปเกรด dependencies; npm รายงาน existing advisories ซึ่งไม่ได้แก้ใน scope นี้
 
 ## Current phase and next action
 
-รอบ 1 candidate c8cbd159ca7c055bd288ee46ed45c61bb9bfb108: Standards และ Security ผ่าน; Spec พบ final-audit ไม่แสดง pending manual gates ทำ regression ให้แดงก่อนแก้แล้วให้ทุก phase แสดง gates และแก้ข้อความ publication status ที่ล้าสมัยได้
+Scope ใหม่: verify → freeze complete candidate → capture เทียบ original base → independent review round 1 ทุกมิติ ถ้าแก้หลังรีวิวต้อง candidate ใหม่และนับ round 2 ตาม core
 
-Freeze candidate หลังแก้ → capture เทียบ original frozen base เดิม → independent Standards/Spec/Security review รอบ 2 ห้ามสืบทอด verdict รอบแรก ถ้ายังมี blocker ที่รอบ 2 ให้หยุดและรายงาน
-
-หลัง review ผ่าน: รัน pre-push --expect กับ candidate ที่ review แล้ว, push exact feature branch, ยืนยัน remote SHA, เปิด PR อ้าง #301 และแนบ current evidence/limits หยุดก่อน merge
+หลัง review ผ่าน: pre-push --expect → push exact branch → ยืนยัน remote SHA → เปิด PR #301 และแนบ current evidence/limits หยุดก่อน merge
 
 Post-review receipts อยู่ใน durable ignored evidence หรือ PR body; ไม่เพิ่ม tracked bookkeeping commit ที่ยังไม่ผ่าน review

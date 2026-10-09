@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { gitEnvironment } = require("./git-environment.cjs");
 const { assertRequiredCoverage } = require("../../../../scripts/playwright-report.cjs");
 
 const isSha = (value) => typeof value === "string" && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value);
@@ -96,8 +97,9 @@ function checkReceipt(receiptPath, target, candidate) {
 function inspectState({ cwd = process.cwd(), mainCheckout, repository, issue, pr, branch, receiptPath, run = execFileSync }) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository || "") || !Number.isSafeInteger(issue) || issue < 1 || !Number.isSafeInteger(pr) || pr < 1 || typeof branch !== "string" || branch === "main") throw new Error("Explicit repository, positive issue/PR numbers and feature branch required.");
   if (!mainCheckout) throw new Error("Explicit main checkout required.");
+  const env = gitEnvironment(cwd);
   const invoke = (program, args, at = cwd) => {
-    try { return String(run(program, args, { cwd: at, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
+    try { return String(run(program, args, { cwd: at, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
     catch (error) { throw new Error(`${program} ${args[0]} observation failed (exit ${error.status ?? "unknown"}); no absence or success inferred.`); }
   };
   const git = (...args) => invoke("git", args);
@@ -157,7 +159,7 @@ function inspectState({ cwd = process.cwd(), mainCheckout, repository, issue, pr
     return result;
   }
   try {
-    run("git", ["merge-base", "--is-ancestor", prState.mergeCommit.oid, "HEAD"], { cwd: mainCheckout, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    run("git", ["merge-base", "--is-ancestor", prState.mergeCommit.oid, "HEAD"], { cwd: mainCheckout, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     result.mergeOnMain = true;
   } catch (error) {
     if (![1, 128].includes(error.status)) throw new Error("Merge ancestry observation failed.");

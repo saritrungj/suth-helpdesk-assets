@@ -85,6 +85,11 @@ after merge, and ancestry uses the PR merge commit so squash merges are supporte
 Run `npm run test:finish-issue`. Tests use temporary Git repositories and local
 bare remotes, real worktrees/reports, and mocked GitHub observations. They cannot
 prove live GitHub permissions, Codex archive behavior, or actual model compliance.
+Git subprocesses select the explicit checkout after clearing repository-local
+environment variables listed by `git rev-parse --local-env-vars`, following
+[Git's hook guidance](https://git-scm.com/docs/githooks). A regression runs under
+a hook-like environment pointing at a disposable decoy repository and verifies
+that its config stays unchanged while fixture operations and inspection succeed.
 For a substantive skill change also run an independent read-only forward test with
 synthetic raw snapshots and realistic requests, recording proposed actions without
 executing publication or cleanup. Keep evaluation traces ignored. A comparison of

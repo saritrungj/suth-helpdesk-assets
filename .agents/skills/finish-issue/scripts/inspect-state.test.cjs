@@ -5,6 +5,34 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test } = require("node:test");
 const { inspectState } = require("./inspect-state.cjs");
+const { gitEnvironment } = require("./git-environment.cjs");
+
+test("hook environment cannot redirect fixture writes or inspector observations", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "suth-hook-decoy-"));
+  t.after(() => {
+    const target = fs.realpathSync(directory);
+    assert.equal(path.dirname(target), fs.realpathSync(os.tmpdir()));
+    assert.ok(path.basename(target).startsWith("suth-hook-decoy-"));
+    fs.rmSync(target, { recursive: true });
+  });
+  // The only inherited repository is disposable, so RED cannot alter the real repo.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith("GIT_")));
+  delete env.NODE_TEST_CONTEXT;
+  execFileSync("git", ["init", "--bare", directory], { env, stdio: "pipe" });
+  const configPath = path.join(directory, "config");
+  const before = fs.readFileSync(configPath, "utf8");
+  let result;
+  try {
+    result = execFileSync(process.execPath, ["--test", "--test-name-pattern=^(open published candidate|merged work routes)", __filename], {
+      env: { ...env, GIT_DIR: directory, GIT_COMMON_DIR: directory, GIT_INDEX_FILE: path.join(directory, "hook-index"), GIT_PREFIX: "foreign/" },
+      encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) { result = error; }
+  assert.equal(fs.readFileSync(configPath, "utf8"), before, "hook repository config must remain unchanged");
+  assert.equal(result instanceof Error, false, String(result.stdout || result));
+  assert.match(result, /open published candidate with current checks\/reviews waits for merge/);
+  assert.match(result, /merged work routes to evidence preservation, never implementation/);
+});
 
 function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "suth-finish-issue-"));
@@ -18,7 +46,8 @@ function fixture(t) {
   const mainCheckout = path.join(directory, "main");
   const remote = path.join(directory, "remote.git");
   fs.mkdirSync(mainCheckout);
-  const git = (at, ...args) => execFileSync("git", args, { cwd: at, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const env = gitEnvironment(directory);
+  const git = (at, ...args) => execFileSync("git", args, { cwd: at, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   git(directory, "init", "--bare", remote);
   git(mainCheckout, "init", "-b", "main");
   git(mainCheckout, "config", "user.name", "Fixture");
