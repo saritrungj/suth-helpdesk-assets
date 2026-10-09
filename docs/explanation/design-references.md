@@ -58,12 +58,13 @@
 | แหล่ง | ที่มา | เอามาใช้ที่ |
 |---|---|---|
 | [Golden Suisse — Moonsight](https://www.behance.net/gallery/186859499/Golden-Suisse) | ~6.2K appreciations, Featured UI/UX | `design/tokens.css` — แยกระดับพื้นผิวด้วย **ความสว่าง** ไม่ใช่ด้วยเงาหนักๆ; ที่ว่างรอบตัวเลขใหญ่คือสิ่งที่ทำให้ดูแพง ไม่ใช่ gradient |
-| [Lando Norris — OFF+BRAND](https://www.awwwards.com/sites/lando-norris) | Site of the Year, 8.18/10 | `views/Login.vue`, `components/AuroraCanvas.vue` — เอกลักษณ์ที่จำได้ต้องมาจาก "ลายเซ็นภาพ" ชิ้นเดียวที่ใช้ซ้ำ ไม่ใช่เอฟเฟกต์กระจายทั้งเว็บ |
+| [Lando Norris — OFF+BRAND](https://www.awwwards.com/sites/lando-norris) | Site of the Year, 8.18/10 | แนวทางย้อนหลังของ `components/AuroraCanvas.vue` — เอกลักษณ์ที่จำได้มาจาก "ลายเซ็นภาพ" ชิ้นเดียวที่ใช้ซ้ำ; Login R7 ปัจจุบันใช้ `canvas-wash` ตาม [พื้นหลังและเอฟเฟกต์](design-system.md#พื้นหลังและเอฟเฟกต์-294) |
 | [USWDS — Sign-in](https://designsystem.digital.gov/templates/authentication-pages/sign-in/) | design system ของรัฐบาลที่ใช้งานจริง | `views/Login.vue` — ฝั่งฟอร์มเป็นพื้นทึบ, ลำดับหัวเรื่อง→ช่องกรอก→คำสั่งหลัก และความช่วยเหลืออยู่ท้ายฟอร์ม |
 
-**สิ่งที่ตัดสินใจจากกลุ่มนี้:** artwork แบบ aurora (ชั้นแสง teal→ส้ม) ใช้ **สอง
-ที่เท่านั้น** — หน้าล็อกอิน และแผงสรุปบนสุดของแดชบอร์ด พื้นหลังของตาราง กราฟ
-และฟอร์มยังต้องเรียบสนิทเพื่อให้อ่านข้อมูลได้เต็มที่
+**การตัดสินใจย้อนหลังจากกลุ่มนี้:** artwork แบบ aurora (ชั้นแสง teal→ส้ม) เคยใช้
+ในหน้าล็อกอินและแผงสรุปบนสุดของแดชบอร์ด แนวทางนี้เลิกใช้แล้วใน Login R7/app R2
+(#294) ปัจจุบันใช้ `canvas-wash` ผืนเดียวกับพื้นข้อมูลทึบตาม
+[พื้นหลังและเอฟเฟกต์](design-system.md#พื้นหลังและเอฟเฟกต์-294)
 
 **ข้อที่ไม่เอาตาม Golden Suisse:** งานนั้นเป็นโหมดมืดล้วนและใช้ตัวอักษร serif
 บางมากกับตัวเลขขนาดใหญ่ ซึ่งสวยในภาพนิ่งแต่อ่านยากบนจอทำงานทั้งวัน และไม่มี
