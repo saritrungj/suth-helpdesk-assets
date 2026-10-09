@@ -7,7 +7,7 @@
 // ผลกระทบต้องมาจาก v_contract_invoice ตัวเดียวกับหน้าค่าใช้จ่าย จึงต้องทดสอบกับฐานข้อมูลจริง
 
 import { expect, test } from "@playwright/test";
-import { activeFiscalYear, apiFetch, reasonToSkip, writesAllowed } from "./fixtures.js";
+import { activeFiscalYear, apiFetch, reasonToSkip, restoreMonth, writesAllowed } from "./fixtures.js";
 
 test.beforeAll(async () => {
   const skip = await reasonToSkip();
@@ -49,6 +49,81 @@ test("เพิ่มค่าเช่าคงที่และ VAT แล้
     const stored = await apiFetch(`/contracts/${contractId}`);
     expect(stored.monthly_rental).toBeNull();
   } finally {
+    if (contractId) await apiFetch(`/contracts/${contractId}`, { method: "DELETE" });
+  }
+});
+
+test("แก้ราคาของสัญญาที่มียอดแล้ว — ยอดย้อนหลังหลังบันทึกเท่ากับที่ดูผลกระทบบอกไว้ (#309)", async () => {
+  const [fy, categories, devices] = await Promise.all([
+    activeFiscalYear(),
+    apiFetch("/contracts/meter-categories"),
+    apiFetch("/devices"),
+  ]);
+  const monochrome = categories.find((category) => category.code === "bw");
+  const template = devices.find((row) => row.brand_id);
+  test.skip(!monochrome || !template, "ต้องมีหมวดมิเตอร์ขาวดำและเครื่องต้นแบบในฐานทดสอบ");
+
+  const [endYear, endMonth] = fy.end_month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(endYear, endMonth, 0)).toISOString().slice(0, 10);
+  const month = fy.start_month;
+  const stamp = Date.now();
+  const base = {
+    contract_no: `E2E-PRICE-IMPACT-${stamp}`,
+    effective_from: `${fy.start_month}-01`,
+    effective_to: lastDay,
+    price_lines: [{ category_id: monochrome.id, price_per_page: "0.4" }],
+  };
+  const repriced = { ...base, price_lines: [{ category_id: monochrome.id, price_per_page: "0.45" }] };
+  let contractId = null;
+  let deviceId = null;
+
+  const costInSystem = async () => {
+    const rows = await apiFetch(`/dashboard/monthly-kpi?month=${month}`);
+    return Number(rows.find((row) => row.device_id === deviceId).total_cost);
+  };
+
+  try {
+    contractId = (await apiFetch("/contracts", { method: "POST", body: JSON.stringify(base) })).id;
+    deviceId = (await apiFetch("/devices", {
+      method: "POST",
+      body: JSON.stringify({
+        serial_number: `E2E-PRICE-IMPACT-${stamp}`,
+        brand_id: template.brand_id,
+        contract_id: contractId,
+        meter_category_id: monochrome.id,
+        price_override: null,
+        status: "active",
+        installation_status: "installed",
+        installed_on: `${fy.start_month}-01`,
+      }),
+    })).id;
+
+    // 1,000 หน้า หลังหัก 2% เหลือ 980 หน้า — 392.00 บาทที่ 0.40 และ 441.00 บาทที่ 0.45
+    await apiFetch("/print-transactions/bulk", {
+      method: "POST",
+      body: JSON.stringify({ month, items: [{ device_id: deviceId, pages: 1000 }] }),
+    });
+    expect(await costInSystem()).toBe(392);
+
+    const preview = await apiFetch(`/contracts/${contractId}`, {
+      method: "PUT",
+      body: JSON.stringify({ ...repriced, preview: true }),
+    });
+    expect(preview.preview).toBe(true);
+    const told = preview.impact.find((row) => row.month === month);
+    expect(Number(told.before)).toBe(392);
+    expect(Number(told.after)).toBe(441);
+    // ดูผลกระทบไม่เขียนอะไร — ยอดในระบบยังเป็นราคาเดิม
+    expect(await costInSystem()).toBe(392);
+
+    const saved = await apiFetch(`/contracts/${contractId}`, { method: "PUT", body: JSON.stringify(repriced) });
+    expect(Number(saved.impact.find((row) => row.month === month).after)).toBe(441);
+    expect(await costInSystem()).toBe(Number(told.after));
+  } finally {
+    if (deviceId) {
+      await restoreMonth(month, [{ device_id: deviceId, pages: null }]);
+      await apiFetch(`/devices/${deviceId}`, { method: "DELETE" });
+    }
     if (contractId) await apiFetch(`/contracts/${contractId}`, { method: "DELETE" });
   }
 });
