@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { assetFixture } from "./asset-fixture.js";
+import { CONTRAST_HELPERS } from "./contrast-helper.js";
 
 test.beforeEach(async ({ page }) => {
   const state = await assetFixture(page);
@@ -90,7 +91,12 @@ for (const mode of ["light", "dark"]) {
       surface: getComputedStyle(el).getPropertyValue("--surface").trim(),
       brand: getComputedStyle(el).getPropertyValue("--brand").trim(),
     }));
-    expect(restored).toEqual(baseline);
+    // #289 intentionally changes only the light workspace canvas after login.
+    // Keep the original surface/brand checks and require the owner's exact B color.
+    const canvas = await page.evaluate(`${CONTRAST_HELPERS} contrast.rgba(${JSON.stringify(restored.canvas)});`);
+    const expectedCanvas = mode === "light" ? [255, 250, 245, 1]
+      : await page.evaluate(`${CONTRAST_HELPERS} contrast.rgba(${JSON.stringify(baseline.canvas)});`);
+    expect({ ...restored, canvas }).toEqual({ ...baseline, canvas: expectedCanvas });
     await expect(page.locator("html")).toHaveCSS("scrollbar-gutter", "stable");
     await expect(page.locator("body")).toHaveCSS("background-image", "none");
   });

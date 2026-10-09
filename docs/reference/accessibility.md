@@ -16,6 +16,7 @@
 | `apps/web/e2e/asset-drawer.spec.js` | ทะเบียนและแผงแก้ไข/ย้าย: โฟกัสในแผง, dirty/pending, สิทธิ์, zoom 200% และ density สามระดับ |
 | `apps/web/e2e/asset-evidence.spec.js` | ภาพหลักฐานของทะเบียน ค่าเริ่มต้นสองชุด (ไทย-สว่าง, อังกฤษ-มืด ที่ 1440) ครบสองภาษา สองธีม สามขนาดเมื่อตั้ง `SUTH_EVIDENCE_FULL=1` ไม่ใช่ pixel regression |
 | `apps/web/e2e/contrast-helper.spec.js` | regression ของตัววัดด้วย CSS จริงใน Chromium โดยไม่ต้องมี API/ฐานข้อมูล |
+| `apps/web/e2e/workspace-background.spec.js` | พื้นสว่าง #289: CSS/raster gradient, ขอบคอนทราสต์ของกระจกที่ saturate ซ้อน และ unsupported เมื่อเกินขอบ; HTTP fixtures |
 | `apps/web/e2e/axe-fixture.spec.js` | 5 สถานะ: ทะเบียน, แผงแก้ไข, แผงย้าย, ภาพรวมเลือกฝ่าย, ภาพรวมค่าใช้จ่าย; HTTP fixtures |
 | `apps/web/e2e/axe-pages.spec.js` | axe-core บน 17 targets ใน `DB_PAGES` — ชุดเดียวกับ wcag.spec.js ต้องมี API/ฐานข้อมูลจริง |
 | `apps/web/e2e/accessibility-pages.spec.js` | full-page axe บน Compare, Import list/detail, AuditLog ผ่าน HTTP fixtures; ตารางสถานะด้านล่าง |

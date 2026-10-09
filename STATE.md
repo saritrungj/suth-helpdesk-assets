@@ -1,48 +1,35 @@
-# STATE — Issue #301
+# STATE — #289 พื้นหลังพื้นที่ทำงาน
 
-อัปเดต: 2026-10-10 (Asia/Bangkok)
+อัปเดต 2026-10-10 Asia/Bangkok ผู้ใช้เลือกแบบ B ก่อน implementation และอนุมัติ commit → review → feature push/PR โดยหยุดก่อน merge/deploy
 
-## Scope and authority
+## ขอบเขต
 
-[Issue #301](https://github.com/saritrungj/suth-helpdesk-assets/issues/301) ปรับ finish-issue ให้ resume จากสถานะจริง รักษาหลักฐาน cleanup และตรวจ frozen candidate ตาม playbook D:/ai-playbook
+ใช้ครีม #FFFAF5 กับแสงพีช #FFE3CC (85%) และมิ้นต์ #D3EFEE (80%) วงรี 70% × 85% จางถึงโปร่งใสที่ 72% เฉพาะ light workspace บน screen ที่ forced-colors:none และไม่มี .auth-stage ตาม #289 ไม่เปลี่ยน opaque surfaces, status colors, Login, dark, print/forced-colors หรือ API/schema/auth/domain/data
 
-- Branch: codex/301-finish-issue
-- Worktree: C:/Users/wayuo/.codex/worktrees/finish-issue-research/suth-helpdesk-assets
-- Frozen base: cd6cbaa47be4d1a88a5d929c5f12b307fd82a45b
-- Do: แก้สกิล/docs/inspector/tests; commit, feature push และเปิด PR หลัง verified frozen-candidate review
-- Don't: merge/deploy, auth/secrets/schema, business data, เปลี่ยน API/web/domain หรือ cleanup branch/worktree ของ #298
-- Durable evidence: <git-common-dir>/finish-issue/301/codex%2F301-finish-issue/
+Branch: codex/289-workspace-background ใน managed worktree C:/Users/wayuo/.codex/worktrees/289-background-preview/suth-helpdesk-assets ต้นแบบเก็บบน codex/289-background-preview commit 9b412b615240d754924ea23d079d844dcc95b5f9 ภาพก่อน implementation อ้าง base 595399f1cbd4d783f8f57018d8979edd4a807303 ปรับ implementation ตาม main ซึ่งเพิ่มเฉพาะเอกสาร #299/#305 ก่อน frozen review
 
-## Acceptance evidence
+## ผลตรวจ
 
-1. Resume merged/partial cleanup, source binding และ limits — SKILL.md, CONTRIBUTING; synthetic forward snapshots A/B
-2. Candidate identity/pre-push gate — bound review-candidate.mjs; capture และ reviews ใช้ exact committed candidate
-3. Durable evidence, managed archive และ idempotent exact refs — CONTRIBUTING; fixture ตรวจอ่านหลักฐานหลังลบ worktree
-4. Read-only inspector, report counts/manual gates — inspector regressions; ไม่มี DONE และ grantsAuthority=false
-5. Hook isolation — fixture และ inspector subprocesses ล้าง Git repository-local variables โดยไม่เปลี่ยน process.env; regression ใช้ hook-like environment ชี้ disposable decoy ตรวจ config ไม่เปลี่ยนและ resume ก่อน/หลัง merge ถูกต้อง
-6. Checks + independent review — frozen candidate ต้องผ่าน full required hook และ Standards/Spec/Security แยกกันก่อน push
+- Full fixture: 378 ผ่าน ไม่มี fail/skip/flaky, workers 3, retries 0
+- Built focused regressions: 10 ผ่าน (8 เคสใหม่และ Login palette สองธีม)
+- Unit checks: 758 ผ่าน 1 skip (API completeness integration ไม่มี SUTH_API_TOKEN)
+- Build/budget: ผ่าน initial JS 196.3/200 KB gzip
+- ภาพ Overview/Registry/Print Entry ที่ 1440×900 และ 1280×800 พร้อม empty/error/pending/focus จาก HTTP fixtures
+- Controlled pixel comparison: dark สามหน้าและ Login light/dark ตรง baseline ทั้งห้าตัวอย่าง
+- Print/forced-colors fallback และ viewport 720×450 ไม่ล้น document พร้อม first-Tab skip link
 
-## Delivery scopes and failures
+รายงานใน ignored output/playwright และสำเนาคงทนที่ Git-common-directory finish-issue/289/codex%2F289-background-preview รวมภาพ approved-preview และ implementation-images รอบ npm run verify เดิมมี 5 failure จาก CSS minification spelling และ expected canvas เดิมของ Login; แก้การเทียบเป็น rendered RGBA และเปลี่ยนเฉพาะ approved light canvas expectation แล้ว focused/full fixture ผ่าน ไม่อ้างรอบล้มเหลวหรือยกเลิกว่า PASS ต้องรัน full verify ใน pre-push hook อีกครั้ง
 
-Scope แรกครบสอง review/fix rounds แล้ว แต่ mandatory pre-push เปิดเผย blocker: fixture รับ Git environment ของ hook และเปลี่ยน shared repo config; publication ถูกหยุด ไม่มี PR ค่า config คืนแล้วและ refs/worktrees เดิมปลอดภัย รายงาน: publication-blocker.md
+## หลักฐานและข้อจำกัด
 
-ผู้ใช้อนุมัติ scope ใหม่ให้แก้ Git subprocess isolation, ตรวจและรีวิวใหม่ก่อน feature push/PR ส่วนเดิมยังอยู่ครบสำหรับการรีวิว full diff; ไม่สืบทอด verdict เดิม Counter ของ scope ใหม่นับแยกโดยบันทึก scope แรกไว้ ไม่ reset counter โดยเงียบ
+Gradient RGB bound [211,227,204] และ stacked saturation ≤1.56 bound [191,222,177] มี native Chromium raster และ nested translucent glass screenshot proof ไม่ลด AA thresholds แสดง measured count >0 และ unsupported แยกจาก PASS Registry มี unsupported เดิม 1 ตัวอย่าง Print Entry 2 ตัวอย่าง ขอบเขตนี้ไม่พิสูจน์ arbitrary dark content ที่เลื่อนใต้กระจก
 
-RED: red-hook-isolation.log ยืนยัน fixture เปลี่ยน decoy config; red-hook-ancestry.log ยืนยัน merged route ผิดภายใต้ hook ทั้งคู่ใช้พื้นที่ชั่วคราวแทน repo จริง
-GREEN: green-hook-isolation.tap ตรวจ open/merged child cases และ config คงเดิม; scope2-checks.tap ผ่าน 38/38 ไม่มี fail/skip (26 inspector + 12 existing scripts) ผล full hook และ frozen reviews เก็บแยกใน durable directory
+ไม่ได้ตรวจ real DB/API flow, screen reader, password manager, Voice Control, physical devices, actual OS forced colors, browser zoom จริง หรือ usability กับเจ้าหน้าที่ และไม่รับรอง WCAG ครบทุกข้อ การตรวจด้วยคนยังเป็นด่านก่อน merge ตาม Issue และ #270
 
-## Checks and limits
+## ขั้นตอนต่อไป
 
-คำสั่งเฉพาะ: node --test --test-reporter=tap .agents/skills/finish-issue/scripts/inspect-state.test.cjs scripts/playwright-report.test.cjs scripts/check-bundle-budget.test.cjs scripts/web-vitals-report.test.cjs
+Frozen review รอบ 1 (eff6c17) พบ SHOULD-FIX ตาม ADR-0008: แทนค่า hex/RGB ของสามสีด้วย OKLCH primitives และ semantic refs โดยคง rendered sRGB เดิม Security ไม่มี finding; Spec ให้เปิดเผยข้อจำกัด dark content ใต้กระจกเป็น manual pre-merge gate ต้องตรวจและรีวิว candidate หลังแก้รอบ 2 ก่อน push
 
-Required delivery gate: git hook run pre-push และ pre-push ของ feature push จริง รัน unit ทุก workspace, web build, bundle budget และ fixture E2E; ต้องอ่านรายงาน counts/skip และยืนยัน shared config ไม่เปลี่ยน ไม่ bypass hook
+ตรึง complete committed candidate ตรวจ Standards/Spec/Security แบบอ่านอย่างเดียว (WIP review ไม่นับเป็น approval) ผ่าน identity gate และ full pre-push verify แล้ว push SHA เดียวกับที่ตรวจ เปิด PR พร้อมหลักฐาน/ข้อจำกัด หยุดก่อน merge ไม่มีอำนาจ deploy หรือลบ branch/worktree ในขั้นตอนนี้
 
-ไม่ได้ทดสอบ DB/API service flows, live cleanup/archive/recovery, หรือ general model compliance; ไม่มี API/web/domain changes ตัว quick validator มาตรฐานใช้ไม่ได้เพราะไม่มี PyYAML; flat frontmatter และ local targets ตรวจแยก การตั้ง worktree ใช้ npm ci --ignore-scripts ตาม lockfile ไม่อัปเกรด dependencies; npm รายงาน existing advisories ซึ่งไม่ได้แก้ใน scope นี้
-
-## Current phase and next action
-
-Scope ใหม่: verify → freeze complete candidate → capture เทียบ original base → independent review round 1 ทุกมิติ ถ้าแก้หลังรีวิวต้อง candidate ใหม่และนับ round 2 ตาม core
-
-หลัง review ผ่าน: pre-push --expect → push exact branch → ยืนยัน remote SHA → เปิด PR #301 และแนบ current evidence/limits หยุดก่อน merge
-
-Post-review receipts อยู่ใน durable ignored evidence หรือ PR body; ไม่เพิ่ม tracked bookkeeping commit ที่ยังไม่ผ่าน review
+หลังแก้ OKLCH: build ผ่าน, built focused 14/14 ผ่าน ไม่มี skip, native gradient/nested glass bounds ผ่าน, dark/Login controlled pixel ทั้งห้าตัวอย่างตรง baseline ภาพ implementation 6 ภาพถ่ายใหม่จาก build ปัจจุบัน (289-oklch-captures.log) การ interpolate gradient กำหนด in srgb เพื่อคงพื้นที่สีของแบบที่เลือก ตรวจ endpoints แบบ opaque เพื่อไม่ปน quantization ของ premultiplied alpha และตรวจ alpha .85/.8 แยกตรงค่าเดิม
