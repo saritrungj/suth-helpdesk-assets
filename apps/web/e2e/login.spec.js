@@ -44,16 +44,16 @@ for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 844 }
 }
 
 test("เปิดความช่วยเหลือด้วยคีย์บอร์ดได้โดยไม่ต้องออกจากฟอร์ม", async ({ page }) => {
-  const help = page.locator(".login__access");
-  await expect(help).not.toHaveAttribute("open", "");
+  const help = page.getByRole("button", { name: "ลืมรหัสผ่าน?", exact: true });
+  await expect(help).toHaveAttribute("aria-expanded", "false");
   await page.locator("#current-password").fill("synthetic-value");
-  await help.locator("summary").focus();
+  await help.focus();
   await page.keyboard.press("Enter");
-  await expect(help).toHaveAttribute("open", "");
-  await expect(help.getByRole("heading", { level: 2 })).toBeVisible();
+  await expect(help).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#login-help").getByRole("heading", { level: 2 })).toBeVisible();
   await expect(page.locator("#current-password")).toHaveValue("synthetic-value");
   await page.keyboard.press("Enter");
-  await expect(help).not.toHaveAttribute("open", "");
+  await expect(help).toHaveAttribute("aria-expanded", "false");
 });
 
 test("ส่งครั้งเดียวระหว่างรอ และกลับมากรอกต่อได้เมื่อเกิดข้อผิดพลาด", async ({ page }) => {
@@ -132,7 +132,7 @@ test("โปรแกรมจัดการรหัสผ่านต้อ�
 test("id ต้องคงที่ ไม่ใช่เลขที่เปลี่ยนทุกครั้งที่โหลด", async ({ page }) => {
   // id ที่มาจากตัวนับตอนรัน (เช่น f-v-0) เปลี่ยนได้เมื่อลำดับการสร้าง component
   // เปลี่ยน ทำให้โปรแกรมจัดการรหัสผ่านเติมรหัสให้ได้บ้างไม่ได้บ้าง
-  const ids = await page.locator("form input").evaluateAll((els) => els.map((el) => el.id));
+  const ids = await page.locator("form input[name]").evaluateAll((els) => els.map((el) => el.id));
   expect(ids).toEqual(["login-username", "current-password"]);
 
   for (const id of ids) {
@@ -158,14 +158,11 @@ test("ปุ่มดูรหัสผ่าน — พื้นที่กด
   // ต้องเตือนว่ารหัสผ่านจะโผล่บนจอ — คนที่ฟังเสียงอ่านหน้าจอมองไม่เห็นว่ารอบตัวมีใคร
   await expect(toggle).toHaveAttribute("aria-label", /รหัสผ่านจะปรากฏบนหน้าจอ/);
 
-  // กดแล้วต้องสลับชนิดช่องจริง และสถานะต้องอ่านออกจาก aria-pressed
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  // ชื่อปุ่มบอกการกระทำถัดไป ไม่ประกาศ aria-pressed ซ้ำกับชื่อที่เปลี่ยน
+  await expect(toggle).not.toHaveAttribute("aria-pressed");
   await toggle.click();
   await expect(page.locator("#current-password")).toHaveAttribute("type", "text");
-  await expect(page.getByRole("button", { name: "ซ่อนรหัสผ่าน" })).toHaveAttribute(
-    "aria-pressed",
-    "true"
-  );
+  await expect(page.getByRole("button", { name: "ซ่อนรหัสผ่าน" })).not.toHaveAttribute("aria-pressed");
 });
 
 test("วางรหัสผ่านจากโปรแกรมจัดการรหัสผ่านได้", async ({ page }) => {

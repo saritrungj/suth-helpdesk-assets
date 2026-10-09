@@ -1,0 +1,75 @@
+/* Login พอดีจอเสมอ: โลโก้รับความสูงที่เหลือจากการ์ดและลิขสิทธิ์ (สูงสุด 560×315 และไม่เกินความกว้างจอ) แถว 1fr สองแถวจัด
+   โลโก้+การ์ดไว้กลางพื้นที่เหนือลิขสิทธิ์ ซึ่งเป็นแถวล่างสุดใน flow ปกติ หน้านี้ไม่จองร่องสกอลบาร์ จึงไม่มีแถบพื้นเรียบที่ขอบขวา
+   ความสูงต้อง definite (height ไม่ใช่ min-height) แถวโลโก้จึงหดตามที่เหลือจริง จอที่เตี้ยกว่าเนื้อหาขั้นต่ำ (เช่นซูม 400%)
+   เนื้อหาล้นกล่องและเลื่อนได้ตามปกติ body วาดพื้นผืนเดียวกันไว้ ส่วนที่ล้นจึงไม่เห็นรอยต่อ */
+html:has(.auth-stage) { scrollbar-gutter: auto; }
+body:has(.auth-stage) { background-color: var(--login-canvas); isolation: isolate; }
+/* Continue the same fixed artwork beneath content on screens shorter than the form. */
+body:has(.auth-stage)::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background-image: var(--login-canvas-wash); }
+@media print, (forced-colors: active) {
+  body:has(.auth-stage)::before { background-image: none; }
+}
+.auth-stage { --auth-pad: 2rem; --auth-side: 1.25rem; --auth-gap: 1.75rem; height: 100dvh; display: grid; justify-items: center; grid-template-rows: minmax(0, 1fr) minmax(3.5rem, min(19.6875rem, calc((100vw - 2 * var(--auth-side)) * .5625))) auto minmax(0, 1fr) auto; padding: var(--auth-pad) var(--auth-side) 0; }
+.auth-theme { position: fixed; top: 1rem; right: 1rem; z-index: 30; width: 2.5rem; height: 2.5rem; border-radius: 50%; }
+.auth-logo { grid-row: 2; min-height: 0; max-width: 100%; }
+.auth-logo img { display: block; width: auto; height: 100%; max-width: 100%; object-fit: contain; }
+.auth-main { grid-row: 3; width: min(29rem, 100%); min-width: 0; margin-top: var(--auth-gap); }
+.auth-card { padding: 2.5rem; box-shadow: var(--elev-2); }
+.auth-title { margin-bottom: 1.75rem; text-align: center; font-size: var(--text-2xl); line-height: 1.3; }
+.auth-title h1 { font-size: inherit; line-height: inherit; }
+.auth-title p { margin-top: .125rem; font-size: var(--text-base); line-height: 1.5; color: var(--ink-mute); }
+.auth-fields { display: grid; gap: 1.25rem; }
+.auth-fields label { font-size: .875rem; }
+.auth-input { min-height: 3.25rem; font-size: 1rem; }
+/* Edge ใส่ปุ่มรูปตาของตัวเองในช่องรหัสผ่านทุกช่อง ซ้อนกับปุ่มของเราเป็นตาสองดวง — ซ่อนของเบราว์เซอร์ ใช้ปุ่มของเราปุ่มเดียว
+   (https://learn.microsoft.com/en-us/microsoft-edge/web-platform/password-reveal) */
+.auth-input::-ms-reveal { display: none; }
+.auth-password-toggle { position: absolute; right: .25rem; top: 50%; transform: translateY(-50%); width: 2.75rem; height: 2.75rem; display: grid; place-items: center; color: var(--ink-mute); border-radius: var(--radius-md); }
+.auth-password-toggle:hover, .auth-password-toggle.is-on { background: var(--surface-2); color: var(--brand-ink); }
+.auth-password-toggle:disabled { cursor: not-allowed; }
+.auth-caps { display: flex; align-items: center; gap: .375rem; margin-top: .5rem; font-size: var(--text-sm); font-weight: 500; color: var(--warn-ink); }
+/* จดจำชื่อผู้ใช้ (ซ้าย) กับ "ลืมรหัสผ่าน?" (ขวา) แถวเดียวกันใต้ช่องรหัสผ่าน ตามที่เจ้าของงานกำหนด — ตัวอักษรขนาดและเส้นกลางเดียวกัน */
+.auth-options { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem 1rem; min-height: 1.5rem; }
+.auth-options label > span, .auth-help-toggle { font-size: .875rem; line-height: 1.5rem; }
+.auth-help-toggle { margin-left: auto; color: var(--brand-ink); font-weight: 500; border-radius: var(--radius-xs); }
+.auth-help-toggle:hover { text-decoration: underline; }
+.auth-remember { align-items: center; min-height: 1.5rem; }
+.auth-remember > span:first-child { margin-top: 0; }
+.auth-remember > span:first-child > span { width: 1.5rem; height: 1.5rem; border-color: var(--field-line); }
+.auth-remember input:focus-visible + span { outline: 2px solid var(--brand-ring); outline-offset: 2px; }
+.auth-help-content { padding: .875rem; border: 1px solid var(--info-line); border-radius: var(--radius-md); background: var(--info-soft); color: var(--info-ink); font-size: var(--text-sm); }
+.auth-help-content h2 { font-size: var(--text-sm); color: inherit; }
+.auth-help-content p { margin-top: .25rem; }
+.auth-submit { min-height: 3.25rem; margin-top: .25rem; }
+.auth-copyright { grid-row: 5; display: flex; flex-wrap: wrap; justify-content: center; gap: 0 .75rem; max-width: 100%; padding: var(--auth-gap) 0 var(--auth-pad); color: var(--ink-soft); text-align: center; font-size: .8125rem; line-height: 1.6; }
+/* จอเตี้ย: บีบระยะของฟอร์มเป็นสองขั้น เพื่อคืนความสูงให้โลโก้ก่อนที่โลโก้จะเล็กกว่าการ์ด */
+@media (max-height: 890px) and (max-width: 899px), (max-height: 760px) {
+  .auth-stage { --auth-pad: 1.25rem; --auth-gap: 1.25rem; }
+  .auth-card { padding: 1.75rem; }
+  .auth-title { margin-bottom: 1.25rem; font-size: 1.375rem; }
+  .auth-fields { gap: 1rem; }
+  .auth-input, .auth-submit { min-height: 3rem; }
+}
+@media (max-height: 700px) and (max-width: 899px), (max-height: 590px) {
+  .auth-stage { --auth-pad: .75rem; --auth-gap: .75rem; }
+  .auth-card { padding: 1.25rem 1.5rem; }
+  .auth-title { margin-bottom: 1rem; font-size: 1.25rem; }
+  .auth-fields { gap: .75rem; }
+  .auth-input, .auth-submit { min-height: 2.75rem; }
+  .auth-submit { margin-top: 0; }
+}
+@media (max-width: 639px) {
+  .auth-stage { --auth-side: 1rem; }
+}
+/* จอกว้าง: โลโก้ซ้าย ฟอร์มขวา (split-screen) — ภาพใหญ่อยู่คนละฝั่งกับฟอร์ม จึงไม่แย่งความสูงกัน และฟอร์มไม่ต้องบีบบนจอเตี้ย
+   หน้าต่างเตี้ยที่กว้างพอ (720px ขึ้นไป) ก็ใช้แบบนี้ เพราะเรียงบนลงล่างแล้วโลโก้เหลือเล็กมาก จอแคบกว่านี้เรียงบนลงล่างตามกติกาด้านบน */
+@media (min-width: 900px), (min-width: 720px) and (max-height: 600px) {
+  .auth-stage { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(min-content, 1fr) auto; column-gap: clamp(2rem, 5vw, 5rem); align-items: center; padding-inline: clamp(1.5rem, 5vw, 5rem); }
+  .auth-logo { grid-row: 1; grid-column: 1; justify-self: end; display: flex; justify-content: flex-end; width: min(100%, 42rem); }
+  .auth-logo img { width: auto; height: auto; max-height: calc(100dvh - 7rem); }
+  .auth-main { grid-row: 1; grid-column: 2; justify-self: start; margin-top: 0; }
+  .auth-copyright { grid-row: 2; grid-column: 1 / -1; }
+}
+@media (max-height: 540px) {
+  .auth-theme { position: absolute; }
+}

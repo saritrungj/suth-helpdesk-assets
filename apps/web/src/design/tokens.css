@@ -759,3 +759,123 @@
     to { background-position: -200% 0; }
   }
 }
+
+/* Login #298: isolated palette; authenticated pages retain their existing tokens. */
+:root {
+  --login-canvas: var(--login-warm-50);
+  --login-canvas-wash: radial-gradient(ellipse 50% 46% at 50% 40%, rgb(255 255 255 / .95), transparent 72%),
+    radial-gradient(ellipse 62% 72% at -5% -10%, var(--login-peach-100), transparent 62%),
+    radial-gradient(ellipse 62% 72% at 105% -10%, var(--login-mint-100), transparent 62%),
+    radial-gradient(ellipse 72% 62% at 110% 110%, var(--login-blue-100), transparent 62%),
+    radial-gradient(ellipse 72% 62% at -10% 110%, var(--login-peach-50), transparent 62%);
+  --login-canvas-wash-worst: var(--login-peach-100);
+  --login-surface: oklch(1 0 0);
+  --login-surface-2: var(--n-50);
+  --login-surface-3: var(--n-150);
+  --login-surface-inset: var(--n-100);
+  --login-surface-float: oklch(1 0 0);
+  --login-field-line: var(--login-ocean-600);
+  --login-field-line-strong: var(--login-ocean-750);
+  --login-ink: var(--login-ocean-930);
+  --login-ink-soft: var(--login-ocean-700);
+  --login-ink-mute: var(--login-ocean-700);
+  --login-ink-faint: var(--n-500);
+  --login-ink-invert: oklch(1 0 0);
+  --login-brand: var(--login-action-700);
+  --login-brand-hover: var(--login-action-800);
+  --login-brand-active: var(--login-action-800);
+  --login-brand-on: oklch(1 0 0);
+  --login-brand-ink: var(--login-action-ink);
+  --login-brand-ring: var(--login-action-ring);
+  --login-brand-gradient: none;
+  --login-brand-worst: var(--login-brand);
+  --login-brand-gradient-hover: none;
+  --login-brand-glow: 0 4px 12px rgb(14 98 114 / .24);
+  --login-brand-glow-hover: 0 4px 14px rgb(14 98 114 / .28);
+  --login-warm-50: oklch(0.9778337199 0.0079016339 73.74493814);
+  --login-peach-100: oklch(0.8868215628 0.0747431103 60.71530237);
+  --login-mint-100: oklch(0.8759846380 0.0535224782 191.81449403);
+  --login-blue-100: oklch(0.9034245209 0.0344437978 230.24794094);
+  --login-peach-50: oklch(0.9261112196 0.0468896160 59.91744667);
+  --login-ocean-600: oklch(0.5730999935 0.0220499212 212.61913589);
+  --login-ocean-750: oklch(0.4340678957 0.0270073735 213.91536466);
+  --login-ocean-930: oklch(0.2251171732 0.0275413217 216.15202260);
+  --login-ocean-700: oklch(0.4644233146 0.0245587797 215.51742279);
+  --login-action-700: oklch(0.4579924121 0.0768093796 214.79244164);
+  --login-action-800: oklch(0.4121607629 0.0694467230 216.14321857);
+  --login-action-ink: oklch(0.4470906284 0.0749739326 212.74910920);
+  --login-action-ring: oklch(0.5049374109 0.0848546387 212.36357999);
+  --login-ocean-975: oklch(0.1612616048 0.0205278963 233.83365245);
+  --login-ocean-850: oklch(0.3264608379 0.0407140486 224.16255773);
+  --login-ocean-925: oklch(0.2308847124 0.0301019627 226.43452620);
+  --login-ocean-950: oklch(0.1943192804 0.0239806342 225.91180336);
+  --login-ocean-900: oklch(0.2912244602 0.0398407232 222.64875867);
+  --login-ocean-500: oklch(0.6410722454 0.0261894676 212.97857097);
+  --login-ocean-200: oklch(0.8200219136 0.0200843904 208.74787456);
+  --login-ocean-50: oklch(0.9723657450 0.0053118706 197.06916152);
+  --login-ocean-400: oklch(0.7551101820 0.0239175683 210.40701090);
+  --login-action-600: oklch(0.5220863655 0.0881913998 214.79831110);
+  --login-action-light: oklch(0.8612575495 0.0819994580 191.87709555);
+}
+[data-mode="dark"] {
+  --login-canvas: var(--login-ocean-975);
+  --login-canvas-wash: radial-gradient(ellipse 50% 46% at 50% 36%, rgb(24 78 92 / .35), transparent 72%),
+    radial-gradient(ellipse 62% 72% at -5% -10%, rgb(16 110 122 / .24), transparent 62%),
+    radial-gradient(ellipse 62% 72% at 105% -10%, rgb(18 140 160 / .28), transparent 62%),
+    radial-gradient(ellipse 72% 62% at 110% 110%, rgb(12 72 112 / .28), transparent 62%),
+    radial-gradient(ellipse 72% 62% at -10% 110%, rgb(10 60 90 / .24), transparent 62%);
+  --login-canvas-wash-worst: var(--login-ocean-850);
+  --login-surface: var(--login-ocean-925);
+  --login-surface-2: var(--login-ocean-950);
+  --login-surface-3: var(--login-ocean-900);
+  --login-surface-inset: var(--login-ocean-950);
+  --login-surface-float: var(--login-ocean-900);
+  --login-field-line: var(--login-ocean-500);
+  --login-field-line-strong: var(--login-ocean-200);
+  --login-ink: var(--login-ocean-50);
+  --login-ink-soft: var(--login-ocean-200);
+  --login-ink-mute: var(--login-ocean-400);
+  --login-ink-faint: var(--login-ocean-400);
+  --login-ink-invert: oklch(0.155 0.012 220);
+  --login-brand: var(--login-action-600);
+  --login-brand-hover: var(--login-action-700);
+  --login-brand-active: var(--login-action-700);
+  --login-brand-on: var(--login-ocean-50);
+  --login-brand-ink: var(--login-action-light);
+  --login-brand-ring: var(--login-action-light);
+  --login-brand-gradient: none;
+  --login-brand-worst: var(--login-brand);
+  --login-brand-gradient-hover: none;
+  --login-brand-glow: 0 4px 14px rgb(0 0 0 / .45), inset 0 1px 0 rgb(255 255 255 / .16);
+  --login-brand-glow-hover: 0 6px 16px rgb(0 0 0 / .45), inset 0 1px 0 rgb(255 255 255 / .16);
+}
+
+/* Map existing UI semantics only inside the Login stage. */
+.auth-stage {
+  --canvas: var(--login-canvas);
+  --canvas-wash: var(--login-canvas-wash);
+  --canvas-wash-worst: var(--login-canvas-wash-worst);
+  --surface: var(--login-surface);
+  --surface-2: var(--login-surface-2);
+  --surface-3: var(--login-surface-3);
+  --surface-inset: var(--login-surface-inset);
+  --surface-float: var(--login-surface-float);
+  --field-line: var(--login-field-line);
+  --field-line-strong: var(--login-field-line-strong);
+  --ink: var(--login-ink);
+  --ink-soft: var(--login-ink-soft);
+  --ink-mute: var(--login-ink-mute);
+  --ink-faint: var(--login-ink-faint);
+  --ink-invert: var(--login-ink-invert);
+  --brand: var(--login-brand);
+  --brand-hover: var(--login-brand-hover);
+  --brand-active: var(--login-brand-active);
+  --brand-on: var(--login-brand-on);
+  --brand-ink: var(--login-brand-ink);
+  --brand-ring: var(--login-brand-ring);
+  --brand-gradient: var(--login-brand-gradient);
+  --brand-worst: var(--login-brand-worst);
+  --brand-gradient-hover: var(--login-brand-gradient-hover);
+  --brand-glow: var(--login-brand-glow);
+  --brand-glow-hover: var(--login-brand-glow-hover);
+}

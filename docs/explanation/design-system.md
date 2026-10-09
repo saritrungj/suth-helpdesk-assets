@@ -28,7 +28,7 @@ src/app/      เปลือกแอป   แถบเมนู แถบบ�
 
 | บริบท | สถานะที่ต้องรักษา | จุดตรวจ |
 |---|---|---|
-| Login | default, focus-visible, pending/disabled, API error, help expanded | `e2e/login.spec.js`, `e2e/login-wcag.spec.js` |
+| Login | default, focus-visible, pending/disabled, API error, help expanded, remember username, Caps Lock, theme | `e2e/login.spec.js`, `e2e/login-wcag.spec.js`, `e2e/login-layout.spec.js`, `e2e/login-options.spec.js`, `e2e/login-identity.spec.js` |
 | Sidebar | group open/closed, active route, expanded/rail, tooltip hover/focus, admin hidden | `e2e/shell.spec.js`, `app/navigation.test.js` |
 | Topbar | ปีงบ loading/list/empty, account menu, ภาษา, theme และ density ที่จำค่า | `e2e/shell.spec.js`, store tests เดิม |
 | Command search | closed/open, keyboard cursor, empty result, route filtered by role | `e2e/shell.spec.js` |
@@ -276,14 +276,28 @@ import { UiButton, UiCard, UiDataTable, UiField, UiInput } from "../ui";
 4. **ห้ามใส่ข้อมูลที่จำเป็นต่อการตัดสินใจไว้ใน tooltip** — บนหน้าจอสัมผัสไม่มี hover ข้อมูลนั้นจะหายไปเลย
 5. **ห้ามแก้ค่าสีของกราฟด้วยสายตา** — ต้องรันตัวตรวจ colorblind ใหม่ทั้งสองโหมดทุกครั้ง
 6. **ห้ามวางตัวกรองไว้ในการ์ดกราฟใบใดใบหนึ่ง** — ตัวกรองอยู่แถวเดียวเหนือทุกอย่างที่มันคุม
-7. **ห้ามเอา `AuroraCanvas` ไปวางหลังตาราง กราฟ หรือฟอร์ม** — ใช้ได้แค่หน้าล็อกอินกับแผงสรุปบนสุดของแดชบอร์ด (ดูหัวข้อถัดไป)
+7. **ห้ามเอา `AuroraCanvas` ไปวางหลังตาราง กราฟ หรือฟอร์ม** — ใช้เฉพาะแผงสรุปบนสุดของแดชบอร์ด (ดูหัวข้อถัดไป)
+
+## หน้า Login (แบบที่เจ้าของงานรับ 2026-10-09)
+
+นำแบบ Login จากต้นแบบ commit `14e2e6789dbb0d99bc7e55768560c3735de42bb3` มาใช้เฉพาะหน้าเข้าสู่ระบบ (#298) สไตล์อยู่ใน `design/layout.css` กลุ่ม `.auth-*` และสี `--login-*` อยู่ใน `design/tokens.css` โดยผูก semantic token ของ UiCard/UiInput/UiButton เฉพาะภายใน `.auth-stage` จึงไม่เปลี่ยนพื้นหลังหรือสีของหน้าหลังเข้าสู่ระบบ
+
+- จอกว้างตั้งแต่ 900px หรือกว้างตั้งแต่ 720px ที่สูงไม่เกิน 600px: โลโก้ซ้าย ฟอร์มขวา ลิขสิทธิ์กลางขอบล่าง; จอแคบเรียงโลโก้ → การ์ด → ลิขสิทธิ์ โลโก้ฝั่งซ้ายกว้างสูงสุด 672px และในแนวตั้งสูงสุด 315px โดยหดตามพื้นที่เหลือ
+- `.auth-stage` สูง `100dvh` และ Login ไม่จองร่องสกอลบาร์ สถานะปกติพอดีจอทั้งสองธีม จอที่เตี้ยกว่าเนื้อหาขั้นต่ำยังเลื่อนได้ ไม่ตัด overflow; พื้นประดับคงที่ของ body ต่อกับหน้าจอเมื่อเนื้อหาล้น
+- การ์ดกว้างสูงสุด 464px; ช่องกรอกและปุ่มสูง 52 → 48 → 44px ตามความสูงจอ ตัวอักษรในช่อง 16px ป้ายช่อง 14px หัวเรื่องเป็น `APP_NAME` และบรรทัดรอง `APP_TAGLINE`
+- ใต้รหัสผ่านมี “จดจำชื่อผู้ใช้” ชิดซ้ายกับ “ลืมรหัสผ่าน?” ชิดขวาบนเส้นกลางเดียวกัน จำเฉพาะชื่อผู้ใช้เมื่อเลือกเอง; กล่องช่วยเหลือแสดง `OWNER_TEAM` และช่องทางที่ยืนยันใน `SUPPORT_CHANNELS`
+- โลโก้พื้นโปร่ง day/night เลือกตามธีมผ่าน `BRAND_ASSETS` ขนาด 440/880/1344w ปุ่มธีมอยู่มุมขวาบน; ลิขสิทธิ์ปี พ.ศ. และแผนกสารสนเทศเป็นแถวล่างสุด ไม่ทับฟอร์ม
+
+พฤติกรรม Caps Lock, ปุ่มแสดงรหัสผ่าน, autocomplete และขอบเขตหลักฐานอยู่ที่ [accessibility — หน้าล็อกอิน](../reference/accessibility.md#หน้าล็อกอิน); ที่มาและวิธีสร้างภาพอยู่ที่ [brand assets](../assets/brand/README.md)
+
+แหล่งอ้างอิงของแบบที่ตรวจรับ: [Carbon login pattern](https://carbondesignsystem.com/patterns/login-pattern/), [WCAG Reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html), [Windows UX guide](https://learn.microsoft.com/en-us/windows/win32/uxguide/ctrl-balloons), [Edge password reveal](https://learn.microsoft.com/en-us/microsoft-edge/web-platform/password-reveal), [WAI-ARIA button pattern](https://www.w3.org/WAI/ARIA/apg/patterns/button/)
 
 ## artwork และ "ลายเซ็นภาพ"
 
 ระบบมี artwork ชิ้นเดียวคือ `components/AuroraCanvas.vue` — ชั้นแสง teal→ส้มจากสี
 ในโลโก้โรงพยาบาล เป็น CSS ล้วน ไม่มีไลบรารีและไม่มี WebGL
 
-**ใช้ได้สองที่เท่านั้น: หน้าล็อกอิน และแผงสรุปบนสุดของแดชบอร์ด**
+**ใช้เฉพาะแผงสรุปบนสุดของแดชบอร์ด; Login ใช้พื้นนิ่งของตัวเองตามหัวข้อด้านบน**
 
 เหตุผลไม่ใช่รสนิยม — พื้นหลังที่ไม่คงที่ทำให้ **วัด contrast ของตัวหนังสือไม่ได้**
 และตัวเลขในระบบนี้ถูกเอาไปเทียบกับใบแจ้งหนี้จริง จุดที่วาง artwork ได้จึงต้องไม่มี

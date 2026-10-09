@@ -36,13 +36,19 @@ export const ORG_NAME = t("โรงพยาบาลมหาวิทยา�
 /** ชื่อหน่วยงานแบบย่อ ใช้ในที่แคบ */
 export const ORG_NAME_SHORT = t("โรงพยาบาล มทส.");
 
-/** ฝ่ายที่ดูแลระบบ — ใช้ในข้อความติดต่อเมื่อเข้าใช้งานไม่ได้ */
-export const OWNER_TEAM = t("ฝ่ายเทคโนโลยีสารสนเทศ");
+/** แผนกที่ดูแลระบบ — ใช้ในข้อความติดต่อเมื่อเข้าใช้งานไม่ได้ */
+export const OWNER_TEAM = t("แผนกสารสนเทศ");
 
 /** Brand assets — ทุกจุดอ้างผ่านที่นี่ ห้ามกระจาย path ไปตาม component */
 export const BRAND_ASSETS = Object.freeze({
-  /** ภาพเต็มสำหรับ Login — derivative ขนาดเว็บจากต้นฉบับของผู้ใช้ */
+  /** ภาพเดิม — derivative ขนาดเว็บจากต้นฉบับของผู้ใช้ */
   horizontal: "/brand/suth-horizontal.webp",
+  loginDay: "/brand/suth-login-day-880.webp",
+  loginDaySmall: "/brand/suth-login-day-440.webp",
+  loginDayLarge: "/brand/suth-login-day-1344.webp",
+  loginNight: "/brand/suth-login-night-880.webp",
+  loginNightSmall: "/brand/suth-login-night-440.webp",
+  loginNightLarge: "/brand/suth-login-night-1344.webp",
   /** ตัดเฉพาะตัวอักษร SUTH จากต้นฉบับเดียวกัน ใช้ใน shell */
   wordmark: "/brand/suth-wordmark.png",
 });
@@ -58,7 +64,7 @@ export function documentTitle(page) {
 /**
  * ช่องทางติดต่อสำหรับขอสิทธิ์เข้าใช้งาน
  *
- * ⚠️ ตั้งใจให้ว่างไว้ — **ห้ามใส่เบอร์หรืออีเมลสมมติ** หน้านี้เป็นหน้าที่คนจะ
+ * ⚠️ **ห้ามใส่เบอร์หรืออีเมลสมมติ** ใส่เฉพาะช่องทางที่เจ้าของระบบยืนยัน — หน้านี้เป็นหน้าที่คนจะ
  * โทรหรือส่งเมลตามจริง ข้อมูลปลอมบนหน้านี้แย่กว่าการไม่มีข้อมูล เพราะมันพา
  * คนไปหาปลายทางที่ผิดโดยที่เขาเชื่อว่าถูก
  *
@@ -74,7 +80,7 @@ export function documentTitle(page) {
  *
  * @type {{kind: "phone" | "email" | "link", label: string, value: string, note?: string}[]}
  */
-export const SUPPORT_CHANNELS = [];
+export const SUPPORT_CHANNELS = [{ kind: "phone", label: "0 4437 6555", value: "044376555" }];
 
 /**
  * สร้าง href ของช่องทางติดต่อหนึ่งรายการ
