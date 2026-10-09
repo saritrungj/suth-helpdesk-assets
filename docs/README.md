@@ -36,6 +36,7 @@
 - [เปิดและทดสอบ QA แยกสำหรับ #48](how-to/run-qa48.md)
 - [ตรวจต้นแบบสามหน้าก่อนขยายทั้งระบบ](how-to/review-three-page-prototype.md)
 - [เตรียมขึ้น production](how-to/prepare-for-production.md)
+- [ตรวจเซิร์ฟเวอร์จริงเทียบ checklist](how-to/audit-production-server.md)
 - [ส่งรุ่น ตรวจหลังส่ง และกู้คืน](how-to/release-and-recovery.md)
 
 ## reference — เพื่อเปิดหา
