@@ -24,14 +24,14 @@ body:has(.auth-stage)::before { content: ""; position: fixed; inset: 0; z-index:
 /* Edge ใส่ปุ่มรูปตาของตัวเองในช่องรหัสผ่านทุกช่อง ซ้อนกับปุ่มของเราเป็นตาสองดวง — ซ่อนของเบราว์เซอร์ ใช้ปุ่มของเราปุ่มเดียว
    (https://learn.microsoft.com/en-us/microsoft-edge/web-platform/password-reveal) */
 .auth-input::-ms-reveal { display: none; }
-.auth-password-toggle { position: absolute; right: .25rem; top: 50%; transform: translateY(-50%); width: 2.75rem; height: 2.75rem; display: grid; place-items: center; color: var(--ink-mute); border-radius: var(--radius-md); }
+.auth-password-toggle { position: absolute; right: .25rem; top: 50%; transform: translateY(-50%); width: 2.75rem; height: 2.75rem; padding: 0; border: 0; display: grid; place-items: center; color: var(--ink-mute); border-radius: var(--radius-md); }
 .auth-password-toggle:hover, .auth-password-toggle.is-on { background: var(--surface-2); color: var(--brand-ink); }
 .auth-password-toggle:disabled { cursor: not-allowed; }
 .auth-caps { display: flex; align-items: center; gap: .375rem; margin-top: .5rem; font-size: var(--text-sm); font-weight: 500; color: var(--warn-ink); }
 /* จดจำชื่อผู้ใช้ (ซ้าย) กับ "ลืมรหัสผ่าน?" (ขวา) แถวเดียวกันใต้ช่องรหัสผ่าน ตามที่เจ้าของงานกำหนด — ตัวอักษรขนาดและเส้นกลางเดียวกัน */
 .auth-options { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem 1rem; min-height: 1.5rem; }
 .auth-options label > span, .auth-help-toggle { font-size: .875rem; line-height: 1.5rem; }
-.auth-help-toggle { margin-left: auto; color: var(--brand-ink); font-weight: 500; border-radius: var(--radius-xs); }
+.auth-help-toggle { margin-left: auto; height: 1.5rem; min-height: 1.5rem; padding: 0; border: 0; background: transparent; color: var(--brand-ink); font-weight: 500; border-radius: var(--radius-xs); }
 .auth-help-toggle:hover { text-decoration: underline; }
 .auth-remember { align-items: center; min-height: 1.5rem; }
 .auth-remember > span:first-child { margin-top: 0; }

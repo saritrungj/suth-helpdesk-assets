@@ -38,6 +38,10 @@ Implementation ของ [#298](https://github.com/saritrungj/suth-helpdesk-asse
 
 ## Review และขั้นต่อไป
 
+รอบแรก (`3a54c191f34510808dfd4efa67747f0fc851cf6d`): Spec และ Security ผ่าน; Standards มี blocker 1 ข้อ เพราะปุ่มช่วยเหลือ/แสดงรหัสผ่านเป็น raw styled button ขัดกฎใช้ `UiButton` กลาง แก้ทั้งสองปุ่มเป็น `UiButton` และคง geometry/ARIA ใน `.auth-*` แล้ว ตรวจซ้ำครบ unit 701, fixture 370, DB 201, Edge 43, native-reveal A/B และ build/budget ก่อน commit candidate ใหม่
+
+หลักฐานรอบแรกอยู่ใน `output/review-candidate-round1.json` และ `output/review-results-round1.md`; candidate ใหม่ต้องรับ verdict รอบสองของ diff ทั้งหมดเทียบ frozen base เดิม ไม่สืบทอดผลรีวิวรอบแรก
+
 Candidate identity / exact diff อยู่ใน `output/review-candidate.json`; independent Standards, Spec และ Security/robustness verdict อยู่ใน `output/review-results.md` หลังจบรอบ review (receipts เป็นไฟล์ ignored ตาม playbook core)
 
 ขั้นถัดไปเมื่อ verdict ผ่าน: สั่ง “เปิด PR ของ #298” เพื่ออนุญาต feature push/PR ตาม delivery gate; ยังไม่ merge

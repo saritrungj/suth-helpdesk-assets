@@ -101,9 +101,9 @@ async function login() {
               <UiInput ref="passwordEl" v-model="password" :type="showPassword ? 'text' : 'password'" name="password" autocomplete="current-password" autocapitalize="none" :spellcheck="false" required placeholder="••••••••" input-class="auth-input pr-12" :disabled="loading" aria-describedby="current-password-caps">
                 <template #icon><LockKeyhole :size="18" /></template>
               </UiInput>
-              <button type="button" class="auth-password-toggle" :aria-label="showPassword ? t('ซ่อนรหัสผ่าน') : t('แสดงรหัสผ่าน — คำเตือน: รหัสผ่านจะปรากฏบนหน้าจอ')" :class="showPassword && 'is-on'" aria-controls="current-password" :disabled="loading" @click="showPassword = !showPassword">
+              <UiButton variant="ghost" icon-only class="auth-password-toggle" :label="showPassword ? t('ซ่อนรหัสผ่าน') : t('แสดงรหัสผ่าน — คำเตือน: รหัสผ่านจะปรากฏบนหน้าจอ')" :class="showPassword && 'is-on'" aria-controls="current-password" :disabled="loading" @click="showPassword = !showPassword">
                 <component :is="showPassword ? EyeOff : Eye" :size="20" aria-hidden="true" />
-              </button>
+              </UiButton>
             </div>
             <!-- live region อยู่ตลอดเพื่อให้โปรแกรมอ่านหน้าจอประกาศตอนข้อความโผล่ โดยไม่ย้าย focus -->
             <p id="current-password-caps" role="status">
@@ -113,7 +113,7 @@ async function login() {
           <!-- จดจำชื่อผู้ใช้ (ซ้าย) กับลืมรหัสผ่าน (ขวา) อยู่แถวเดียวกันใต้ช่องรหัสผ่าน บนเส้นกลางเดียวกัน -->
           <div class="auth-options">
             <UiCheckbox v-model="rememberUsername" class="auth-remember" :label="t('จดจำชื่อผู้ใช้')" :disabled="loading" />
-            <button type="button" class="auth-help-toggle" :aria-expanded="helpOpen" aria-controls="login-help" @click="helpOpen = !helpOpen">{{ t('ลืมรหัสผ่าน?') }}</button>
+            <UiButton variant="ghost" size="xs" class="auth-help-toggle" :aria-expanded="helpOpen" aria-controls="login-help" @click="helpOpen = !helpOpen">{{ t('ลืมรหัสผ่าน?') }}</UiButton>
           </div>
           <div v-show="helpOpen" id="login-help" class="auth-help-content">
             <h2>{{ t('ติดต่อ{0}', [OWNER_TEAM]) }}</h2>
