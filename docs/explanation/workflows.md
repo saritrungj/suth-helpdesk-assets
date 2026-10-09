@@ -7,6 +7,58 @@
 
 ## งานของผู้ใช้
 
+รูปนี้แสดงว่างานของแต่ละบทบาทต่อกันอย่างไรในหนึ่งรอบเดือน รายละเอียดของแต่ละเส้นทางอยู่ในตารางถัดไป
+
+```mermaid
+flowchart TD
+  subgraph admin["ผู้ดูแล · admin"]
+    setup["ตั้งปีงบ ข้อมูลอ้างอิง<br/>สัญญาและรายการราคา"]
+    register["ลงทะเบียนหรือนำเข้าเครื่อง<br/>ยืนยันช่วงที่ต้องบันทึกยอด"]
+    move["ย้ายเครื่อง<br/>เมื่อที่ตั้งเปลี่ยน"]
+    importMeter["นำเข้ายอดมิเตอร์<br/>จากไฟล์ผู้ให้เช่า"]
+  end
+
+  subgraph staff["เจ้าหน้าที่ · staff และ admin"]
+    entry["บันทึกยอดรายเดือน<br/>ทีละมิเตอร์"]
+  end
+
+  subgraph api["ด่านของ API"]
+    priced{"ยอดนี้<br/>หาราคาได้ไหม"}
+    refused["ไม่รับยอด บอกเหตุผล<br/>ผู้ดูแลแก้สัญญาหรือมิเตอร์<br/>แล้วบันทึกใหม่"]
+    saved(["ยอดพิมพ์หนึ่งรายการ<br/>ต่อมิเตอร์ต่องวด"])
+  end
+
+  subgraph everyone["ทุกบทบาท · รวม viewer"]
+    coverage{"เดือนนี้<br/>บันทึกครบไหม"}
+    pending["งานค้างของเดือน<br/>กลับไปบันทึกยอดที่ขาด"]
+    report(["ภาพรวม ค่าใช้จ่าย<br/>รายงาน และไฟล์ส่งออก"])
+  end
+
+  setup --> register
+  register --> move
+  register --> importMeter
+  register --> entry
+  importMeter --> priced
+  entry --> priced
+  priced -->|"ไม่ได้"| refused
+  priced -->|"ได้"| saved
+  saved --> coverage
+  coverage -->|"ยังค้าง"| pending
+  coverage -->|"ครบ"| report
+  move -.->|"ยอดเป็นของที่ตั้งใหม่<br/>ตั้งแต่เดือนที่ย้าย"| report
+
+  classDef value fill:#ffffff,stroke:#8c959f,color:#1f2328
+  classDef choice fill:#ddf4ff,stroke:#0969da,color:#1f2328
+  classDef stop fill:#ffebe9,stroke:#cf222e,color:#1f2328
+  classDef stage fill:none,stroke:#8c959f,stroke-dasharray:4 3
+  class setup,register,move,importMeter,entry,saved,pending,report value
+  class priced,coverage choice
+  class refused stop
+  class admin,staff,api,everyone stage
+```
+
+กรอบประคือบทบาทที่ทำงานนั้นได้ สิทธิ์บังคับที่ API ไม่ใช่ที่เมนู ดู [บทบาทผู้ใช้](domain.md#บทบาทผู้ใช้) เมื่อผู้ตรวจพบยอดไม่ตรงใบแจ้งหนี้ ผู้ดูแลหรือเจ้าหน้าที่แก้ยอดต้นทางแล้วรอบนี้เดินซ้ำจากด่านของ API
+
 | เส้นทางและผู้ทำ | ผลที่ต้องพิสูจน์ | กฎที่เป็น source of truth | หลักฐานที่มีใน repo / ช่องว่าง |
 |---|---|---|---|
 | ผู้ดูแลตั้งปีงบ ข้อมูลอ้างอิง และสัญญา | ช่วงปีงบถูกต้อง; ราคาของแต่ละหมวดและช่วงเวลาที่มีผลตรวจสอบได้ก่อนบันทึก | [กฎโดเมน](domain.md), [ADR-0001](../decisions/0001-thai-fiscal-year-oct-sep.md), [ADR-0019](../decisions/0019-effective-pricing-history.md), [ADR-0023](../decisions/0023-contract-term-price-lines-and-meters.md) | unit test ของ `packages/domain/` และ `apps/api/src/contracts/routes.test.js`; ยังต้องยืนยัน flow แก้สัญญา→ยอดย้อนหลังผ่าน API/ฐานชั่วคราวเมื่อแตะกฎราคา |
