@@ -2,6 +2,33 @@
 
 ตารางและหน้าที่ — โครงสร้างเต็มพร้อมชนิดข้อมูลและ constraint อยู่ที่ `database/schema.sql` ซึ่งเป็น source of truth
 
+```mermaid
+erDiagram
+  METER_CATEGORY["หมวดมิเตอร์"]
+  CONTRACT["สัญญา"]
+  DEVICE["เครื่อง"]
+  PLACE["อาคาร ชั้น ฝ่าย แผนก"]
+  PRICE_LINE["รายการราคา"]
+  METER["มิเตอร์"]
+  READING["ยอดพิมพ์ต่องวด"]
+  BILLING_PERIOD["ช่วงการคิดเงิน"]
+  SERVICE_PERIOD["ช่วงที่ต้องบันทึกยอด"]
+  LOCATION_PERIOD["ช่วงที่ตั้ง"]
+
+  METER_CATEGORY ||--o{ PRICE_LINE : "ตั้งราคา"
+  CONTRACT ||--|{ PRICE_LINE : "มี"
+  METER_CATEGORY ||--o{ METER : "จัดหมวด"
+  DEVICE ||--|{ METER : "มี"
+  METER ||--o{ READING : "บันทึก"
+  CONTRACT |o--o{ BILLING_PERIOD : "ให้ราคา"
+  DEVICE ||--o{ BILLING_PERIOD : "คิดเงิน"
+  DEVICE ||--o{ SERVICE_PERIOD : "ต้องกรอก"
+  DEVICE ||--o{ LOCATION_PERIOD : "ที่ตั้ง"
+  PLACE |o--o{ LOCATION_PERIOD : "เจ้าของยอด"
+```
+
+รูปนี้แสดงเฉพาะแนวคิดที่ใช้คิดเงินและจัดยอด ชื่อกล่องเป็นคำในโดเมน ไม่ใช่ชื่อตาราง คำที่นิยามแล้วอยู่ใน [CONTEXT.md](../../CONTEXT.md) สัญญาต้องมีรายการราคาและเครื่องต้องมีมิเตอร์อย่างน้อยหนึ่งรายการตาม [ADR-0023](../decisions/0023-contract-term-price-lines-and-meters.md) แต่ฐานข้อมูลไม่ได้บังคับข้อนี้ ช่วงเวลาสามชุดของเครื่องตอบคนละคำถามและห้ามรวมกัน ปีงบไม่มีเส้นเชื่อมกับตารางใด เพราะได้จากการเทียบเดือนของยอดกับช่วงเดือนของปีงบ
+
 | กลุ่ม | ตาราง | หน้าที่ |
 |---|---|---|
 | ผู้ใช้ | `users` | บัญชี รหัสผ่านแบบ bcrypt hash และ role |
@@ -35,7 +62,7 @@
 | `fiscal_year` | `CHECK chk_fiscal_year_start_month_ce` / `..._end_month_ce` | ช่วงเดือนของปีงบถูกกรอกเป็น พ.ศ. |
 | `device_service_period` | `CHECK chk_device_service_period_order` | ช่วงที่สิ้นสุดก่อนเริ่ม ซึ่งจะทำให้เดือนนั้นหายจากตัวส่วนเงียบๆ |
 | `device_contract_history` | `CHECK chk_device_contract_history_order` | ช่วงการคิดเงินที่สิ้นสุดก่อนเริ่ม |
-| `contracts` | `CHECK chk_contracts_effective_order` | ช่วงที่สัญญามีผลซึ่งสิ้นสุดก่อนเริ่ม |
+| `contracts` | `CHECK chk_contracts_term_order` | ช่วงที่สัญญามีผลซึ่งสิ้นสุดก่อนเริ่ม |
 | `*_alias` | `UNIQUE KEY (alias)` | ชื่อเรียกอื่นเดียวชี้สองรายการ — การห้ามชนชื่อหลักอยู่ใน API เพราะคนละตาราง |
 
 ## รูปแบบค่าที่ต้องรู้
