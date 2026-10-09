@@ -134,7 +134,8 @@ function inspectState({ cwd = process.cwd(), mainCheckout, repository, issue, pr
   const targetWorktrees = git("worktree", "list", "--porcelain", "-z").split("\0\0").filter(Boolean).map((record) => record.split("\0")).filter((fields) => fields.includes(`branch refs/heads/${branch}`)).map((fields) => fields.find((field) => field.startsWith("worktree "))?.slice(9));
   if (targetWorktrees.some((directory) => !directory)) throw new Error("Incomplete worktree observation.");
   const targetDirty = targetWorktrees.some((directory) => invoke("git", ["status", "--porcelain=v1", "--untracked-files=all", "--ignore-submodules=none"], directory));
-  const result = { grantsAuthority: false, repository, issue, pr, branch, currentBranch, head, localBranch, remoteBranch, mainHead, remoteMain, targetWorktrees, checkpointPath, prState: prState.state, issueState: issueState.state, prHead: prState.headRefOid, prMergeCommit: prState.mergeCommit?.oid || null, reviewIdentity: null, phase: "blocked", reasons: [], checks: [] };
+  const pendingChecks = ["task ownership and exact attachment identity", "required-check coverage against acceptance matrix", "human gates and current authorization", "generated-artifact and durable completion-record audit"];
+  const result = { grantsAuthority: false, repository, issue, pr, branch, currentBranch, head, localBranch, remoteBranch, mainHead, remoteMain, targetWorktrees, checkpointPath, prState: prState.state, issueState: issueState.state, prHead: prState.headRefOid || null, prMergeCommit: prState.mergeCommit?.oid || null, reviewIdentity: null, phase: "blocked", reasons: [], checks: [], pendingChecks };
   const issueUrl = `https://github.com/${repository}/issues/${issue}`.toLowerCase();
   if (prState.headRefName !== branch || prState.baseRefName !== "main" || !prState.closingIssuesReferences.some((item) => item.number === issue && item.url?.toLowerCase() === issueUrl)) result.reasons.push("TARGET_MISMATCH");
   if (status || mainStatus || targetDirty) result.reasons.push("DIRTY_WORKTREE");
@@ -171,7 +172,6 @@ function inspectState({ cwd = process.cwd(), mainCheckout, repository, issue, pr
     try { checkpointPresent = inside(recoveryDirectory, readArtifact(checkpointPath).path); } catch { /* Missing checkpoint needs preservation. */ }
     const evidenceDurable = evidence.evidencePaths.every((file) => inside(recoveryDirectory, file));
     result.phase = checkpointPresent && evidenceDurable ? "cleanup-preflight" : "preserve-evidence";
-    if (result.phase === "cleanup-preflight") result.pendingChecks = ["task ownership and exact attachment identity", "required-check coverage against acceptance matrix", "human gates and current authorization", "generated-artifact and durable completion-record audit"];
   }
   return result;
 }

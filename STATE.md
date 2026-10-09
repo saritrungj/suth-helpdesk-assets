@@ -31,7 +31,9 @@ Live read-only inspector กับ #298/#300 ยืนยัน PR merged แล
 
 ## Current phase and next action
 
-Freeze complete scoped candidate → capture base/mergeBase/candidate/changedFiles/diffCommand → independent Standards/Spec/Security review (round 1, delivery verdict ยังไม่มี)
+รอบ 1 candidate c8cbd159ca7c055bd288ee46ed45c61bb9bfb108: Standards และ Security ผ่าน; Spec พบ final-audit ไม่แสดง pending manual gates ทำ regression ให้แดงก่อนแก้แล้วให้ทุก phase แสดง gates และแก้ข้อความ publication status ที่ล้าสมัยได้
+
+Freeze candidate หลังแก้ → capture เทียบ original frozen base เดิม → independent Standards/Spec/Security review รอบ 2 ห้ามสืบทอด verdict รอบแรก ถ้ายังมี blocker ที่รอบ 2 ให้หยุดและรายงาน
 
 หลัง review ผ่าน: รัน pre-push --expect กับ candidate ที่ review แล้ว, push exact feature branch, ยืนยัน remote SHA, เปิด PR อ้าง #301 และแนบ current evidence/limits หยุดก่อน merge
 

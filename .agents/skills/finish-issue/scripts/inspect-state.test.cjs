@@ -241,6 +241,10 @@ test("absent feature refs give final audit hint, never DONE", (t) => {
   const result = f.inspect(f.mainCheckout);
   assert.equal(result.phase, "final-audit");
   assert.equal(result.grantsAuthority, false);
+  assert.ok(result.pendingChecks?.includes("task ownership and exact attachment identity"));
+  assert.ok(result.pendingChecks?.includes("required-check coverage against acceptance matrix"));
+  assert.ok(result.pendingChecks?.includes("human gates and current authorization"));
+  assert.ok(result.pendingChecks?.includes("generated-artifact and durable completion-record audit"));
   assert.deepEqual(result.targetWorktrees, []);
   assert.ok(fs.existsSync(checkpoint));
 });
