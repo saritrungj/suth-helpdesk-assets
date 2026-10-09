@@ -12,10 +12,33 @@ set -e
 
 # ruleset ฝั่ง GitHub ตั้งไม่ได้ระหว่างที่บัญชีถูกล็อก จึงกันการ push ตรงเข้า main ที่นี่แทน
 # การ merge ผ่าน PR บนเว็บไม่ผ่าน hook นี้ เส้นทาง PR จึงใช้ได้เหมือนเดิม
+#
+# ระหว่างอ่าน ref จดด้วยว่า push นี้เป็นการลบ branch ล้วน หรือแตะเฉพาะไฟล์ .md (#320)
+# ชุดเต็มใช้ราว 12 นาที ถ้าต้องรอเท่ากันเพื่อลบ branch หรือแก้เอกสาร คนจะหันไปใช้
+# --no-verify ซึ่งข้ามทุกด่านรวมด่านห้าม push เข้า main ข้างบนนี้ด้วย
+zero=0000000000000000000000000000000000000000
+pushed=0
+only_deletes=1
+only_docs=1
 while read -r local_ref local_sha remote_ref remote_sha; do
   if [ "$remote_ref" = "refs/heads/main" ]; then
     echo "pre-push: ห้าม push ตรงเข้า main — เปิด branch แล้วส่งผ่าน PR"
     exit 1
+  fi
+  pushed=1
+  [ "$local_sha" = "$zero" ] && continue
+  only_deletes=0
+
+  # branch ใหม่ยังไม่มีฝั่ง remote ให้เทียบ — เทียบกับจุดที่แตกจาก origin/main
+  if [ "$remote_sha" = "$zero" ]; then
+    base=$(git merge-base "$local_sha" origin/main 2>/dev/null || true)
+  else
+    base=$remote_sha
+  fi
+  # หาจุดเทียบไม่ได้ หรือ diff ล้ม (เช่น commit ฝั่ง remote ไม่อยู่ในเครื่อง) = ไม่รู้ว่าแตะอะไร รันชุดเต็ม
+  files=$(git diff --name-only "$base" "$local_sha" 2>/dev/null) || files="?"
+  if [ -z "$base" ] || [ -z "$files" ] || printf '%s\n' "$files" | grep -qv '\.md$'; then
+    only_docs=0
   fi
 done
 
@@ -24,11 +47,29 @@ if [ "$SKIP_VERIFY" = "1" ]; then
   exit 0
 fi
 
+if [ "$pushed" = "1" ] && [ "$only_deletes" = "1" ]; then
+  echo "pre-push: ลบ branch อย่างเดียว ไม่มีโค้ดให้ตรวจ"
+  exit 0
+fi
+
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 echo "pre-push: ตรวจช่องว่างท้ายบรรทัดและ conflict marker"
 git diff --check HEAD
+
+if [ "$pushed" = "1" ] && [ "$only_docs" = "1" ]; then
+  echo "pre-push: แตะเฉพาะไฟล์ .md — ตรวจเอกสารอย่างเดียว"
+  node scripts/check-docs.cjs
+  echo "pre-push: ผ่าน"
+  exit 0
+fi
+
+# แต่ละ worktree มี node_modules ของตัวเอง (CONTRIBUTING.md) — บอกตรงๆ ดีกว่าปล่อยให้ล้มด้วย MODULE_NOT_FOUND
+if [ ! -d "$root/node_modules" ]; then
+  echo "pre-push: โฟลเดอร์นี้ยังไม่ได้ติดตั้ง dependency — รัน npm ci ก่อน แล้ว push ใหม่"
+  exit 1
+fi
 
 echo "pre-push: npm test, build และ E2E ที่ไม่ต้องใช้ฐานข้อมูล"
 npm run verify
