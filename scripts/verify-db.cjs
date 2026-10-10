@@ -147,6 +147,30 @@ function checkSeedDates() {
   console.log(`verify:db — seed_ci.sql โหลดผ่านกับวันที่จำลอง ${seedCheckDates().length} วัน`);
 }
 
+/**
+ * งานนำเข้าที่ชุด E2E ทิ้งค้างไว้ในฐานชั่วคราว (#322)
+ *
+ * เทสที่อัปโหลดไฟล์แล้วไม่บันทึกหรือยกเลิก ทิ้งงานสถานะ "ต้องทำต่อ" ไว้ให้เทสถัดไปเห็น
+ * หน้านำเข้าจึงมีตารางงานค้างโผล่ขึ้นมากลางชุด และเทสที่ไม่เกี่ยวล้มตามลำดับการรัน
+ * สถานะชุดเดียวกับ OPEN ใน apps/api/src/import/session-store.js
+ */
+const OPEN_IMPORT_STATUSES = ["draft", "validating", "ready", "processing", "failed"];
+
+function leftoverImportSessions() {
+  const statuses = OPEN_IMPORT_STATUSES.map((status) => `'${status}'`).join(", ");
+  const result = spawnSync(
+    "docker",
+    [
+      "exec", "-e", `MYSQL_PWD=${dbPassword}`, container,
+      "mysql", "--default-character-set=utf8mb4", "-uroot", "-N", "-B", database,
+      "-e", `SELECT CONCAT('#', id, ' ', status, ' ', file_name) FROM import_session WHERE status IN (${statuses}) ORDER BY id`,
+    ],
+    { encoding: "utf8" }
+  );
+  if (result.error || result.status !== 0) throw new Error(`ตรวจงานนำเข้าที่ค้างไม่ได้: ${String(result.stderr).trim()}`);
+  return result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
 async function main() {
   const docker = spawnSync("docker", ["info"], { stdio: "ignore" });
   if (docker.error || docker.status !== 0) {
@@ -211,6 +235,15 @@ async function main() {
     const status = run("npm", ["run", "test:e2e:db", "--workspace", "@suth/web"], { cwd: root, env });
     if (status !== 0) throw new Error(`E2E โปรเจกต์ db ล้ม (exit ${status ?? "unknown"})`);
     console.log(assertReportFile(dbResultFile, "verify:db"));
+
+    const leftovers = leftoverImportSessions();
+    if (leftovers.length) {
+      throw new Error(
+        `เทสทิ้งงานนำเข้าที่ยังไม่ปิดไว้ ${leftovers.length} งาน — ให้เทสที่สร้างปิดงานของตัวเอง (บันทึก หรือ POST /import-sessions/:id/abandon)\n  ` +
+          leftovers.join("\n  ")
+      );
+    }
+    console.log("verify:db — ไม่มีงานนำเข้าค้างหลังจบชุด");
   } finally {
     if (created) {
       removeContainer();
