@@ -127,3 +127,81 @@ test("แก้ราคาของสัญญาที่มียอดแ�
     if (contractId) await apiFetch(`/contracts/${contractId}`, { method: "DELETE" });
   }
 });
+
+test("แก้ราคาหนึ่งรายการของสัญญาหลายรายการราคา — รายการอื่นและเครื่องราคาพิเศษยอดไม่เปลี่ยน (#327)", async () => {
+  const [fy, categories, devices] = await Promise.all([
+    activeFiscalYear(),
+    apiFetch("/contracts/meter-categories"),
+    apiFetch("/devices"),
+  ]);
+  const [lineA, lineB] = categories.filter((category) => !category.is_color);
+  const template = devices.find((row) => row.brand_id);
+  test.skip(!lineA || !lineB || !template, "ต้องมีหมวดมิเตอร์ขาวดำสองหมวดและเครื่องต้นแบบในฐานทดสอบ");
+
+  const [endYear, endMonth] = fy.end_month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(endYear, endMonth, 0)).toISOString().slice(0, 10);
+  const month = fy.start_month;
+  const stamp = Date.now();
+  const lines = (priceA) => [
+    { category_id: lineA.id, price_per_page: priceA },
+    { category_id: lineB.id, price_per_page: "0.3" },
+  ];
+  const base = { contract_no: `E2E-PRICE-LINES-${stamp}`, effective_from: `${fy.start_month}-01`, effective_to: lastDay, price_lines: lines("0.4") };
+  const repriced = { ...base, price_lines: lines("0.45") };
+  let contractId = null;
+  const ids = {};
+
+  const costs = async () => {
+    const rows = await apiFetch(`/dashboard/monthly-kpi?month=${month}`);
+    const of = (deviceId) => Number(rows.find((row) => row.device_id === deviceId).total_cost);
+    return { onLineA: of(ids.onLineA), special: of(ids.special), onLineB: of(ids.onLineB) };
+  };
+
+  try {
+    contractId = (await apiFetch("/contracts", { method: "POST", body: JSON.stringify(base) })).id;
+    // สามเครื่อง: ใช้ราคารายการ A, ใช้ราคาพิเศษเฉพาะเครื่องบนหมวดเดียวกับ A, และใช้ราคารายการ B
+    for (const [key, extra] of Object.entries({
+      onLineA: { meter_category_id: lineA.id, price_override: null },
+      special: { meter_category_id: lineA.id, price_override: "0.5" },
+      onLineB: { meter_category_id: lineB.id, price_override: null },
+    })) {
+      ids[key] = (await apiFetch("/devices", {
+        method: "POST",
+        body: JSON.stringify({
+          serial_number: `E2E-PRICE-LINES-${stamp}-${key}`,
+          brand_id: template.brand_id,
+          contract_id: contractId,
+          status: "active",
+          installation_status: "installed",
+          installed_on: `${fy.start_month}-01`,
+          ...extra,
+        }),
+      })).id;
+    }
+
+    // เครื่องละ 1,000 หน้า หลังหัก 2% เหลือ 980 หน้า
+    await apiFetch("/print-transactions/bulk", {
+      method: "POST",
+      body: JSON.stringify({ month, items: Object.values(ids).map((device_id) => ({ device_id, pages: 1000 })) }),
+    });
+    expect(await costs()).toEqual({ onLineA: 392, special: 490, onLineB: 294 });
+
+    const preview = await apiFetch(`/contracts/${contractId}`, { method: "PUT", body: JSON.stringify({ ...repriced, preview: true }) });
+    const told = preview.impact.find((row) => row.month === month);
+    // ผลกระทบเป็นยอดของทั้งสัญญาในงวดนั้น — เปลี่ยนเฉพาะส่วนของรายการ A: 392 → 441
+    expect(Number(told.before)).toBe(392 + 490 + 294);
+    expect(Number(told.after)).toBe(441 + 490 + 294);
+
+    await apiFetch(`/contracts/${contractId}`, { method: "PUT", body: JSON.stringify(repriced) });
+    const after = await costs();
+    expect(after).toEqual({ onLineA: 441, special: 490, onLineB: 294 });
+    expect(after.onLineA + after.special + after.onLineB).toBe(Number(told.after));
+  } finally {
+    const created = Object.values(ids);
+    if (created.length) {
+      await restoreMonth(month, created.map((device_id) => ({ device_id, pages: null })));
+      for (const id of created) await apiFetch(`/devices/${id}`, { method: "DELETE" });
+    }
+    if (contractId) await apiFetch(`/contracts/${contractId}`, { method: "DELETE" });
+  }
+});

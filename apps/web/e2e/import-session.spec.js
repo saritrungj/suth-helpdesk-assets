@@ -180,6 +180,56 @@ test("นำเข้าไฟล์เดิมซ้ำ — ไม่มีย
   }
 });
 
+test("นำเข้าซ้ำด้วยยอดที่เปลี่ยน — บอกจำนวนที่จะแทนที่ บันทึกแล้วค่าพิมพ์ตรงกับไฟล์ใหม่ ไม่มียอดซ้ำ (#327)", async ({ page }) => {
+  test.skip(process.env.SUTH_E2E_DISPOSABLE_DB !== "1", "ต่อจากเทสนำเข้าครั้งแรกและเขียนทับยอดถาวร — รันเฉพาะฐานชั่วคราวของ verify:db");
+  test.setTimeout(180000);
+  const tag = `A${run}`;
+  const first = syntheticFile(tag);
+  test.skip(!(await contractInSystem(first.contractNo)), "ต้องมีผลของเทสนำเข้าครั้งแรกในฐานก่อน");
+
+  // ไฟล์ชุดเดียวกับครั้งแรก ต่างที่เดียว: เครื่อง 01 งวดล่าสุด 157 → 200 หน้า (ผู้ให้เช่าส่งไฟล์แก้ไขมา)
+  const common = { division: `ฝ่ายทดสอบ ${tag}`, department: "งานทดสอบ", building: `อาคารทดสอบ ${tag}`, floor: "2" };
+  const revised = meterReportWorkbook({
+    contractNo: first.contractNo,
+    months: first.months,
+    devices: [
+      { serial: `TX9-${tag}-01`, model: "Brother HL-L5210DN", place: "เคาน์เตอร์ 1", ...common, price: 0.365, pages: [771, 200] },
+      { serial: `TX9-${tag}-02`, model: "Brother HL-L5210DN", place: "เคาน์เตอร์ 2", ...common, price: 0.365, pages: [1505, 357] },
+      { serial: `TX9-${tag}-03`, model: "HP MFP E78635DN", place: "ห้องถ่ายเอกสาร", ...common, price: 0.35, pages: [3000, 2500], color: { price: 3.9, pages: [120, 95] } },
+      { serial: `TX9-${tag}-04`, model: "Brother HL-L5210DN", place: "เครื่องสำรอง", ...common, price: 0.365, pages: [0, 0], spare: true },
+    ],
+  });
+  const expectedTotal = first.months.reduce((sum, month) => sum + revised.expected.costByMonth[month], 0);
+  const firstTotal = first.months.reduce((sum, month) => sum + first.expected.costByMonth[month], 0);
+  expect(expectedTotal, "ไฟล์แก้ไขต้องให้ยอดต่างจากครั้งแรก ไม่งั้นเทสนี้ไม่ได้พิสูจน์อะไร").not.toBeCloseTo(firstTotal, 2);
+
+  const expenseOf = async () => {
+    const years = await apiFetch("/fiscal-years");
+    const fy = (Array.isArray(years) ? years : years.data ?? []).find((y) => y.start_month <= first.months[0] && first.months[0] <= y.end_month);
+    const expense = await apiFetch(`/expense/${fy.id}?month=${first.months.join(",")}`);
+    return Number(expense.contracts.find((c) => c.contract_no === first.contractNo).total_cost);
+  };
+  expect(await expenseOf()).toBeCloseTo(firstTotal, 2);
+
+  const id = await upload(page, "meter-report-revised.xlsx", revised.buffer);
+  let committed = false;
+  try {
+    const rows = first.months.length * 4;
+    await expect(item(page, `ยอดมิเตอร์: ใหม่ 0 · เขียนทับ 1 · ไม่เปลี่ยน ${rows - 1}`)).toBeVisible({ timeout: 30000 });
+    await expect(item(page, "ยอดตามใบแจ้งหนี้ตรงกับท้ายแผ่นทุกงวด")).toBeVisible();
+    await confirmCommit(page);
+    committed = true;
+
+    const detail = await apiFetch(`/import-sessions/${id}`);
+    expect(detail.result).toMatchObject({ devices_created: 0, readings_new: 0, readings_overwritten: 1 });
+
+    // ยอดใหม่แทนยอดเดิม ไม่ได้บวกเพิ่ม — ค่าพิมพ์ของสัญญาเท่ากับที่คำนวณจากไฟล์แก้ไข
+    expect(await expenseOf()).toBeCloseTo(expectedTotal, 2);
+  } finally {
+    if (!committed) await apiFetch(`/import-sessions/${id}/abandon`, { method: "POST", body: JSON.stringify({ reason: "เทสนำเข้าซ้ำ #327" }) });
+  }
+});
+
 test("ออกจากหน้ากลางงานแล้วกลับมา — ไฟล์ ผลตรวจ และสิ่งที่เลือกไว้ยังอยู่ ทั้งกลับจากรายการงานค้างและรีเฟรช", async ({ page }) => {
   const file = syntheticFile(`B${run}`);
   const id = await upload(page, "meter-report-b.xlsx", file.buffer);
