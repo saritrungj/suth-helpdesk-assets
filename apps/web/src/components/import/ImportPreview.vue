@@ -33,8 +33,8 @@ const lines = computed(() => {
   if (p.departments) add("departments", t("เพิ่มแผนกใหม่ {0} แผนก", [formatCount(p.departments)]));
   if (p.devices?.create) add("create", t("ลงทะเบียนเครื่องใหม่ {0} เครื่อง", [formatCount(p.devices.create)]));
   if (p.devices?.fill) add("fill", t("เติมช่องที่ว่างของเครื่องเดิม {0} เครื่อง", [formatCount(p.devices.fill)]));
-  if (p.readings?.new) add("new", t("บันทึกยอดใหม่ {0} รายการ", [formatCount(p.readings.new)]));
-  if (p.readings?.overwrite) add("overwrite", t("แทนที่ยอดเดิม {0} รายการ", [formatCount(p.readings.overwrite)]), "warn");
+  if (p.readings?.new) add("new", t("บันทึกตัวเลขใหม่ {0} รายการ", [formatCount(p.readings.new)]));
+  if (p.readings?.overwrite) add("overwrite", t("แทนที่ตัวเลขเดิม {0} รายการ", [formatCount(p.readings.overwrite)]), "warn");
   if (p.look_alike) add("look", t("เลขซีเรียลคล้ายเครื่องที่มีอยู่ {0} รายการ — ถ้าเป็นเครื่องเดียวกันที่พิมพ์ผิด จะได้เครื่องซ้ำ", [formatCount(p.look_alike)]), "warn");
   return out;
 });
@@ -57,7 +57,7 @@ const period = computed(() => {
     </ul>
     <p v-else class="text-sm text-ink-mute">{{ t("ไม่มีอะไรใหม่ในไฟล์นี้") }}</p>
     <p v-if="preview.invoice_total" class="text-sm text-ink mt-2" data-testid="preview-invoice">
-      {{ t("ยอดตามใบแจ้งหนี้ของระบบหลังบันทึก {0} บาท ({1} งวด{2})", [formatBahtValue(preview.invoice_total), formatCount(preview.invoice_months), period ? ` · ${period}` : ""]) }}
+      {{ t("เงินตามใบแจ้งหนี้ของระบบหลังบันทึก {0} บาท ({1} งวด{2})", [formatBahtValue(preview.invoice_total), formatCount(preview.invoice_months), period ? ` · ${period}` : ""]) }}
     </p>
   </section>
 </template>

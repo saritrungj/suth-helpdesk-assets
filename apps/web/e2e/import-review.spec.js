@@ -125,7 +125,7 @@ for (const width of [1280, 1440]) {
       const rail = page.getByTestId("import-review-summary");
       const commit = page.getByTestId("import-commit");
       await expect(commit).toHaveCount(1);
-      await expect(rail).toContainText("ข้าม 1 · ยอดไม่เปลี่ยน 3");
+      await expect(rail).toContainText("ข้าม 1 · ตัวเลขไม่เปลี่ยน 3");
       await page.evaluate(() => window.scrollTo(0, 900));
       await expect(commit).toBeInViewport();
       const box = await rail.boundingBox();

@@ -23,8 +23,8 @@ function validationFor(decisions, { contractCreated }) {
       ? { key: "models", state: "ok", title: "หมวดมิเตอร์ของทุกรุ่นครบแล้ว", detail: null, action: null }
       : { key: "models", state: "blocking", title: "ยังต้องเลือกหมวดมิเตอร์ของรุ่นใหม่ 1 รุ่น", detail: null, action: { type: "decide_models" } },
     decided
-      ? { key: "readings", state: "ok", title: "ยอดมิเตอร์: ใหม่ 2 · เขียนทับ 0 · ไม่เปลี่ยน 0", detail: null, action: null }
-      : { key: "readings", state: "waiting", title: "ยอดมิเตอร์: รอให้ข้อมูลเครื่องพร้อมก่อน", detail: null, action: null },
+      ? { key: "readings", state: "ok", title: "เลขมิเตอร์: ใหม่ 2 · แทนที่ 0 · ไม่เปลี่ยน 0", detail: null, action: null }
+      : { key: "readings", state: "waiting", title: "เลขมิเตอร์: รอให้ข้อมูลเครื่องพร้อมก่อน", detail: null, action: null },
   ];
   return {
     validated_at: new Date().toISOString(),

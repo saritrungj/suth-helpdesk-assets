@@ -113,8 +113,8 @@ test("ไฟล์รายงานมิเตอร์ → สร้างส
     await expect(fiscal).toHaveCount(0, { timeout: 30000 });
   }
 
-  // 5) ยอดตามใบแจ้งหนี้ของระบบเทียบท้ายแผ่นแล้วตรงทุกงวด (ต่างไม่เกิน 1 สตางค์)
-  await expect(item(page, "ยอดตามใบแจ้งหนี้ตรงกับท้ายแผ่นทุกงวด")).toBeVisible();
+  // 5) เงินตามใบแจ้งหนี้ของระบบเทียบท้ายแผ่นแล้วตรงทุกงวด (ต่างไม่เกิน 1 สตางค์)
+  await expect(item(page, "เงินตามใบแจ้งหนี้ตรงกับท้ายแผ่นทุกงวด")).toBeVisible();
   await expect(page.getByTestId("readings-new")).toHaveText(String(file.months.length * 4));
 
   // 6) สรุปสิ่งที่จะเกิด แล้วยืนยัน
@@ -146,7 +146,7 @@ test("ไฟล์รายงานมิเตอร์ → สร้างส
   await expect(page.getByText(file.contractNo)).toBeVisible();
 });
 
-test("นำเข้าไฟล์เดิมซ้ำ — ไม่มียอดใหม่ ไม่เขียนทับ บันทึกไม่ได้ และค่าพิมพ์ของสัญญาเท่าเดิม (#309)", async ({ page }) => {
+test("นำเข้าไฟล์เดิมซ้ำ — ไม่มีตัวเลขใหม่ ไม่แทนที่ บันทึกไม่ได้ และค่าพิมพ์ของสัญญาเท่าเดิม (#309)", async ({ page }) => {
   test.skip(process.env.SUTH_E2E_DISPOSABLE_DB !== "1", "ต่อจากเทสก่อนหน้าที่สร้างสัญญาและเครื่องถาวร — รันเฉพาะฐานชั่วคราวของ verify:db");
   test.setTimeout(180000);
   const file = syntheticFile(`A${run}`);
@@ -165,7 +165,7 @@ test("นำเข้าไฟล์เดิมซ้ำ — ไม่มีย
   try {
     // ทุกยอดในไฟล์มีอยู่ในระบบแล้วและเท่าเดิม — ไม่มีรายการใหม่หรือเขียนทับ
     const rows = file.months.length * 4;
-    await expect(item(page, `ยอดมิเตอร์: ใหม่ 0 · เขียนทับ 0 · ไม่เปลี่ยน ${rows}`)).toBeVisible({ timeout: 30000 });
+    await expect(item(page, `เลขมิเตอร์: ใหม่ 0 · แทนที่ 0 · ไม่เปลี่ยน ${rows}`)).toBeVisible({ timeout: 30000 });
     await expect(item(page, "ไม่มีอะไรใหม่ในไฟล์นี้")).toHaveAttribute("data-state", "blocking");
     await expect(page.getByTestId("import-commit")).toBeDisabled();
 
@@ -215,8 +215,8 @@ test("นำเข้าซ้ำด้วยยอดที่เปลี่�
   let committed = false;
   try {
     const rows = first.months.length * 4;
-    await expect(item(page, `ยอดมิเตอร์: ใหม่ 0 · เขียนทับ 1 · ไม่เปลี่ยน ${rows - 1}`)).toBeVisible({ timeout: 30000 });
-    await expect(item(page, "ยอดตามใบแจ้งหนี้ตรงกับท้ายแผ่นทุกงวด")).toBeVisible();
+    await expect(item(page, `เลขมิเตอร์: ใหม่ 0 · แทนที่ 1 · ไม่เปลี่ยน ${rows - 1}`)).toBeVisible({ timeout: 30000 });
+    await expect(item(page, "เงินตามใบแจ้งหนี้ตรงกับท้ายแผ่นทุกงวด")).toBeVisible();
     await confirmCommit(page);
     committed = true;
 
