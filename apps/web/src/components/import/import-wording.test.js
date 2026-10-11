@@ -17,10 +17,19 @@ const here = dirname(fileURLToPath(import.meta.url));
 const webSrc = join(here, "../..");
 const apiImport = join(here, "../../../../api/src/import");
 
-/** คำจากคอลัมน์ "ไม่ใช้" ของ ui-words.md ที่ปรากฏในหน้านำเข้า พร้อมคำที่ต้องใช้แทน */
+/**
+ * ทุกคำจากคอลัมน์ "ไม่ใช้" ของ ui-words.md พร้อมคำที่ต้องใช้แทน
+ *
+ * "ยอด" ห้ามทั้งคำ (ตารางห้ามคำเดี่ยว แต่ไม่มีคำประสมที่ถูกในหน้านำเข้า) จึงจับจากอักษรตรงๆ
+ * ซึ่งครอบ ยอดมิเตอร์ / ยอดตามใบแจ้งหนี้ / ยอดใหม่ / ยอดพิมพ์จริง ในตารางด้วย
+ */
 const FORBIDDEN = [
   { pattern: /ยอด/, use: "จำนวนพิมพ์ / ตัวเลข / เลขมิเตอร์ / เงินตามใบแจ้งหนี้ (ตามความหมาย)" },
   { pattern: /เขียนทับ/, use: "แทนที่" },
+  { pattern: /หน้าที่พิมพ์|หน้าดิบ|หน้าที่คิดเงิน|หน้าสุทธิ|สุทธิหลังหัก/, use: "จำนวนพิมพ์ / จำนวนพิมพ์หลังหัก 2%" },
+  { pattern: /ส่วนลด 2%/, use: "หัก 2%" },
+  { pattern: /ค่าใช้จ่ายสุทธิ|ต้นทุนเฉลี่ยต่อหน้า/, use: "ค่าใช้จ่าย / เฉลี่ยหน้าละ" },
+  { pattern: /ทรัพย์สิน|อุปกรณ์/, use: "เครื่อง / เครื่องพิมพ์" },
 ];
 
 function files(directory, accept) {
@@ -31,7 +40,7 @@ function files(directory, accept) {
 
 const SOURCES = [
   ...files(join(webSrc, "components/import"), /\.(vue|js)$/),
-  ...files(join(webSrc, "views/admin"), /^ImportSessions?\.vue$/),
+  ...files(join(webSrc, "views/admin"), /^Import.*\.vue$/),
   join(webSrc, "components/device-import.js"),
   join(webSrc, "components/print-usage-import.js"),
   join(webSrc, "components/audit-log.js"),
