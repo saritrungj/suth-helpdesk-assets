@@ -1,7 +1,7 @@
 import { assetFixture } from "./asset-fixture.js";
 
 // Dedicated HTTP boundary: real preview shape and preserved processing/failure states.
-export async function importReviewFixture(page, { role = "admin", status = "ready" } = {}) {
+export async function importReviewFixture(page, { role = "admin", status = "ready", fileName = "review-meter.xlsx" } = {}) {
   await assetFixture(page, role);
   const state = { status, revision: 1, building: { action: "create" }, puts: [], commits: [], delay: 0, failDecisions: false, commitDelay: 0, outcome: "completed", owner: { id: 99, username: "other-admin" } };
   const detail = () => {
@@ -9,7 +9,7 @@ export async function importReviewFixture(page, { role = "admin", status = "read
     const preview = { writes: state.building?.action === "alias" ? 4 : 5, devices: { create: 2, fill: 0 }, readings: { new: 2, overwrite: 0 }, names: { building: state.building?.action === "create" ? 1 : 0 }, contracts: [], fiscal_years: [], months: ["2026-08"] };
     return {
       id: 41, status: state.status, fingerprint: `review-${state.revision}`,
-      file: { name: "review-meter.xlsx", size: 1024, kind: "meter_report" }, owner: state.owner,
+      file: { name: fileName, size: 1024, kind: "meter_report" }, owner: state.owner,
       created_at: "2026-09-23T07:00:00.000Z", duplicates: [], events: [],
       can_commit: state.status === "ready" && decided,
       decisions: { names: { building: { "Review building": state.building } } },

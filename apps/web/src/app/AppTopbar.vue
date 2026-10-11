@@ -139,7 +139,7 @@ async function logout() {
       <!-- ช่องค้นหาคำสั่ง — บนจอใหญ่แสดงเป็นช่องจริงให้รู้ว่ามีอยู่ บนจอเล็กเหลือแค่ไอคอน -->
       <button
         type="button"
-        class="hidden md:flex items-center gap-2 h-8 pl-2.5 pr-2 rounded-lg border border-line
+        class="hidden md:flex items-center gap-2 h-8 pl-2.5 pr-2 rounded-md border border-line
                bg-surface text-ink-mute text-sm hover:border-line-strong hover:text-ink transition-colors"
         @click="openCommandPalette"
       >
@@ -170,7 +170,7 @@ async function logout() {
         <template #trigger>
           <button
             type="button"
-            class="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-brand-line
+            class="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-brand-line
                    bg-brand-soft text-brand-ink text-sm font-semibold
                    hover:bg-brand-soft-hover transition-colors"
           >
@@ -215,11 +215,11 @@ async function logout() {
         <template #trigger>
           <button
             type="button"
-            class="flex items-center gap-2 h-8 pl-1 pr-2 rounded-lg hover:bg-chrome-hover transition-colors"
+            class="flex items-center gap-2 h-8 pl-1 pr-2 rounded-md hover:bg-chrome-hover transition-colors"
             :aria-label="`${t(&quot;บัญชีของ {0}&quot;, [authState.user?.username ?? ''])} — ${roleLabel}`"
           >
             <span
-              class="grid place-items-center shrink-0 w-7 h-7 rounded-lg bg-brand-soft text-brand-ink"
+              class="grid place-items-center shrink-0 w-7 h-7 rounded-md bg-brand-soft text-brand-ink"
               aria-hidden="true"
             >
               <UserRound :size="15" />

@@ -94,7 +94,7 @@ const SIZES = {
 
         <footer
           v-if="$slots.footer"
-          class="flex flex-wrap items-center justify-end gap-2 px-5 py-3.5 border-t border-line-soft bg-surface-2 shrink-0 rounded-b-xl pb-[max(0.875rem,env(safe-area-inset-bottom))]"
+          class="flex flex-wrap items-center justify-end gap-2 px-5 py-3.5 border-t border-line-soft bg-surface-2 shrink-0 sm:rounded-b-lg pb-[max(0.875rem,env(safe-area-inset-bottom))]"
         >
           <slot name="footer" />
         </footer>

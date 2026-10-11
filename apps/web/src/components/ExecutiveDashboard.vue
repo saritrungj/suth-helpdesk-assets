@@ -566,6 +566,7 @@ function runCsv() {
   try { downloadCsv(`${filenameFor('csv')}.csv`, dashboardCsv(detailRows.value)); }
   catch (error) { exportError.value = errorMessage(error, t('ส่งออกไม่สำเร็จ')); }
 }
+const exportDescriptionTarget = ref(null);
 </script>
 
 <template>
@@ -583,8 +584,9 @@ function runCsv() {
         </UiButton>
         <!-- ส่งออกทั้งขอบเขตที่ตัวกรองเลือกไว้ ไม่ใช่เฉพาะสิ่งที่กราฟวาด จึงเป็นปุ่มของหน้า
              ไม่ใช่ปุ่มของการ์ดกราฟ -->
-        <ExportMenu :disabled="Boolean(blockedReason)" :reason="blockedReason" :scope="exportScope" :busy="exportBusy" @excel="runExcel" @csv="runCsv" />
+        <ExportMenu :disabled="Boolean(blockedReason)" :reason="blockedReason" :scope="exportScope" :busy="exportBusy" :description-target="exportDescriptionTarget" @excel="runExcel" @csv="runCsv" />
       </template>
+      <template #context><div ref="exportDescriptionTarget" /></template>
     </UiPageHeader>
 
     <DashboardFilters

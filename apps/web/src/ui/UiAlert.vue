@@ -54,7 +54,7 @@ const tone = computed(() => TONES[props.tone] ?? TONES.info);
     <button
       v-if="dismissible"
       type="button"
-      class="shrink-0 -mr-1 -mt-1 p-1 rounded-sm opacity-60 hover:opacity-100 transition-opacity"
+      class="shrink-0 -mr-1 -mt-1 p-1 rounded-md opacity-60 hover:opacity-100 transition-opacity"
       :aria-label="t(&quot;ปิดข้อความนี้&quot;)"
       @click="$emit('close')"
     >

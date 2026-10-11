@@ -139,7 +139,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
             :key="item.label"
             role="option"
             :aria-selected="i === cursor"
-            class="flex items-center gap-3 px-3 h-11 rounded-lg cursor-pointer transition-colors duration-100"
+            class="flex items-center gap-3 px-3 h-11 rounded-md cursor-pointer transition-colors duration-100"
             :class="i === cursor ? 'bg-brand-soft text-brand-ink' : 'text-ink-soft'"
             @click="go(item)"
             @mousemove="cursor = i"

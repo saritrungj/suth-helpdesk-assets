@@ -35,16 +35,18 @@ defineProps({
   title: { type: String, required: true },
   eyebrow: { type: String, default: "" },
   description: { type: String, default: "" },
+  /** Identifiers keep their monospace font within the shared heading geometry. */
+  monospace: { type: Boolean, default: false },
 });
 </script>
 
 <template>
   <header class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 mb-4">
-    <div class="min-w-0">
+    <div class="min-w-0 max-w-full">
       <p v-if="eyebrow" class="eyebrow mb-1">{{ eyebrow }}</p>
 
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 tabindex="-1" class="text-2xl sm:text-3xl font-semibold text-ink tracking-tight">
+        <h1 tabindex="-1" class="min-w-0 max-w-full [overflow-wrap:anywhere] text-2xl sm:text-3xl font-semibold text-ink tracking-tight" :class="monospace && 'font-mono'">
           {{ title }}
         </h1>
         <slot name="badge" />
@@ -59,6 +61,9 @@ defineProps({
 
     <div v-if="$slots.actions" class="flex flex-wrap items-center gap-2" data-print="hide">
       <slot name="actions" />
+    </div>
+    <div v-if="$slots.context" class="basis-full min-w-0" data-print="hide">
+      <slot name="context" />
     </div>
   </header>
 </template>
