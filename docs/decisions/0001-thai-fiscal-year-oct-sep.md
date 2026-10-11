@@ -2,6 +2,8 @@
 
 **สถานะ:** Accepted
 
+**หมายเหตุ implementation ปัจจุบัน:** `getFiscalYearRange()` อยู่ใน [packages/domain/fiscal-year.cjs](../../packages/domain/fiscal-year.cjs) path ในเนื้อหาด้านล่างบันทึกโครงสร้าง ณ วันที่ตัดสิน
+
 ## บริบท
 
 ระบบคิดค่าใช้จ่ายเครื่องพิมพ์แยกตาม "ปีงบประมาณ" ซึ่งเป็นหน่วยที่โรงพยาบาลใช้ตั้งงบและตรวจสอบย้อนหลัง

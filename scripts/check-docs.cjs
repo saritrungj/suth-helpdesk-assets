@@ -89,21 +89,35 @@ function findProblems({ docs, schemaSql, exists }) {
   return problems;
 }
 
-/** ไฟล์ markdown ที่ตรวจ: เอกสารที่รากและทุกไฟล์ใต้ docs/ */
-function collectDocs(root) {
+const OPTIONAL_DOC_ROOTS = [".agents", ".claude", "apps/api/.claude", "apps/web/.claude", "brand"];
+
+/** เอกสารกลางและ Markdown ของ agent/skill ใน repo — ไม่ตาม symlink */
+function collectDocs(root, io = fs) {
   const files = [];
-  for (const name of fs.readdirSync(root)) {
-    if (name.endsWith(".md")) files.push(name);
+  for (const entry of io.readdirSync(root, { withFileTypes: true })) {
+    if (entry.isFile() && !entry.isSymbolicLink() && entry.name.endsWith(".md")) files.push(entry.name);
   }
+  // ตรวจทุกส่วนของ path ด้วย: apps หรือ apps/web อาจเป็น symlink แม้ .claude ไม่ใช่
+  const canWalk = (dir) => dir.split("/").every((_, index, parts) => {
+    const absolute = path.join(root, ...parts.slice(0, index + 1));
+    if (!io.existsSync(absolute)) return false;
+    const entry = io.lstatSync(absolute);
+    return !entry.isSymbolicLink() && entry.isDirectory();
+  });
   const walk = (dir) => {
-    for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+    for (const entry of io.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) continue;
       const relative = `${dir}/${entry.name}`;
       if (entry.isDirectory()) walk(relative);
-      else if (entry.name.endsWith(".md")) files.push(relative);
+      else if (entry.isFile() && entry.name.endsWith(".md")) files.push(relative);
     }
   };
+  if (!canWalk("docs")) throw new Error("check-docs: docs/ ต้องเป็น directory ใน repo ที่ไม่ใช่ symlink");
   walk("docs");
-  return files.sort().map((file) => ({ file, text: fs.readFileSync(path.join(root, file), "utf8") }));
+  for (const dir of OPTIONAL_DOC_ROOTS) {
+    if (canWalk(dir)) walk(dir);
+  }
+  return files.sort().map((file) => ({ file, text: io.readFileSync(path.join(root, file), "utf8") }));
 }
 
 function main() {
@@ -124,4 +138,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { findProblems, relativeLinks, schemaObjects, schemaConstraints, RETIRED_TERMS };
+module.exports = { findProblems, relativeLinks, schemaObjects, schemaConstraints, RETIRED_TERMS, collectDocs };

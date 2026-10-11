@@ -17,7 +17,7 @@
 - **ห้ามเพิ่มโฟลเดอร์แบบ `routes/` หรือ `controllers/` กลับมาอีก**
 - โค้ดที่ใช้แค่ feature เดียวอยู่ในโฟลเดอร์ของ feature นั้น `shared/` ไว้เฉพาะของที่ทุก feature ใช้จริง (ฐานข้อมูล ข้อผิดพลาด การตรวจข้อมูล ล็อก แคช)
 - `auth/` ให้ middleware `require-auth` / `require-admin` / `require-staff` แก่ feature อื่น
-- `health/` เป็นเส้นทางเดียวที่ไม่ต้องล็อกอิน
+- เส้นทางข้อมูลธุรกิจต้องตรวจ auth/role; ข้อยกเว้น public อยู่ใน [ขอบเขต API](api.md) ตรวจ middleware ของ route จริงก่อนสรุป finding
 - `audit/` อ่านประวัติการแก้ไขอย่างเดียว การเขียนบันทึกทำผ่าน `shared/audit.js` จากทุกเส้นทางเขียน ([ADR-0035](../decisions/0035-audit-log.md))
 
 ## ชั้นพื้นฐานของทุกเส้นทาง API
