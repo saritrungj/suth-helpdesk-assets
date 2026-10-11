@@ -44,7 +44,7 @@ function downloadErrors() {
       </p>
       <div class="grid grid-cols-3 gap-3" role="status">
         <div class="rounded-lg bg-surface-2 p-3"><span class="block text-xs text-ink-mute">{{ t("ตัวเลขใหม่") }}</span><strong class="numeral text-lg text-ink" data-testid="readings-new">{{ formatCount(counts.new) }}</strong></div>
-        <div class="rounded-lg p-3" :class="counts.overwrite ? 'bg-warn-soft' : 'bg-surface-2'"><span class="block text-xs text-ink-mute">{{ t("เขียนทับค่าเดิม") }}</span><strong class="numeral text-lg text-ink">{{ formatCount(counts.overwrite) }}</strong></div>
+        <div class="rounded-lg p-3" :class="counts.overwrite ? 'bg-warn-soft' : 'bg-surface-2'"><span class="block text-xs text-ink-mute">{{ t("แทนที่ค่าเดิม") }}</span><strong class="numeral text-lg text-ink">{{ formatCount(counts.overwrite) }}</strong></div>
         <div class="rounded-lg bg-surface-2 p-3"><span class="block text-xs text-ink-mute">{{ t("ไม่เปลี่ยน") }}</span><strong class="numeral text-lg text-ink">{{ formatCount(counts.unchanged) }}</strong></div>
       </div>
 
@@ -69,7 +69,7 @@ function downloadErrors() {
 
       <div v-if="overwrites.length">
         <div class="flex flex-wrap items-center gap-2 mb-2">
-          <p class="text-sm font-semibold text-ink mr-auto">{{ t("ค่าที่จะถูกเขียนทับ") }}</p>
+          <p class="text-sm font-semibold text-ink mr-auto">{{ t("ค่าที่จะถูกแทนที่") }}</p>
           <UiButton size="sm" variant="ghost" @click="downloadCsv(overwriteCsv(overwrites), 'import-overwrites.csv')">{{ t("ดาวน์โหลด CSV") }}</UiButton>
         </div>
         <table class="w-full text-sm [&_th]:pr-4 [&_td]:pr-4">

@@ -148,14 +148,14 @@ function autoCommitBlockers(validation) {
     if (item.state === "blocking" || item.state === "waiting") reasons.push(item.title);
   }
   const overwrite = validation.readings?.counts?.overwrite ?? 0;
-  if (overwrite) reasons.push(`ไฟล์จะเขียนทับยอดเดิม ${overwrite} รายการด้วยค่าที่ต่างจากเดิม — ดูค่าเดิม/ค่าใหม่ก่อนบันทึก`);
+  if (overwrite) reasons.push(`ไฟล์จะแทนที่ตัวเลขเดิม ${overwrite} รายการด้วยค่าที่ต่างจากเดิม — ดูค่าเดิม/ค่าใหม่ก่อนบันทึก`);
   for (const contract of validation.contracts ?? []) {
     if (contract.state === "warning" || contract.state === "mismatch") {
       reasons.push(`สัญญา ${contract.contract_no} ในระบบต่างจากไฟล์: ${contract.issues.map((i) => i.message).join(" · ")}`);
     }
   }
   const off = (validation.reconciliation ?? []).filter((line) => !line.matches);
-  if (off.length) reasons.push(`ยอดตามใบแจ้งหนี้ต่างจากท้ายรายงาน ${off.length} งวด — ตรวจราคาหรือค่าเช่าก่อนบันทึก`);
+  if (off.length) reasons.push(`เงินตามใบแจ้งหนี้ต่างจากท้ายรายงาน ${off.length} งวด — ตรวจราคาหรือค่าเช่าก่อนบันทึก`);
   const lookAlike = validation.registry?.look_alike_count ?? 0;
   if (lookAlike) reasons.push(`มีเลขซีเรียลคล้ายเครื่องอื่น ${lookAlike} รายการ — ถ้าเป็นเครื่องเดียวกันที่พิมพ์ผิด การบันทึกจะสร้างเครื่องซ้ำ`);
   return [...new Set(reasons)];

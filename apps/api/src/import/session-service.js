@@ -97,7 +97,7 @@ function inspectFile(session) {
   if (!kind) {
     throw badRequest("ไม่รู้จักรูปแบบไฟล์นี้", {
       code: "unknown_import_file",
-      detail: "รับรายงานมิเตอร์หรือรายงานสถานะเครื่องของผู้ให้เช่า เทมเพลตทะเบียนของระบบ หรือเทมเพลตยอดรายเดือน (SN. + meter M/YY)",
+      detail: "รับรายงานมิเตอร์หรือรายงานสถานะเครื่องของผู้ให้เช่า เทมเพลตทะเบียนของระบบ หรือเทมเพลตจำนวนพิมพ์รายเดือน (SN. + meter M/YY)",
     });
   }
   return {
@@ -200,10 +200,10 @@ async function contractChecks(conn, info, plan, decisions, context) {
         "อายุสัญญาในไฟล์ต่างจากในระบบ — งวดที่อยู่นอกอายุสัญญาในระบบจะหาราคาไม่ได้");
     }
     if (file?.monthly_rental !== null && file?.monthly_rental !== undefined && money(file.monthly_rental) !== money(system.monthly_rental ?? 0)) {
-      issue("rental", "blocking", file.monthly_rental, system.monthly_rental, "ค่าเช่าคงที่ต่อเดือนในไฟล์ต่างจากในระบบ — ยอดตามใบแจ้งหนี้จะไม่ตรงกับของผู้ให้เช่า");
+      issue("rental", "blocking", file.monthly_rental, system.monthly_rental, "ค่าเช่าคงที่ต่อเดือนในไฟล์ต่างจากในระบบ — เงินตามใบแจ้งหนี้จะไม่ตรงกับของผู้ให้เช่า");
     }
     if (file?.vat_rate !== null && file?.vat_rate !== undefined && money(file.vat_rate) !== money(system.vat_rate ?? 0)) {
-      issue("vat", "blocking", file.vat_rate, system.vat_rate, "อัตรา VAT ในไฟล์ต่างจากในระบบ — ยอดตามใบแจ้งหนี้รวม VAT จะไม่ตรงกับของผู้ให้เช่า");
+      issue("vat", "blocking", file.vat_rate, system.vat_rate, "อัตรา VAT ในไฟล์ต่างจากในระบบ — เงินตามใบแจ้งหนี้รวม VAT จะไม่ตรงกับของผู้ให้เช่า");
     }
     return {
       key,
@@ -393,7 +393,7 @@ async function analyse(conn, session, info, { actorId, importSessionId }) {
       title: cycle.cycle_day === 1
         ? `รอบมิเตอร์ของสัญญา ${cycle.contract_no}: ตัดรอบสิ้นเดือน`
         : `รอบมิเตอร์ของสัญญา ${cycle.contract_no}: วันที่ ${cycle.cycle_day} ถึง ${cycle.cycle_day - 1} ของเดือนถัดไป`,
-      detail: "อ่านจากงวดในหัวรายงาน เครื่องที่ติดตั้งหลังวันตัดรอบเริ่มกรอกยอดเดือนถัดไป",
+      detail: "อ่านจากงวดในหัวรายงาน เครื่องที่ติดตั้งหลังวันตัดรอบเริ่มกรอกจำนวนพิมพ์เดือนถัดไป",
     });
   }
   if (replaced.length) {
@@ -490,7 +490,7 @@ function buildValidation({ info, plan, described, contracts, readings, reconcili
   const add = (key, state, title, detail = null, action = null) => checklist.push({ key, state, title, detail, action });
 
   const sheetCount = info.registry?.sheets.length ?? info.raw.length;
-  const kindLabel = { meter_report: "รายงานมิเตอร์", registry: "ทะเบียนเครื่อง", readings_template: "เทมเพลตยอดรายเดือน" }[info.kind];
+  const kindLabel = { meter_report: "รายงานมิเตอร์", registry: "ทะเบียนเครื่อง", readings_template: "เทมเพลตจำนวนพิมพ์รายเดือน" }[info.kind];
   add("file", "ok", `อ่านไฟล์ได้: ${kindLabel} ${sheetCount} แผ่น`,
     fiscalYears.months.length ? `งวด ${formatMonthTH(fiscalYears.months[0])} ถึง ${formatMonthTH(fiscalYears.months.at(-1))}` : null);
 
@@ -554,17 +554,17 @@ function buildValidation({ info, plan, described, contracts, readings, reconcili
 
   if (info.hasReadings) {
     if (readings.status === "waiting") {
-      add("readings", "waiting", "ยอดมิเตอร์: รอให้ข้อมูลเครื่องพร้อมก่อน", "ตรวจยอดได้หลังตัดสินชื่อ หมวดมิเตอร์ และสัญญาครบ");
+      add("readings", "waiting", "เลขมิเตอร์: รอให้ข้อมูลเครื่องพร้อมก่อน", "ตรวจตัวเลขได้หลังตัดสินชื่อ หมวดมิเตอร์ และสัญญาครบ");
     } else {
       const { counts } = readings;
       add("readings", readings.error_count ? "blocking" : "ok",
-        `ยอดมิเตอร์: ใหม่ ${counts.new} · เขียนทับ ${counts.overwrite} · ไม่เปลี่ยน ${counts.unchanged}`,
+        `เลขมิเตอร์: ใหม่ ${counts.new} · แทนที่ ${counts.overwrite} · ไม่เปลี่ยน ${counts.unchanged}`,
         readings.error_count ? `มี ${readings.error_count} รายการที่ต้องแก้ก่อน — ทั้งไฟล์ยังบันทึกไม่ได้` : null);
       const off = reconciliation.filter((line) => !line.matches);
       if (reconciliation.length) {
         add("reconciliation", off.length ? "warning" : "ok",
-          off.length ? `ยอดตามใบแจ้งหนี้ต่างจากท้ายแผ่น ${off.length} งวด` : `ยอดตามใบแจ้งหนี้ตรงกับท้ายแผ่นทุกงวด (${reconciliation.length} งวด)`,
-          off.length ? "ตรวจค่าเช่า VAT และราคาในสัญญา หรือยอดที่ผู้ให้เช่าแก้มือในไฟล์" : null);
+          off.length ? `เงินตามใบแจ้งหนี้ต่างจากท้ายแผ่น ${off.length} งวด` : `เงินตามใบแจ้งหนี้ตรงกับท้ายแผ่นทุกงวด (${reconciliation.length} งวด)`,
+          off.length ? "ตรวจค่าเช่า VAT และราคาในสัญญา หรือตัวเลขที่ผู้ให้เช่าแก้มือในไฟล์" : null);
       }
     }
   }
@@ -579,7 +579,7 @@ function buildValidation({ info, plan, described, contracts, readings, reconcili
 
   const readingsToWrite = readings.status === "checked" ? readings.counts.new + readings.counts.overwrite : 0;
   const nothing = registryChanges === 0 && readingsToWrite === 0 && !checklist.some((c) => c.state === "blocking" || c.state === "waiting");
-  if (nothing) add("nothing", "blocking", "ไม่มีอะไรใหม่ในไฟล์นี้", "ทุกเครื่องและยอดในไฟล์มีอยู่ในระบบแล้วด้วยค่าเดียวกัน");
+  if (nothing) add("nothing", "blocking", "ไม่มีอะไรใหม่ในไฟล์นี้", "ทุกเครื่องและตัวเลขในไฟล์มีอยู่ในระบบแล้วด้วยค่าเดียวกัน");
 
   const canCommit = !checklist.some((c) => c.state === "blocking" || c.state === "waiting");
   return {
@@ -896,7 +896,7 @@ async function commitSession(id, actor, seen) {
         const o = result.outcome;
         await recordAudit(conn, { userId: actorId(actor), username: actor?.username ?? null, requestId: null }, [{
           action: "create", entity: "import_session", entityId: id, entityKey: session.file_name,
-          summary: `บันทึกงานนำเข้า #${id} ${session.file_name}: เครื่องใหม่ ${o.devices_created} · เติม ${o.devices_filled} · ยอดใหม่ ${o.readings_new} · แทนที่ ${o.readings_overwritten}`,
+          summary: `บันทึกงานนำเข้า #${id} ${session.file_name}: เครื่องใหม่ ${o.devices_created} · เติม ${o.devices_filled} · ตัวเลขใหม่ ${o.readings_new} · แทนที่ ${o.readings_overwritten}`,
           after: {
             devices_created: o.devices_created, devices_filled: o.devices_filled, readings_new: o.readings_new,
             readings_overwritten: o.readings_overwritten, contracts_created: o.contracts_created, fiscal_years_created: o.fiscal_years_created,

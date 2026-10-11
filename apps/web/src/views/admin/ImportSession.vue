@@ -469,8 +469,8 @@ async function showPreviewDetails() {
             <template v-else-if="session.can_commit && preview">
               <p class="text-sm text-ink mb-2">{{ t("พร้อมบันทึก {0} รายการ", [formatCount(writeCount)]) }}</p>
               <p class="text-sm text-ink-soft">{{ t("เครื่องใหม่ {0} · เติมข้อมูล {1}", [formatCount(preview.devices?.create ?? 0), formatCount(preview.devices?.fill ?? 0)]) }}</p>
-              <p class="text-sm text-ink-soft">{{ t("ยอดใหม่ {0} · แทนที่ {1}", [formatCount(preview.readings?.new ?? 0), formatCount(preview.readings?.overwrite ?? 0)]) }}</p>
-              <p class="text-xs text-ink-mute mt-2">{{ t("ข้าม {0} · ยอดไม่เปลี่ยน {1}", [formatCount(registry?.summary?.skip ?? 0), formatCount(validation.readings?.counts?.unchanged ?? 0)]) }}</p>
+              <p class="text-sm text-ink-soft">{{ t("ตัวเลขใหม่ {0} · แทนที่ {1}", [formatCount(preview.readings?.new ?? 0), formatCount(preview.readings?.overwrite ?? 0)]) }}</p>
+              <p class="text-xs text-ink-mute mt-2">{{ t("ข้าม {0} · ตัวเลขไม่เปลี่ยน {1}", [formatCount(registry?.summary?.skip ?? 0), formatCount(validation.readings?.counts?.unchanged ?? 0)]) }}</p>
               <UiButton variant="ghost" size="sm" class="mt-2" @click="showPreviewDetails">{{ t("ดูรายละเอียดก่อนยืนยัน") }}</UiButton>
             </template>
             <p v-else class="text-sm text-ink-soft">{{ t("ตรวจรายการที่ยังไม่ครบก่อนยืนยัน") }}</p>

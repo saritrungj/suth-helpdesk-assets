@@ -45,7 +45,7 @@ const FIELD_LABEL = {
   contract_no: "เลขที่สัญญา", monthly_rental: "ค่าเช่า/เดือน", vat_rate: "VAT (%)", price_lines: "ราคาต่อหน้า",
   name: "ชื่อ", year: "ปีงบ", start_month: "เดือนแรก", end_month: "เดือนสุดท้าย", username: "ชื่อผู้ใช้", role: "สิทธิ์",
   password_changed: "เปลี่ยนรหัสผ่าน", alias: "ชื่อเรียกอื่น", target_id: "ของรายการ (รหัส)", id: "รหัส",
-  devices_created: "เครื่องใหม่", devices_filled: "เติมข้อมูล", readings_new: "ยอดใหม่", readings_overwritten: "แทนที่",
+  devices_created: "เครื่องใหม่", devices_filled: "เติมข้อมูล", readings_new: "ตัวเลขใหม่", readings_overwritten: "แทนที่",
   contracts_created: "สัญญาใหม่", fiscal_years_created: "ปีงบใหม่",
 };
 

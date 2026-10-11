@@ -403,7 +403,7 @@ function planRegistryImport(input) {
     // วันก่อนเริ่มสัญญาใช้วันเริ่มสัญญาแทน — เดือนก่อนสัญญาไม่มีราคา ยอดของเดือนนั้นบันทึกไม่ได้เลย
     let installedOn = row.installed_on || today;
     if (row.installation === "installed" && contract && monthIndex(installedOn.slice(0, 7)) < monthIndex(contract.effective_from.slice(0, 7))) {
-      notes.push(`วันติดตั้ง ${formatDateTH(installedOn)} อยู่ก่อนเดือนเริ่มสัญญา — เริ่มนับยอดที่วันเริ่มสัญญา ${contract.effective_from}`);
+      notes.push(`วันติดตั้ง ${formatDateTH(installedOn)} อยู่ก่อนเดือนเริ่มสัญญา — เริ่มนับจำนวนพิมพ์ที่วันเริ่มสัญญา ${contract.effective_from}`);
       installedOn = contract.effective_from;
     }
 
