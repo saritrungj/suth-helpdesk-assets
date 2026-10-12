@@ -13,7 +13,7 @@ prefix และความรับผิดชอบ — รายละเ�
 | `PUT /api/auth/password` | ใช่ | ผู้ใช้เปลี่ยนรหัสผ่านของตัวเอง — body `{ current_password, new_password }` รหัสปัจจุบันผิดตอบ 400 `wrong_current_password` สำเร็จแล้ว token เดิมทุกใบของบัญชีใช้ไม่ได้และ session นี้ได้ cookie ใหม่ จำกัดการลองผิด 10 ครั้งต่อ 15 นาที |
 | `POST /api/auth/logout` | ไม่ | ลบ cookie ทิ้งและเพิกถอน token ที่ส่งมา — token นั้นได้ 401 `signed_out` จนหมดอายุ ([ADR-0038](../decisions/0038-revoke-session-on-logout.md)) เรียกได้แม้ token หมดอายุแล้ว |
 
-เส้นอื่นทั้งหมดต้องล็อกอิน
+เส้นทางข้อมูลธุรกิจต้องล็อกอินและตรวจ role ข้อยกเว้น public ปัจจุบันคือ login/logout ตามตาราง, `GET /api/health` (readiness), `GET /api/health/live` (liveness), `POST /api/metrics/web-vitals` และ `GET /` ที่บอกข้อมูล API ตรวจการ mount และ middleware จาก [index.js](../../apps/api/index.js), [auth routes](../../apps/api/src/auth/routes.js), [health routes](../../apps/api/src/health/routes.js) และ [metrics routes](../../apps/api/src/metrics/routes.js) การเป็น public ไม่ยกเว้นการตรวจ input และการจำกัดข้อมูลที่รับ
 
 | Prefix | หน้าที่ | โค้ด |
 |---|---|---|
@@ -24,7 +24,8 @@ prefix และความรับผิดชอบ — รายละเ�
 | `/api/dashboard` | KPI รายงาน และการเปรียบเทียบ | `src/dashboard/` |
 | `/api/expense` | ค่าใช้จ่ายตามปีงบ และอุปกรณ์ที่ไม่มีสัญญา | `src/expense/` |
 | `/api/users` | จัดการผู้ใช้ (admin เท่านั้น) | `src/users/` |
-| `/api/health` | ตรวจว่าระบบพร้อมรับงาน (ไม่ต้องล็อกอิน) | `src/health/` |
+| `/api/health` | ตรวจ readiness (พร้อมรับงานรวมฐานข้อมูล) และ `/live` ตรวจ liveness (โปรเซสยังตอบอยู่) ทั้งสองเส้นไม่ต้องล็อกอิน | `src/health/` |
+| `/api/metrics` | รับ Core Web Vitals รวมถึงหน้า Login (ไม่ต้องล็อกอิน; ตรวจ schema และจำกัดขนาด body) | `src/metrics/` |
 | `/api/import-sessions` | งานนำเข้าไฟล์จากผู้ให้เช่าแบบ session (admin เท่านั้น — [ADR-0027](../decisions/0027-import-session-lifecycle.md), [ADR-0029](../decisions/0029-import-session-visibility.md)): อัปโหลดหนึ่งครั้งได้ทั้งทะเบียนและยอดมิเตอร์ `GET` รายการงานค้าง, `POST` อัปโหลด (ช่อง `auto=resolve` ให้ระบบเตรียมให้ — ไม่บันทึก; `auto=commit` ของเว็บรุ่นเก่ามีผลเท่ากับ `resolve` — [ADR-0034](../decisions/0034-import-preview-before-write.md)), `GET /:id` ผลตรวจ+checklist+`validation.preview` (สิ่งที่จะเกิดเมื่อยืนยัน)+ประวัติล่าสุด, `PUT /:id/decisions` (ไม่แตะแผนสัญญา/ปีงบ; ส่ง `fingerprint` ที่ได้จาก `GET /:id` มาด้วยได้ — ไม่ตรงกับผลตรวจล่าสุดตอบ 409 `import_session_changed`), `POST /:id/validate`, `POST /:id/contracts` (วางแผนสัญญาที่ไฟล์อ้าง — สร้างจริงตอน commit), `DELETE /:id/contracts/:key` (เอาออกจากแผน), `POST /:id/fiscal-years` (วางแผนปีงบ), `POST /:id/auto` (ให้ระบบตัดสินส่วนที่เหลือ — ไม่บันทึก), `POST /:id/commit` (ยืนยัน — แผน เครื่อง และยอดใน transaction เดียว; body `{ fingerprint }` คือผลตรวจที่ผู้กดเห็น ไม่ตรงตอบ 409 `import_session_changed` โดยไม่เขียนอะไร หน้าเว็บส่งเสมอ), `POST /:id/abandon`, `DELETE /:id` (ลบถาวรเฉพาะงาน expired ที่ไม่เคยบันทึก — [ADR-0031](../decisions/0031-purge-unsaved-import-sessions.md)), `GET /:id/events`, `GET /:id/file` — สถานะ `draft` `validating` `ready` `processing` `completed` `failed` `expired` บันทึกตาม [ADR-0028](../decisions/0028-import-commit-strategy.md) | `src/import/session-*.js` |
 
 Master Data ใช้ prefix แยกกันแต่อยู่ในโฟลเดอร์เดียว (`src/master-data/`) — `/api/brands`, `/api/buildings`, `/api/floors`, `/api/divisions`, `/api/departments` และ `/api/fiscal-years`
