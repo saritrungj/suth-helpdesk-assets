@@ -75,7 +75,7 @@ const RAILS = {
 
           <button
             type="button"
-            class="shrink-0 -mr-1 -mt-0.5 grid place-items-center w-6 h-6 rounded-sm text-ink-faint hover:text-ink hover:bg-surface-3 transition-colors"
+            class="shrink-0 -mr-1 -mt-0.5 grid place-items-center w-6 h-6 rounded-md text-ink-faint hover:text-ink hover:bg-surface-3 transition-colors"
             :aria-label="t(&quot;ปิดการแจ้งเตือน&quot;)"
             @click="dismissToast(item.id)"
           >

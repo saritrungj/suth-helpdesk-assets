@@ -63,7 +63,7 @@ import { confirmState, resolveConfirm } from "../store/confirmDialog";
 
         <div
           class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-5 py-3.5
-                 border-t border-line-soft bg-surface-2 rounded-b-xl"
+                 border-t border-line-soft bg-surface-2 rounded-b-lg"
         >
           <AlertDialogCancel
             class="inline-flex items-center justify-center h-[var(--field-h)] px-4 rounded-md border border-line

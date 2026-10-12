@@ -25,6 +25,8 @@ const props = defineProps({
   reason: { type: String, default: "" },
   busy: { type: Boolean, default: false },
   scope: { type: String, default: "" },
+  /** Optional element for a full-width description below a page's action row. */
+  descriptionTarget: { type: Object, default: null },
 });
 const descriptionId = useId();
 const message = computed(() => props.busy ? t("กำลังสร้างไฟล์ส่งออก") : props.disabled ? props.reason : "");
@@ -52,9 +54,12 @@ const emit = defineEmits(["excel", "csv"]);
         {{ t("CSV — ข้อมูลรายละเอียด") }}
       </UiMenuItem>
     </UiMenu>
-    <p v-if="described" :id="descriptionId" :tabindex="disabled || busy ? 0 : undefined" class="text-xs text-ink-soft break-words max-w-full" aria-live="polite">
-      <span v-if="message" class="block font-medium">{{ message }}</span>
-      <span v-if="scope">{{ t("ขอบเขตไฟล์: {0}", [scope]) }}</span>
-    </p>
+    <!-- Keep one live description and its aria-describedby ID when moving it. -->
+    <Teleport :to="descriptionTarget" :disabled="!descriptionTarget">
+      <p v-if="described" :id="descriptionId" :tabindex="disabled || busy ? 0 : undefined" class="text-xs text-ink-soft break-words max-w-full" aria-live="polite">
+        <span v-if="message" class="block font-medium">{{ message }}</span>
+        <span v-if="scope">{{ t("ขอบเขตไฟล์: {0}", [scope]) }}</span>
+      </p>
+    </Teleport>
   </div>
 </template>

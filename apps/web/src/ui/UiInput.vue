@@ -145,7 +145,7 @@ defineExpose({ focus: () => el.value?.focus() });
     <button
       v-if="clearable && String(modelValue).length && !disabled && !readonly"
       type="button"
-      class="absolute right-2 grid place-items-center w-6 h-6 rounded-sm text-ink-faint hover:text-ink hover:bg-surface-3 transition-colors"
+      class="absolute right-2 grid place-items-center w-6 h-6 rounded-md text-ink-faint hover:text-ink hover:bg-surface-3 transition-colors"
       :aria-label="t(&quot;ล้างค่าในช่องนี้&quot;)"
       @click="clear"
     >

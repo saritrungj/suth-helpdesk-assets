@@ -44,7 +44,7 @@ watch(() => route.fullPath, () => { open.value = false; });
   <UiTooltip :content="label" side="bottom">
     <button
       type="button"
-      class="relative grid place-items-center w-9 h-9 rounded-lg text-ink-soft hover:bg-chrome-hover hover:text-ink transition-colors"
+      class="relative grid place-items-center w-9 h-9 rounded-md text-ink-soft hover:bg-chrome-hover hover:text-ink transition-colors"
       :aria-label="label"
       aria-haspopup="dialog"
       :aria-expanded="open"

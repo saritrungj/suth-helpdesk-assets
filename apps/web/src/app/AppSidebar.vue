@@ -22,7 +22,6 @@ import { NAV_WIDTH, closeMobileNav, isNavGroupOpen, resetNavWidth, setNavWidth, 
 import { UiTooltip } from "../ui";
 
 const route = useRoute();
-const isPrintEntry = (item) => item.to === "/print-transactions";
 
 // รายการที่ติด admin ในหมวดทั่วไป (เช่นนำเข้าไฟล์ในงานประจำ) ซ่อนจากบทบาทอื่น — เหมือนช่องค้นหาคำสั่ง
 // เป็นแค่ความสะดวก สิทธิ์จริงอยู่ที่ API
@@ -232,16 +231,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
             <UiTooltip :content="uiState.navCollapsed ? item.label : ''" side="right">
               <RouterLink
                 :to="item.to"
-                class="group relative flex items-center gap-2.5 rounded-lg px-1.5 h-9 text-sm transition-colors"
+                class="group relative flex items-center gap-2.5 rounded-md px-1.5 h-9 text-sm transition-colors"
                 :class="[
                   uiState.navCollapsed ? 'justify-center' : '',
-                  isPrintEntry(item)
-                    ? (isActiveNav(item, route)
-                      ? 'bg-brand text-brand-on font-semibold'
-                      : 'bg-brand-soft text-brand-ink font-medium hover:bg-brand-soft-hover')
-                    : (isActiveNav(item, route)
-                      ? 'bg-surface text-ink font-semibold shadow-[0_0_0_1px_var(--chrome-line)]'
-                      : 'text-ink-soft hover:bg-chrome-hover hover:text-ink'),
+                  isActiveNav(item, route)
+                    ? 'bg-surface text-ink font-semibold shadow-[0_0_0_1px_var(--chrome-line)]'
+                    : 'text-ink-soft hover:bg-chrome-hover hover:text-ink',
                 ]"
                 :aria-current="isActiveNav(item, route) ? 'page' : undefined"
                 :aria-label="uiState.navCollapsed ? item.label : undefined"
@@ -249,13 +244,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
                 <!-- สถานะ active มีทั้งรูปทรง, aria-current และสี -->
                 <span
                   v-if="isActiveNav(item, route)"
-                  class="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
-                  :class="isPrintEntry(item) ? 'bg-brand-on' : 'bg-brand'"
+                  class="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand"
                   aria-hidden="true"
                 ></span>
 
                 <!-- ไอคอนบนพื้นสีของกลุ่ม (#196) — พับเมนูแล้วยังบอกได้ว่าอยู่กลุ่มไหน -->
-                <span class="grid place-items-center shrink-0 w-7 h-7 rounded-md" :class="isPrintEntry(item) ? 'bg-brand-soft text-brand-ink' : (GROUP_TONE[group.key] ?? GROUP_TONE.overview)">
+                <span class="grid place-items-center shrink-0 w-7 h-7 rounded-md" :class="GROUP_TONE[group.key] ?? GROUP_TONE.overview">
                   <component :is="item.icon" :size="16" aria-hidden="true" />
                 </span>
                 <span v-if="!uiState.navCollapsed" class="truncate">{{ item.label }}</span>
@@ -274,7 +268,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onShortcut));
       >
         <button
           type="button"
-          class="flex items-center gap-2.5 w-full h-9 rounded-lg text-sm text-ink-mute
+          class="flex items-center gap-2.5 w-full h-9 rounded-md text-sm text-ink-mute
                  hover:bg-chrome-hover hover:text-ink transition-colors"
           :class="uiState.navCollapsed ? 'justify-center' : 'px-2.5'"
           :aria-pressed="uiState.navCollapsed"

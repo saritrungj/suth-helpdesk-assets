@@ -276,7 +276,6 @@ onMounted(load);
 <template>
   <div>
     <UiPageHeader
-      :eyebrow="t(&quot;ตั้งค่าระบบ&quot;)"
       :title="t(&quot;สัญญาเช่า&quot;)"
       :description="t(&quot;อายุสัญญาและราคาต่อหน้าของแต่ละหมวด ใช้คิดเงินทุกงวดในอายุสัญญาทันทีที่บันทึก&quot;)"
     >

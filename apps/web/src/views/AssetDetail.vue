@@ -47,6 +47,7 @@ import {
   UiEmpty,
   UiField,
   UiCombobox,
+  UiPageHeader,
   UiSkeleton,
 } from "../ui";
 import UiStockChart from "../ui/UiStockChart.vue";
@@ -264,37 +265,28 @@ const hasUsage = computed(() => usageSeries.value.some((series) => series.values
     <template v-else-if="device">
       <!-- หัวเรื่อง — serial เป็นตัวโมโนสเปซขนาดใหญ่ เพราะเป็นสิ่งที่คนเอาไป
            เทียบกับสติกเกอร์บนตัวเครื่องทีละตัวอักษร -->
-      <header
-        class="flex flex-wrap items-start justify-between gap-x-6 gap-y-4 mb-5 p-5
-               rounded-lg border border-line-soft bg-surface"
+      <UiPageHeader
+        :title="device.serial_number || '—'"
+        :eyebrow="t('ทะเบียนเครื่องพิมพ์')"
+        :description="[device.brand_name || t('ไม่ระบุยี่ห้อ'), device.model].filter(Boolean).join(' · ')"
+        monospace
       >
-        <div class="min-w-0">
-          <p class="eyebrow mb-1.5"> {{ t("ทะเบียนเครื่องพิมพ์") }} </p>
-
-          <h1 class="font-mono text-2xl sm:text-3xl font-semibold text-ink tracking-tight break-all">
-            {{ device.serial_number || "—" }}
-          </h1>
-
-          <p class="text-sm text-ink-mute mt-1.5">
-            {{ device.brand_name || t("ไม่ระบุยี่ห้อ") }}
-            <span v-if="device.model"> · {{ device.model }}</span>
-          </p>
-
+        <template #meta>
           <div class="flex flex-wrap items-center gap-2 mt-3">
             <UiBadge :tone="statusMeta.tone">{{ statusMeta.label }}</UiBadge>
 
             <UiBadge v-if="!device.contract_id" tone="warn"> {{ t("ยังไม่ผูกสัญญา") }} </UiBadge>
           </div>
-        </div>
+        </template>
 
-        <div v-if="isAdmin" class="flex flex-wrap items-center gap-2">
+        <template v-if="isAdmin" #actions>
           <UiButton :to="`/assets?edit=${device.id}&from=detail`" variant="secondary">
             <template #icon><Pencil :size="15" /></template> {{ t("แก้ไข") }} </UiButton>
 
           <UiButton :to="`/assets?move=${device.id}&from=detail`" variant="secondary">
             <template #icon><Move :size="15" /></template> {{ t("ย้ายเครื่อง") }} </UiButton>
-        </div>
-      </header>
+        </template>
+      </UiPageHeader>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- ยอดพิมพ์ — ใหญ่ที่สุดเพราะเป็นสิ่งที่คนเปิดหน้านี้มาดูบ่อยที่สุด -->
