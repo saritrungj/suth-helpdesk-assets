@@ -4,13 +4,9 @@
 
 ## สถานะโปรเจกต์
 
-อยู่ระหว่างทดลองใช้ ระบบรันบนเซิร์ฟเวอร์ภายในโรงพยาบาลด้วยข้อมูลจริงของหน่วยงานแล้ว (ทะเบียนเครื่อง สัญญา และยอดพิมพ์ ไม่มีข้อมูลผู้ป่วย) แต่ยังไม่ออกเวอร์ชันอย่างเป็นทางการ (`version` ยังเป็น `0.0.0`) และรุ่นบนเซิร์ฟเวอร์อาจตามหลัง `main`
+อ่าน [สถานะการติดตั้งและความพร้อมล่าสุด](docs/reference/deployment.md) สำหรับรุ่นที่ deploy วันที่ตรวจ หลักฐานที่ผ่านแล้ว และข้อที่ยังไม่ยืนยัน เอกสารหน้านั้นเป็นแหล่งอ้างอิงหลักของสถานะการใช้งานจริง ส่วนลำดับงานและเกณฑ์ปิดติดตามใน [#304](https://github.com/saritrungj/suth-helpdesk-assets/issues/304)
 
-- ความสามารถหลักทำงานครบตั้งแต่ทะเบียนเครื่อง การนำเข้ายอดพิมพ์ จนถึง Dashboard และรายงาน
-- หน้าตาทั้งระบบผ่าน design system กลางแล้ว รองรับโหมดสว่าง/มืด และสลับภาษาไทย/อังกฤษได้
-- มีชุดเทสอัตโนมัติของ `packages/domain`, `apps/api`, `apps/web` และเทส E2E ผ่านเบราว์เซอร์จริง แต่ยังไม่มีเทสระดับ route ที่ต่อฐานข้อมูลจริง
-- สิ่งที่เปลี่ยนล่าสุดและผู้ใช้สังเกตเห็นได้ อยู่ใน [CHANGELOG](CHANGELOG.md) หัวข้อ `Unreleased`
-- [checklist เตรียมขึ้น production](docs/how-to/prepare-for-production.md) **ยังไม่ได้ตรวจยืนยันกับเซิร์ฟเวอร์จริง** รวมถึง backup การซ้อมกู้คืน และ HTTPS — ติดตามที่ [#304](https://github.com/saritrungj/suth-helpdesk-assets/issues/304) จนกว่าจะปิด ให้ถือว่าทุกการ deploy, migration และการแก้ข้อมูลมีผลกับข้อมูลจริง
+สิ่งที่เปลี่ยนและผู้ใช้สังเกตเห็นได้อยู่ใน [CHANGELOG](CHANGELOG.md) หัวข้อ `Unreleased` ผลเทสอัตโนมัติและ health check ต้องพิจารณาร่วมกับการตรวจเส้นทางผู้ใช้หลัง deploy ตาม [คู่มือส่งรุ่นและกู้คืน](docs/how-to/release-and-recovery.md)
 
 ## ความสามารถหลัก
 
@@ -83,19 +79,26 @@ curl http://localhost:3000/api/health
 npm test
 ```
 
-เทส E2E ผ่านเบราว์เซอร์จริง (ต้องมี API, เว็บ และฐานข้อมูลรันอยู่ก่อน):
+ตรวจเอกสาร เทสทุก workspace, build, bundle budget และ E2E แบบ fixture ที่ไม่ใช้ฐานข้อมูล:
 
 ```powershell
-npm run test:e2e --workspace @suth/web
+npm run verify
 ```
 
-เลือก build, health check และ smoke test ตามสิ่งที่แก้ ดู [คู่มือตรวจการเปลี่ยนแปลง](docs/how-to/verify-changes.md)
+ตรวจ flow ที่อ่านเขียนฐานข้อมูลด้วยฐาน QA แยก (ต้องมี Docker):
+
+```powershell
+npm run verify:db
+```
+
+เลือกชุดตรวจให้สัมพันธ์กับสิ่งที่แก้ และรายงานเคสที่ข้ามหรือไม่ได้ตรวจ ดู [คู่มือตรวจการเปลี่ยนแปลง](docs/how-to/verify-changes.md) การทดสอบที่เขียนข้อมูลให้ใช้ QA แยกตามคู่มือ
 
 ## เอกสาร
 
 - [สารบัญเอกสารทั้งหมด](docs/README.md) — แบ่งตาม Diátaxis: เข้าใจ / ทำ / เปิดหา / การตัดสินใจ
 - [กฎธุรกิจและโดเมน](docs/explanation/domain.md) — ปีงบประมาณ การคิดค่าใช้จ่าย ประวัติการย้ายเครื่อง
 - [สถาปัตยกรรม](docs/explanation/architecture.md) — โครงสร้างระบบและโค้ด
+- [สถานะการติดตั้ง](docs/reference/deployment.md) — รุ่นที่ใช้งาน หลักฐานตรวจ และงานความพร้อมที่ค้าง
 - [บันทึกการตัดสินใจ (ADR)](docs/decisions/) — ทำไมถึงเลือกแบบนั้น
 - [แนวทางสำหรับ AI agent](AGENTS.md) และ [ข้อตกลงการทำงานของทีม](CONTRIBUTING.md)
 
@@ -103,4 +106,4 @@ npm run test:e2e --workspace @suth/web
 
 ## ความปลอดภัย
 
-ระบบมีข้อมูลจริงแล้ว ก่อน deploy หรือรัน migration ให้อ่าน [checklist เตรียมขึ้น production](docs/how-to/prepare-for-production.md) และ [คู่มือส่งรุ่นและกู้คืน](docs/how-to/release-and-recovery.md)
+ก่อน deploy, migration หรือ operation ที่กระทบข้อมูลจริง ให้อ่าน [checklist เตรียมขึ้น production](docs/how-to/prepare-for-production.md), [คู่มือส่งรุ่นและกู้คืน](docs/how-to/release-and-recovery.md) และขอบเขตการอนุมัติใน [CONTRIBUTING](CONTRIBUTING.md) เก็บ secret ใน environment และอย่าเผยแพร่ข้อมูลผู้ใช้หรือรายละเอียดระบบภายในลง Issue/PR

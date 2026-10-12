@@ -55,6 +55,7 @@
 - [โมเดลข้อมูล](reference/data-model.md) — ตารางและหน้าที่
 - [ขอบเขต API](reference/api.md) — prefix และความรับผิดชอบ
 - [ตัวแปร environment](reference/environment.md)
+- [สถานะการติดตั้งและความพร้อม](reference/deployment.md) — รุ่นที่ส่ง วันที่ตรวจ ข้อเท็จจริงการติดตั้ง และงานที่ยังค้าง
 - [รูปแบบไฟล์นำเข้า](reference/import-format.md)
 - [คำที่ใช้บนหน้าจอ](reference/ui-words.md) — คำเดียวต่อหนึ่งความหมาย ภาษาง่าย
 - [ระบบกับ WCAG 2.2 ระดับ AA](reference/accessibility.md) — ขอบเขตของเทส ผลที่ตรวจแล้ว และสิ่งที่ยังไม่ได้ตรวจ
