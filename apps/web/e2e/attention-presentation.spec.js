@@ -66,20 +66,20 @@ for (const mode of ["light", "dark"]) {
       await expectContrast(page, "[role='dialog']");
       await page.keyboard.press("Escape");
       await expect(drawer).not.toBeVisible();
-      await expectBackground(entry, "--brand-soft");
+      await expect(entry).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       await expect(entry).not.toHaveAttribute("aria-current", "page");
       await expectContrast(page, "aside nav");
       await entry.focus();
       await page.keyboard.press("Enter");
       await expect(page).toHaveURL(/\/print-transactions/);
       await expect(entry).toHaveAttribute("aria-current", "page");
-      await expectBackground(entry, "--brand");
+      await expectBackground(entry, "--surface");
       await expectContrast(page, "aside nav");
       await page.screenshot({ path: testInfo.outputPath("navigation-active.png") });
       await page.getByRole("button", { name: "พับเมนู", exact: true }).click();
       await expect(entry).toHaveAccessibleName("บันทึกจำนวนพิมพ์");
       await expect(entry).toHaveAttribute("aria-current", "page");
-      await expectBackground(entry, "--brand");
+      await expectBackground(entry, "--surface");
     });
   }
 }
