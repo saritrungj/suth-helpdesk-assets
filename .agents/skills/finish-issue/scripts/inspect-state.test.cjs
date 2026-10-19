@@ -150,7 +150,8 @@ test("merged work routes to evidence preservation, never implementation", (t) =>
   assert.equal(result.mergeOnMain, true);
   assert.equal(result.prMergeCommit, f.pr.mergeCommit.oid);
   assert.notEqual(f.git(f.mainCheckout, "rev-parse", "HEAD"), f.candidate);
-  assert.ok(result.checkpointPath.startsWith(path.join(f.mainCheckout, ".git")));
+  // Windows TEMP may use an 8.3 alias; Git reports the same directory by its long name.
+  assert.equal(result.checkpointPath, path.join(fs.realpathSync.native(path.join(f.mainCheckout, ".git")), "finish-issue", "48", encodeURIComponent("codex/fixture"), "checkpoint.md"));
 });
 
 test("durable checkpoint survives worktree removal and partial remote cleanup", (t) => {
