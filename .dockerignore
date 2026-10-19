@@ -17,6 +17,7 @@ uploads
 **/test-results
 **/playwright-report
 **/.artifacts
+**/.artifacts-docker
 prototypes
 *.zip
 *.sql
