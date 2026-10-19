@@ -45,10 +45,11 @@ const ports = {
   web: port("SUTH_VERIFY_WEB_PORT", 5310),
 };
 if (new Set(Object.values(ports)).size !== 3) throw new Error("พอร์ต MySQL, API และเว็บต้องไม่ซ้ำกัน");
-const webUrl = `http://localhost:${ports.web}`;
+// Compose publishes IPv4 loopback only; localhost may resolve to ::1 on Windows.
+const webUrl = `http://${dockerApp ? "127.0.0.1" : "localhost"}:${ports.web}`;
 const apiUrl = dockerApp ? `${webUrl}/api` : `http://localhost:${ports.api}/api`;
 const webDist = "dist-verify-db";
-const dbResultFile = path.join(root, "apps", "web", "e2e", ".artifacts", "db-results.json");
+const dbResultFile = path.join(root, "apps", "web", "e2e", dockerApp ? ".artifacts-docker" : ".artifacts", "db-results.json");
 
 // รหัสไม่ว่าง เพราะบน Windows env ที่เป็นค่าว่างอาจไม่ถูกส่งต่อ แล้ว dotenv ของ API
 // จะเติม DB_PASSWORD จาก apps/api/.env ของฐานพัฒนาแทน
@@ -269,6 +270,7 @@ async function main() {
       // จึงรันได้เฉพาะกับฐานชั่วคราวที่สคริปต์นี้สร้าง ไม่ใช่ฐานที่แชร์กัน
       SUTH_E2E_DISPOSABLE_DB: "1",
       SUTH_E2E_REPORT_FILE: dbResultFile,
+      SUTH_E2E_OUTPUT_DIR: path.dirname(dbResultFile),
     };
     // token ที่ตั้งไว้ก่อนหน้าอาจเป็นของ server อื่น fixtures.js ใช้ตัวนี้ก่อน JWT_SECRET
     delete env.SUTH_E2E_TOKEN;

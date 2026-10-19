@@ -1,6 +1,9 @@
 # dependency — workspace เดียว hoist ไว้ที่รากเป็นหลัก แต่ npm ยังวางบางตัวไว้ในแต่ละ package ได้
 node_modules/
 
+# Docker QA reports are separate from local preview/fixture reports.
+apps/web/e2e/.artifacts-docker/
+
 # ความลับ — ห้าม commit เด็ดขาด ดูตัวอย่างค่าที่ apps/api/.env.example
 .env
 .env.*

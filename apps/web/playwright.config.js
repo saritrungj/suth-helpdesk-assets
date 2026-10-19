@@ -125,7 +125,7 @@ if (process.env.SUTH_E2E_START_API === "1") {
 
 export default defineConfig({
   testDir: "./e2e",
-  outputDir: "./e2e/.artifacts",
+  outputDir: process.env.SUTH_E2E_OUTPUT_DIR || "./e2e/.artifacts",
 
   webServer: webServers,
 
