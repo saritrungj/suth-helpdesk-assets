@@ -244,6 +244,9 @@ async function main() {
         await response.arrayBuffer();
         if (response.status !== 200) throw new Error(`Docker proxy ${route}: expected 200, received ${response.status}`);
       }
+      const redirect = await fetch(`${webUrl}/api`, { redirect: "manual", signal: AbortSignal.timeout(10_000) });
+      await redirect.arrayBuffer();
+      if (redirect.status !== 308 || redirect.headers.get("location") !== "/api/") throw new Error("Docker proxy /api must preserve the public origin with a relative redirect");
     } else {
       console.log(`verify:db — build เว็บแยกใน apps/web/${webDist} ที่ชี้ API ${apiUrl}`);
       must("build เว็บ", "npm", ["run", "build", "--workspace", "@suth/web", "--", "--outDir", webDist], {
