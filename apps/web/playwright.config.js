@@ -94,7 +94,8 @@ const desktop = { ...devices["Desktop Chrome"], viewport: { width: 1440, height:
 // build ที่ฝังที่อยู่ API ของตัวเอง โดยไม่ทับ dist ปกติ
 const webDist = process.env.SUTH_WEB_DIST ? ` --outDir ${process.env.SUTH_WEB_DIST}` : "";
 
-const webServers = [
+// Only the isolated Docker verification harness supplies already-started services.
+const webServers = process.env.SUTH_E2E_EXTERNAL_SERVICES === "1" ? [] : [
   {
     command: `npm run preview -- --port ${webPort} --strictPort${webDist}`,
     url: webUrl,
@@ -124,7 +125,7 @@ if (process.env.SUTH_E2E_START_API === "1") {
 
 export default defineConfig({
   testDir: "./e2e",
-  outputDir: "./e2e/.artifacts",
+  outputDir: process.env.SUTH_E2E_OUTPUT_DIR || "./e2e/.artifacts",
 
   webServer: webServers,
 

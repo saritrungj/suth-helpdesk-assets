@@ -18,6 +18,7 @@
     "test:finish-issue": "node --test .agents/skills/finish-issue/scripts/inspect-state.test.cjs",
     "verify": "node scripts/check-docs.cjs && npm test && npm run build && node scripts/check-bundle-budget.cjs && node scripts/verify-fixture.cjs",
     "verify:db": "node scripts/verify-db.cjs",
+    "verify:docker": "node scripts/verify-db.cjs --docker",
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}\"",
     "db:up": "docker compose --env-file database/docker/compose.env up -d --wait",
     "db:down": "docker compose --env-file database/docker/compose.env down",

@@ -1,5 +1,7 @@
 # ตัวแปร environment
 
+Docker Compose ใช้ [compose.assets.env.example](../../compose.assets.env.example) เป็นบ้านหลักของตัวแปร `SUTH_*` และส่งต่อให้ API ตามชื่อเดิม เช่น `SUTH_TRUST_PROXY_HOPS` → `TRUST_PROXY_HOPS` ดู [วิธีตั้งค่า](../how-to/deploy-docker-compose.md) และ [ค่าบน server](../how-to/deploy-server.md)
+
 source of truth คือ `apps/api/.env.example` และ `apps/web/.env.example` ตารางนี้อธิบายความหมาย ถ้าสองที่ไม่ตรงกันให้เชื่อไฟล์
 
 ไฟล์จริงอยู่ที่ `apps/api/.env` และ `apps/web/.env` ทั้งคู่อยู่ใน `.gitignore` แล้ว **ห้าม commit**

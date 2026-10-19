@@ -29,6 +29,8 @@ node scripts/check-bundle-budget.cjs
 
 ## Health check ฝั่ง API
 
+เมื่อแก้ Dockerfile, Compose หรือ reverse proxy ให้รัน `npm run verify:docker` เพิ่มด้วย คำสั่งนี้ใช้ฐานชั่วคราวและ seed/date checks เดียวกับ `verify:db` แต่ build API/web images แล้วรันชุด `db` ผ่าน Nginx ของ Compose จริง ใช้ network, image tags, container และ volumes ของ QA แยก ลบเฉพาะสิ่งที่สร้างเมื่อจบ ไม่ต่อฐาน shared และไม่ต้องตั้ง `.env.assets` รันทีละชุดกับ `verify:db` เพราะใช้พอร์ตและ report เดียวกัน
+
 ```text
 GET http://localhost:3000/api/health
 ```

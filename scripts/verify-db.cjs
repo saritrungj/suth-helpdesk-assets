@@ -1,6 +1,7 @@
 // scripts/verify-db.cjs — รัน E2E ชุด db (DB_SPECS) กับฐาน MySQL ชั่วคราวในคำสั่งเดียว
 //
 //   npm run verify:db
+//   npm run verify:docker — same disposable database/tests via Docker images + Nginx
 //
 // ต้องเปิด Docker ไว้ ทุกอย่างแยกจากเครื่องพัฒนา:
 //   MySQL  127.0.0.1:3317 — ค่าเริ่มต้น container ชื่อ suth-verify-db สร้างจาก schema.sql + seed_ci.sql
@@ -20,6 +21,11 @@ const { spawnSync } = require("node:child_process");
 const { assertReportFile } = require("./playwright-report.cjs");
 
 const root = path.resolve(__dirname, "..");
+const dockerApp = process.argv.includes("--docker");
+// A unique project owns all application containers/volumes; the database and
+// external network are created and removed by this harness only.
+const dockerProject = `suth-verify-app-${crypto.randomBytes(5).toString("hex")}`;
+const dockerNetwork = `${dockerProject}-qa`;
 // งานหลาย worktree อาจรันพร้อมกันได้ ใช้ suffix + พอร์ตของตัวเองเมื่อจำเป็น
 // และห้ามลบ container ที่มีอยู่ก่อน เพราะอาจเป็นงานของอีก session
 const instance = process.env.SUTH_VERIFY_DB_INSTANCE || "";
@@ -39,14 +45,37 @@ const ports = {
   web: port("SUTH_VERIFY_WEB_PORT", 5310),
 };
 if (new Set(Object.values(ports)).size !== 3) throw new Error("พอร์ต MySQL, API และเว็บต้องไม่ซ้ำกัน");
-const apiUrl = `http://localhost:${ports.api}/api`;
+// Existing authenticated fixtures scope their session cookie to localhost.
 const webUrl = `http://localhost:${ports.web}`;
+const apiUrl = dockerApp ? `${webUrl}/api` : `http://localhost:${ports.api}/api`;
 const webDist = "dist-verify-db";
-const dbResultFile = path.join(root, "apps", "web", "e2e", ".artifacts", "db-results.json");
+const dbResultFile = path.join(root, "apps", "web", "e2e", dockerApp ? ".artifacts-docker" : ".artifacts", "db-results.json");
 
 // รหัสไม่ว่าง เพราะบน Windows env ที่เป็นค่าว่างอาจไม่ถูกส่งต่อ แล้ว dotenv ของ API
 // จะเติม DB_PASSWORD จาก apps/api/.env ของฐานพัฒนาแทน
 const dbPassword = crypto.randomBytes(16).toString("hex");
+const jwtSecret = crypto.randomBytes(32).toString("hex");
+const composeEnv = {
+  ...process.env,
+  SUTH_MYSQL_NETWORK: dockerNetwork,
+  SUTH_PROXY_NETWORK: dockerNetwork,
+  SUTH_DB_HOST: container,
+  SUTH_DB_NAME: database,
+  SUTH_DB_USER: "root",
+  SUTH_DB_PASSWORD: dbPassword,
+  SUTH_JWT_SECRET: jwtSecret,
+  SUTH_NODE_ENV: "development", // HTTP is restricted to loopback QA.
+  SUTH_TRUST_PROXY_HOPS: "1",
+  SUTH_HTTP_PORT: String(ports.web),
+  SUTH_PUBLIC_ORIGIN: webUrl,
+  SUTH_RATE_LIMIT_PER_MINUTE: "100000",
+  SUTH_API_IMAGE: `${dockerProject}-api:qa`,
+  SUTH_WEB_IMAGE: `${dockerProject}-web:qa`,
+};
+
+function compose(args) {
+  return run("docker", ["compose", "-p", dockerProject, "-f", "compose.assets.yaml", ...args], { cwd: root, env: composeEnv });
+}
 
 function run(command, args, options = {}) {
   // npm บน Windows เป็น .cmd ซึ่ง Node รุ่นใหม่ไม่ยอม spawn ตรงๆ และการส่ง args ผ่าน
@@ -184,9 +213,16 @@ async function main() {
 
   console.log(`verify:db — สร้าง MySQL ชั่วคราวที่พอร์ต ${ports.mysql}`);
   let created = false;
+  let networkCreated = false;
+  let applicationStarted = false;
   try {
+    if (dockerApp) {
+      must("สร้าง QA network", "docker", ["network", "create", dockerNetwork]);
+      networkCreated = true;
+    }
     must("สร้าง container", "docker", [
       "run", "-d", "--name", container,
+      ...(dockerApp ? ["--network", dockerNetwork] : []),
       "-e", `MYSQL_ROOT_PASSWORD=${dbPassword}`, "-e", `MYSQL_DATABASE=${database}`,
       "-p", `127.0.0.1:${ports.mysql}:3306`, "mysql:8.4",
     ], { stdio: "ignore" });
@@ -196,11 +232,28 @@ async function main() {
     load("schema.sql");
     load("seed_ci.sql");
 
-    console.log(`verify:db — build เว็บแยกใน apps/web/${webDist} ที่ชี้ API ${apiUrl}`);
-    must("build เว็บ", "npm", ["run", "build", "--workspace", "@suth/web", "--", "--outDir", webDist], {
-      cwd: root,
-      env: { ...process.env, VITE_API_BASE_URL: apiUrl },
-    });
+    if (dockerApp) {
+      if (compose(["config", "--quiet"]) !== 0) throw new Error("Docker Compose config ไม่ผ่าน");
+      if (compose(["build"]) !== 0) throw new Error("Docker image build ไม่ผ่าน");
+      applicationStarted = true;
+      if (compose(["up", "-d", "--wait", "--wait-timeout", "120"]) !== 0) throw new Error("Docker application health ไม่ผ่าน");
+      // Vite emits an assets/ directory, while /assets is a routed page too.
+      // Reject redirects here before the longer authenticated browser suite.
+      for (const route of ["/api/health/live", "/api/health", "/login", "/assets", "/assets/"]) {
+        const response = await fetch(`${webUrl}${route}`, { redirect: "manual", signal: AbortSignal.timeout(10_000) });
+        await response.arrayBuffer();
+        if (response.status !== 200) throw new Error(`Docker proxy ${route}: expected 200, received ${response.status}`);
+      }
+      const redirect = await fetch(`${webUrl}/api`, { redirect: "manual", signal: AbortSignal.timeout(10_000) });
+      await redirect.arrayBuffer();
+      if (redirect.status !== 308 || redirect.headers.get("location") !== "/api/") throw new Error("Docker proxy /api must preserve the public origin with a relative redirect");
+    } else {
+      console.log(`verify:db — build เว็บแยกใน apps/web/${webDist} ที่ชี้ API ${apiUrl}`);
+      must("build เว็บ", "npm", ["run", "build", "--workspace", "@suth/web", "--", "--outDir", webDist], {
+        cwd: root,
+        env: { ...process.env, VITE_API_BASE_URL: apiUrl },
+      });
+    }
 
     const env = {
       ...process.env,
@@ -212,20 +265,22 @@ async function main() {
       DB_NAME: database,
       PORT: String(ports.api),
       CORS_ORIGIN: webUrl,
-      JWT_SECRET: crypto.randomBytes(32).toString("hex"),
+      JWT_SECRET: jwtSecret,
       // ชุด db ยิง API หลายร้อยครั้งในไม่กี่นาทีจาก IP เดียว การชน production
       // rate limit ทำให้เคสท้ายๆ ได้ 429 ทั้งที่ระบบและฐานทดสอบยังปกติ
       RATE_LIMIT_PER_MINUTE: "100000",
       SUTH_API_URL: apiUrl,
       SUTH_WEB_URL: webUrl,
       SUTH_WEB_DIST: webDist,
-      SUTH_E2E_START_API: "1",
+      SUTH_E2E_START_API: dockerApp ? "0" : "1",
+      SUTH_E2E_EXTERNAL_SERVICES: dockerApp ? "1" : "0",
       SUTH_E2E_REQUIRE_SERVICES: "1",
       SUTH_E2E_ALLOW_WRITES: "1",
       // fiscal-year-cache.spec.js อาจต้องกู้แถวหลัง POST ที่ผลตอบกลับไม่ชัดเจน
       // จึงรันได้เฉพาะกับฐานชั่วคราวที่สคริปต์นี้สร้าง ไม่ใช่ฐานที่แชร์กัน
       SUTH_E2E_DISPOSABLE_DB: "1",
       SUTH_E2E_REPORT_FILE: dbResultFile,
+      SUTH_E2E_OUTPUT_DIR: path.dirname(dbResultFile),
     };
     // token ที่ตั้งไว้ก่อนหน้าอาจเป็นของ server อื่น fixtures.js ใช้ตัวนี้ก่อน JWT_SECRET
     delete env.SUTH_E2E_TOKEN;
@@ -245,10 +300,24 @@ async function main() {
     }
     console.log("verify:db — ไม่มีงานนำเข้าค้างหลังจบชุด");
   } finally {
+    // Attempt all owned-resource cleanup even when a previous cleanup fails.
+    const cleanupErrors = [];
+    if (applicationStarted && compose(["down", "--volumes"]) !== 0) cleanupErrors.push("Docker QA application cleanup failed");
     if (created) {
-      removeContainer();
-      console.log("verify:db — ลบ MySQL ชั่วคราวแล้ว");
+      try {
+        removeContainer();
+        console.log("verify:db — ลบ MySQL ชั่วคราวแล้ว");
+      } catch (error) { cleanupErrors.push(error.message); }
     }
+    if (networkCreated && run("docker", ["network", "rm", dockerNetwork]) !== 0) cleanupErrors.push("Docker QA network cleanup failed");
+    if (dockerApp) {
+      // Build cache is reusable; ephemeral runtime image tags are not releases.
+      for (const image of [composeEnv.SUTH_API_IMAGE, composeEnv.SUTH_WEB_IMAGE]) {
+        const exists = spawnSync("docker", ["image", "inspect", image], { stdio: "ignore" });
+        if (exists.status === 0 && run("docker", ["image", "rm", image]) !== 0) cleanupErrors.push(`QA image cleanup failed: ${image}`);
+      }
+    }
+    if (cleanupErrors.length) throw new Error(cleanupErrors.join("; "));
   }
 }
 
