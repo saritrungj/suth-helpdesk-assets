@@ -45,8 +45,8 @@ const ports = {
   web: port("SUTH_VERIFY_WEB_PORT", 5310),
 };
 if (new Set(Object.values(ports)).size !== 3) throw new Error("พอร์ต MySQL, API และเว็บต้องไม่ซ้ำกัน");
-// Compose publishes IPv4 loopback only; localhost may resolve to ::1 on Windows.
-const webUrl = `http://${dockerApp ? "127.0.0.1" : "localhost"}:${ports.web}`;
+// Existing authenticated fixtures scope their session cookie to localhost.
+const webUrl = `http://localhost:${ports.web}`;
 const apiUrl = dockerApp ? `${webUrl}/api` : `http://localhost:${ports.api}/api`;
 const webDist = "dist-verify-db";
 const dbResultFile = path.join(root, "apps", "web", "e2e", dockerApp ? ".artifacts-docker" : ".artifacts", "db-results.json");
