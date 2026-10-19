@@ -237,6 +237,13 @@ async function main() {
       if (compose(["build"]) !== 0) throw new Error("Docker image build ไม่ผ่าน");
       applicationStarted = true;
       if (compose(["up", "-d", "--wait", "--wait-timeout", "120"]) !== 0) throw new Error("Docker application health ไม่ผ่าน");
+      // Vite emits an assets/ directory, while /assets is a routed page too.
+      // Reject redirects here before the longer authenticated browser suite.
+      for (const route of ["/api/health/live", "/api/health", "/login", "/assets", "/assets/"]) {
+        const response = await fetch(`${webUrl}${route}`, { redirect: "manual", signal: AbortSignal.timeout(10_000) });
+        await response.arrayBuffer();
+        if (response.status !== 200) throw new Error(`Docker proxy ${route}: expected 200, received ${response.status}`);
+      }
     } else {
       console.log(`verify:db — build เว็บแยกใน apps/web/${webDist} ที่ชี้ API ${apiUrl}`);
       must("build เว็บ", "npm", ["run", "build", "--workspace", "@suth/web", "--", "--outDir", webDist], {
