@@ -1,0 +1,84 @@
+services:
+  suth-assets-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: "${SUTH_API_IMAGE:-suth-assets-api:local}"
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Bangkok
+      NODE_ENV: "${SUTH_NODE_ENV:-production}"
+      PORT: "3000"
+      DB_HOST: "${SUTH_DB_HOST:-mysql84}"
+      DB_PORT: "3306"
+      DB_NAME: "${SUTH_DB_NAME:-hospital_it_asset}"
+      DB_USER: "${SUTH_DB_USER:-suth_app}"
+      DB_PASSWORD: "${SUTH_DB_PASSWORD:?Set SUTH_DB_PASSWORD in .env.assets}"
+      JWT_SECRET: "${SUTH_JWT_SECRET:?Set SUTH_JWT_SECRET in .env.assets}"
+      CORS_ORIGIN: "${SUTH_PUBLIC_ORIGIN:?Set SUTH_PUBLIC_ORIGIN in .env.assets}"
+      COOKIE_SAMESITE: lax
+      TRUST_PROXY_HOPS: "${SUTH_TRUST_PROXY_HOPS:-1}"
+      IMPORT_SESSION_DIR: /data/import-sessions
+      RATE_LIMIT_PER_MINUTE: "${SUTH_RATE_LIMIT_PER_MINUTE:-600}"
+    expose:
+      - "3000"
+    volumes:
+      - api_uploads:/app/uploads
+      - import_sessions:/data/import-sessions
+    networks:
+      - app
+      - mysql_shared
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  suth-assets-web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    image: "${SUTH_WEB_IMAGE:-suth-assets-web:local}"
+    restart: unless-stopped
+    expose:
+      - "80"
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  suth-assets-proxy:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    depends_on:
+      suth-assets-api:
+        condition: service_healthy
+      suth-assets-web:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${SUTH_HTTP_PORT:-8081}:80"
+    volumes:
+      - ./deploy/docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - app
+      - reverse_proxy
+
+volumes:
+  api_uploads:
+  import_sessions:
+
+networks:
+  app:
+  mysql_shared:
+    external: true
+    name: "${SUTH_MYSQL_NETWORK:?Set the existing mysql84 Docker network in .env.assets}"
+  reverse_proxy:
+    external: true
+    name: "${SUTH_PROXY_NETWORK:-php-docker_default}"

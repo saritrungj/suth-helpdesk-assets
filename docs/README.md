@@ -37,6 +37,8 @@
 
 - [ตั้งระบบสำหรับพัฒนา](how-to/set-up-development.md)
 - [เปิดฐานพัฒนาบน Docker และดูข้อมูลด้วย phpMyAdmin](how-to/run-docker-database.md)
+- [รันแอปด้วย Docker Compose แยก](how-to/deploy-docker-compose.md)
+- [นำ Docker images ขึ้น server](how-to/deploy-server.md)
 - [รัน migration กับฐานข้อมูลเดิม](how-to/run-migrations.md)
 - [นำเข้าไฟล์ Excel/CSV](how-to/import-files.md)
 - [ตรวจยอดและติดตามงานจากรายงาน](how-to/use-report-workflow.md)
