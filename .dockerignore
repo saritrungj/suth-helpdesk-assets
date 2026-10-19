@@ -24,4 +24,3 @@ docs/**/*.xls*
 docs/**/*.csv
 database/docker/compose.env
 pnpm-lock.yaml
-
